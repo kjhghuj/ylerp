@@ -1,0 +1,108 @@
+﻿docker : #0 building with "desktop-linux" instance usin
+g docker driver
+所在位置 行:1 字符: 1
++ docker build --progress=plain . 2> build_out.txt
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (#0 buildi 
+   ng wit...g docker driver:String) [], RemoteExcepti  
+  on
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 390B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/node:
+22-alpine
+#2 DONE 0.5s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [ 1/10] FROM docker.io/library/node:22-alpine@sha256
+:e4bf2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc1
+3363826e34
+#4 resolve docker.io/library/node:22-alpine@sha256:e4bf
+2a82ad0a4037d28035ae71529873c069b13eb0455466ae0bc133638
+26e34 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 1.67kB 0.1s done
+#5 DONE 0.1s
+
+#6 [ 7/10] COPY prisma ./prisma
+#6 CACHED
+
+#7 [ 6/10] COPY src ./src
+#7 CACHED
+
+#8 [ 2/10] WORKDIR /app
+#8 CACHED
+
+#9 [ 3/10] COPY package*.json ./
+#9 CACHED
+
+#10 [ 4/10] COPY tsconfig.json ./
+#10 CACHED
+
+#11 [ 5/10] RUN npm install
+#11 CACHED
+
+#12 [ 8/10] COPY .env ./
+#12 CACHED
+
+#13 [ 9/10] RUN npx prisma generate
+#13 1.135 Prisma schema loaded from prisma/schema.prism
+a.
+#13 1.137 Error: Prisma schema validation - (get-config
+ wasm)
+#13 1.137 Error code: P1012
+#13 1.137 error: The datasource property `url` is no lo
+nger supported in schema files. Move connection URLs fo
+r Migrate to `prisma.config.ts` and pass either `adapte
+r` for a direct database connection or `accelerateUrl` 
+for Accelerate to the `PrismaClient` constructor. See h
+ttps://pris.ly/d/config-datasource and https://pris.ly/
+d/prisma7-client-config
+#13 1.137   -->  prisma/schema.prisma:3
+#13 1.137    | 
+#13 1.137  2 |   provider = "postgresql"
+#13 1.137  3 |   url      = env("DATABASE_URL")
+#13 1.137    | 
+#13 1.137 
+#13 1.137 Validation Error Count: 1
+#13 1.137 [Context: getConfig]
+#13 1.137 
+#13 1.137 Prisma CLI Version : 7.4.2
+#13 ERROR: process "/bin/sh -c npx prisma generate" did
+ not complete successfully: exit code: 1
+------
+ > [ 9/10] RUN npx prisma generate:
+1.137   -->  prisma/schema.prisma:3
+1.137    | 
+1.137  2 |   provider = "postgresql"
+1.137  3 |   url      = env("DATABASE_URL")
+1.137    | 
+1.137 
+1.137 Validation Error Count: 1
+1.137 [Context: getConfig]
+1.137 
+1.137 Prisma CLI Version : 7.4.2
+------
+Dockerfile:17
+--------------------
+  15 |     
+  16 |     # Generate prisma client
+  17 | >>> RUN npx prisma generate
+  18 |     
+  19 |     # Build typescript 
+--------------------
+ERROR: failed to build: failed to solve: process "/bin/
+sh -c npx prisma generate" did not complete successfull
+y: exit code: 1
+
+View build details: docker-desktop://dashboard/build/de
+sktop-linux/desktop-linux/0upes97996rrwjimeisuq7f9j

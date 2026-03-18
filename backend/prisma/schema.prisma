@@ -1,0 +1,93 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id                        String  @id @default(uuid())
+  name                      String
+  sku                       String
+  country                   String?
+  totalRevenue              Float
+  cost                      Float
+  productWeight             Float
+  firstWeight               Float
+  baseShippingFee           Float
+  extraShippingFee          Float
+  crossBorderFee            Float
+  sellerCoupon              Float
+  platformCoupon            Float
+  platformCouponRate        Float?
+  platformCommissionRate    Float
+  transactionFeeRate        Float
+  damageReturnRate          Float
+  adROI                     Float
+  vatRate                   Float
+  corporateIncomeTaxRate    Float
+  supplierTaxPoint          Float
+  mdvServiceFeeRate         Float
+  fssServiceFeeRate         Float
+  ccbServiceFeeRate         Float
+  platformInfrastructureFee Float
+  warehouseOperationFee     Float
+  supplierInvoice           String
+  quantityPerBox            Float?
+  volume                    String?
+  shipping                  Float
+  fees                      Float
+  marketing                 Float
+  taxes                     Float
+  profit                    Float
+  margin                    Float
+  costMargin                Float
+}
+
+model FinanceRecord {
+  id          String   @id @default(uuid())
+  date        DateTime
+  type        String
+  amount      Float
+  category    String
+  description String
+  accountId   String
+}
+
+model InventoryItem {
+  id              String  @id @default(uuid())
+  name            String
+  sku             String
+  currentStock    Int
+  stockOfficial   Int
+  stockThirdParty Int
+  inTransit       Int
+  dailySales      Float
+  leadTime        Int
+  replenishCycle  Int
+  costPerUnit     Float
+}
+
+model WarehouseMapping {
+  id                    String  @id @default(uuid())
+  officialWarehouseId   String?
+  thirdPartyWarehouseId String?
+  sku                   String
+  type                  String
+}
+
+model SkuGroup {
+  id        String   @id @default(uuid())
+  groupName String
+  skus      String[]
+}
+
+model ProfitTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  country   String
+  data      Json
+  createdAt DateTime @default(now())
+}
