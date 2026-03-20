@@ -24,7 +24,12 @@ redis.on('error', (err) => {
     console.error('Redis connection error:', err);
 });
 
-// Basic structure for routes (we'll implement them next)
+// Import middleware
+import { authenticate } from './middleware/authMiddleware';
+
+// Import routes
+import authRoutes from './routes/authRoutes';
+import userRoutes from './routes/userRoutes';
 import productRoutes from './routes/productRoutes';
 import financeRoutes from './routes/financeRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
@@ -32,12 +37,17 @@ import mappingRoutes from './routes/mappingRoutes';
 import skuGroupRoutes from './routes/skuGroupRoutes';
 import templateRoutes from './routes/templateRoutes';
 
-app.use('/api/products', productRoutes);
-app.use('/api/finance', financeRoutes);
-app.use('/api/inventory', inventoryRoutes);
-app.use('/api/warehouse-mappings', mappingRoutes);
-app.use('/api/sku-groups', skuGroupRoutes);
-app.use('/api/templates', templateRoutes);
+// Public routes (no auth required)
+app.use('/api/auth', authRoutes);
+
+// Protected routes (auth required)
+app.use('/api/users', userRoutes);
+app.use('/api/products', authenticate, productRoutes);
+app.use('/api/finance', authenticate, financeRoutes);
+app.use('/api/inventory', authenticate, inventoryRoutes);
+app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
+app.use('/api/sku-groups', authenticate, skuGroupRoutes);
+app.use('/api/templates', authenticate, templateRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

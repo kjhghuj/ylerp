@@ -215,8 +215,9 @@ export const PricingCalculator: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        const numericVal = (name === 'name' || name === 'sku' || name === 'supplierInvoice') ? value : (parseFloat(value) || 0);
-        setInputs(prev => ({ ...prev, [name]: numericVal }));
+        // Keep as string to allow typing decimal points (e.g. "12.")
+        const val = (name === 'name' || name === 'sku' || name === 'supplierInvoice') ? value : value;
+        setInputs(prev => ({ ...prev, [name]: val }));
     };
 
     const getCurrencyProps = () => ({
@@ -236,7 +237,7 @@ export const PricingCalculator: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto no-scrollbar pb-1 md:pb-0">
+                <div className="flex items-center gap-3 w-full md:w-auto pb-1 md:pb-0">
                     {/* Region Tabs */}
                     <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 shrink-0">
                          <div className={`p-1.5 rounded ${isLoadingRates ? 'animate-spin text-slate-400' : 'text-emerald-600'}`}>

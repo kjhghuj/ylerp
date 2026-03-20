@@ -24,7 +24,8 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
             <label className="block text-[13px] font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
             <div className="relative">
                 <input
-                    type="number"
+                    type="text"
+                    inputMode="decimal"
                     name={name}
                     value={value}
                     onChange={onChange}

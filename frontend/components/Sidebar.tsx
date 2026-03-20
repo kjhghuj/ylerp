@@ -1,7 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List } from 'lucide-react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
+import { useAuth } from '../AuthContext';
 
 interface SidebarProps {
   currentView: AppState['currentView'];
@@ -12,15 +13,40 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen, onClose }) => {
   const { strings } = useStore();
+  const { user, logout } = useAuth();
 
-  const menuItems = [
+  const allMenuItems = [
     { id: 'dashboard', label: strings.sidebar.dashboard, icon: LayoutDashboard },
     { id: 'profit', label: strings.sidebar.profit, icon: Calculator },
     { id: 'product-list', label: strings.sidebar.productList, icon: List },
     { id: 'finance', label: strings.sidebar.finance, icon: Wallet },
     { id: 'inventory', label: strings.sidebar.inventory, icon: PackageCheck },
     { id: 'pricing', label: strings.sidebar.pricing, icon: Tag },
+    // Only show user management for owner
+    ...(user?.role === 'owner' ? [{ id: 'user-management', label: '用户管理', icon: Users }] : []),
   ];
+
+  // Filter menu items by permissions for non-owner users
+  const menuItems = user?.role === 'owner'
+    ? allMenuItems
+    : allMenuItems.filter(item => item.id === 'user-management' || (user?.permissions || []).includes(item.id));
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'owner': return <ShieldCheck size={12} />;
+      case 'admin': return <Shield size={12} />;
+      default: return <Eye size={12} />;
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner': return '超级管理员';
+      case 'admin': return '管理员';
+      case 'viewer': return '查看者';
+      default: return role;
+    }
+  };
 
   return (
     <>
@@ -68,9 +94,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
           })}
         </nav>
 
-        <div className="p-6 text-xs text-blue-200 border-t border-white/10 shrink-0">
-          <p>{strings.app.name}</p>
-          <p className="mt-1 opacity-70">{strings.sidebar.version}</p>
+        {/* User Info & Logout */}
+        <div className="p-4 border-t border-white/10 shrink-0">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white font-bold text-sm">
+              {user?.displayName?.charAt(0) || 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-white truncate">{user?.displayName || 'User'}</p>
+              <p className="text-xs text-blue-200 flex items-center gap-1">{getRoleIcon(user?.role || '')} {getRoleLabel(user?.role || '')}</p>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
+          >
+            <LogOut size={16} /> 退出登录
+          </button>
+          <p className="text-xs text-blue-200/50 text-center mt-2">{strings.sidebar.version}</p>
         </div>
       </aside>
     </>

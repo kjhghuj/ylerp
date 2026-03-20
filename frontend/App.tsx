@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StoreProvider, useStore } from './StoreContext';
+import { AuthProvider, useAuth } from './AuthContext';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './modules/Dashboard';
 import { ProfitCalculator } from './modules/ProfitCalculator';
@@ -7,14 +8,17 @@ import { FinanceManager } from './modules/FinanceManager';
 import { RestockCalculator } from './modules/RestockCalculator';
 import { PricingCalculator } from './modules/PricingCalculator';
 import { ProductList } from './modules/ProductList';
+import { LoginPage } from './modules/LoginPage';
+import { UserManagement } from './modules/UserManagement';
 import { DebugConsole } from './components/DebugConsole';
 import { AppState } from './types';
-import { Globe, Menu } from 'lucide-react';
+import { Globe, Menu, LogOut, Lock } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { language, setLanguage, strings, setCalculatorImport, loading } = useStore();
+  const { user, logout } = useAuth();
 
   const handleViewChange = (view: AppState['currentView']) => {
     setCurrentView(view);
@@ -30,6 +34,19 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
+    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'pricing', 'product-list'];
+    // Permission check for non-owner users
+    if (user?.role !== 'owner' && moduleViews.includes(currentView) && !(user?.permissions || []).includes(currentView)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
+          <div className="p-4 bg-slate-100 rounded-2xl">
+            <Lock size={40} className="text-slate-300" />
+          </div>
+          <p className="text-lg font-bold text-slate-500">无访问权限</p>
+          <p className="text-sm text-slate-400">请联系管理员开通此模块的访问权限</p>
+        </div>
+      );
+    }
     switch (currentView) {
       case 'dashboard': return <Dashboard />;
       case 'profit': return <ProfitCalculator />;
@@ -37,6 +54,7 @@ const MainContent: React.FC = () => {
       case 'inventory': return <RestockCalculator />;
       case 'pricing': return <PricingCalculator />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
+      case 'user-management': return <UserManagement />;
       default: return <Dashboard />;
     }
   };
@@ -49,9 +67,19 @@ const MainContent: React.FC = () => {
       case 'inventory': return strings.sidebar.inventory;
       case 'pricing': return strings.sidebar.pricing;
       case 'product-list': return strings.sidebar.productList;
+      case 'user-management': return '用户管理';
       default: return view;
     }
   }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner': return '超级管理员';
+      case 'admin': return '管理员';
+      case 'viewer': return '查看者';
+      default: return role;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50/50 overflow-hidden font-sans">
@@ -96,10 +124,19 @@ const MainContent: React.FC = () => {
             <div className="h-6 w-px bg-slate-200 mx-2 hidden md:block"></div>
 
             <div className="text-right hidden md:block">
-              <p className="text-sm font-bold text-slate-800">{strings.app.admin}</p>
-              <p className="text-xs text-slate-400">{strings.app.role}</p>
+              <p className="text-sm font-bold text-slate-800">{user?.displayName || 'User'}</p>
+              <p className="text-xs text-slate-400">{getRoleLabel(user?.role || '')}</p>
             </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full shadow-md shrink-0"></div>
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full shadow-md shrink-0 flex items-center justify-center text-white font-bold text-sm">
+              {user?.displayName?.charAt(0) || 'U'}
+            </div>
+            <button
+              onClick={logout}
+              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+              title="退出登录"
+            >
+              <LogOut size={18} />
+            </button>
           </div>
         </header>
 
@@ -115,6 +152,28 @@ const MainContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppGuard />
+    </AuthProvider>
+  );
+};
+
+const AppGuard: React.FC = () => {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen w-screen bg-gradient-to-br from-slate-900 via-blue-900 to-purple-900">
+        <div className="w-10 h-10 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
+
   return (
     <StoreProvider>
       <MainContent />

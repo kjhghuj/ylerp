@@ -93,5 +93,5 @@ export interface SkuGroupMapping {
 }
 
 export interface AppState {
-  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'pricing' | 'product-list';
+  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'pricing' | 'product-list' | 'user-management';
 }

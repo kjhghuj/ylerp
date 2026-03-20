@@ -248,19 +248,20 @@ export const ProfitCalculator: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        const numericVal = (name === 'name' || name === 'sku' || name === 'supplierInvoice') ? value : (parseFloat(value) || 0);
+        // Keep as string to allow typing decimal points (e.g. "12.")
+        const val = (name === 'name' || name === 'sku' || name === 'supplierInvoice') ? value : value;
 
         setInputs(prev => {
-            const next = { ...prev, [name]: numericVal };
+            const next = { ...prev, [name]: val };
 
             // Sync Coupon Logic
             if (name === 'platformCouponRate') {
-                next.platformCoupon = parseFloat((next.totalRevenue * ((numericVal as number) / 100)).toFixed(2));
+                next.platformCoupon = parseFloat((next.totalRevenue * ((parseFloat(val as string) || 0) / 100)).toFixed(2));
             } else if (name === 'platformCoupon') {
-                next.platformCouponRate = next.totalRevenue > 0 ? parseFloat((((numericVal as number) / next.totalRevenue) * 100).toFixed(2)) : 0;
+                next.platformCouponRate = next.totalRevenue > 0 ? parseFloat((((parseFloat(val as string) || 0) / next.totalRevenue) * 100).toFixed(2)) : 0;
             } else if (name === 'totalRevenue') {
                 // If revenue changes, keep the RATE constant and update amount
-                next.platformCoupon = parseFloat(((numericVal as number) * (prev.platformCouponRate / 100)).toFixed(2));
+                next.platformCoupon = parseFloat(((parseFloat(val as string) || 0) * (prev.platformCouponRate / 100)).toFixed(2));
             }
 
             return next;
