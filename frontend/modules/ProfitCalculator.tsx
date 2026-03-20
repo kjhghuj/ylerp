@@ -4,105 +4,8 @@ import { Save, Calculator, Percent, Truck, Tag, Landmark, Box, ChevronRight, Lay
 import { ProductCalcData } from '../types';
 import api from '../src/api';
 
-// --- Helper Components ---
+import { InputCard, NumberInput, TextInput, SelectInput, ResultRow } from '../components/CalcInputs';
 
-const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildren<{ title: string, icon: any }>) => (
-    <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl flex flex-col">
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-white/20 bg-white/30 rounded-t-xl">
-            <div className="p-1.5 bg-white/80 rounded-md shadow-sm text-blue-600 border border-white/50">
-                <Icon size={14} />
-            </div>
-            <h3 className="text-sm font-extrabold text-slate-700 uppercase tracking-wide">{title}</h3>
-        </div>
-        <div className="p-3 grid grid-cols-2 gap-2 flex-1 content-start">
-            {children}
-        </div>
-    </div>
-);
-
-const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '' }: any) => {
-    const safeValue = typeof value === 'number' ? value : 0;
-    const convertedValue = (exchangeRate > 0 && currencyCode) ? (safeValue * exchangeRate).toFixed(2) : null;
-
-    return (
-        <div className={colSpan}>
-            <label className="block text-[13px] font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
-            <div className="relative">
-                <input
-                    type="number"
-                    name={name}
-                    value={value}
-                    onChange={onChange}
-                    onFocus={(e) => e.target.select()}
-                    className={`w-full h-9 px-3 rounded-lg border outline-none text-base font-semibold transition-all
-                        ${highlight
-                            ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                            : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
-                />
-                {suffix && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
-                        {suffix}
-                    </div>
-                )}
-            </div>
-            {convertedValue && (
-                <div className="text-[11px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                    <span>≈ {convertedValue} {currencyCode}</span>
-                </div>
-            )}
-        </div>
-    );
-};
-
-const TextInput = ({ label, name, value, onChange }: any) => (
-    <div className="col-span-2">
-        <label className="block text-[13px] font-bold text-slate-500 mb-0.5 truncate">{label}</label>
-        <input
-            type="text"
-            name={name}
-            value={value}
-            onChange={onChange}
-            className="w-full h-9 px-3 rounded-lg border border-slate-200 bg-white outline-none text-base font-semibold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all"
-        />
-    </div>
-);
-
-const SelectInput = ({ label, name, value, onChange, options }: any) => (
-    <div className="col-span-2">
-        <label className="block text-[13px] font-bold text-slate-500 mb-0.5 truncate">{label}</label>
-        <div className="relative">
-            <select
-                name={name}
-                value={value}
-                onChange={onChange}
-                className="w-full h-9 px-3 appearance-none rounded-lg border border-slate-200 bg-white outline-none text-base font-semibold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer"
-            >
-                {options.map((opt: any) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-            </select>
-            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={16} />
-        </div>
-    </div>
-);
-
-const ResultRow = ({ label, value, colorClass = "bg-slate-50", tooltip }: { label: string, value: number, colorClass?: string, tooltip?: React.ReactNode }) => (
-    <div className="relative group/row">
-        <div className={`flex justify-between items-center px-4 py-2 rounded-lg ${colorClass} ${tooltip ? 'cursor-help' : ''}`}>
-            <span className="text-[13px] font-bold text-slate-500 flex items-center gap-1.5">
-                {label}
-                {tooltip && <Info size={12} className="opacity-50" />}
-            </span>
-            <span className="font-mono text-base font-bold text-slate-800">
-                {(value || 0).toFixed(2)}
-            </span>
-        </div>
-        {tooltip && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-slate-800/95 backdrop-blur-sm text-white text-xs rounded-xl p-3 shadow-xl opacity-0 group-hover/row:opacity-100 pointer-events-none z-50 transition-all duration-200 translate-y-2 group-hover/row:translate-y-0 border border-slate-700">
-                {tooltip}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800/95"></div>
-            </div>
-        )}
-    </div>
-);
 
 interface Template {
     id?: string;
@@ -559,12 +462,15 @@ export const ProfitCalculator: React.FC = () => {
                         </div>
 
                         {/* Expense Breakdown List */}
-                        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-                            <ResultRow label={t.inputs.cost} value={inputs.purchaseCost} colorClass="bg-orange-50/60 text-orange-800" />
-                            <ResultRow label={t.results.shipping} value={results.shippingFee} colorClass="bg-blue-50/60 text-blue-800" />
-                            <ResultRow label={t.results.commission} value={results.commission} colorClass="bg-purple-50/60 text-purple-800" />
-                            <ResultRow label={t.results.transFee} value={results.transactionFee} colorClass="bg-indigo-50/60 text-indigo-800" />
-                            <ResultRow label={t.results.serviceFee} value={results.serviceFee} colorClass="bg-violet-50/60 text-violet-800"
+                        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                            <ResultRow label={t.inputs.cost} value={inputs.purchaseCost} colorClass="bg-orange-50/60 text-orange-800" percentage={inputs.totalRevenue > 0 ? (inputs.purchaseCost / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.shipping} value={results.shippingFee} colorClass="bg-blue-50/60 text-blue-800" percentage={inputs.totalRevenue > 0 ? (results.shippingFee / inputs.totalRevenue) * 100 : 0} />
+                            
+                            <div className="h-px bg-slate-100 my-1 mx-1"></div>
+                            
+                            <ResultRow label={t.results.commission} value={results.commission} percentage={inputs.totalRevenue > 0 ? (results.commission / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.transFee} value={results.transactionFee} percentage={inputs.totalRevenue > 0 ? (results.transactionFee / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.serviceFee} value={results.serviceFee} percentage={inputs.totalRevenue > 0 ? (results.serviceFee / inputs.totalRevenue) * 100 : 0}
                                 tooltip={
                                     <div className="space-y-1 min-w-[120px]">
                                         <div className="flex justify-between"><span>MDV:</span><span className="font-mono">{results.mdvServiceFee.toFixed(2)}</span></div>
@@ -574,11 +480,17 @@ export const ProfitCalculator: React.FC = () => {
                                     </div>
                                 }
                             />
-                            <ResultRow label={t.results.adFee} value={results.adFee} colorClass="bg-amber-50/60 text-amber-800" />
-                            <ResultRow label={t.results.warehouse} value={inputs.warehouseOperationFee} colorClass="bg-cyan-50/60 text-cyan-800" />
-                            <ResultRow label={t.results.damage} value={results.damage} colorClass="bg-pink-50/60 text-pink-800" />
-                            <ResultRow label={t.results.vat} value={results.vat} colorClass="bg-red-50/60 text-red-800" />
-                            <ResultRow label={t.results.corpTax} value={results.corporateIncomeTax} colorClass="bg-rose-50/60 text-rose-800" />
+                            <ResultRow label={t.results.adFee} value={results.adFee} percentage={inputs.totalRevenue > 0 ? (results.adFee / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.warehouse} value={inputs.warehouseOperationFee} percentage={inputs.totalRevenue > 0 ? (inputs.warehouseOperationFee / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.damage} value={results.damage} percentage={inputs.totalRevenue > 0 ? (results.damage / inputs.totalRevenue) * 100 : 0} />
+                            
+                            <div className="h-px bg-slate-100 my-1 mx-1"></div>
+                            
+                            <ResultRow label={t.results.vat} value={results.vat} colorClass="bg-rose-50/40 text-rose-700" percentage={inputs.totalRevenue > 0 ? (results.vat / inputs.totalRevenue) * 100 : 0} />
+                            <ResultRow label={t.results.corpTax} value={results.corporateIncomeTax} colorClass="bg-rose-50/40 text-rose-700" percentage={inputs.totalRevenue > 0 ? (results.corporateIncomeTax / inputs.totalRevenue) * 100 : 0} />
+                            
+                            <div className="h-px bg-slate-100 my-1 mx-1 shadow-sm"></div>
+                            <ResultRow label={t.results.finalRevenue} value={results.finalRevenue} colorClass="bg-emerald-50 text-emerald-800 font-bold" percentage={inputs.totalRevenue > 0 ? (results.finalRevenue / inputs.totalRevenue) * 100 : 0} />
                         </div>
                     </div>
 

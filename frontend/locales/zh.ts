@@ -290,7 +290,7 @@ export const zh = {
   pricingCalculator: {
     title: '智能反向定价',
     subtitle: '基于目标利润率推导建议售价',
-    targetMargin: '目标成本利润率 (ROI %)',
+    targetMargin: '目标收入利润率 (Margin %)',
     suggestedPrice: '建议定价',
     breakdown: '成本结构拆解',
     inputs: '成本与费率设定',

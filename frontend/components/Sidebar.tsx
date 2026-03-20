@@ -38,9 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
       `}>
         <div className="p-6 border-b border-white/10 flex justify-between items-center">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white">
-              <span className="font-bold text-lg">U</span>
-            </div>
+            <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg bg-white/10 p-1" />
             <span className="hidden sm:inline">Commerce</span>
           </h1>
           {/* Mobile Close Button */}
