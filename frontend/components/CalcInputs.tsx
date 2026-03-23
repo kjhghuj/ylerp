@@ -16,7 +16,7 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
 );
 
 export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '' }: any) => {
-    const safeValue = typeof value === 'number' ? value : 0;
+    const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
     const convertedValue = (exchangeRate > 0 && currencyCode) ? (safeValue * exchangeRate).toFixed(2) : null;
 
     return (
@@ -90,12 +90,12 @@ export const ResultRow = ({ label, value, colorClass = "bg-slate-50", tooltip, p
                 </span>
                 {percentage !== undefined && (
                     <span className="text-[10px] text-slate-400 font-bold leading-none">
-                        {percentage.toFixed(1)}%
+                        {(Number(percentage) || 0).toFixed(1)}%
                     </span>
                 )}
             </div>
             <span className="font-mono text-base font-bold text-slate-800">
-                {(value || 0).toFixed(2)}
+                {(Number(value) || 0).toFixed(2)}
             </span>
         </div>
         {tooltip && (

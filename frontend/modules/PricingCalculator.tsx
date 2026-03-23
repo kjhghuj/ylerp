@@ -99,7 +99,7 @@ export const PricingCalculator: React.FC = () => {
             id: Date.now().toString(),
             name: inputs.name, sku: inputs.sku || inputs.name,
             country: selectedCurrency === 'PHP' ? 'PH' : selectedCurrency === 'MYR' ? 'MY' : selectedCurrency === 'SGD' ? 'SG' : selectedCurrency === 'THB' ? 'TH' : 'ID',
-            totalRevenue: parseFloat(results.suggestedPrice.toFixed(2)), cost: inputs.purchaseCost,
+            totalRevenue: Number((results.suggestedPrice || 0).toFixed(2)), cost: Number(inputs.purchaseCost),
             productWeight: inputs.productWeight, firstWeight: inputs.firstWeight, baseShippingFee: inputs.baseShippingFee,
             extraShippingFee: inputs.extraShippingFee, crossBorderFee: inputs.crossBorderFee, sellerCoupon: inputs.sellerCoupon,
             platformCoupon: inputs.platformCoupon, platformCouponRate: inputs.platformCouponRate,
@@ -108,8 +108,8 @@ export const PricingCalculator: React.FC = () => {
             supplierTaxPoint: inputs.supplierTaxPoint, mdvServiceFeeRate: inputs.mdvServiceFeeRate, fssServiceFeeRate: inputs.fssServiceFeeRate,
             ccbServiceFeeRate: inputs.ccbServiceFeeRate, platformInfrastructureFee: inputs.platformInfrastructureFee, warehouseOperationFee: inputs.warehouseOperationFee,
             supplierInvoice: inputs.supplierInvoice as 'yes' | 'no', shipping: results.shippingFee, fees: results.platformFee,
-            marketing: results.adFee, taxes: results.totalTax, profit: parseFloat(results.profit.toFixed(2)),
-            margin: parseFloat(results.revenueMargin.toFixed(1)), costMargin: parseFloat(inputs.targetROI.toFixed(1)),
+            marketing: results.adFee, taxes: results.totalTax, profit: Number((results.profit || 0).toFixed(2)),
+            margin: Number((results.revenueMargin || 0).toFixed(1)), costMargin: Number((Number(inputs.targetROI) || 0).toFixed(1)),
         };
 
         addProduct(product);
@@ -359,7 +359,7 @@ export const PricingCalculator: React.FC = () => {
                             {results.valid ? (
                                 <div className="text-4xl font-black tracking-tight flex items-baseline gap-1 text-indigo-600">
                                     <span className="text-2xl font-bold text-slate-400">¥</span>
-                                    {results.suggestedPrice.toFixed(2)}
+                                    {(results.suggestedPrice || 0).toFixed(2)}
                                 </div>
                             ) : (
                                 <div className="text-xl font-bold text-rose-500 py-2">{tp.cantCalc}</div>
@@ -367,10 +367,10 @@ export const PricingCalculator: React.FC = () => {
 
                             <div className="flex gap-2 mt-2 w-full justify-center">
                                 <div className="px-2 py-1 rounded text-xs font-bold border bg-emerald-50 text-emerald-700 border-emerald-100">
-                                    {t.results.revenueMargin}: {results.revenueMargin.toFixed(1)}%
+                                    {t.results.revenueMargin}: {(results.revenueMargin || 0).toFixed(1)}%
                                 </div>
                                 <div className="px-2 py-1 rounded text-xs font-bold border bg-purple-50 text-purple-700 border-purple-100">
-                                    Cost ROI: {(results.profit / inputs.purchaseCost * 100).toFixed(1)}%
+                                    Cost ROI: {(Number(inputs.purchaseCost) > 0 ? (results.profit / Number(inputs.purchaseCost) * 100) : 0).toFixed(1)}%
                                 </div>
                             </div>
                         </div>
