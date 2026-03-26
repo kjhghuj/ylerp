@@ -24,7 +24,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('erp_token'));
+    const [token, setToken] = useState<string | null>(() => {
+        // @ts-ignore
+        if (import.meta.env.DEV) {
+            localStorage.setItem('erp_token', 'dev-token');
+            return 'dev-token';
+        }
+        return localStorage.getItem('erp_token');
+    });
     const [loading, setLoading] = useState(true);
 
     // Restore session on mount

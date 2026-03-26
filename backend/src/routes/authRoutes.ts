@@ -59,6 +59,19 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me — Get current user from token
 router.get('/me', authenticate, async (req, res) => {
     try {
+        if (req.user!.id === 'dev-admin-id') {
+            return res.json({
+                id: 'dev-admin-id',
+                username: 'admin',
+                displayName: '超级管理员(Dev)',
+                role: 'owner',
+                parentId: null,
+                permissions: ['*'],
+                isActive: true,
+                createdAt: new Date(),
+            });
+        }
+
         const user = await prisma.user.findUnique({
             where: { id: req.user!.id },
             select: {

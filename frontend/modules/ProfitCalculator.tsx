@@ -42,14 +42,14 @@ export const ProfitCalculator: React.FC = () => {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [showTemplateMenu, setShowTemplateMenu] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
+    const [compareTemplateIds, setCompareTemplateIds] = useState<string[]>([]);
 
     const getTemplateKey = (currency: CurrencyCode) => `profit_templates_${currency}`;
 
-    // Load templates for the current currency from backend
     useEffect(() => {
         const fetchTemplates = async () => {
             try {
-                const response = await api.get(`/templates/${selectedCurrency}`);
+                const response = await api.get(`/templates/${selectedCurrency}?type=profit`);
                 setTemplates(response.data);
             } catch (error) {
                 console.error('Failed to fetch templates:', error);
@@ -65,6 +65,7 @@ export const ProfitCalculator: React.FC = () => {
             }
         };
 
+        setCompareTemplateIds([]);
         fetchTemplates();
     }, [selectedCurrency]);
 
@@ -162,6 +163,7 @@ export const ProfitCalculator: React.FC = () => {
             const response = await api.post('/templates', {
                 name: newTemplateName,
                 country: selectedCurrency,
+                type: 'profit',
                 data: templateData
             });
             const newTemplates = [...templates, response.data];
@@ -203,48 +205,139 @@ export const ProfitCalculator: React.FC = () => {
     });
 
     useEffect(() => {
+        // Create a safe version of inputs with Numbers to prevent string concatenation bugs
+        const safeInputs: any = {};
+        for (const key in inputs) {
+            if (key === 'name' || key === 'sku' || key === 'supplierInvoice') {
+                safeInputs[key] = (inputs as any)[key];
+            } else {
+                safeInputs[key] = Number((inputs as any)[key]) || 0;
+            }
+        }
+
         // Calculation Logic
-        const costTaxAmount = inputs.purchaseCost * (inputs.supplierTaxPoint / 100);
+        const costTaxAmount = safeInputs.purchaseCost * (safeInputs.supplierTaxPoint / 100);
         let vat = 0, corporateIncomeTax = 0;
 
-        if (inputs.supplierInvoice === 'yes') {
-            vat = (inputs.totalRevenue - inputs.sellerCoupon - inputs.platformCoupon) * (inputs.vatRate / 100);
-            const corporateIncomeTaxableAmount = (inputs.totalRevenue - inputs.sellerCoupon - inputs.platformCoupon) - inputs.purchaseCost;
-            corporateIncomeTax = ((inputs.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
+        if (safeInputs.supplierInvoice === 'yes') {
+            vat = (safeInputs.totalRevenue - safeInputs.sellerCoupon - safeInputs.platformCoupon) * (safeInputs.vatRate / 100);
+            const corporateIncomeTaxableAmount = (safeInputs.totalRevenue - safeInputs.sellerCoupon - safeInputs.platformCoupon) - safeInputs.purchaseCost;
+            corporateIncomeTax = ((safeInputs.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
         } else {
-            vat = inputs.totalRevenue * (inputs.vatRate / 100);
-            corporateIncomeTax = (inputs.corporateIncomeTaxRate / 100) * inputs.totalRevenue;
+            vat = safeInputs.totalRevenue * (safeInputs.vatRate / 100);
+            corporateIncomeTax = (safeInputs.corporateIncomeTaxRate / 100) * safeInputs.totalRevenue;
         }
         const totalTax = vat + corporateIncomeTax;
 
-        const commission = (inputs.totalRevenue - inputs.sellerCoupon) * (inputs.platformCommissionRate / 100);
-        const transactionFee = (inputs.totalRevenue - inputs.sellerCoupon) * (inputs.transactionFeeRate / 100);
+        const commission = (safeInputs.totalRevenue - safeInputs.sellerCoupon) * (safeInputs.platformCommissionRate / 100);
+        const transactionFee = (safeInputs.totalRevenue - safeInputs.sellerCoupon) * (safeInputs.transactionFeeRate / 100);
 
-        const revenueAfterSellerCoupon = inputs.totalRevenue - inputs.sellerCoupon;
-        const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (inputs.mdvServiceFeeRate / 100), 25);
-        const fssServiceFee = Math.min(revenueAfterSellerCoupon * (inputs.fssServiceFeeRate / 100), 12.5);
-        const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (inputs.ccbServiceFeeRate / 100), 12.5);
-        const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + inputs.platformInfrastructureFee;
+        const revenueAfterSellerCoupon = safeInputs.totalRevenue - safeInputs.sellerCoupon;
+        const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (safeInputs.mdvServiceFeeRate / 100), 25);
+        const fssServiceFee = Math.min(revenueAfterSellerCoupon * (safeInputs.fssServiceFeeRate / 100), 12.5);
+        const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (safeInputs.ccbServiceFeeRate / 100), 12.5);
+        const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + safeInputs.platformInfrastructureFee;
 
-        let shippingFee = inputs.baseShippingFee + inputs.crossBorderFee;
-        if (inputs.productWeight > inputs.firstWeight) {
-            const extraWeight = inputs.productWeight - inputs.firstWeight;
-            shippingFee += inputs.extraShippingFee * (extraWeight / 10);
+        let shippingFee = safeInputs.baseShippingFee + safeInputs.crossBorderFee;
+        if (safeInputs.productWeight > safeInputs.firstWeight) {
+            const extraWeight = safeInputs.productWeight - safeInputs.firstWeight;
+            shippingFee += safeInputs.extraShippingFee * (extraWeight / 10);
         }
 
-        const adFee = inputs.adROI > 0 ? (inputs.totalRevenue - inputs.sellerCoupon - inputs.platformCoupon) / inputs.adROI : 0;
-        const damage = inputs.totalRevenue * (inputs.damageReturnRate / 100);
-        const platformFee = commission + transactionFee + serviceFee + adFee + inputs.warehouseOperationFee + damage;
-        const finalRevenue = inputs.totalRevenue - inputs.sellerCoupon - platformFee - shippingFee - totalTax - inputs.purchaseCost;
+        const adFee = safeInputs.adROI > 0 ? (safeInputs.totalRevenue - safeInputs.sellerCoupon - safeInputs.platformCoupon) / safeInputs.adROI : 0;
+        const damage = safeInputs.totalRevenue * (safeInputs.damageReturnRate / 100);
+        const platformFee = commission + transactionFee + serviceFee + adFee + safeInputs.warehouseOperationFee + damage;
+        const finalRevenue = safeInputs.totalRevenue - safeInputs.sellerCoupon - platformFee - shippingFee - totalTax - safeInputs.purchaseCost;
 
         setResults({
             commission, transactionFee, mdvServiceFee, fssServiceFee, ccbServiceFee, serviceFee,
             shippingFee, adFee, damage, platformFee, vat, corporateIncomeTax, totalTax,
             costTaxAmount, finalRevenue,
-            costProfitMargin: inputs.purchaseCost > 0 ? (finalRevenue / inputs.purchaseCost) * 100 : 0,
-            revenueProfitMargin: inputs.totalRevenue > 0 ? (finalRevenue / inputs.totalRevenue) * 100 : 0
+            costProfitMargin: safeInputs.purchaseCost > 0 ? (finalRevenue / safeInputs.purchaseCost) * 100 : 0,
+            revenueProfitMargin: safeInputs.totalRevenue > 0 ? (finalRevenue / safeInputs.totalRevenue) * 100 : 0
         });
     }, [inputs]);
+
+    // --- Comparison State & Logic ---
+    const [comparisonResults, setComparisonResults] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (compareTemplateIds.length === 0) {
+            setComparisonResults([]);
+            return;
+        }
+
+        const results = compareTemplateIds.map(idOrName => {
+            const tpl = templates.find(t => (t.id || t.name) === idOrName);
+            if (!tpl) return null;
+
+            // Merge current base inputs with template platform inputs
+            const rawInputs = {
+                ...tpl.data,
+                totalRevenue: inputs.totalRevenue,
+                purchaseCost: inputs.purchaseCost,
+                productWeight: inputs.productWeight,
+                supplierInvoice: inputs.supplierInvoice,
+            };
+
+            const mergedInputs: any = {};
+            for (const key in rawInputs) {
+                if (key === 'name' || key === 'sku' || key === 'supplierInvoice') {
+                    mergedInputs[key] = rawInputs[key];
+                } else {
+                    mergedInputs[key] = Number(rawInputs[key]) || 0;
+                }
+            }
+
+            // Run Calculation Logic
+            const costTaxAmount = mergedInputs.purchaseCost * (mergedInputs.supplierTaxPoint / 100);
+            let vat = 0, corporateIncomeTax = 0;
+
+            if (mergedInputs.supplierInvoice === 'yes') {
+                vat = (mergedInputs.totalRevenue - mergedInputs.sellerCoupon - mergedInputs.platformCoupon) * (mergedInputs.vatRate / 100);
+                const corporateIncomeTaxableAmount = (mergedInputs.totalRevenue - mergedInputs.sellerCoupon - mergedInputs.platformCoupon) - mergedInputs.purchaseCost;
+                corporateIncomeTax = ((mergedInputs.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
+            } else {
+                vat = mergedInputs.totalRevenue * (mergedInputs.vatRate / 100);
+                corporateIncomeTax = (mergedInputs.corporateIncomeTaxRate / 100) * mergedInputs.totalRevenue;
+            }
+            const totalTax = vat + corporateIncomeTax;
+
+            const commission = (mergedInputs.totalRevenue - mergedInputs.sellerCoupon) * (mergedInputs.platformCommissionRate / 100);
+            const transactionFee = (mergedInputs.totalRevenue - mergedInputs.sellerCoupon) * (mergedInputs.transactionFeeRate / 100);
+
+            const revenueAfterSellerCoupon = mergedInputs.totalRevenue - mergedInputs.sellerCoupon;
+            const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (mergedInputs.mdvServiceFeeRate / 100), 25);
+            const fssServiceFee = Math.min(revenueAfterSellerCoupon * (mergedInputs.fssServiceFeeRate / 100), 12.5);
+            const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (mergedInputs.ccbServiceFeeRate / 100), 12.5);
+            const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + mergedInputs.platformInfrastructureFee;
+
+            let shippingFee = mergedInputs.baseShippingFee + mergedInputs.crossBorderFee;
+            if (mergedInputs.productWeight > mergedInputs.firstWeight) {
+                const extraWeight = mergedInputs.productWeight - mergedInputs.firstWeight;
+                shippingFee += mergedInputs.extraShippingFee * (extraWeight / 10);
+            }
+
+            const adFee = mergedInputs.adROI > 0 ? (mergedInputs.totalRevenue - mergedInputs.sellerCoupon - mergedInputs.platformCoupon) / mergedInputs.adROI : 0;
+            const damage = mergedInputs.totalRevenue * (mergedInputs.damageReturnRate / 100);
+            const platformFee = commission + transactionFee + serviceFee + adFee + mergedInputs.warehouseOperationFee + damage;
+            const finalRevenue = mergedInputs.totalRevenue - mergedInputs.sellerCoupon - platformFee - shippingFee - totalTax - mergedInputs.purchaseCost;
+
+            return {
+                templateName: tpl.name,
+                commission, transactionFee, serviceFee,
+                shippingFee, adFee, damage, platformFee, totalTax,
+                finalRevenue,
+                costProfitMargin: mergedInputs.purchaseCost > 0 ? (finalRevenue / mergedInputs.purchaseCost) * 100 : 0,
+                revenueProfitMargin: mergedInputs.totalRevenue > 0 ? (finalRevenue / mergedInputs.totalRevenue) * 100 : 0
+            };
+        }).filter(Boolean);
+
+        setComparisonResults(results);
+    }, [
+        compareTemplateIds, templates, 
+        inputs.totalRevenue, inputs.purchaseCost, inputs.productWeight, inputs.supplierInvoice
+    ]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -320,7 +413,7 @@ export const ProfitCalculator: React.FC = () => {
     });
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)]">
+        <div className={`flex flex-col ${comparisonResults.length > 0 ? 'min-h-[calc(100vh-140px)] pb-6' : 'h-[calc(100vh-140px)]'}`}>
             {/* Header Bar */}
             <div className="px-4 py-2 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-3 flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 z-20 gap-2">
                 <div className="flex items-center gap-3 text-slate-800">
@@ -373,14 +466,31 @@ export const ProfitCalculator: React.FC = () => {
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-wider">{t.templates.title}</h4>
                                 <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
                                     {templates.length === 0 && <p className="text-sm text-slate-400 italic text-center py-4">{t.templates.empty}</p>}
-                                    {templates.map((tpl, i) => (
-                                        <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl group cursor-pointer border border-transparent hover:border-slate-200 transition-all" onClick={() => handleLoadTemplate(tpl)}>
-                                            <span className="text-sm font-bold text-slate-700 truncate flex-1">{tpl.name}</span>
-                                            <button onClick={(e) => handleDeleteTemplate(i, tpl, e)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                    {templates.map((tpl, i) => {
+                                        const tplKey = tpl.id || tpl.name;
+                                        return (
+                                        <div key={i} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-xl group border border-transparent hover:border-slate-200 transition-all">
+                                            <div className="flex-1 min-w-0 pr-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                <input 
+                                                    type="checkbox"
+                                                    checked={compareTemplateIds.includes(tplKey)}
+                                                    onChange={(e) => {
+                                                        setCompareTemplateIds(prev => 
+                                                            e.target.checked ? [...prev, tplKey] : prev.filter(id => id !== tplKey)
+                                                        );
+                                                    }}
+                                                    className="w-4 h-4 text-blue-600 rounded cursor-pointer"
+                                                    title="加入对比"
+                                                />
+                                                <span className="text-sm font-bold text-slate-700 truncate cursor-pointer hover:text-blue-600 flex-1" onClick={() => handleLoadTemplate(tpl)} title={`点击加载 ${tpl.name}`}>
+                                                    {tpl.name}
+                                                </span>
+                                            </div>
+                                            <button onClick={(e) => handleDeleteTemplate(i, tpl, e)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="删除模板">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                                 <div className="pt-4 border-t border-slate-100">
                                     <div className="flex gap-2">
@@ -412,8 +522,8 @@ export const ProfitCalculator: React.FC = () => {
             </div>
 
             {/* Full-width Content Grid — no scroll, fill viewport */}
-            <div className="flex-1 min-h-0">
-                <div className="grid grid-cols-3 xl:grid-cols-4 gap-3 h-full" style={{ gridTemplateRows: 'repeat(2, 1fr)' }}>
+            <div className={`flex-1 min-h-0 ${comparisonResults.length > 0 ? '' : ''}`}>
+                <div className={`grid grid-cols-3 xl:grid-cols-4 gap-3 ${comparisonResults.length > 0 ? '' : 'h-full'}`} style={{ gridTemplateRows: comparisonResults.length > 0 ? 'auto' : 'repeat(2, 1fr)' }}>
 
                     {/* 1. Basic Info */}
                     <InputCard title={t.sections.basic} icon={Box}>
@@ -445,11 +555,11 @@ export const ProfitCalculator: React.FC = () => {
                     {/* 4. Results — NO pie chart, just listed expenses */}
                     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl flex flex-col row-span-2">
                         {/* KPI Header */}
-                        <div className="px-4 py-3 flex flex-col items-center justify-center text-center gap-1 relative border-b border-white/20">
+                        <div className="px-4 py-5 flex flex-col items-center justify-center text-center gap-1.5 relative border-b border-white/20">
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-500"></div>
-                            <div className="text-xs font-extrabold uppercase tracking-widest text-slate-500 mt-1">{t.results.finalRevenue}</div>
-                            <div className={`text-4xl font-black tracking-tight flex items-baseline gap-1 ${results.finalRevenue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                <span className="text-2xl font-bold text-slate-400">¥</span>
+                            <div className="text-sm font-extrabold uppercase tracking-widest text-slate-500 mt-1">{t.results.finalRevenue}</div>
+                            <div className={`text-5xl font-black tracking-tight flex items-baseline gap-1 ${results.finalRevenue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                <span className="text-3xl font-bold text-slate-400">¥</span>
                                 {results.finalRevenue.toFixed(2)}
                             </div>
                             <div className="flex gap-2 mt-2 w-full justify-center">
@@ -463,11 +573,11 @@ export const ProfitCalculator: React.FC = () => {
                         </div>
 
                         {/* Expense Breakdown List */}
-                        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
                             <ResultRow label={t.inputs.cost} value={inputs.purchaseCost} colorClass="bg-orange-50/60 text-orange-800" percentage={inputs.totalRevenue > 0 ? (inputs.purchaseCost / inputs.totalRevenue) * 100 : 0} />
                             <ResultRow label={t.results.shipping} value={results.shippingFee} colorClass="bg-blue-50/60 text-blue-800" percentage={inputs.totalRevenue > 0 ? (results.shippingFee / inputs.totalRevenue) * 100 : 0} />
                             
-                            <div className="h-px bg-slate-100 my-1 mx-1"></div>
+                            <div className="h-px bg-slate-100 my-1.5 mx-1"></div>
                             
                             <ResultRow label={t.results.commission} value={results.commission} percentage={inputs.totalRevenue > 0 ? (results.commission / inputs.totalRevenue) * 100 : 0} />
                             <ResultRow label={t.results.transFee} value={results.transactionFee} percentage={inputs.totalRevenue > 0 ? (results.transactionFee / inputs.totalRevenue) * 100 : 0} />
@@ -485,12 +595,12 @@ export const ProfitCalculator: React.FC = () => {
                             <ResultRow label={t.results.warehouse} value={inputs.warehouseOperationFee} percentage={inputs.totalRevenue > 0 ? (inputs.warehouseOperationFee / inputs.totalRevenue) * 100 : 0} />
                             <ResultRow label={t.results.damage} value={results.damage} percentage={inputs.totalRevenue > 0 ? (results.damage / inputs.totalRevenue) * 100 : 0} />
                             
-                            <div className="h-px bg-slate-100 my-1 mx-1"></div>
+                            <div className="h-px bg-slate-100 my-1.5 mx-1"></div>
                             
                             <ResultRow label={t.results.vat} value={results.vat} colorClass="bg-rose-50/40 text-rose-700" percentage={inputs.totalRevenue > 0 ? (results.vat / inputs.totalRevenue) * 100 : 0} />
                             <ResultRow label={t.results.corpTax} value={results.corporateIncomeTax} colorClass="bg-rose-50/40 text-rose-700" percentage={inputs.totalRevenue > 0 ? (results.corporateIncomeTax / inputs.totalRevenue) * 100 : 0} />
                             
-                            <div className="h-px bg-slate-100 my-1 mx-1 shadow-sm"></div>
+                            <div className="h-px bg-slate-100 my-1.5 mx-1 shadow-sm"></div>
                             <ResultRow label={t.results.finalRevenue} value={results.finalRevenue} colorClass="bg-emerald-50 text-emerald-800 font-bold" percentage={inputs.totalRevenue > 0 ? (results.finalRevenue / inputs.totalRevenue) * 100 : 0} />
                         </div>
                     </div>
@@ -517,6 +627,45 @@ export const ProfitCalculator: React.FC = () => {
                     <div className="hidden xl:block"></div>
 
                 </div>
+
+                {/* --- Comparison View --- */}
+                {comparisonResults.length > 0 && (
+                    <div className="mt-4 bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-5 mb-4 flex-shrink-0 relative">
+                        <div className="flex items-center gap-2 mb-4">
+                            <div className="p-1.5 bg-gradient-to-br from-purple-500 to-pink-600 rounded-md text-white shadow-sm">
+                                <Info size={16} />
+                            </div>
+                            <h3 className="text-[15px] font-extrabold text-slate-800 uppercase tracking-wide">多模板利润对比</h3>
+                        </div>
+                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x">
+                            {comparisonResults.map((res, i) => (
+                                <div key={i} className="min-w-[280px] w-[280px] border border-slate-200 rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center transition-all hover:shadow-md">
+                                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+                                        <div className="font-extrabold text-slate-700 truncate text-sm" title={res.templateName}>{res.templateName}</div>
+                                    </div>
+                                    <div className="p-4 flex flex-col items-center justify-center border-b border-slate-100 bg-gradient-to-b from-white to-slate-50/50">
+                                        <div className="text-[10px] font-bold text-slate-400 mb-1.5 tracking-wider uppercase">{t.results.finalRevenue}</div>
+                                        <div className={`text-4xl font-black tracking-tight flex items-baseline gap-0.5 ${Number(res.finalRevenue) > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            <span className="text-xl text-slate-400">¥</span>{(Number(res.finalRevenue) || 0).toFixed(2)}
+                                        </div>
+                                        <div className="flex gap-1.5 mt-3">
+                                            <div className="px-2 py-0.5 rounded text-[11px] font-bold border border-blue-100 bg-blue-50 text-blue-700">Margin: {(Number(res.revenueProfitMargin) || 0).toFixed(1)}%</div>
+                                            <div className="px-2 py-0.5 rounded text-[11px] font-bold border border-purple-100 bg-purple-50 text-purple-700">ROI: {(Number(res.costProfitMargin) || 0).toFixed(0)}%</div>
+                                        </div>
+                                    </div>
+                                    <div className="p-2 space-y-[2px] bg-white text-[13px]">
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors"><span className="text-slate-500 font-bold">{t.inputs.cost}</span><span className="font-bold text-slate-700">{(Number(inputs.purchaseCost) || 0).toFixed(2)}</span></div>
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors"><span className="text-slate-500 font-bold">{t.results.shipping}</span><span className="font-bold text-slate-700">{(Number(res.shippingFee) || 0).toFixed(2)}</span></div>
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors"><span className="text-slate-500 font-bold">{t.results.commission}</span><span className="font-bold text-slate-700">{(Number(res.commission) || 0).toFixed(2)}</span></div>
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors"><span className="text-slate-500 font-bold">{t.results.serviceFee}</span><span className="font-bold text-slate-700">{(Number(res.serviceFee) || 0).toFixed(2)}</span></div>
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors"><span className="text-slate-500 font-bold">{t.results.platformFee}</span><span className="font-bold text-slate-700">{(Number(res.platformFee) || 0).toFixed(2)}</span></div>
+                                        <div className="flex justify-between px-3 py-1.5 hover:bg-slate-50 rounded transition-colors border-t border-slate-100 mt-1 pt-2"><span className="text-slate-500 font-bold">{t.results.totalTax}</span><span className="font-bold text-slate-700">{(Number(res.totalTax) || 0).toFixed(2)}</span></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

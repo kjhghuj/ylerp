@@ -19,7 +19,7 @@ export const PricingCalculator: React.FC = () => {
 
     // --- Inputs State ---
     const [inputs, setInputs] = useState({
-        name: '', sku: '', targetROI: 30, purchaseCost: 0,
+        name: '', sku: '', targetMargin: 30, purchaseCost: 0,
         productWeight: 0, firstWeight: 50, baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
         platformCommissionRate: 0, transactionFeeRate: 0, sellerCoupon: 0, platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 0, adROI: 0,
         mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0, platformInfrastructureFee: 0, warehouseOperationFee: 0,
@@ -41,12 +41,16 @@ export const PricingCalculator: React.FC = () => {
     // Load templates (reusing the same API but we'll try to distinguish by name prefix or just hope they are compatible)
     // For now, let's just use local storage to avoid confusing Profit templates with Pricing templates if the backend isn't updated.
     useEffect(() => {
-        const saved = localStorage.getItem(getTemplateKey(selectedCurrency));
-        if (saved) {
-            try { setTemplates(JSON.parse(saved)); } catch (e) { setTemplates([]); }
-        } else {
-            setTemplates([]);
-        }
+        const fetchTemplates = async () => {
+             try {
+                 const response = await api.get(`/templates/${selectedCurrency}?type=pricing`);
+                 setTemplates(response.data);
+             } catch (error) {
+                 console.error('Failed to fetch templates:', error);
+                 setTemplates([]);
+             }
+        };
+        fetchTemplates();
     }, [selectedCurrency]);
 
     useEffect(() => {
@@ -74,12 +78,22 @@ export const PricingCalculator: React.FC = () => {
         }
     };
 
-    const handleSaveTemplate = () => {
+    const handleSaveTemplate = async () => {
         if (!newTemplateName.trim()) return;
-        const newTemplates = [...templates, { name: newTemplateName, data: { ...inputs, name: '', sku: '' } }];
-        setTemplates(newTemplates);
-        localStorage.setItem(getTemplateKey(selectedCurrency), JSON.stringify(newTemplates));
-        setNewTemplateName('');
+        try {
+            const res = await api.post('/templates', {
+                name: newTemplateName,
+                country: selectedCurrency,
+                type: 'pricing',
+                data: { ...inputs, name: '', sku: '' }
+            });
+            const newTemplates = [...templates, res.data];
+            setTemplates(newTemplates);
+            setNewTemplateName('');
+        } catch (error) {
+             console.error('Error saving template:', error);
+             alert('Failed to save template to database.');
+        }
     };
 
     const handleLoadTemplate = (tpl: Template) => {
@@ -87,11 +101,16 @@ export const PricingCalculator: React.FC = () => {
         setShowTemplateMenu(false);
     };
 
-    const handleDeleteTemplate = (idx: number, e: React.MouseEvent) => {
+    const handleDeleteTemplate = async (idx: number, tpl: Template, e: React.MouseEvent) => {
         e.stopPropagation();
-        const newTemplates = templates.filter((_, i) => i !== idx);
-        setTemplates(newTemplates);
-        localStorage.setItem(getTemplateKey(selectedCurrency), JSON.stringify(newTemplates));
+        try {
+            if (tpl.id) await api.delete(`/templates/${tpl.id}`);
+            const newTemplates = templates.filter((_, i) => i !== idx);
+            setTemplates(newTemplates);
+        } catch (error) {
+             console.error('Error deleting template:', error);
+             alert('Failed to delete template from database.');
+        }
     };
     const handleSave = () => {
         if (!inputs.name) return alert(t.actions.alert);
@@ -109,7 +128,7 @@ export const PricingCalculator: React.FC = () => {
             ccbServiceFeeRate: inputs.ccbServiceFeeRate, platformInfrastructureFee: inputs.platformInfrastructureFee, warehouseOperationFee: inputs.warehouseOperationFee,
             supplierInvoice: inputs.supplierInvoice as 'yes' | 'no', shipping: results.shippingFee, fees: results.platformFee,
             marketing: results.adFee, taxes: results.totalTax, profit: Number((results.profit || 0).toFixed(2)),
-            margin: Number((results.revenueMargin || 0).toFixed(1)), costMargin: Number((Number(inputs.targetROI) || 0).toFixed(1)),
+            margin: Number((results.revenueMargin || 0).toFixed(1)), costMargin: Number((Number(inputs.targetMargin) || 0).toFixed(1)),
         };
 
         addProduct(product);
@@ -127,7 +146,6 @@ export const PricingCalculator: React.FC = () => {
 
     useEffect(() => {
         const C = inputs.purchaseCost;
-        const targetProfit = C * (inputs.targetROI / 100);
         
         // 1. Fixed Expenses
         let shippingFee = inputs.baseShippingFee + inputs.crossBorderFee;
@@ -154,7 +172,7 @@ export const PricingCalculator: React.FC = () => {
         const vatR = inputs.vatRate / 100;
         const corpR = inputs.corporateIncomeTaxRate / 100;
         const supTaxP = inputs.supplierTaxPoint / 100;
-        const targetMargin = inputs.targetROI / 100;
+        const targetMargin = inputs.targetMargin / 100;
 
         let suggestedPrice = 0;
         let vat = 0, corpTax = 0, totalTax = 0;
@@ -289,7 +307,7 @@ export const PricingCalculator: React.FC = () => {
                                     {templates.map((tpl, i) => (
                                         <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl group cursor-pointer border border-transparent hover:border-slate-200 transition-all" onClick={() => handleLoadTemplate(tpl)}>
                                             <span className="text-sm font-bold text-slate-700 truncate flex-1">{tpl.name}</span>
-                                            <button onClick={(e) => handleDeleteTemplate(i, e)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
+                                            <button onClick={(e) => handleDeleteTemplate(i, tpl, e)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition">
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -327,7 +345,7 @@ export const PricingCalculator: React.FC = () => {
                     {/* 1. Basic & Pricing Goal */}
                     <InputCard title={t.sections.basic} icon={Box}>
                         <TextInput label={t.inputs.name} name="name" value={inputs.name} onChange={handleChange} />
-                        <NumberInput label={tp.targetMargin} name="targetROI" value={inputs.targetROI} onChange={handleChange} highlight suffix="%" />
+                        <NumberInput label={tp.targetMargin} name="targetMargin" value={inputs.targetMargin} onChange={handleChange} highlight suffix="%" />
                         <NumberInput label={t.inputs.cost} name="purchaseCost" value={inputs.purchaseCost} onChange={handleChange} highlight {...getCurrencyProps()} />
                     </InputCard>
 

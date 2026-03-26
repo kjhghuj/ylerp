@@ -8,8 +8,9 @@ const prisma = new PrismaClient();
 router.get('/:country', async (req, res) => {
     try {
         const { country } = req.params;
+        const { type } = req.query;
         const templates = await prisma.profitTemplate.findMany({
-            where: { country },
+            where: { country, ...(type ? { type: String(type) } : {}) },
             orderBy: { createdAt: 'desc' }
         });
         res.json(templates);
@@ -22,7 +23,7 @@ router.get('/:country', async (req, res) => {
 // Create a new template
 router.post('/', async (req, res) => {
     try {
-        const { name, country, data } = req.body;
+        const { name, country, data, type } = req.body;
         
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -32,7 +33,8 @@ router.post('/', async (req, res) => {
             data: {
                 name,
                 country,
-                data
+                data,
+                type: type || 'profit'
             }
         });
         res.status(201).json(template);

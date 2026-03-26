@@ -57,7 +57,7 @@ export interface ProductCalcData {
 export interface FinanceRecord {
   id: string;
   date: string;
-  type: 'income' | 'expense' | 'debt_repayment' | 'new_debt';
+  type: 'income' | 'expense' | 'debt_repayment' | 'new_debt' | 'debt_balance' | 'account_balance';
   amount: number;
   category: string;
   description: string;

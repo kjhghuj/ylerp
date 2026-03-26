@@ -88,7 +88,7 @@ router.delete('/all', async (req, res) => {
     }
 });
 
-// Delete finance record
+// Delete finance record by ID
 router.delete('/:id', async (req, res) => {
     try {
         await prisma.financeRecord.delete({ where: { id: req.params.id } });
@@ -96,6 +96,37 @@ router.delete('/:id', async (req, res) => {
         res.status(204).send();
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete finance record' });
+    }
+});
+
+// Delete finance records by month
+router.delete('/month/:month', async (req, res) => {
+    try {
+        const [yearStr, monthStr] = req.params.month.split('-');
+        const year = parseInt(yearStr);
+        const month = parseInt(monthStr);
+        
+        if (isNaN(year) || isNaN(month)) {
+            return res.status(400).json({ error: 'Invalid month format, expected YYYY-MM' });
+        }
+
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 1);
+
+        const result = await prisma.financeRecord.deleteMany({
+            where: {
+                date: {
+                    gte: startDate,
+                    lt: endDate
+                }
+            }
+        });
+        
+        await redis.del('finance');
+        res.json({ message: 'Deleted records', count: result.count });
+    } catch (error) {
+        console.error('Delete month failed:', error);
+        res.status(500).json({ error: 'Failed to delete finance records for the month' });
     }
 });
 

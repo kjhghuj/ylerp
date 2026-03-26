@@ -16,7 +16,7 @@ import { AddTransactionModal } from './finance/modals/AddTransactionModal';
 import { DayDetailModal } from './finance/modals/DayDetailModal';
 
 export const FinanceManager: React.FC = () => {
-    const { financeRecords, addTransaction, importTransactions, clearAllTransactions, accountBalance, totalDebt, strings, language } = useStore();
+    const { financeRecords, addTransaction, importTransactions, clearAllTransactions, accountBalance, totalDebt, strings, language, deleteTransactionsByMonth } = useStore();
     const t = strings.finance;
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -105,6 +105,8 @@ export const FinanceManager: React.FC = () => {
                         addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
                         addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
                         addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
+                        addRecord(day.debt, 'debt_balance', 'Loans', 'Debt Balance');
+                        addRecord(day.accountBalance, 'account_balance', 'Asset', 'Account Balance');
                         addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
                         addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
                         addRecord(day.salary, 'expense', 'HR', 'Salary');
@@ -189,8 +191,16 @@ export const FinanceManager: React.FC = () => {
     // --- Data Grouping ---
     interface DaySummary {
         date: string;
-        income: number;
-        expense: number;
+        expectedIncome: number;
+        newDebt: number;
+        repayment: number;
+        debtBalance: number;
+        accountBalance: number;
+        rentUtilities: number;
+        freightCost: number;
+        salary: number;
+        otherIncome: number;
+        otherExpense: number;
         net: number;
         records: FinanceRecord[];
     }
@@ -200,7 +210,20 @@ export const FinanceManager: React.FC = () => {
             [monthKey: string]: {
                 monthIncome: number,
                 monthExpense: number,
+                monthNewDebt: number,
+                monthRepayment: number,
                 monthNet: number,
+                monthDebtBalance: number,
+                monthAccountBalance: number,
+                
+                // Detailed totals for month
+                totalExpectedIncome: number,
+                totalRentUtilities: number,
+                totalFreightCost: number,
+                totalSalary: number,
+                totalOtherIncome: number,
+                totalOtherExpense: number,
+                
                 days: { [dayKey: string]: DaySummary }
             }
         } = {};
@@ -212,27 +235,65 @@ export const FinanceManager: React.FC = () => {
             const dayKey = record.date;
 
             if (!groups[monthKey]) {
-                groups[monthKey] = { monthIncome: 0, monthExpense: 0, monthNet: 0, days: {} };
+                groups[monthKey] = { 
+                    monthIncome: 0, monthExpense: 0, monthNewDebt: 0, monthRepayment: 0, monthNet: 0, monthDebtBalance: 0, monthAccountBalance: 0,
+                    totalExpectedIncome: 0, totalRentUtilities: 0, totalFreightCost: 0, totalSalary: 0, totalOtherIncome: 0, totalOtherExpense: 0,
+                    days: {} 
+                };
             }
 
             const monthGroup = groups[monthKey];
             if (!monthGroup.days[dayKey]) {
-                monthGroup.days[dayKey] = { date: dayKey, income: 0, expense: 0, net: 0, records: [] };
+                monthGroup.days[dayKey] = { 
+                    date: dayKey, expectedIncome: 0, newDebt: 0, repayment: 0, debtBalance: 0, accountBalance: 0, rentUtilities: 0, freightCost: 0, salary: 0, otherIncome: 0, otherExpense: 0, net: 0, records: [] 
+                };
             }
 
             const dayGroup = monthGroup.days[dayKey];
             dayGroup.records.push(record);
 
-            if (record.type === 'income' || record.type === 'new_debt') {
+            if (record.type === 'income') {
+                if (record.category === 'Revenue') {
+                    dayGroup.expectedIncome += record.amount;
+                    monthGroup.totalExpectedIncome += record.amount;
+                } else {
+                    dayGroup.otherIncome += record.amount;
+                    monthGroup.totalOtherIncome += record.amount;
+                }
                 monthGroup.monthIncome += record.amount;
                 monthGroup.monthNet += record.amount;
-                dayGroup.income += record.amount;
                 dayGroup.net += record.amount;
-            } else {
+            } else if (record.type === 'expense') {
+                if (record.category === 'Operations') {
+                    dayGroup.rentUtilities += record.amount;
+                    monthGroup.totalRentUtilities += record.amount;
+                } else if (record.category === 'Logistics') {
+                    dayGroup.freightCost += record.amount;
+                    monthGroup.totalFreightCost += record.amount;
+                } else if (record.category === 'HR') {
+                    dayGroup.salary += record.amount;
+                    monthGroup.totalSalary += record.amount;
+                } else {
+                    dayGroup.otherExpense += record.amount;
+                    monthGroup.totalOtherExpense += record.amount;
+                }
                 monthGroup.monthExpense += record.amount;
                 monthGroup.monthNet -= record.amount;
-                dayGroup.expense += record.amount;
                 dayGroup.net -= record.amount;
+            } else if (record.type === 'new_debt') {
+                monthGroup.monthNewDebt += record.amount;
+                dayGroup.newDebt += record.amount;
+                // Note: user explicitly stated newDebt has no effect on net
+            } else if (record.type === 'debt_repayment') {
+                monthGroup.monthRepayment += record.amount;
+                dayGroup.repayment += record.amount;
+                // Note: user explicitly stated repayment has no effect on net
+            } else if (record.type === 'debt_balance') {
+                dayGroup.debtBalance += record.amount;
+                if (!monthGroup.monthDebtBalance) monthGroup.monthDebtBalance = record.amount;
+            } else if (record.type === 'account_balance') {
+                dayGroup.accountBalance += record.amount;
+                if (!monthGroup.monthAccountBalance) monthGroup.monthAccountBalance = record.amount;
             }
         });
         return groups;
@@ -357,69 +418,82 @@ export const FinanceManager: React.FC = () => {
                                         <div className="hidden sm:flex flex-col items-end">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.in}</span>
                                             <span className="font-bold text-emerald-600">+¥{group.monthIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            {group.monthNewDebt > 0 && <span className="text-[10px] text-amber-600 font-bold mt-0.5">借入 +¥{group.monthNewDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
                                         </div>
                                         <div className="hidden sm:flex flex-col items-end">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.out}</span>
                                             <span className="font-bold text-slate-600">-¥{group.monthExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            {group.monthRepayment > 0 && <span className="text-[10px] text-indigo-500 font-bold mt-0.5">还款 -¥{group.monthRepayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
                                         </div>
                                         <div className="flex flex-col items-end min-w-[60px] md:min-w-[80px]">
                                             <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.net}</span>
                                             <span className={`font-bold ${group.monthNet >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{group.monthNet >= 0 ? '+' : ''}¥{group.monthNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                        <div className="border-l border-slate-200 pl-2 md:pl-4 ml-1 md:ml-2 flex items-center">
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if(window.confirm(`确定要删除 ${formatMonthTitle(monthKey)} 的所有流水数据吗？`)) {
+                                                        deleteTransactionsByMonth(monthKey);
+                                                    }
+                                                }} 
+                                                className="p-1.5 md:p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition"
+                                                title="删除该月所有流水"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Day List */}
                                 {isExpanded && (
-                                    <div className="animate-in slide-in-from-top-2 duration-200 divide-y divide-slate-50">
-                                        {sortedDayKeys.map(dayKey => {
-                                            const dayData = group.days[dayKey];
-                                            const { day, weekDay } = getDayLabel(dayKey);
-                                            const isActive = activeDate === dayKey;
-                                            return (
-                                                <div
-                                                    key={dayKey}
-                                                    onClick={() => setActiveDate(dayKey)}
-                                                    onDoubleClick={() => setSelectedDetailDate(dayKey)}
-                                                    className={`group flex items-center p-3 md:p-4 transition cursor-pointer select-none border-l-[3px]
-                                                    ${isActive ? 'bg-indigo-50/50 border-indigo-500' : 'hover:bg-slate-50 border-transparent'}
-                                                `}
-                                                    title="Click to set as active date, Double click for details"
-                                                >
-                                                    <div className="w-14 md:w-20 pl-1 md:pl-2 flex flex-col items-center justify-center border-r border-slate-100 pr-3 md:pr-6 mr-3 md:mr-6">
-                                                        <span className={`text-xl md:text-2xl font-bold leading-none ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>{day}</span>
-                                                        <span className="text-[10px] text-slate-400 uppercase font-bold mt-1 tracking-wide">{weekDay}</span>
-                                                    </div>
-                                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-8">
-                                                        <div className="flex items-center gap-2 md:gap-3">
-                                                            <div className="p-1.5 md:p-2 bg-emerald-100/50 text-emerald-600 rounded-lg"><TrendingUp size={16} /></div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.labels.incomeLabel}</span>
-                                                                <span className={`font-bold text-sm md:text-base ${dayData.income > 0 ? 'text-emerald-700' : 'text-slate-300'}`}>+¥{dayData.income.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 md:gap-3">
-                                                            <div className="p-1.5 md:p-2 bg-rose-100/50 text-rose-600 rounded-lg"><TrendingDown size={16} /></div>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.labels.expenseLabel}</span>
-                                                                <span className={`font-bold text-sm md:text-base ${dayData.expense > 0 ? 'text-slate-700' : 'text-slate-300'}`}>-¥{dayData.expense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="w-24 md:w-40 text-right pr-2 md:pr-4">
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t.labels.netChange}</span>
-                                                            <span className={`font-bold text-sm md:text-lg ${dayData.net >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{dayData.net > 0 ? '+' : ''}¥{dayData.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        </div>
-                                                    </div>
-                                                    {isActive && (
-                                                        <div className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 text-indigo-200">
-                                                            <Check size={20} strokeWidth={3} />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
+                                    <div className="animate-in slide-in-from-top-2 duration-200 overflow-x-auto custom-scrollbar bg-slate-50/30">
+                                        <table className="w-full text-sm text-left whitespace-nowrap min-w-[900px]">
+                                            <thead className="text-slate-500 font-bold border-b border-slate-200">
+                                                <tr>
+                                                    <th className="py-3 pl-6">日期 (日)</th>
+                                                    <th className="py-3 text-right pr-4">资金余额</th>
+                                                    <th className="py-3 text-right pr-4">营业收入</th>
+                                                    <th className="py-3 text-right pr-4">新增借入</th>
+                                                    <th className="py-3 text-right pr-4">债务偿还</th>
+                                                    <th className="py-3 text-right pr-4">累计负债</th>
+                                                    <th className="py-3 text-right pr-4">房租水电</th>
+                                                    <th className="py-3 text-right pr-4">物流运费</th>
+                                                    <th className="py-3 text-right pr-4">人工薪资</th>
+                                                    <th className="py-3 text-right pr-4">其他收支</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {sortedDayKeys.map(dayKey => {
+                                                    const dayData = group.days[dayKey];
+                                                    const { day } = getDayLabel(dayKey);
+                                                    const isActive = activeDate === dayKey;
+                                                    return (
+                                                        <tr 
+                                                            key={dayKey}
+                                                            onClick={() => setActiveDate(dayKey)}
+                                                            onDoubleClick={() => setSelectedDetailDate(dayKey)}
+                                                            className={`group hover:bg-white cursor-pointer transition-colors ${isActive ? 'bg-white shadow-[inset_3px_0_0_#4f46e5]' : ''}`}
+                                                            title="双击查看明细"
+                                                        >
+                                                            <td className={`py-4 pl-6 font-bold ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>{day}日</td>
+                                                            <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.accountBalance > 0 ? `¥${dayData.accountBalance.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-emerald-600">{dayData.expectedIncome > 0 ? `+¥${dayData.expectedIncome.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-amber-600">{dayData.newDebt > 0 ? `+¥${dayData.newDebt.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-indigo-500">{dayData.repayment > 0 ? `-¥${dayData.repayment.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.debtBalance > 0 ? `¥${dayData.debtBalance.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.rentUtilities > 0 ? `-¥${dayData.rentUtilities.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.freightCost > 0 ? `-¥${dayData.freightCost.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.salary > 0 ? `-¥${dayData.salary.toLocaleString()}` : '-'}</td>
+                                                            <td className="py-4 text-right pr-4 font-medium text-slate-500">
+                                                                {(dayData.otherIncome > 0 || dayData.otherExpense > 0) ? `+${dayData.otherIncome} / -${dayData.otherExpense}` : '-'}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </div>

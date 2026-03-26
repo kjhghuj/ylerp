@@ -22,6 +22,7 @@ interface StoreContextType {
   addTransaction: (t: FinanceRecord) => Promise<void>;
   updateTransaction: (t: FinanceRecord) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  deleteTransactionsByMonth: (monthKey: string) => Promise<void>;
   clearAllTransactions: () => Promise<void>;
   importTransactions: (records: Omit<FinanceRecord, 'id'>[]) => Promise<void>;
   accountBalance: number;
@@ -115,6 +116,8 @@ const normalizeFinanceData = (): FinanceRecord[] => {
       addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
       addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
       addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
+      addRecord(day.debt, 'debt_balance', 'Loans', 'Debt Balance');
+      addRecord(day.accountBalance, 'account_balance', 'Asset', 'Account Balance');
       addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
       addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
       addRecord(day.salary, 'expense', 'HR', 'Salary');
@@ -214,6 +217,14 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) { console.error('Error deleting finance record', e); }
   };
 
+  const deleteTransactionsByMonth = async (monthKey: string) => {
+    try {
+      await api.delete(`/finance/month/${monthKey}`);
+      // Also update local state
+      setFinanceRecords(prev => prev.filter(t => !t.date.startsWith(monthKey)));
+    } catch (e) { console.error('Error deleting finance month records', e); }
+  };
+
   const importTransactions = async (records: Omit<FinanceRecord, 'id'>[]) => {
     try {
       await api.post('/finance/batch', records);
@@ -286,6 +297,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   // Derived Financial State
   const accountBalance = useMemo(() => {
     return financeRecords.reduce((acc, curr) => {
+      if (curr.type === 'debt_balance' || curr.type === 'account_balance') return acc;
       if (curr.type === 'income' || curr.type === 'new_debt') return acc + curr.amount;
       return acc - curr.amount;
     }, 0);
@@ -293,6 +305,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const totalDebt = useMemo(() => {
     return financeRecords.reduce((acc, curr) => {
+      if (curr.type === 'debt_balance' || curr.type === 'account_balance') return acc;
       if (curr.type === 'new_debt') return acc + curr.amount;
       if (curr.type === 'debt_repayment') return acc - curr.amount;
       return acc;
@@ -304,7 +317,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       language, setLanguage, strings,
       products, addProduct, updateProduct, deleteProduct,
       calculatorImport, setCalculatorImport,
-      financeRecords, addTransaction, updateTransaction, deleteTransaction, clearAllTransactions, importTransactions, accountBalance, totalDebt,
+      financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,
       skuGroupMappings, addSkuGroup, deleteSkuGroup
