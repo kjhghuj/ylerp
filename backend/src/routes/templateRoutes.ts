@@ -4,6 +4,21 @@ import { PrismaClient } from '@prisma/client';
 const router = Router();
 const prisma = new PrismaClient();
 
+// Get all templates
+router.get('/', async (req, res) => {
+    try {
+        const { type } = req.query;
+        const templates = await prisma.profitTemplate.findMany({
+            where: type ? { type: String(type) } : {},
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(templates);
+    } catch (error) {
+        console.error('Error fetching templates:', error);
+        res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+});
+
 // Get templates by country
 router.get('/:country', async (req, res) => {
     try {
@@ -23,7 +38,7 @@ router.get('/:country', async (req, res) => {
 // Create a new template
 router.post('/', async (req, res) => {
     try {
-        const { name, country, data, type } = req.body;
+        const { name, country, data, type, platform } = req.body;
         
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -34,7 +49,8 @@ router.post('/', async (req, res) => {
                 name,
                 country,
                 data,
-                type: type || 'profit'
+                type: type || 'profit',
+                platform
             }
         });
         res.status(201).json(template);

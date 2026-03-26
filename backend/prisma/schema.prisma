@@ -89,6 +89,7 @@ model ProfitTemplate {
   type      String   @default("profit") // "profit" | "pricing"
   name      String
   country   String
+  platform  String?
   data      Json
   createdAt DateTime @default(now())
 }

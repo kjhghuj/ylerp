@@ -66,16 +66,16 @@ export const TextInput = ({ label, name, value, onChange }: any) => (
 export const SelectInput = ({ label, name, value, onChange, options }: any) => (
     <div className="col-span-2">
         <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{label}</label>
-        <div className="relative">
+        <div className="relative group">
             <select
                 name={name}
                 value={value}
                 onChange={onChange}
-                className="w-full h-11 px-3 appearance-none rounded-lg border border-slate-200 bg-white outline-none text-lg font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer"
+                className="w-full h-11 px-3 appearance-none rounded-lg border border-slate-200 bg-slate-50 outline-none text-lg font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer hover:bg-slate-100/50"
             >
-                {options.map((opt: any) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                {options.map((opt: any) => <option key={opt.value} value={opt.value} className="font-sans">{opt.label}</option>)}
             </select>
-            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none" size={18} />
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" size={18} />
         </div>
     </div>
 );
