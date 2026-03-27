@@ -10,7 +10,10 @@ import { PricingCalculator } from './modules/PricingCalculator';
 import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
 import { UserManagement } from './modules/UserManagement';
+import { ChromaAdapt } from './modules/chroma-adapt/ChromaAdapt';
+import ChromaAdaptV2 from './modules/chroma-adapt-v2/ChromaAdaptV2';
 import { DebugConsole } from './components/DebugConsole';
+import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
 import { Globe, Menu, LogOut, Lock } from 'lucide-react';
 
@@ -55,6 +58,8 @@ const MainContent: React.FC = () => {
       case 'pricing': return <PricingCalculator />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
+      case 'chroma-adapt': return <ChromaAdapt />;
+      case 'chroma-adapt-v2': return <ChromaAdaptV2 />;
       default: return <Dashboard />;
     }
   };
@@ -68,6 +73,8 @@ const MainContent: React.FC = () => {
       case 'pricing': return strings.sidebar.pricing;
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
+      case 'chroma-adapt': return strings.sidebar.chromaAdapt || '图片制作';
+      case 'chroma-adapt-v2': return strings.sidebar.chromaAdaptV2 || '色彩适配V2';
       default: return view;
     }
   }
@@ -176,8 +183,10 @@ const AppGuard: React.FC = () => {
 
   return (
     <StoreProvider>
-      <MainContent />
-      <DebugConsole />
+      <ToastProvider>
+        <MainContent />
+        <DebugConsole />
+      </ToastProvider>
     </StoreProvider>
   );
 };

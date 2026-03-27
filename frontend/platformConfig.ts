@@ -26,10 +26,10 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-orange-500 to-amber-500'
         },
         fields: {
-            base: ['totalRevenue', 'platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'sellerCoupon', 'platformCoupon', 'platformCouponRate'],
+            base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
-            services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'adROI', 'platformInfrastructureFee', 'warehouseOperationFee'],
-            tax: ['vatRate', 'corporateIncomeTaxRate']
+            services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'],
+            tax: []
         }
     },
     lazada: {
@@ -40,10 +40,10 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-indigo-600 to-blue-500'
         },
         fields: {
-            base: ['totalRevenue', 'platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'sellerCoupon', 'platformCoupon', 'platformCouponRate'],
+            base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
-            services: ['adROI', 'platformInfrastructureFee', 'warehouseOperationFee'],
-            tax: ['vatRate', 'corporateIncomeTaxRate']
+            services: ['warehouseOperationFee'],
+            tax: []
         }
     },
     tiktok: {
@@ -54,10 +54,10 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-slate-800 to-black'
         },
         fields: {
-            base: ['totalRevenue', 'platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'sellerCoupon', 'platformCoupon', 'platformCouponRate'],
+            base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
-            services: ['adROI', 'platformInfrastructureFee', 'warehouseOperationFee'],
-            tax: ['vatRate', 'corporateIncomeTaxRate']
+            services: ['warehouseOperationFee'],
+            tax: []
         }
     },
     other: {
@@ -68,10 +68,10 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-slate-400 to-slate-500'
         },
         fields: {
-            base: ['totalRevenue', 'platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'sellerCoupon', 'platformCoupon', 'platformCouponRate'],
+            base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
-            services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'adROI', 'platformInfrastructureFee', 'warehouseOperationFee'],
-            tax: ['vatRate', 'corporateIncomeTaxRate']
+            services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'],
+            tax: []
         }
     }
 };

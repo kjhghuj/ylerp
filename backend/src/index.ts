@@ -11,7 +11,7 @@ const port = process.env.PORT || 3001;
 
 // Middlewares
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100mb' }));
 
 export const prisma = new PrismaClient();
 export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
@@ -36,6 +36,8 @@ import inventoryRoutes from './routes/inventoryRoutes';
 import mappingRoutes from './routes/mappingRoutes';
 import skuGroupRoutes from './routes/skuGroupRoutes';
 import templateRoutes from './routes/templateRoutes';
+import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
+import chromaAdaptV2Routes from './routes/chromaAdaptV2Routes';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
@@ -48,6 +50,8 @@ app.use('/api/inventory', authenticate, inventoryRoutes);
 app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
 app.use('/api/sku-groups', authenticate, skuGroupRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
+app.use('/api/chroma-adapt', chromaAdaptRoutes);
+app.use('/api/chroma-adapt-v2', chromaAdaptV2Routes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

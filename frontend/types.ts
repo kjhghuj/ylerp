@@ -16,6 +16,8 @@ export interface ProductCalcData {
   
   // Coupons & Discounts
   sellerCoupon: number;
+  sellerCouponType?: 'fixed' | 'percent';
+  sellerCouponPlatformRatio?: number;
   platformCoupon: number;
   platformCouponRate?: number; // New field for Percentage
   
@@ -93,5 +95,5 @@ export interface SkuGroupMapping {
 }
 
 export interface AppState {
-  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'pricing' | 'product-list' | 'user-management';
+  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'pricing' | 'product-list' | 'user-management' | 'chroma-adapt' | 'chroma-adapt-v2';
 }

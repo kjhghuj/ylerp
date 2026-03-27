@@ -20,6 +20,8 @@ model Product {
   extraShippingFee          Float
   crossBorderFee            Float
   sellerCoupon              Float
+  sellerCouponType          String  @default("fixed")
+  sellerCouponPlatformRatio Float
   platformCoupon            Float
   platformCouponRate        Float?
   platformCommissionRate    Float

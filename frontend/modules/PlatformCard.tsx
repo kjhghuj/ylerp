@@ -50,21 +50,25 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         ) as any;
 
         const costTaxAmount = g.purchaseCost * (g.supplierTaxPoint / 100);
+        const grossSellerCoupon = globalInputs.sellerCouponType === 'percent'
+            ? g.totalRevenue * (g.sellerCoupon / 100)
+            : g.sellerCoupon;
+        const actualSellerCoupon = grossSellerCoupon * (1 - g.sellerCouponPlatformRatio / 100);
         let vat = 0, corporateIncomeTax = 0;
 
-        const taxableRevenue = safeData.totalRevenue - safeData.sellerCoupon - safeData.platformCoupon;
+        const taxableRevenue = g.totalRevenue - actualSellerCoupon - safeData.platformCoupon;
 
         if (globalInputs.supplierInvoice === 'yes') {
-            vat = taxableRevenue * (safeData.vatRate / 100);
+            vat = taxableRevenue * (g.vatRate / 100);
             const corporateIncomeTaxableAmount = taxableRevenue - g.purchaseCost;
-            corporateIncomeTax = ((safeData.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
+            corporateIncomeTax = ((g.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
         } else {
-            vat = taxableRevenue * (safeData.vatRate / 100);
-            corporateIncomeTax = (safeData.corporateIncomeTaxRate / 100) * taxableRevenue;
+            vat = taxableRevenue * (g.vatRate / 100);
+            corporateIncomeTax = (g.corporateIncomeTaxRate / 100) * taxableRevenue;
         }
         const totalTax = vat + corporateIncomeTax;
 
-        const revenueAfterSellerCoupon = safeData.totalRevenue - safeData.sellerCoupon;
+        const revenueAfterSellerCoupon = g.totalRevenue - actualSellerCoupon;
         const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
         const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
 
@@ -77,7 +81,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.mdvServiceFeeRate / 100), mdvCapCNY);
         const fssServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.fssServiceFeeRate / 100), otherCapCNY);
         const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.ccbServiceFeeRate / 100), otherCapCNY);
-        const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + safeData.platformInfrastructureFee;
+        const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + g.platformInfrastructureFee;
 
         let shippingFee = safeData.baseShippingFee + safeData.crossBorderFee;
         if (g.productWeight > safeData.firstWeight) {
@@ -85,12 +89,12 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             shippingFee += safeData.extraShippingFee * (extraWeight / 10);
         }
 
-        const adFee = safeData.adROI > 0 ? taxableRevenue / safeData.adROI : 0;
-        const damage = safeData.totalRevenue * (safeData.damageReturnRate / 100);
+        const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
+        const damage = g.totalRevenue * (safeData.damageReturnRate / 100);
         const platformFee = commission + transactionFee + serviceFee + adFee + safeData.warehouseOperationFee + damage;
         
         // Final Revenue directly in CNY
-        const finalRevenueCNY = safeData.totalRevenue - safeData.sellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
+        const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
         const finalRevenueLocal = finalRevenueCNY * rateToCNY;
         
         setResults({
@@ -98,14 +102,14 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
             finalRevenueLocal, finalRevenueCNY,
             roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
-            margin: safeData.totalRevenue > 0 ? (finalRevenueCNY / safeData.totalRevenue) * 100 : 0
+            margin: g.totalRevenue > 0 ? (finalRevenueCNY / g.totalRevenue) * 100 : 0
         });
 
     }, [data, globalInputs, rateToCNY]);
 
     const isMoneyField = (key: string) => [
-        'totalRevenue', 'sellerCoupon', 'platformCoupon', 'baseShippingFee', 
-        'extraShippingFee', 'crossBorderFee', 'platformInfrastructureFee', 'warehouseOperationFee'
+        'platformCoupon', 'baseShippingFee', 
+        'extraShippingFee', 'crossBorderFee', 'warehouseOperationFee'
     ].includes(key);
 
     const renderInput = (key: string) => {
@@ -149,10 +153,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             <div className="flex-1 overflow-y-auto outline-none" style={{ maxHeight: '400px' }}>
                 <div className="p-4 space-y-4">
                     <div className="grid grid-cols-2 gap-3">
-                        <NumberInput label={t.matrix.priceLabel} name="totalRevenue" value={data.totalRevenue ?? ''} onChange={handleChange} highlight currencyCode={country} exchangeRate={rateToCNY} />
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}
-                        {config.fields.base.includes('sellerCoupon') && renderInput('sellerCoupon')}
                         {config.fields.base.includes('damageReturnRate') && renderInput('damageReturnRate')}
                         
                         {config.fields.shipping.includes('firstWeight') && renderInput('firstWeight')}
@@ -163,12 +165,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.services.includes('mdvServiceFeeRate') && renderInput('mdvServiceFeeRate')}
                         {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
-                        {config.fields.services.includes('adROI') && renderInput('adROI')}
-                        {config.fields.services.includes('platformInfrastructureFee') && renderInput('platformInfrastructureFee')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
-                        
-                        {config.fields.tax.includes('vatRate') && renderInput('vatRate')}
-                        {config.fields.tax.includes('corporateIncomeTaxRate') && renderInput('corporateIncomeTaxRate')}
                     </div>
                 </div>
             </div>
@@ -192,7 +189,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-800/95 backdrop-blur-md text-white border border-slate-700 rounded-xl p-4 shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none z-50 transition-all duration-200 translate-y-2 group-hover/tooltip:translate-y-0 flex flex-col gap-1.5 text-[11px] font-medium">
                             <div className="flex justify-between font-bold text-slate-300 pb-2 mb-1 border-b border-slate-600">
                                 <span>{t.inputs.totalRevenue || '售价 (CNY)'}</span>
-                                <span className="text-white">¥{Number(data.totalRevenue || 0).toFixed(2)}</span>
+                                <span className="text-white">¥{Number(globalInputs.totalRevenue || 0).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.inputs.cost || '成本'}</span>
