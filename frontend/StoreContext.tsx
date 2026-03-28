@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
 import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping } from './types';
 import { translations } from './translations';
-import { importedRawData } from './data/initialFinanceData';
 
 type Language = 'zh' | 'en';
 
@@ -40,93 +39,10 @@ interface StoreContextType {
   skuGroupMappings: SkuGroupMapping[];
   addSkuGroup: (m: SkuGroupMapping) => Promise<void>;
   deleteSkuGroup: (id: string) => Promise<void>;
-
   loading: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
-
-// Initial Products Data - Updated to match new comprehensive structure
-const initialProducts: ProductCalcData[] = [
-  {
-    id: '1', name: '无线蓝牙耳机', sku: 'WE-001', country: 'SG',
-    totalRevenue: 199, cost: 60, productWeight: 150, firstWeight: 50,
-    baseShippingFee: 10, extraShippingFee: 0.5, crossBorderFee: 5,
-    sellerCoupon: 5, platformCoupon: 5, platformCouponRate: 2.51,
-    platformCommissionRate: 15, transactionFeeRate: 3, damageReturnRate: 1, adROI: 3,
-    vatRate: 0, corporateIncomeTaxRate: 0, supplierTaxPoint: 0,
-    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
-    platformInfrastructureFee: 0, warehouseOperationFee: 2,
-    supplierInvoice: 'yes',
-    quantityPerBox: 50, volume: '40x30x30',
-    shipping: 15, fees: 30, marketing: 40, taxes: 10, profit: 44, margin: 22.1, costMargin: 73
-  },
-];
-
-// Initial Inventory Data
-const initialInventory: InventoryItem[] = [
-  { id: '1', name: '无线蓝牙耳机', sku: 'WE-001', currentStock: 120, stockOfficial: 100, stockThirdParty: 20, inTransit: 50, dailySales: 6.5, leadTime: 25, replenishCycle: 45, costPerUnit: 60 },
-  { id: '2', name: '智能运动手表', sku: 'SW-PRO-02', currentStock: 15, stockOfficial: 10, stockThirdParty: 5, inTransit: 0, dailySales: 1.4, leadTime: 30, replenishCycle: 30, costPerUnit: 100 },
-];
-
-const initialMappings: WarehouseMapping[] = [
-  { id: '1', officialWarehouseId: 'WH-OFF-001-A', sku: 'WE-001', type: 'official' },
-  { id: '2', officialWarehouseId: 'WH-OFF-001-B', sku: 'WE-001', type: 'official' },
-];
-
-const initialSkuGroups: SkuGroupMapping[] = [];
-
-const normalizeFinanceData = (): FinanceRecord[] => {
-  const records: FinanceRecord[] = [];
-  let idCounter = 1;
-
-  importedRawData.forEach(monthGroup => {
-    // Parse "2025年7月" -> 2025, 7
-    const monthMatch = monthGroup.month.match(/(\d{4})年(\d{1,2})月/);
-    if (!monthMatch) return;
-    const year = parseInt(monthMatch[1]);
-    const month = parseInt(monthMatch[2]);
-
-    monthGroup.days.forEach((day: any) => {
-      // Parse "1日" -> 1
-      const dayMatch = day.date.match(/(\d{1,2})日/);
-      if (!dayMatch) return;
-      const dayNum = parseInt(dayMatch[1]);
-
-      // Format YYYY-MM-DD
-      const dateStr = `${year}-${month.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
-      const notes = day.notes || '';
-
-      const addRecord = (amountStr: string, type: FinanceRecord['type'], category: string, descPrefix: string) => {
-        if (!amountStr) return;
-        const amount = parseFloat(amountStr.toString().replace(/,/g, ''));
-        if (amount > 0) {
-          records.push({
-            id: (idCounter++).toString(),
-            date: dateStr,
-            type,
-            amount,
-            category,
-            description: notes ? `${descPrefix} - ${notes}` : descPrefix,
-            accountId: 'main'
-          });
-        }
-      };
-
-      addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
-      addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
-      addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
-      addRecord(day.debt, 'debt_balance', 'Loans', 'Debt Balance');
-      addRecord(day.accountBalance, 'account_balance', 'Asset', 'Account Balance');
-      addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
-      addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
-      addRecord(day.salary, 'expense', 'HR', 'Salary');
-    });
-  });
-  return records;
-};
-
-// --- DATA IMPORT LOGIC END ---
 
 import api from './src/api';
 
@@ -314,7 +230,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   return (
     <StoreContext.Provider value={{
-      language, setLanguage, strings,
+      language, setLanguage, strings, loading,
       products, addProduct, updateProduct, deleteProduct,
       calculatorImport, setCalculatorImport,
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,

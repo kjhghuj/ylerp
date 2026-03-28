@@ -25,7 +25,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<AuthUser | null>(null);
     const [token, setToken] = useState<string | null>(() => {
-        // @ts-ignore
+        // dev mode token injection
         if (import.meta.env.DEV) {
             localStorage.setItem('erp_token', 'dev-token');
             return 'dev-token';

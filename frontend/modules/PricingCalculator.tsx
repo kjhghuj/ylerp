@@ -175,7 +175,7 @@ export const PricingCalculator: React.FC = () => {
         const targetMargin = inputs.targetMargin / 100;
 
         let suggestedPrice = 0;
-        let vat = 0, corpTax = 0, totalTax = 0;
+        let vat: number, corpTax: number, totalTax: number;
 
         // Formula: Profit = P * Margin
         // Profit = P - (P * totalPlatformVarRate) - S - fixedPlatform - TotalTax - Costs

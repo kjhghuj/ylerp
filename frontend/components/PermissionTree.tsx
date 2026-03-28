@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List } from 'lucide-react';
+import { ChevronDown, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;

@@ -11,11 +11,17 @@ export const DebugConsole: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const addLog = (msg: string) => {
+      setLogs(prev => [
+        { id: Date.now() + Math.random(), message: msg, time: new Date().toLocaleTimeString() },
+        ...prev
+      ].slice(0, 20));
+      setIsExpanded(true);
+  };
+
   useEffect(() => {
-    // Save original console methods
     const originalError = console.error;
     
-    // Intercept console.error
     console.error = (...args: any[]) => {
       originalError.apply(console, args);
       
@@ -24,7 +30,7 @@ export const DebugConsole: React.FC = () => {
             if (a instanceof Error) return a.message + '\n' + a.stack;
             const str = typeof a === 'object' ? JSON.stringify(a) : String(a);
             return str.length > 500 ? str.substring(0, 500) + '...' : str;
-        } catch (e) {
+        } catch (_e) {
             return '[Complex Object]';
         }
       }).join(' ');
@@ -32,25 +38,22 @@ export const DebugConsole: React.FC = () => {
       addLog(msg);
     };
 
-    // Intercept Global Runtime Errors
     const handleError = (event: ErrorEvent) => {
       addLog(`Runtime Error: ${event.message}`);
     };
 
-    // Intercept Unhandled Promise Rejections
     const handleRejection = (event: PromiseRejectionEvent) => {
       let reason = event.reason;
       if (reason instanceof Error) {
           reason = reason.message + (reason.stack ? '\n' + reason.stack : '');
       } else if (typeof reason === 'object') {
           try {
-              // Handle Axios error response safely
               if (reason?.isAxiosError) {
                   reason = `AxiosError: ${reason.message} ${reason.response?.status || ''}`;
               } else {
                   reason = JSON.stringify(reason);
               }
-          } catch(e) { 
+          } catch(_e) { 
               reason = String(reason); 
           }
       }
@@ -66,14 +69,6 @@ export const DebugConsole: React.FC = () => {
       window.removeEventListener('unhandledrejection', handleRejection);
     };
   }, []);
-
-  const addLog = (msg: string) => {
-      setLogs(prev => [
-        { id: Date.now() + Math.random(), message: msg, time: new Date().toLocaleTimeString() },
-        ...prev
-      ].slice(0, 20)); // Keep last 20 errors
-      setIsExpanded(true); // Auto open when error occurs
-  };
 
   if (logs.length === 0) return null;
 

@@ -20,7 +20,7 @@ import { Globe, Menu, LogOut, Lock } from 'lucide-react';
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { language, setLanguage, strings, setCalculatorImport, loading } = useStore();
+  const { language, setLanguage, strings, loading } = useStore();
   const { user, logout } = useAuth();
 
   const handleViewChange = (view: AppState['currentView']) => {

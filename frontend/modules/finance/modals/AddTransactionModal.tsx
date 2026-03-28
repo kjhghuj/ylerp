@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { FinanceRecord } from '../../../types';
 
@@ -10,21 +10,22 @@ interface AddTransactionModalProps {
     t: any;
 }
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onAdd, initialDate, t }) => {
-    const [newTrans, setNewTrans] = useState({
-        type: 'income',
-        amount: '',
-        description: '',
-        date: initialDate
-    });
+const createInitialState = (initialDate: string) => ({
+    type: 'income',
+    amount: '',
+    description: '',
+    date: initialDate
+});
 
-    useEffect(() => {
-        if(isOpen) {
-            setNewTrans(prev => ({ ...prev, date: initialDate, amount: '', description: '' }));
-        }
-    }, [isOpen, initialDate]);
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onAdd, initialDate, t }) => {
+    const [newTrans, setNewTrans] = useState(() => createInitialState(initialDate));
 
     if (!isOpen) return null;
+
+    const resetAndClose = () => {
+        setNewTrans(createInitialState(initialDate));
+        onClose();
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -41,8 +42,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
             date: newTrans.date,
         });
 
-        // Close modal
-        onClose();
+        resetAndClose();
     };
 
     return (
@@ -53,7 +53,7 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
                       <Plus size={18} className="text-indigo-600"/>
                       {t.form.add}
                   </h3>
-                  <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-indigo-600 transition"/></button>
+                  <button onClick={resetAndClose}><X size={20} className="text-slate-400 hover:text-indigo-600 transition"/></button>
               </div>
               
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">

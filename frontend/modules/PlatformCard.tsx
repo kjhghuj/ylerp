@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { PLATFORMS, PlatformType, PlatformConfig } from '../platformConfig';
-import { NumberInput, ResultRow } from '../components/CalcInputs';
+import React, { useState, useMemo } from 'react';
+import { PLATFORMS, PlatformType } from '../platformConfig';
+import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
 
 interface PlatformCardProps {
@@ -33,15 +33,13 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
     const siteName = countryMap[country] || country;
 
-    const [results, setResults] = useState<any>(null);
     const [templateName, setTemplateName] = useState('');
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(nodeId, { [e.target.name]: e.target.value });
     };
 
-    useEffect(() => {
-        // Calculate Profit for this card (inputs are now in CNY)
+    const results = useMemo(() => {
         const safeData = Object.fromEntries(
             Object.entries(data).map(([k, v]) => [k, Number(v) || 0])
         ) as any;
@@ -54,7 +52,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             ? g.totalRevenue * (g.sellerCoupon / 100)
             : g.sellerCoupon;
         const actualSellerCoupon = grossSellerCoupon * (1 - g.sellerCouponPlatformRatio / 100);
-        let vat = 0, corporateIncomeTax = 0;
+        let vat: number, corporateIncomeTax: number;
 
         const taxableRevenue = g.totalRevenue - actualSellerCoupon - safeData.platformCoupon;
 
@@ -72,9 +70,6 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
         const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
 
-        // Maximum caps were previously hardcoded in local currency (25 for MDV, 12.5 for others).
-        // Since input is now in CNY, we'll convert caps to CNY using the rate, or assume the caps apply after conversion?
-        // Let's cap them by dividing the local cap by rateToCNY.
         const mdvCapCNY = 25 / rateToCNY;
         const otherCapCNY = 12.5 / rateToCNY;
 
@@ -93,18 +88,16 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const damage = g.totalRevenue * (safeData.damageReturnRate / 100);
         const platformFee = commission + transactionFee + serviceFee + adFee + safeData.warehouseOperationFee + damage;
         
-        // Final Revenue directly in CNY
         const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
         const finalRevenueLocal = finalRevenueCNY * rateToCNY;
-        
-        setResults({
+
+        return {
             purchaseCost: g.purchaseCost,
             commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
             finalRevenueLocal, finalRevenueCNY,
             roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
             margin: g.totalRevenue > 0 ? (finalRevenueCNY / g.totalRevenue) * 100 : 0
-        });
-
+        };
     }, [data, globalInputs, rateToCNY]);
 
     const isMoneyField = (key: string) => [

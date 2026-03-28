@@ -4,7 +4,7 @@ import { Save, Calculator, Plus, Box, Building, Trash2, ChevronDown } from 'luci
 import api from '../src/api';
 import { ProductCalcData } from '../types';
 
-import { InputCard, NumberInput, TextInput, SelectInput } from '../components/CalcInputs';
+import { NumberInput, TextInput, SelectInput } from '../components/CalcInputs';
 import { PlatformCard } from './PlatformCard';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { useToast } from '../components/Toast';
@@ -60,24 +60,6 @@ export const ProfitCalculator: React.FC = () => {
 
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
-    useEffect(() => {
-        fetchTemplates();
-        fetchRates();
-    }, []);
-
-    useEffect(() => {
-        if (!templatesLoaded || allTemplates.length === 0) return;
-        const siteTemplates = allTemplates.filter(tpl => tpl.country === siteCountry);
-        setNodes(siteTemplates.map(tpl => ({
-            id: tpl.id || crypto.randomUUID(),
-            templateId: tpl.id,
-            platform: tpl.platform || 'other',
-            country: tpl.country,
-            name: tpl.name,
-            data: { ...DEFAULT_NODE_DATA, ...tpl.data }
-        })));
-    }, [siteCountry, templatesLoaded]);
-
     const fetchTemplates = async () => {
         try {
             const response = await api.get(`/templates?type=profit`);
@@ -102,6 +84,24 @@ export const ProfitCalculator: React.FC = () => {
             setRates({ MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0 });
         }
     };
+
+    useEffect(() => {
+        fetchTemplates();
+        fetchRates();
+    }, []);
+
+    useEffect(() => {
+        if (!templatesLoaded || allTemplates.length === 0) return;
+        const siteTemplates = allTemplates.filter(tpl => tpl.country === siteCountry);
+        setNodes(siteTemplates.map(tpl => ({
+            id: tpl.id || crypto.randomUUID(),
+            templateId: tpl.id,
+            platform: tpl.platform || 'other',
+            country: tpl.country,
+            name: tpl.name,
+            data: { ...DEFAULT_NODE_DATA, ...tpl.data }
+        })));
+    }, [siteCountry, templatesLoaded]);
 
     // Handle data import from Product List
     useEffect(() => {

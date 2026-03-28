@@ -1,19 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../StoreContext';
 import {
-    Plus, ChevronDown, Calendar,
-    TrendingUp, TrendingDown, DollarSign, CreditCard,
+    Plus, Calendar,
+    TrendingUp, TrendingDown, CreditCard,
     Check, Wallet, ArrowRightLeft, Upload, Trash2
 } from 'lucide-react';
 import { FinanceRecord } from '../types';
-
-// Imported Components
 import { KPICard } from './finance/components/KPICard';
 import { FinanceCharts } from './finance/components/FinanceCharts';
 import { MonthPickerModal } from './finance/modals/MonthPickerModal';
 import { DatePickerModal } from './finance/modals/DatePickerModal';
 import { AddTransactionModal } from './finance/modals/AddTransactionModal';
 import { DayDetailModal } from './finance/modals/DayDetailModal';
+import { MonthGroup } from './finance/components/MonthGroup';
 
 export const FinanceManager: React.FC = () => {
     const { financeRecords, addTransaction, importTransactions, clearAllTransactions, accountBalance, totalDebt, strings, language, deleteTransactionsByMonth } = useStore();
@@ -393,110 +392,27 @@ export const FinanceManager: React.FC = () => {
                 <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                     {sortedMonthKeys.map(monthKey => {
                         const group = groupedData[monthKey];
-                        const isExpanded = expandedMonths.has(monthKey);
-                        const sortedDayKeys = Object.keys(group.days).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
                         return (
-                            <div key={monthKey} className="bg-white/60 backdrop-blur-md rounded-2xl overflow-hidden transition-all duration-300 shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-white/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)]">
-                                {/* Month Header */}
-                                <div
-                                    onClick={() => toggleMonth(monthKey)}
-                                    className={`flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors ${isExpanded ? 'bg-indigo-50/30 border-b border-indigo-100' : ''}`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-2 rounded-lg transition-transform duration-300 ${isExpanded ? 'bg-indigo-100 text-indigo-600 rotate-180' : 'bg-slate-100 text-slate-500'}`}>
-                                            <ChevronDown size={16} />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="font-bold text-slate-800 text-base flex items-center gap-2">
-                                                {formatMonthTitle(monthKey)}
-                                            </span>
-                                            <span className="text-xs text-slate-400 font-medium">{sortedDayKeys.length} {t.labels.activeDays}</span>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2 md:gap-6 text-sm">
-                                        <div className="hidden sm:flex flex-col items-end">
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.in}</span>
-                                            <span className="font-bold text-emerald-600">+¥{group.monthIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                            {group.monthNewDebt > 0 && <span className="text-[10px] text-amber-600 font-bold mt-0.5">借入 +¥{group.monthNewDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                                        </div>
-                                        <div className="hidden sm:flex flex-col items-end">
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.out}</span>
-                                            <span className="font-bold text-slate-600">-¥{group.monthExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                            {group.monthRepayment > 0 && <span className="text-[10px] text-indigo-500 font-bold mt-0.5">还款 -¥{group.monthRepayment.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>}
-                                        </div>
-                                        <div className="flex flex-col items-end min-w-[60px] md:min-w-[80px]">
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">{t.monthlyStats.net}</span>
-                                            <span className={`font-bold ${group.monthNet >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>{group.monthNet >= 0 ? '+' : ''}¥{group.monthNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                        </div>
-                                        <div className="border-l border-slate-200 pl-2 md:pl-4 ml-1 md:ml-2 flex items-center">
-                                            <button 
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if(window.confirm(`确定要删除 ${formatMonthTitle(monthKey)} 的所有流水数据吗？`)) {
-                                                        deleteTransactionsByMonth(monthKey);
-                                                    }
-                                                }} 
-                                                className="p-1.5 md:p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition"
-                                                title="删除该月所有流水"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Day List */}
-                                {isExpanded && (
-                                    <div className="animate-in slide-in-from-top-2 duration-200 overflow-x-auto custom-scrollbar bg-slate-50/30">
-                                        <table className="w-full text-sm text-left whitespace-nowrap min-w-[900px]">
-                                            <thead className="text-slate-500 font-bold border-b border-slate-200">
-                                                <tr>
-                                                    <th className="py-3 pl-6">日期 (日)</th>
-                                                    <th className="py-3 text-right pr-4">资金余额</th>
-                                                    <th className="py-3 text-right pr-4">营业收入</th>
-                                                    <th className="py-3 text-right pr-4">新增借入</th>
-                                                    <th className="py-3 text-right pr-4">债务偿还</th>
-                                                    <th className="py-3 text-right pr-4">累计负债</th>
-                                                    <th className="py-3 text-right pr-4">房租水电</th>
-                                                    <th className="py-3 text-right pr-4">物流运费</th>
-                                                    <th className="py-3 text-right pr-4">人工薪资</th>
-                                                    <th className="py-3 text-right pr-4">其他收支</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {sortedDayKeys.map(dayKey => {
-                                                    const dayData = group.days[dayKey];
-                                                    const { day } = getDayLabel(dayKey);
-                                                    const isActive = activeDate === dayKey;
-                                                    return (
-                                                        <tr 
-                                                            key={dayKey}
-                                                            onClick={() => setActiveDate(dayKey)}
-                                                            onDoubleClick={() => setSelectedDetailDate(dayKey)}
-                                                            className={`group hover:bg-white cursor-pointer transition-colors ${isActive ? 'bg-white shadow-[inset_3px_0_0_#4f46e5]' : ''}`}
-                                                            title="双击查看明细"
-                                                        >
-                                                            <td className={`py-4 pl-6 font-bold ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>{day}日</td>
-                                                            <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.accountBalance > 0 ? `¥${dayData.accountBalance.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-emerald-600">{dayData.expectedIncome > 0 ? `+¥${dayData.expectedIncome.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-amber-600">{dayData.newDebt > 0 ? `+¥${dayData.newDebt.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-indigo-500">{dayData.repayment > 0 ? `-¥${dayData.repayment.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.debtBalance > 0 ? `¥${dayData.debtBalance.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.rentUtilities > 0 ? `-¥${dayData.rentUtilities.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.freightCost > 0 ? `-¥${dayData.freightCost.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.salary > 0 ? `-¥${dayData.salary.toLocaleString()}` : '-'}</td>
-                                                            <td className="py-4 text-right pr-4 font-medium text-slate-500">
-                                                                {(dayData.otherIncome > 0 || dayData.otherExpense > 0) ? `+${dayData.otherIncome} / -${dayData.otherExpense}` : '-'}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                )}
-                            </div>
+                            <MonthGroup
+                                key={monthKey}
+                                monthKey={monthKey}
+                                group={group}
+                                isExpanded={expandedMonths.has(monthKey)}
+                                onToggle={() => toggleMonth(monthKey)}
+                                activeDate={activeDate}
+                                onDateSelect={setActiveDate}
+                                onDateDetail={setSelectedDetailDate}
+                                onDeleteMonth={() => {
+                                    if (window.confirm(`确定要删除 ${formatMonthTitle(monthKey)} 的所有流水数据吗？`)) {
+                                        deleteTransactionsByMonth(monthKey);
+                                    }
+                                }}
+                                formatMonthTitle={formatMonthTitle}
+                                getDayLabel={getDayLabel}
+                                t={t}
+                                activeDaysLabel={t.labels.activeDays}
+                                dayCount={Object.keys(group.days).length}
+                            />
                         );
                     })}
                     {sortedMonthKeys.length === 0 && (
