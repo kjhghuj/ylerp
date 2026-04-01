@@ -6,12 +6,12 @@ import { Dashboard } from './modules/Dashboard';
 import { ProfitCalculator } from './modules/ProfitCalculator';
 import { FinanceManager } from './modules/FinanceManager';
 import { RestockCalculator } from './modules/RestockCalculator';
+import { RestockRecords } from './modules/RestockRecords';
 import { PricingCalculator } from './modules/PricingCalculator';
 import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
 import { UserManagement } from './modules/UserManagement';
 import { ChromaAdapt } from './modules/chroma-adapt/ChromaAdapt';
-import ChromaAdaptV2 from './modules/chroma-adapt-v2/ChromaAdaptV2';
 import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
@@ -37,9 +37,8 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
-    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'pricing', 'product-list'];
-    // Permission check for non-owner users
-    if (user?.role !== 'owner' && moduleViews.includes(currentView) && !(user?.permissions || []).includes(currentView)) {
+    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-records', 'pricing', 'product-list'];
+    if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !(user.permissions || []).includes(currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
           <div className="p-4 bg-slate-100 rounded-2xl">
@@ -55,11 +54,11 @@ const MainContent: React.FC = () => {
       case 'profit': return <ProfitCalculator />;
       case 'finance': return <FinanceManager />;
       case 'inventory': return <RestockCalculator />;
+      case 'restock-records': return <RestockRecords />;
       case 'pricing': return <PricingCalculator />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
       case 'chroma-adapt': return <ChromaAdapt />;
-      case 'chroma-adapt-v2': return <ChromaAdaptV2 />;
       default: return <Dashboard />;
     }
   };
@@ -70,11 +69,11 @@ const MainContent: React.FC = () => {
       case 'profit': return strings.sidebar.profit;
       case 'finance': return strings.sidebar.finance;
       case 'inventory': return strings.sidebar.inventory;
+      case 'restock-records': return strings.sidebar.restockRecords || '补货记录';
       case 'pricing': return strings.sidebar.pricing;
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
       case 'chroma-adapt': return strings.sidebar.chromaAdapt || '图片制作';
-      case 'chroma-adapt-v2': return strings.sidebar.chromaAdaptV2 || '色彩适配V2';
       default: return view;
     }
   }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
-import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping } from './types';
+import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping, RestockRecord } from './types';
 import { translations } from './translations';
 
 type Language = 'zh' | 'en';
@@ -39,6 +39,11 @@ interface StoreContextType {
   skuGroupMappings: SkuGroupMapping[];
   addSkuGroup: (m: SkuGroupMapping) => Promise<void>;
   deleteSkuGroup: (id: string) => Promise<void>;
+
+  restockRecords: RestockRecord[];
+  addRestockRecord: (name: string, items: RestockRecord['items']) => Promise<void>;
+  deleteRestockRecord: (id: string) => Promise<void>;
+
   loading: boolean;
 }
 
@@ -54,6 +59,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [warehouseMappings, setWarehouseMappings] = useState<WarehouseMapping[]>([]);
   const [skuGroupMappings, setSkuGroupMappings] = useState<SkuGroupMapping[]>([]);
+  const [restockRecords, setRestockRecords] = useState<RestockRecord[]>([]);
   const [calculatorImport, setCalculatorImport] = useState<ProductCalcData | null>(null);
 
   React.useEffect(() => {
@@ -64,7 +70,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           api.get('/finance'),
           api.get('/inventory'),
           api.get('/warehouse-mappings'),
-          api.get('/sku-groups')
+          api.get('/sku-groups'),
+          api.get('/restock-records')
         ];
 
         // Attach dummy catch handlers to prevent unhandled rejection warnings
@@ -76,14 +83,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           finRes,
           invRes,
           wmRes,
-          sgRes
+          sgRes,
+          rrRes
         ] = await Promise.all(requests);
 
-        setProducts(prodRes.data);
-        setFinanceRecords(finRes.data);
-        setInventory(invRes.data);
-        setWarehouseMappings(wmRes.data);
-        setSkuGroupMappings(sgRes.data);
+        setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
+        setFinanceRecords(Array.isArray(finRes.data) ? finRes.data : []);
+        setInventory(Array.isArray(invRes.data) ? invRes.data : []);
+        setWarehouseMappings(Array.isArray(wmRes.data) ? wmRes.data : []);
+        setSkuGroupMappings(Array.isArray(sgRes.data) ? sgRes.data : []);
+        setRestockRecords(Array.isArray(rrRes.data) ? rrRes.data : []);
       } catch (error) {
         console.error('Failed to fetch initial data', error);
       } finally {
@@ -210,12 +219,27 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) { console.error('Error deleting sku group', e); }
   };
 
+  const addRestockRecord = async (name: string, items: RestockRecord['items']) => {
+    try {
+      const res = await api.post('/restock-records', { name, items });
+      setRestockRecords(prev => [res.data, ...prev]);
+    } catch (e) { console.error('Error adding restock record', e); }
+  };
+  const deleteRestockRecord = async (id: string) => {
+    try {
+      await api.delete(`/restock-records/${id}`);
+      setRestockRecords(prev => prev.filter(r => r.id !== id));
+    } catch (e) { console.error('Error deleting restock record', e); }
+  };
+
   // Derived Financial State
   const accountBalance = useMemo(() => {
     return financeRecords.reduce((acc, curr) => {
-      if (curr.type === 'debt_balance' || curr.type === 'account_balance') return acc;
-      if (curr.type === 'income' || curr.type === 'new_debt') return acc + curr.amount;
-      return acc - curr.amount;
+      if (curr.type === 'debt_balance' || curr.type === 'account_balance' || curr.type === 'new_debt') return acc;
+      if (curr.type === 'income') return acc + curr.amount;
+      if (curr.type === 'debt_repayment') return acc - curr.amount;
+      if (curr.type === 'expense') return acc - curr.amount;
+      return acc;
     }, 0);
   }, [financeRecords]);
 
@@ -236,7 +260,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,
-      skuGroupMappings, addSkuGroup, deleteSkuGroup
+      skuGroupMappings, addSkuGroup, deleteSkuGroup,
+      restockRecords, addRestockRecord, deleteRestockRecord
     }}>
       {children}
     </StoreContext.Provider>

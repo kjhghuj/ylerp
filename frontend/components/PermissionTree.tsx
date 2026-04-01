@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List } from 'lucide-react';
+import { ChevronDown, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List, ClipboardList } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -13,7 +13,8 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
     { key: 'profit', label: '利润计算器', icon: Calculator },
     { key: 'product-list', label: '产品列表', icon: List },
     { key: 'finance', label: '财务管理', icon: Wallet },
-    { key: 'inventory', label: '补货计算', icon: PackageCheck },
+    { key: 'inventory', label: '智能补货', icon: PackageCheck },
+    { key: 'restock-records', label: '补货记录', icon: ClipboardList },
     { key: 'pricing', label: '定价计算', icon: Tag },
 ];
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, ClipboardList } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
@@ -21,9 +21,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
     { id: 'product-list', label: strings.sidebar.productList, icon: List },
     { id: 'finance', label: strings.sidebar.finance, icon: Wallet },
     { id: 'inventory', label: strings.sidebar.inventory, icon: PackageCheck },
+    { id: 'restock-records', label: strings.sidebar.restockRecords || '补货记录', icon: ClipboardList },
     { id: 'pricing', label: strings.sidebar.pricing, icon: Tag },
     { id: 'chroma-adapt', label: strings.sidebar.chromaAdapt || '图片制作', icon: Image },
-    { id: 'chroma-adapt-v2', label: strings.sidebar.chromaAdaptV2 || '色彩适配V2', icon: Sparkles },
     // Only show user management for owner
     ...(user?.role === 'owner' ? [{ id: 'user-management', label: '用户管理', icon: Users }] : []),
   ];

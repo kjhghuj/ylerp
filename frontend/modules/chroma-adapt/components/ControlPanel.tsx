@@ -97,11 +97,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   };
 
   return (
-    <div className="lg:col-span-5 h-full flex flex-col min-h-0 pt-2">
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto pr-2 pb-4 space-y-6 custom-scrollbar scroll-smooth">
+    <div className="lg:col-span-5 h-full flex flex-col min-h-0 pt-1">
+      <div className="flex-1 overflow-y-auto pr-1 pb-4 space-y-4 custom-scrollbar scroll-smooth">
         <>
-          {/* Step 1: Uploads (hidden if batch queue is active in Translation mode) */}
           {!hasBatchQueue && (
             <ImageUploadSection
               state={state}
@@ -112,29 +110,26 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             />
           )}
 
-          {/* Steps 2 & 3 */}
           {showPalette && (
-            <div>
-              <h2 className="text-sm font-display font-semibold text-slate-800 flex items-center gap-2 mb-3 sticky top-0 bg-slate-50/80 backdrop-blur-md py-2 z-10 border-b border-slate-200/50">
-                <span className="flex items-center justify-center w-5 h-5 rounded-md bg-brand-100/80 text-brand-700 text-[10px] ring-1 ring-brand-200/50">{t.paletteStep}</span>
-                {t.extractedPalette}
-              </h2>
-              <div className="w-full">
-                <ColorPaletteDisplay
-                  palette={state.extractedPalette}
-                  isLoading={state.status === ProcessingState.ANALYZING}
-                  lang={state.language}
-                />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.paletteStep}</span>
+                <h2 className="text-sm font-bold text-slate-800">{t.extractedPalette}</h2>
               </div>
+              <ColorPaletteDisplay
+                palette={state.extractedPalette}
+                isLoading={state.status === ProcessingState.ANALYZING}
+                lang={state.language}
+              />
             </div>
           )}
 
           {showStyleConfig && (
-            <div>
-              <h2 className="text-sm font-display font-semibold text-slate-800 flex items-center gap-2 mb-3 sticky top-0 bg-slate-50/80 backdrop-blur-md py-2 z-10 border-b border-slate-200/50">
-                <span className="flex items-center justify-center w-5 h-5 rounded-md bg-brand-100/80 text-brand-700 text-[10px] ring-1 ring-brand-200/50">{t.configStep}</span>
-                {t.configuration}
-              </h2>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.configStep}</span>
+                <h2 className="text-sm font-bold text-slate-800">{t.configuration}</h2>
+              </div>
               <StyleControls
                 config={state.styleConfig}
                 onChange={onStyleChange}
@@ -158,7 +153,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             />
           )}
 
-          {/* Edit Prompt & Secondary Gen UI */}
           <EditPromptSection
             state={state}
             t={t}
@@ -175,34 +169,31 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             onColorWorkflowModeChange={onColorWorkflowModeChange}
           />
 
-          {/* Concurrent Count (COLOR_ADAPT only) */}
           {state.mode === 'COLOR_ADAPT' && (
-            <div className="mb-4 space-y-3">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-display font-semibold text-slate-700">{t.concurrentCount}</label>
-                  <span className="text-xs text-slate-400">{t.concurrentCountDesc}</span>
-                </div>
-                <div className="flex gap-2">
-                  {[1, 2, 3, 4].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => onConcurrentCountChange?.(n)}
-                      disabled={state.status === ProcessingState.GENERATING}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 border ${state.concurrentCount === n
-                        ? 'bg-gradient-to-r from-brand-500 to-indigo-500 text-white border-brand-400/50 shadow-lg shadow-brand-500/20 scale-105'
-                        : 'bg-white/60 text-slate-600 border-slate-200/60 hover:bg-white hover:border-brand-300 hover:text-brand-600'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                      ×{n}
-                    </button>
-                  ))}
-                </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-bold text-slate-700">{t.concurrentCount}</label>
+                <span className="text-[10px] text-slate-400">{t.concurrentCountDesc}</span>
+              </div>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => onConcurrentCountChange?.(n)}
+                    disabled={state.status === ProcessingState.GENERATING}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+                      state.concurrentCount === n
+                        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
+                        : 'bg-white text-slate-500 border border-slate-200 hover:border-brand-300 hover:text-brand-600'
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  >
+                    ×{n}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Generate Action */}
           {!hasBatchQueue && state.mode !== 'TRANSLATION' && (() => {
             const hasSecondaryBatch = state.mode === 'SECONDARY_GENERATION' && state.secondaryBatchQueue.length > 0;
             const batchLabel = hasSecondaryBatch
@@ -225,21 +216,19 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               <button
                 onClick={handleClick}
                 disabled={isDisabled}
-                className={`group relative w-full py-4 rounded-2xl flex items-center justify-center gap-2 font-display font-bold text-base shadow-xl transition-all duration-300 transform active:scale-95 overflow-hidden ${isActive
-                  ? 'bg-gradient-to-r from-brand-600 to-indigo-600 text-white hover:shadow-brand-500/40 hover:-translate-y-0.5 border border-white/20'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300/50'
-                  }`}
+                className={`group relative w-full py-3.5 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm transition-all duration-200 transform active:scale-[0.98] overflow-hidden ${
+                  isActive
+                    ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-500/25'
+                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                }`}
               >
-                {isActive && (
-                  <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12"></div>
-                )}
                 {state.status === ProcessingState.GENERATING ? (
                   <>
-                    <Loader2 className="animate-spin w-5 h-5" /> {t.processing}
+                    <Loader2 className="animate-spin w-4 h-4" /> {t.processing}
                   </>
                 ) : (
                   <>
-                    <Wand2 className="w-5 h-5" /> {batchLabel}
+                    <Wand2 className="w-4 h-4" /> {batchLabel}
                   </>
                 )}
               </button>

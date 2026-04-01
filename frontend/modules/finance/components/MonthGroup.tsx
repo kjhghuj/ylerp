@@ -88,19 +88,19 @@ export const MonthGroup: React.FC<MonthGroupProps> = ({
 
             {isExpanded && (
                 <div className="animate-in slide-in-from-top-2 duration-200 overflow-x-auto custom-scrollbar bg-slate-50/30">
-                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[900px]">
-                        <thead className="text-slate-500 font-bold border-b border-slate-200">
+                    <table className="w-full text-sm text-left whitespace-nowrap min-w-[1000px]">
+                        <thead className="text-slate-500 font-bold border-b border-slate-200 text-xs uppercase tracking-wider">
                             <tr>
-                                <th className="py-3 pl-6">日期 (日)</th>
-                                <th className="py-3 text-right pr-4">资金余额</th>
-                                <th className="py-3 text-right pr-4">营业收入</th>
-                                <th className="py-3 text-right pr-4">新增借入</th>
-                                <th className="py-3 text-right pr-4">债务偿还</th>
-                                <th className="py-3 text-right pr-4">累计负债</th>
-                                <th className="py-3 text-right pr-4">房租水电</th>
-                                <th className="py-3 text-right pr-4">物流运费</th>
-                                <th className="py-3 text-right pr-4">人工薪资</th>
-                                <th className="py-3 text-right pr-4">其他收支</th>
+                                <th className="py-3 pl-6 pr-2 w-16">日期</th>
+                                <th className="py-3 pr-6 w-28 text-right">资金余额</th>
+                                <th className="py-3 pr-6 w-28 text-right border-l border-slate-200 pl-4">营业收入</th>
+                                <th className="py-3 pr-6 w-24 text-right">新增借入</th>
+                                <th className="py-3 pr-6 w-24 text-right">债务偿还</th>
+                                <th className="py-3 pr-6 w-28 text-right">累计负债</th>
+                                <th className="py-3 pr-6 w-24 text-right border-l border-slate-200 pl-4">房租水电</th>
+                                <th className="py-3 pr-6 w-24 text-right">物流运费</th>
+                                <th className="py-3 pr-6 w-24 text-right">人工薪资</th>
+                                <th className="py-3 pr-6 w-28 text-right border-l border-slate-200 pl-4">其他收支</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -112,16 +112,16 @@ export const MonthGroup: React.FC<MonthGroupProps> = ({
                                     <tr key={dayKey} onClick={() => onDateSelect(dayKey)} onDoubleClick={() => onDateDetail(dayKey)}
                                         className={`group hover:bg-white cursor-pointer transition-colors ${isActive ? 'bg-white shadow-[inset_3px_0_0_#4f46e5]' : ''}`}
                                         title="双击查看明细">
-                                        <td className={`py-4 pl-6 font-bold ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>{day}日</td>
-                                        <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.accountBalance > 0 ? `¥${dayData.accountBalance.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-emerald-600">{dayData.expectedIncome > 0 ? `+¥${dayData.expectedIncome.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-amber-600">{dayData.newDebt > 0 ? `+¥${dayData.newDebt.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-indigo-500">{dayData.repayment > 0 ? `-¥${dayData.repayment.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-bold text-slate-800">{dayData.debtBalance > 0 ? `¥${dayData.debtBalance.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.rentUtilities > 0 ? `-¥${dayData.rentUtilities.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.freightCost > 0 ? `-¥${dayData.freightCost.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-slate-600">{dayData.salary > 0 ? `-¥${dayData.salary.toLocaleString()}` : '-'}</td>
-                                        <td className="py-4 text-right pr-4 font-medium text-slate-500">
+                                        <td className={`py-3.5 pl-6 pr-2 font-bold ${isActive ? 'text-indigo-600' : 'text-slate-700'}`}>{day}日</td>
+                                        <td className={`py-3.5 pr-6 text-right font-bold ${dayData.accountBalance >= 0 ? 'text-indigo-700' : 'text-rose-600'}`}>¥{dayData.accountBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-emerald-600 border-l border-slate-100 pl-4">{dayData.expectedIncome > 0 ? `+¥${dayData.expectedIncome.toLocaleString()}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-amber-600">{dayData.newDebt > 0 ? `+¥${dayData.newDebt.toLocaleString()}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-indigo-500">{dayData.repayment > 0 ? `-¥${dayData.repayment.toLocaleString()}` : '-'}</td>
+                                        <td className={`py-3.5 pr-6 text-right font-bold ${dayData.debtBalance >= 0 ? 'text-slate-800' : 'text-emerald-600'}`}>{dayData.debtBalance !== 0 ? `¥${dayData.debtBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-slate-600 border-l border-slate-100 pl-4">{dayData.rentUtilities > 0 ? `-¥${dayData.rentUtilities.toLocaleString()}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-slate-600">{dayData.freightCost > 0 ? `-¥${dayData.freightCost.toLocaleString()}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-slate-600">{dayData.salary > 0 ? `-¥${dayData.salary.toLocaleString()}` : '-'}</td>
+                                        <td className="py-3.5 pr-6 text-right font-medium text-slate-500 border-l border-slate-100 pl-4">
                                             {(dayData.otherIncome > 0 || dayData.otherExpense > 0) ? `+${dayData.otherIncome} / -${dayData.otherExpense}` : '-'}
                                         </td>
                                     </tr>

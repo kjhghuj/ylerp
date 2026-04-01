@@ -94,6 +94,23 @@ export interface SkuGroupMapping {
     skus: string[]; // List of SKUs belonging to this group
 }
 
+export interface RestockRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  items: {
+    sku: string;
+    productName: string;
+    currentStock: number;
+    avgDailySales: number;
+    suggestedQty: number;
+    estimatedDays: number;
+    supplier?: string;
+    note?: string;
+  }[];
+}
+
 export interface AppState {
-  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'pricing' | 'product-list' | 'user-management' | 'chroma-adapt' | 'chroma-adapt-v2';
+  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'restock-records'
+    | 'pricing' | 'product-list' | 'user-management' | 'chroma-adapt';
 }

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Trash2, AlertCircle, Package, ChevronDown, ChevronRight, Layers, Edit2 } from 'lucide-react';
+import { Trash2, AlertCircle, Package, ChevronDown, ChevronRight, Layers, Edit2, Save } from 'lucide-react';
 import { InventoryItem } from '../../../types';
 import { useStore } from '../../../StoreContext';
 import { calculateRestock } from '../utils/restockUtils';
+import { useToast } from '../../../components/Toast';
 
 interface InventoryTableProps {
     targetDate: string;
@@ -23,9 +24,11 @@ interface GroupedItem {
 }
 
 export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, leadTime, t }) => {
-    const { inventory, updateInventoryItem, deleteInventoryItem } = useStore();
+    const { inventory, updateInventoryItem, deleteInventoryItem, addRestockRecord } = useStore();
+    const { showToast } = useToast();
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [saving, setSaving] = useState(false);
 
     const toggleGroup = (groupKey: string) => {
         setExpandedGroups(prev => {
@@ -86,13 +89,67 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
         }
     };
 
+    const handleSaveRecord = async () => {
+        if (groupedInventory.length === 0) {
+            showToast('暂无补货数据', 'error');
+            return;
+        }
+        setSaving(true);
+        try {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('zh-CN');
+            const items = groupedInventory.map(group => {
+                const syntheticItem: InventoryItem = {
+                    id: 'group-' + group.groupKey,
+                    name: group.name,
+                    sku: group.items[0]?.sku || '',
+                    currentStock: group.totalStockOfficial + group.totalStockThirdParty,
+                    stockOfficial: group.totalStockOfficial,
+                    stockThirdParty: group.totalStockThirdParty,
+                    inTransit: group.totalInTransit,
+                    dailySales: group.totalDailySales,
+                    leadTime: leadTime,
+                    replenishCycle: 30,
+                    costPerUnit: group.maxCost
+                };
+                const calc = calculateRestock(syntheticItem, targetDate, leadTime);
+                return {
+                    sku: group.items.map(i => i.sku).join(', '),
+                    productName: group.name,
+                    currentStock: syntheticItem.currentStock,
+                    avgDailySales: group.totalDailySales,
+                    suggestedQty: calc.restockQty,
+                    estimatedDays: calc.daysCovered,
+                };
+            });
+            await addRestockRecord(`补货记录 ${dateStr}`, items);
+            for (const item of inventory) {
+                await deleteInventoryItem(item.id);
+            }
+            showToast('已保存到补货记录', 'success');
+        } catch {
+            showToast('保存失败', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/50 overflow-hidden flex flex-col min-h-[400px] hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] transition-all duration-300 relative z-10">
             <div className="p-4 border-b border-white/20 flex justify-between items-center">
                 <h3 className="font-bold text-slate-700">{t.detailsTitle}</h3>
-                <div className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg flex items-center gap-1 font-medium">
-                    <Layers size={14} />
-                    <span>名称相同的 SKU 自动合并计算</span>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleSaveRecord}
+                        disabled={saving || groupedInventory.length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded-lg hover:shadow-lg hover:shadow-indigo-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <Save size={14} />{saving ? '保存中...' : '保存到补货记录'}
+                    </button>
+                    <div className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg flex items-center gap-1 font-medium">
+                        <Layers size={14} />
+                        <span>名称相同的 SKU 自动合并计算</span>
+                    </div>
                 </div>
             </div>
 

@@ -36,15 +36,13 @@ export const FinanceManager: React.FC = () => {
     const existingDates = useMemo(() => new Set(financeRecords.map(r => r.date)), [financeRecords]);
 
     // --- Handlers ---
-    const handleAddTransaction = (data: Omit<FinanceRecord, 'id' | 'accountId' | 'category'>) => {
+    const handleAddTransaction = (data: Omit<FinanceRecord, 'id' | 'accountId'>) => {
         addTransaction({
-            id: Date.now().toString(),
+            id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
             ...data,
-            category: 'General',
             accountId: 'main'
         });
 
-        // Auto expand the month
         const monthKey = data.date.substring(0, 7);
         setExpandedMonths(prev => new Set(prev).add(monthKey));
     };
@@ -104,8 +102,6 @@ export const FinanceManager: React.FC = () => {
                         addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
                         addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
                         addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
-                        addRecord(day.debt, 'debt_balance', 'Loans', 'Debt Balance');
-                        addRecord(day.accountBalance, 'account_balance', 'Asset', 'Account Balance');
                         addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
                         addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
                         addRecord(day.salary, 'expense', 'HR', 'Salary');
@@ -146,7 +142,7 @@ export const FinanceManager: React.FC = () => {
 
     const totalExpense = useMemo(() => {
         return financeRecords
-            .filter(r => r.type === 'expense')
+            .filter(r => r.type === 'expense' || r.type === 'debt_repayment')
             .reduce((sum, r) => sum + r.amount, 0);
     }, [financeRecords]);
 
@@ -159,9 +155,9 @@ export const FinanceManager: React.FC = () => {
     let runningExpense = 0;
 
     const chartData = sortedRecords.map(record => {
-        if (record.type === 'income' || record.type === 'new_debt') {
+        if (record.type === 'income') {
             runningBalance += record.amount;
-        } else {
+        } else if (record.type === 'expense' || record.type === 'debt_repayment') {
             runningBalance -= record.amount;
         }
 
@@ -174,7 +170,7 @@ export const FinanceManager: React.FC = () => {
         if (record.type === 'income') {
             runningIncome += record.amount;
         }
-        if (record.type === 'expense') {
+        if (record.type === 'expense' || record.type === 'debt_repayment') {
             runningExpense += record.amount;
         }
 
@@ -214,15 +210,12 @@ export const FinanceManager: React.FC = () => {
                 monthNet: number,
                 monthDebtBalance: number,
                 monthAccountBalance: number,
-                
-                // Detailed totals for month
                 totalExpectedIncome: number,
                 totalRentUtilities: number,
                 totalFreightCost: number,
                 totalSalary: number,
                 totalOtherIncome: number,
                 totalOtherExpense: number,
-                
                 days: { [dayKey: string]: DaySummary }
             }
         } = {};
@@ -282,19 +275,46 @@ export const FinanceManager: React.FC = () => {
             } else if (record.type === 'new_debt') {
                 monthGroup.monthNewDebt += record.amount;
                 dayGroup.newDebt += record.amount;
-                // Note: user explicitly stated newDebt has no effect on net
             } else if (record.type === 'debt_repayment') {
                 monthGroup.monthRepayment += record.amount;
                 dayGroup.repayment += record.amount;
-                // Note: user explicitly stated repayment has no effect on net
             } else if (record.type === 'debt_balance') {
                 dayGroup.debtBalance += record.amount;
                 if (!monthGroup.monthDebtBalance) monthGroup.monthDebtBalance = record.amount;
-            } else if (record.type === 'account_balance') {
-                dayGroup.accountBalance += record.amount;
-                if (!monthGroup.monthAccountBalance) monthGroup.monthAccountBalance = record.amount;
             }
         });
+
+        const allDays: { date: string; expectedIncome: number; newDebt: number; repayment: number; rentUtilities: number; freightCost: number; salary: number }[] = [];
+        Object.values(groups).forEach(g => {
+            Object.entries(g.days).forEach(([dateStr, day]) => {
+                allDays.push({
+                    date: dateStr,
+                    expectedIncome: day.expectedIncome,
+                    newDebt: day.newDebt,
+                    repayment: day.repayment,
+                    rentUtilities: day.rentUtilities,
+                    freightCost: day.freightCost,
+                    salary: day.salary,
+                });
+            });
+        });
+        allDays.sort((a, b) => a.date.localeCompare(b.date));
+
+        let runningBalance = 0;
+        let runningDebtBalance = 0;
+        allDays.forEach(day => {
+            const dailyNet = day.expectedIncome - day.repayment - day.rentUtilities - day.freightCost - day.salary;
+            runningBalance += dailyNet;
+            runningDebtBalance += day.newDebt - day.repayment;
+            const monthKey = day.date.substring(0, 7);
+            if (groups[monthKey]?.days[day.date]) {
+                groups[monthKey].days[day.date].accountBalance = runningBalance;
+                groups[monthKey].monthAccountBalance = runningBalance;
+                groups[monthKey].days[day.date].debtBalance = runningDebtBalance;
+                groups[monthKey].monthDebtBalance = runningDebtBalance;
+            }
+        });
+
         return groups;
     }, [financeRecords]);
 
@@ -335,7 +355,7 @@ export const FinanceManager: React.FC = () => {
     return (
         <div className="flex flex-col h-full gap-5 bg-gradient-to-br from-slate-50 to-blue-50/50 p-1 -m-1 rounded-3xl">
             {/* Modals */}
-            <DayDetailModal date={selectedDetailDate} onClose={() => setSelectedDetailDate(null)} t={t} getTypeLabel={getTypeLabel} />
+            <DayDetailModal date={selectedDetailDate} onClose={() => setSelectedDetailDate(null)} t={t} />
             <MonthPickerModal isOpen={showMonthPicker} onClose={() => setShowMonthPicker(false)} onSelect={(d) => setActiveDate(d)} existingMonths={existingMonths} t={t} />
             <DatePickerModal isOpen={showDatePicker} onClose={() => setShowDatePicker(false)} onSelect={(d) => setActiveDate(d)} existingDates={existingDates} t={t} />
             <AddTransactionModal isOpen={showAddTransModal} onClose={() => setShowAddTransModal(false)} onAdd={handleAddTransaction} initialDate={activeDate} t={t} />

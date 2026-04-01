@@ -86,6 +86,13 @@ model SkuGroup {
   skus      String[]
 }
 
+model RestockRecord {
+  id          String   @id @default(uuid())
+  name        String
+  createdAt   DateTime @default(now())
+  items       Json
+}
+
 model ProfitTemplate {
   id        String   @id @default(uuid())
   type      String   @default("profit") // "profit" | "pricing"

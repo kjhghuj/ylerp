@@ -37,6 +37,7 @@ import mappingRoutes from './routes/mappingRoutes';
 import skuGroupRoutes from './routes/skuGroupRoutes';
 import templateRoutes from './routes/templateRoutes';
 import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
+import restockRecordRoutes from './routes/restockRecordRoutes';
 import chromaAdaptV2Routes from './routes/chromaAdaptV2Routes';
 
 // Public routes (no auth required)
@@ -50,6 +51,7 @@ app.use('/api/inventory', authenticate, inventoryRoutes);
 app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
 app.use('/api/sku-groups', authenticate, skuGroupRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
+app.use('/api/restock-records', authenticate, restockRecordRoutes);
 app.use('/api/chroma-adapt', chromaAdaptRoutes);
 app.use('/api/chroma-adapt-v2', chromaAdaptV2Routes);
 
