@@ -7,7 +7,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/ylerp
 ExecStart=/usr/bin/python3 /opt/ylerp/webhook-listener.py
-Environment=WEBHOOK_SECRET=your-webhook-secret-here
+Environment=WEBHOOK_SECRET=yl-webhook-2026-secret
 Restart=always
 RestartSec=5
 
