@@ -1,7 +1,8 @@
 import { StyleConfig, TargetFont } from '../chromaTypes';
 import { resizeImage } from '../utils/imageHelpers';
 
-const BACKEND_URL = import.meta.env.VITE_CHROMA_API_BASE_URL || 'http://localhost:3002/api/chroma-adapt';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const BACKEND_URL = `${API_BASE}/chroma-adapt`;
 
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/[a-z]+;base64,/, '');
 
