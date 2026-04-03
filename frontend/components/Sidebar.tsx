@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
         <div className="p-6 border-b border-white/10 flex justify-between items-center">
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg bg-white/10 p-1" />
-            <span className="hidden sm:inline">Commerce</span>
+            <span className="hidden sm:inline">阳零ERP</span>
           </h1>
           {/* Mobile Close Button */}
           <button onClick={onClose} className="md:hidden text-blue-200 hover:text-white">

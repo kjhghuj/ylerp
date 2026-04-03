@@ -2,7 +2,7 @@
 export const en = {
   app: {
     name: 'YangLing ERP',
-    title: 'Unified Commerce ERP',
+    title: 'YangLing ERP',
     admin: 'Admin User',
     role: 'Store Manager',
   },
