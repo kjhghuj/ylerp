@@ -1,9 +1,11 @@
 FROM node:22-slim AS build
 
+RUN npm install -g cnpm --registry=https://registry.npmmirror.com
+
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN cnpm install
 
 COPY . .
 ARG VITE_API_URL=/api
