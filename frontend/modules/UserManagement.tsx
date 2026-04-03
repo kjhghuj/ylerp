@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 import { Users, UserPlus, Shield, ShieldCheck, Eye, Trash2, Key, CheckCircle, ToggleLeft, ToggleRight, Lock } from 'lucide-react';
-import { ALL_PERMISSIONS, getAllPermissionKeys } from '../components/PermissionTree';
+import { ALL_PERMISSIONS, getAllPermissionKeys, getModuleKeys } from '../components/PermissionTree';
 import { CreateUserModal } from './user-management/CreateUserModal';
 import { ChangePasswordModal } from './user-management/ChangePasswordModal';
 import { EditPermissionsModal } from './user-management/EditPermissionsModal';
@@ -107,17 +107,29 @@ export const UserManagement: React.FC = () => {
 
     const getPermissionSummary = (perms: string[]) => {
         if (!perms || perms.length === 0) return <span className="text-xs text-slate-400">无权限</span>;
-        const allKeys = getAllPermissionKeys();
-        if (perms.length === allKeys.length) return <span className="text-xs font-bold text-emerald-600">全部模块</span>;
-        return (
-            <div className="flex flex-wrap gap-1">
-                {perms.slice(0, 3).map(k => {
-                    const node = ALL_PERMISSIONS.find(n => n.key === k);
-                    return node ? <span key={k} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">{node.label}</span> : null;
-                })}
-                {perms.length > 3 && <span className="text-[10px] text-slate-400">+{perms.length - 3}</span>}
-            </div>
-        );
+        const moduleKeys = getModuleKeys();
+        const allModuleSelected = moduleKeys.every(k => perms.includes(k));
+        const hasSubPerms = perms.some(p => p.includes('.'));
+        if (allModuleSelected && !hasSubPerms) return <span className="text-xs font-bold text-emerald-600">全部模块</span>;
+
+        const modules = ALL_PERMISSIONS.map(node => {
+            const hasModule = perms.includes(node.key);
+            const subPerms = node.children?.filter(c => perms.includes(c.key)) || [];
+            if (!hasModule && subPerms.length === 0) return null;
+            return (
+                <div key={node.key} className="flex items-center gap-1 flex-wrap">
+                    <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 border border-blue-100">{node.label}</span>
+                    {!hasModule && subPerms.length > 0 && (
+                        <span className="text-[10px] text-slate-400">
+                            ({subPerms.map(s => s.label).join('、')})
+                        </span>
+                    )}
+                </div>
+            );
+        }).filter(Boolean);
+
+        if (modules.length === 0) return <span className="text-xs text-slate-400">无权限</span>;
+        return <div className="flex flex-wrap gap-1">{modules}</div>;
     };
 
     const getRoleBadge = (role: string) => {

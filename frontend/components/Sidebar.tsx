@@ -3,6 +3,7 @@ import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users,
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
+import { hasPermission } from './PermissionTree';
 
 interface SidebarProps {
   currentView: AppState['currentView'];
@@ -31,7 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
   // Filter menu items by permissions for non-owner users
   const menuItems = user?.role === 'owner'
     ? allMenuItems
-    : allMenuItems.filter(item => item.id === 'user-management' || (user?.permissions || []).includes(item.id));
+    : allMenuItems.filter(item => item.id === 'user-management' || hasPermission(user?.permissions || [], item.id));
 
   const getRoleIcon = (role: string) => {
     switch (role) {
