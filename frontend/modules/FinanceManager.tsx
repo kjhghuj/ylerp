@@ -356,7 +356,20 @@ export const FinanceManager: React.FC = () => {
         <div className="flex flex-col h-full gap-5 bg-gradient-to-br from-slate-50 to-blue-50/50 p-1 -m-1 rounded-3xl">
             {/* Modals */}
             <DayDetailModal date={selectedDetailDate} onClose={() => setSelectedDetailDate(null)} t={t} />
-            <MonthPickerModal isOpen={showMonthPicker} onClose={() => setShowMonthPicker(false)} onSelect={(d) => setActiveDate(d)} existingMonths={existingMonths} t={t} />
+            <MonthPickerModal isOpen={showMonthPicker} onClose={() => setShowMonthPicker(false)} onSelect={(dateStr) => {
+                addTransaction({
+                    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+                    date: dateStr,
+                    type: 'account_balance',
+                    amount: 0,
+                    category: 'Placeholder',
+                    description: '月份占位',
+                    accountId: 'main'
+                });
+                const monthKey = dateStr.substring(0, 7);
+                setExpandedMonths(prev => new Set(prev).add(monthKey));
+                setActiveDate(dateStr);
+            }} existingMonths={existingMonths} t={t} />
             <DatePickerModal isOpen={showDatePicker} onClose={() => setShowDatePicker(false)} onSelect={(d) => setActiveDate(d)} existingDates={existingDates} t={t} />
             <AddTransactionModal isOpen={showAddTransModal} onClose={() => setShowAddTransModal(false)} onAdd={handleAddTransaction} initialDate={activeDate} t={t} />
 

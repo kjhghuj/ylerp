@@ -1,0 +1,15 @@
+[Unit]
+Description=YLerp GitHub Webhook Listener
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/ylerp
+ExecStart=/usr/bin/python3 /opt/ylerp/webhook-listener.py
+Environment=WEBHOOK_SECRET=your-webhook-secret-here
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

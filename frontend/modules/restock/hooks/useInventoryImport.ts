@@ -214,19 +214,20 @@ export const useInventoryImport = (leadTimeSetting: number) => {
 
 
 
+                const officialMappings = warehouseMappings.filter(m => m.type === 'official');
+                console.log('[Official Import] 系统中的官方仓映射数量:', officialMappings.length);
+                console.log('[Official Import] 映射详情:', officialMappings.map(m => ({ officialWarehouseId: m.officialWarehouseId, sku: m.sku })));
+                console.log('[Official Import] 系统中的库存SKU列表:', inventory.map(i => i.sku));
+
                 for (let i = 0; i < Math.min(rawData.length, 20); i++) {
                     const row = rawData[i];
                     if (!Array.isArray(row)) continue;
                     let currentWhIdIdx = -1, currentQtyIdx = -1, currentSkuIdx = -1;
 
-
-
                     row.forEach((cell, colIdx) => {
                         const val = String(cell || '').trim();
                         if (!val) return;
 
-                        // Identify ID Column (Mapping Key)
-                        // Added: '条码' as the primary mapping key
                         if (
                             ['条码', '仓库SKU ID', '仓库SKUID', 'SKU ID', '商品编码', 'Warehouse SKU', 'Warehouse SKU ID', 'Official ID'].includes(val) ||
                             (val.includes('仓库') && val.includes('ID')) ||
@@ -235,8 +236,6 @@ export const useInventoryImport = (leadTimeSetting: number) => {
                             currentWhIdIdx = colIdx;
                         }
 
-                        // Identify Qty Column
-                        // Added: '可销售' explicitly, plus flexible matching
                         if (
                             ['可销售', '总可用', '可销售数量', '良品数量', '良品', '可售', '可用', 'Sellable', 'Available Stock', 'Qty', '库存'].includes(val) ||
                             (val.includes('可用') && !val.includes('不可用')) ||
@@ -245,7 +244,6 @@ export const useInventoryImport = (leadTimeSetting: number) => {
                             currentQtyIdx = colIdx;
                         }
 
-                        // Identify SKU Column (Fallback for direct matching if Barcode/Mapping not found)
                         if (['商家SKU', 'Seller SKU', 'SKU', 'Product SKU', '商品SKU'].includes(val)) {
                             currentSkuIdx = colIdx;
                         }
@@ -253,47 +251,52 @@ export const useInventoryImport = (leadTimeSetting: number) => {
 
                     if (currentQtyIdx !== -1 && (currentWhIdIdx !== -1 || currentSkuIdx !== -1)) {
                         headerRowIndex = i; whIdColIdx = currentWhIdIdx; qtyColIdx = currentQtyIdx; skuColIdx = currentSkuIdx;
-
+                        console.log(`[Official Import] 找到表头行: 第${i + 1}行`);
+                        console.log(`[Official Import] 仓库SKU ID列索引: ${currentWhIdIdx}, 表头名: "${row[currentWhIdIdx]}"`);
+                        console.log(`[Official Import] 可销售列索引: ${currentQtyIdx}, 表头名: "${row[currentQtyIdx]}"`);
+                        if (currentSkuIdx !== -1) console.log(`[Official Import] SKU列索引: ${currentSkuIdx}, 表头名: "${row[currentSkuIdx]}"`);
                         break;
+                    } else {
+                        console.log(`[Official Import] 第${i + 1}行未匹配到表头:`, row.slice(0, 10));
                     }
                 }
 
                 if (headerRowIndex === -1) {
-
-                    alert("无法识别表头。\n请确保Excel包含以下列：\n1. '条码' (用于匹配系统映射)\n2. '可销售' 或 '总可用' (用于更新库存)");
+                    console.error('[Official Import] 未找到匹配的表头行，前20行内容:', rawData.slice(0, 20));
+                    alert("无法识别表头。\n请确保Excel包含以下列：\n1. '仓库SKU ID' (用于匹配系统映射)\n2. '可销售' 或 '总可用' (用于更新库存)");
                     if (fileInputRef.current) fileInputRef.current.value = '';
                     return;
                 }
 
                 const stockMap = new Map<string, number>();
+                let matchCount = 0;
+                let noMatchRows: string[] = [];
+
                 for (let i = headerRowIndex + 1; i < rawData.length; i++) {
                     const row = rawData[i];
                     if (!row) continue;
 
                     let targetSystemSku: string | null = null;
-                    let matchReason = '';
 
-                    // 1. Try Mapping via Warehouse ID (Barcode)
                     const rawWhId = whIdColIdx !== -1 ? row[whIdColIdx] : null;
 
                     if (rawWhId) {
                         const whId = String(rawWhId).trim();
-                        // Find mapping where officialWarehouseId === whId (barcode)
                         const mapping = warehouseMappings.find(m => m.type === 'official' && m.officialWarehouseId === whId);
                         if (mapping) {
                             targetSystemSku = mapping.sku;
-                            matchReason = `Mapped via Barcode '${whId}'`;
+                            matchCount++;
+                        } else {
+                            noMatchRows.push(`行${i + 1}: 仓库SKU ID="${whId}"(type:${typeof rawWhId}) 未找到映射`);
                         }
                     }
 
-                    // 2. Try Direct SKU Match (if no mapping found, or ID not present)
                     if (!targetSystemSku && skuColIdx !== -1) {
                         const rawSku = row[skuColIdx];
                         if (rawSku) {
                             const skuStr = String(rawSku).trim();
-                            // We just assume the Excel SKU matches the System SKU directly
                             targetSystemSku = skuStr;
-                            matchReason = 'Direct SKU match';
+                            matchCount++;
                         }
                     }
 
@@ -302,21 +305,23 @@ export const useInventoryImport = (leadTimeSetting: number) => {
                     if (typeof rawQty === 'number') {
                         qty = rawQty;
                     } else if (typeof rawQty === 'string') {
-                        // Handle "1,200", "1 200" etc.
                         const cleanQty = rawQty.replace(/[, ]/g, '');
                         qty = parseFloat(cleanQty);
                     }
 
                     if (isNaN(qty)) qty = 0;
 
-
-
                     if (targetSystemSku) {
-                        // Accumulate stock (handle case where multiple excel rows map to one system sku)
                         const current = stockMap.get(targetSystemSku) || 0;
                         stockMap.set(targetSystemSku, current + qty);
                     }
                 }
+
+                console.log(`[Official Import] 数据行匹配结果: 成功${matchCount}行, 失败${noMatchRows.length}行`);
+                if (noMatchRows.length > 0) {
+                    console.warn('[Official Import] 未匹配的行 (前20条):', noMatchRows.slice(0, 20));
+                }
+                console.log('[Official Import] stockMap内容:', Array.from(stockMap.entries()));
 
 
 

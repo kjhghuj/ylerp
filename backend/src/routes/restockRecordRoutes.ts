@@ -34,7 +34,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
-        await prisma.restockRecord.delete({ where: { id: req.params.id } });
+        await prisma.restockRecord.delete({ where: { id: req.params.id as string } });
         res.json({ success: true });
     } catch (error) {
         console.error('Failed to delete restock record:', error);

@@ -9,7 +9,7 @@ export const zh = {
   sidebar: {
     dashboard: '总览仪表盘',
     profit: '利润计算',
-    finance: '财务资金管理',
+    finance: '财务管理',
     inventory: '智能补货',
     restockRecords: '补货记录',
     pricing: '智能定价',
