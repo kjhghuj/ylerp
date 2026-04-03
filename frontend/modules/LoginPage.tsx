@@ -118,7 +118,7 @@ export const LoginPage: React.FC = () => {
                         </button>
                     </form>
 
-                    <p className="text-center text-blue-300/40 text-xs mt-6">v1.0.1 正式版</p>
+                    <p className="text-center text-blue-300/40 text-xs mt-6">v1.0.2 正式版</p>
                 </div>
             </div>
 

@@ -15,7 +15,7 @@ export const en = {
     pricing: 'Smart Pricing',
     chromaAdapt: 'Image Studio',
     productList: 'Product List',
-    version: 'v1.0.1 Stable',
+    version: 'v1.0.2 Stable',
   },
   dashboard: {
     title: 'Dashboard Overview',
