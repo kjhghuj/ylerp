@@ -1,36 +1,20 @@
-import React, { useState } from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, ClipboardList, KeyRound } from 'lucide-react';
+import React from 'react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, ClipboardList, UserCircle } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { hasPermission } from './PermissionTree';
-import api from '../src/api';
-import { ChangePasswordModal } from '../modules/user-management/ChangePasswordModal';
 
 interface SidebarProps {
   currentView: AppState['currentView'];
   onChangeView: (view: AppState['currentView']) => void;
-  isOpen?: boolean; // Mobile state
-  onClose?: () => void; // Mobile close handler
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen, onClose }) => {
   const { strings } = useStore();
   const { user, logout } = useAuth();
-  const [showChangePwd, setShowChangePwd] = useState(false);
-  const [changePwdError, setChangePwdError] = useState('');
-
-  const handleChangePassword = async (oldPassword: string, newPassword: string) => {
-    setChangePwdError('');
-    try {
-      await api.put('/users/me/password', { oldPassword, newPassword });
-      setShowChangePwd(false);
-      alert('密码修改成功');
-    } catch (error: any) {
-      setChangePwdError(error.response?.data?.error || '修改失败');
-      throw error;
-    }
-  };
 
   const allMenuItems = [
     { id: 'dashboard', label: strings.sidebar.dashboard, icon: LayoutDashboard },
@@ -41,11 +25,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
     { id: 'restock-records', label: strings.sidebar.restockRecords || '补货记录', icon: ClipboardList },
     { id: 'pricing', label: strings.sidebar.pricing, icon: Tag },
     { id: 'chroma-adapt', label: strings.sidebar.chromaAdapt || '图片制作', icon: Image },
-    // Only show user management for owner
     ...(user?.role === 'owner' ? [{ id: 'user-management', label: '用户管理', icon: Users }] : []),
   ];
 
-  // Filter menu items by permissions for non-owner users
   const menuItems = user?.role === 'owner'
     ? allMenuItems
     : allMenuItems.filter(item => item.id === 'user-management' || hasPermission(user?.permissions || [], item.id));
@@ -69,7 +51,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
 
   return (
     <>
-      {/* Mobile Backdrop */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-20 md:hidden backdrop-blur-sm transition-opacity"
@@ -86,7 +67,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
             <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain rounded-lg bg-white/10 p-1" />
             <span className="hidden sm:inline">阳零ERP</span>
           </h1>
-          {/* Mobile Close Button */}
           <button onClick={onClose} className="md:hidden text-blue-200 hover:text-white">
             <X size={24} />
           </button>
@@ -113,11 +93,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
           })}
         </nav>
 
-        {/* User Info & Logout */}
         <div className="p-4 border-t border-white/10 shrink-0">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white font-bold text-sm">
-              {user?.displayName?.charAt(0) || 'U'}
+            <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-white font-bold text-sm overflow-hidden">
+              {user?.avatar ? (
+                <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                user?.displayName?.charAt(0) || 'U'
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white truncate">{user?.displayName || 'User'}</p>
@@ -125,10 +108,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
             </div>
           </div>
           <button
-            onClick={() => { setShowChangePwd(true); setChangePwdError(''); }}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
+            onClick={() => onChangeView('personal-center')}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all text-sm font-medium ${
+              currentView === 'personal-center' ? 'bg-white/20 text-white' : 'text-blue-200 hover:text-white hover:bg-white/10'
+            }`}
           >
-            <KeyRound size={16} /> 修改密码
+            <UserCircle size={16} /> {strings.sidebar.personalCenter || '个人中心'}
           </button>
           <button
             onClick={logout}
@@ -136,7 +121,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
           >
             <LogOut size={16} /> 退出登录
           </button>
-          {showChangePwd && <ChangePasswordModal onClose={() => { setShowChangePwd(false); setChangePwdError(''); }} onSubmit={handleChangePassword} error={changePwdError} />}
           <p className="text-xs text-blue-200/50 text-center mt-2">{strings.sidebar.version}</p>
         </div>
       </aside>

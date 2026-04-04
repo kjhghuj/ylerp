@@ -15,6 +15,7 @@ export const zh = {
     pricing: '智能定价',
     chromaAdapt: '图片制作',
     productList: '商品明细表',
+    personalCenter: '个人中心',
     version: 'v1.0.2 正式版',
   },
   dashboard: {

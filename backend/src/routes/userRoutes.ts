@@ -8,6 +8,50 @@ const prisma = new PrismaClient();
 
 router.use(authenticate);
 
+router.get('/me/profile', async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user!.id },
+            select: {
+                id: true, username: true, displayName: true,
+                phone: true, email: true, avatar: true,
+                role: true, parentId: true, permissions: true,
+                isActive: true, createdAt: true, updatedAt: true,
+            },
+        });
+        if (!user) {
+            return res.status(404).json({ error: '用户不存在' });
+        }
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: '获取个人信息失败' });
+    }
+});
+
+router.put('/me/profile', async (req, res) => {
+    try {
+        const { displayName, phone, email, avatar } = req.body;
+        const updateData: any = {};
+        if (displayName !== undefined && displayName.trim()) updateData.displayName = displayName.trim();
+        if (phone !== undefined) updateData.phone = phone.trim() || null;
+        if (email !== undefined) updateData.email = email.trim() || null;
+        if (avatar !== undefined) updateData.avatar = avatar.trim() || null;
+        const user = await prisma.user.update({
+            where: { id: req.user!.id },
+            data: updateData,
+            select: {
+                id: true, username: true, displayName: true,
+                phone: true, email: true, avatar: true,
+                role: true, parentId: true, permissions: true,
+                isActive: true, createdAt: true, updatedAt: true,
+            },
+        });
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: '更新个人信息失败' });
+    }
+});
+
 router.put('/me/password', async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;

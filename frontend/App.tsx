@@ -11,6 +11,7 @@ import { PricingCalculator } from './modules/PricingCalculator';
 import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
 import { UserManagement } from './modules/UserManagement';
+import { PersonalCenter } from './modules/PersonalCenter';
 import { ChromaAdapt } from './modules/chroma-adapt/ChromaAdapt';
 import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
@@ -58,6 +59,7 @@ const MainContent: React.FC = () => {
       case 'pricing': return <PricingCalculator />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
+      case 'personal-center': return <PersonalCenter />;
       case 'chroma-adapt': return <ChromaAdapt />;
       default: return <Dashboard />;
     }
@@ -73,6 +75,7 @@ const MainContent: React.FC = () => {
       case 'pricing': return strings.sidebar.pricing;
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
+      case 'personal-center': return '个人中心';
       case 'chroma-adapt': return strings.sidebar.chromaAdapt || '图片制作';
       default: return view;
     }
@@ -133,8 +136,12 @@ const MainContent: React.FC = () => {
               <p className="text-sm font-bold text-slate-800">{user?.displayName || 'User'}</p>
               <p className="text-xs text-slate-400">{getRoleLabel(user?.role || '')}</p>
             </div>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full shadow-md shrink-0 flex items-center justify-center text-white font-bold text-sm">
-              {user?.displayName?.charAt(0) || 'U'}
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-full shadow-md shrink-0 flex items-center justify-center text-white font-bold text-sm overflow-hidden cursor-pointer" onClick={() => setCurrentView('personal-center')}>
+              {user?.avatar ? (
+                <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+              ) : (
+                user?.displayName?.charAt(0) || 'U'
+              )}
             </div>
             <button
               onClick={logout}

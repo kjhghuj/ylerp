@@ -108,6 +108,9 @@ model User {
   username    String   @unique
   password    String
   displayName String
+  phone       String?
+  email       String?
+  avatar      String?
   role        String   @default("viewer") // "owner" | "admin" | "viewer"
   permissions String[] @default([])       // Authorized module keys, e.g. ["dashboard","finance"]
   parentId    String?

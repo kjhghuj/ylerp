@@ -5,6 +5,9 @@ export interface AuthUser {
     id: string;
     username: string;
     displayName: string;
+    phone?: string | null;
+    email?: string | null;
+    avatar?: string | null;
     role: 'owner' | 'admin' | 'viewer';
     parentId: string | null;
     permissions: string[];
