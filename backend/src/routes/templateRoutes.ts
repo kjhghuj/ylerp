@@ -4,12 +4,12 @@ import { PrismaClient } from '@prisma/client';
 const router = Router();
 const prisma = new PrismaClient();
 
-// Get all templates
 router.get('/', async (req, res) => {
     try {
+        const userId = req.user!.id;
         const { type } = req.query;
         const templates = await prisma.profitTemplate.findMany({
-            where: type ? { type: String(type) } : {},
+            where: { userId, ...(type ? { type: String(type) } : {}) },
             orderBy: { createdAt: 'desc' }
         });
         res.json(templates);
@@ -19,13 +19,13 @@ router.get('/', async (req, res) => {
     }
 });
 
-// Get templates by country
 router.get('/:country', async (req, res) => {
     try {
+        const userId = req.user!.id;
         const { country } = req.params;
         const { type } = req.query;
         const templates = await prisma.profitTemplate.findMany({
-            where: { country, ...(type ? { type: String(type) } : {}) },
+            where: { userId, country, ...(type ? { type: String(type) } : {}) },
             orderBy: { createdAt: 'desc' }
         });
         res.json(templates);
@@ -35,11 +35,11 @@ router.get('/:country', async (req, res) => {
     }
 });
 
-// Create a new template
 router.post('/', async (req, res) => {
     try {
+        const userId = req.user!.id;
         const { name, country, data, type, platform } = req.body;
-        
+
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -50,7 +50,8 @@ router.post('/', async (req, res) => {
                 country,
                 data,
                 type: type || 'profit',
-                platform
+                platform,
+                userId
             }
         });
         res.status(201).json(template);
@@ -60,10 +61,13 @@ router.post('/', async (req, res) => {
     }
 });
 
-// Delete a template
 router.delete('/:id', async (req, res) => {
     try {
+        const userId = req.user!.id;
         const { id } = req.params;
+        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        if (!existing) return res.status(404).json({ error: 'Template not found' });
+
         await prisma.profitTemplate.delete({
             where: { id }
         });

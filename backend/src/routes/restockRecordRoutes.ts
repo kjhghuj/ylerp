@@ -3,9 +3,11 @@ import { prisma } from '../index';
 
 const router = Router();
 
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
     try {
+        const userId = req.user!.id;
         const records = await prisma.restockRecord.findMany({
+            where: { userId },
             orderBy: { createdAt: 'desc' }
         });
         res.json(records);
@@ -17,13 +19,14 @@ router.get('/', async (_req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
     try {
+        const userId = req.user!.id;
         const { name, items } = req.body;
         if (!name || !items) {
             res.status(400).json({ error: 'name and items are required' });
             return;
         }
         const record = await prisma.restockRecord.create({
-            data: { name, items }
+            data: { name, items, userId }
         });
         res.json(record);
     } catch (error) {
@@ -34,6 +37,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
     try {
+        const userId = req.user!.id;
+        const existing = await prisma.restockRecord.findFirst({ where: { id: req.params.id as string, userId } });
+        if (!existing) {
+            res.status(404).json({ error: 'Record not found' });
+            return;
+        }
         await prisma.restockRecord.delete({ where: { id: req.params.id as string } });
         res.json({ success: true });
     } catch (error) {

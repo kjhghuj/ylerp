@@ -46,6 +46,8 @@ model Product {
   profit                    Float
   margin                    Float
   costMargin                Float
+  userId                    String
+  user                      User    @relation(fields: [userId], references: [id])
 }
 
 model FinanceRecord {
@@ -56,6 +58,8 @@ model FinanceRecord {
   category    String
   description String
   accountId   String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 model InventoryItem {
@@ -70,6 +74,8 @@ model InventoryItem {
   leadTime        Int
   replenishCycle  Int
   costPerUnit     Float
+  userId          String
+  user            User    @relation(fields: [userId], references: [id])
 }
 
 model WarehouseMapping {
@@ -78,29 +84,37 @@ model WarehouseMapping {
   thirdPartyWarehouseId String?
   sku                   String
   type                  String
+  userId                String
+  user                  User    @relation(fields: [userId], references: [id])
 }
 
 model SkuGroup {
   id        String   @id @default(uuid())
   groupName String
   skus      String[]
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model RestockRecord {
-  id          String   @id @default(uuid())
-  name        String
-  createdAt   DateTime @default(now())
-  items       Json
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  items     Json
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model ProfitTemplate {
   id        String   @id @default(uuid())
-  type      String   @default("profit") // "profit" | "pricing"
+  type      String   @default("profit")
   name      String
   country   String
   platform  String?
   data      Json
   createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model User {
@@ -111,12 +125,19 @@ model User {
   phone       String?
   email       String?
   avatar      String?
-  role        String   @default("viewer") // "owner" | "admin" | "viewer"
-  permissions String[] @default([])       // Authorized module keys, e.g. ["dashboard","finance"]
+  role        String   @default("viewer")
+  permissions String[] @default([])
   parentId    String?
   parent      User?    @relation("SubAccounts", fields: [parentId], references: [id])
   children    User[]   @relation("SubAccounts")
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  products       Product[]
+  financeRecords  FinanceRecord[]
+  inventoryItems  InventoryItem[]
+  warehouseMappings WarehouseMapping[]
+  skuGroups       SkuGroup[]
+  restockRecords  RestockRecord[]
+  profitTemplates ProfitTemplate[]
 }
