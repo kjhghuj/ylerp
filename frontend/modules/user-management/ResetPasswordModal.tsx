@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 
-interface ChangePasswordModalProps {
+interface ResetPasswordModalProps {
+    username: string;
     onClose: () => void;
-    onSubmit: (oldPassword: string, newPassword: string) => Promise<void>;
+    onSubmit: (newPassword: string) => Promise<void>;
     error: string;
 }
 
-export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose, onSubmit, error }) => {
-    const [oldPassword, setOldPassword] = useState('');
+export const ResetPasswordModal: React.FC<ResetPasswordModalProps> = ({ username, onClose, onSubmit, error }) => {
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPwd, setShowPwd] = useState(false);
@@ -16,10 +16,11 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (oldPassword.length < 1 || newPassword.length < 6 || newPassword !== confirmPassword) return;
+        if (newPassword.length < 6) return;
+        if (newPassword !== confirmPassword) return;
         setLoading(true);
         try {
-            await onSubmit(oldPassword, newPassword);
+            await onSubmit(newPassword);
         } finally {
             setLoading(false);
         }
@@ -30,10 +31,13 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
                 <div className="flex items-center justify-between p-6 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                            <KeyRound size={20} className="text-indigo-600" />
+                        <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                            <KeyRound size={20} className="text-amber-600" />
                         </div>
-                        <h3 className="text-lg font-semibold text-slate-800">修改密码</h3>
+                        <div>
+                            <h3 className="text-lg font-semibold text-slate-800">重置密码</h3>
+                            <p className="text-sm text-slate-500">用户: {username}</p>
+                        </div>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                         <X size={20} className="text-slate-400" />
@@ -44,18 +48,6 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
                     {error && (
                         <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
                     )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">当前密码</label>
-                        <input
-                            type="password"
-                            value={oldPassword}
-                            onChange={e => setOldPassword(e.target.value)}
-                            placeholder="输入当前密码"
-                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            required
-                        />
-                    </div>
 
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">新密码</label>
@@ -97,10 +89,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
                         </button>
                         <button
                             type="submit"
-                            disabled={loading || !oldPassword || newPassword.length < 6 || newPassword !== confirmPassword}
-                            className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={loading || newPassword.length < 6 || newPassword !== confirmPassword}
+                            className="flex-1 px-4 py-2.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {loading ? '修改中...' : '确认修改'}
+                            {loading ? '重置中...' : '确认重置'}
                         </button>
                     </div>
                 </form>

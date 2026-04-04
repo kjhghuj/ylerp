@@ -1,9 +1,11 @@
-import React from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, ClipboardList } from 'lucide-react';
+import React, { useState } from 'react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, X, Tag, List, Users, LogOut, ShieldCheck, Shield, Eye, Image, ClipboardList, KeyRound } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { hasPermission } from './PermissionTree';
+import api from '../src/api';
+import { ChangePasswordModal } from '../modules/user-management/ChangePasswordModal';
 
 interface SidebarProps {
   currentView: AppState['currentView'];
@@ -15,6 +17,20 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen, onClose }) => {
   const { strings } = useStore();
   const { user, logout } = useAuth();
+  const [showChangePwd, setShowChangePwd] = useState(false);
+  const [changePwdError, setChangePwdError] = useState('');
+
+  const handleChangePassword = async (oldPassword: string, newPassword: string) => {
+    setChangePwdError('');
+    try {
+      await api.put('/users/me/password', { oldPassword, newPassword });
+      setShowChangePwd(false);
+      alert('密码修改成功');
+    } catch (error: any) {
+      setChangePwdError(error.response?.data?.error || '修改失败');
+      throw error;
+    }
+  };
 
   const allMenuItems = [
     { id: 'dashboard', label: strings.sidebar.dashboard, icon: LayoutDashboard },
@@ -109,11 +125,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
             </div>
           </div>
           <button
+            onClick={() => { setShowChangePwd(true); setChangePwdError(''); }}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
+          >
+            <KeyRound size={16} /> 修改密码
+          </button>
+          <button
             onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-blue-200 hover:text-white hover:bg-white/10 transition-all text-sm font-medium"
           >
             <LogOut size={16} /> 退出登录
           </button>
+          {showChangePwd && <ChangePasswordModal onClose={() => { setShowChangePwd(false); setChangePwdError(''); }} onSubmit={handleChangePassword} error={changePwdError} />}
           <p className="text-xs text-blue-200/50 text-center mt-2">{strings.sidebar.version}</p>
         </div>
       </aside>

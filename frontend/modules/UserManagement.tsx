@@ -5,6 +5,7 @@ import { Users, UserPlus, Shield, ShieldCheck, Eye, Trash2, Key, CheckCircle, To
 import { ALL_PERMISSIONS, getAllPermissionKeys, getModuleKeys } from '../components/PermissionTree';
 import { CreateUserModal } from './user-management/CreateUserModal';
 import { ChangePasswordModal } from './user-management/ChangePasswordModal';
+import { ResetPasswordModal } from './user-management/ResetPasswordModal';
 import { EditPermissionsModal } from './user-management/EditPermissionsModal';
 
 interface UserRecord {
@@ -25,6 +26,9 @@ export const UserManagement: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [resetPwdUser, setResetPwdUser] = useState<UserRecord | null>(null);
+    const [resetPwdError, setResetPwdError] = useState('');
+    const [changePwdError, setChangePwdError] = useState('');
     const [permEditUser, setPermEditUser] = useState<UserRecord | null>(null);
     const [permEditValues, setPermEditValues] = useState<string[]>([]);
     const [permSaving, setPermSaving] = useState(false);
@@ -85,8 +89,31 @@ export const UserManagement: React.FC = () => {
         }
     };
 
-    const handleChangePassword = async (data: { oldPassword: string; newPassword: string }) => {
-        await api.put('/auth/password', data);
+    const handleChangePassword = async (oldPassword: string, newPassword: string) => {
+        setChangePwdError('');
+        try {
+            await api.put('/users/me/password', { oldPassword, newPassword });
+            setShowPasswordModal(false);
+            setMessage('密码修改成功');
+            setTimeout(() => setMessage(''), 3000);
+        } catch (error: any) {
+            setChangePwdError(error.response?.data?.error || '修改失败');
+            throw error;
+        }
+    };
+
+    const handleResetPassword = async (newPassword: string) => {
+        if (!resetPwdUser) return;
+        setResetPwdError('');
+        try {
+            await api.put(`/users/${resetPwdUser.id}/reset-password`, { newPassword });
+            setResetPwdUser(null);
+            setMessage(`已重置 ${resetPwdUser.displayName} 的密码`);
+            setTimeout(() => setMessage(''), 3000);
+        } catch (error: any) {
+            setResetPwdError(error.response?.data?.error || '重置失败');
+            throw error;
+        }
     };
 
     const handleSavePermissions = async () => {
@@ -147,7 +174,8 @@ export const UserManagement: React.FC = () => {
     return (
         <div className="h-full flex flex-col gap-4">
             {showCreateModal && <CreateUserModal onClose={() => { setShowCreateModal(false); setCreateError(''); }} onSubmit={handleCreate} error={createError} />}
-            {showPasswordModal && <ChangePasswordModal onClose={() => setShowPasswordModal(false)} onSubmit={handleChangePassword} />}
+            {showPasswordModal && <ChangePasswordModal onClose={() => { setShowPasswordModal(false); setChangePwdError(''); }} onSubmit={handleChangePassword} error={changePwdError} />}
+            {resetPwdUser && <ResetPasswordModal username={resetPwdUser.username} onClose={() => { setResetPwdUser(null); setResetPwdError(''); }} onSubmit={handleResetPassword} error={resetPwdError} />}
             {permEditUser && <EditPermissionsModal userName={permEditUser.displayName} userHandle={permEditUser.username} selected={permEditValues} onChange={setPermEditValues} onClose={() => setPermEditUser(null)} onSave={handleSavePermissions} saving={permSaving} />}
 
             <div className="px-4 py-3 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
@@ -214,6 +242,7 @@ export const UserManagement: React.FC = () => {
                                                     <option value="viewer">查看者</option>
                                                 </select>
                                                 <button onClick={() => { setPermEditUser(u); setPermEditValues([...u.permissions]); }} className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="编辑权限"><Lock size={16} /></button>
+                                                <button onClick={() => { setResetPwdUser(u); setResetPwdError(''); }} className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition" title="重置密码"><Key size={16} /></button>
                                                 <button onClick={() => handleDelete(u)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="删除"><Trash2 size={16} /></button>
                                             </div>
                                         )}
