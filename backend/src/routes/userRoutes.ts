@@ -80,9 +80,16 @@ router.post('/', authorize('owner'), async (req, res) => {
         });
 
         res.status(201).json(user);
-    } catch (error) {
+    } catch (error: any) {
         console.error('Create user error:', error);
-        res.status(500).json({ error: '创建用户失败' });
+        const msg = error?.message || '创建用户失败';
+        if (error?.code === 'P2002') {
+            res.status(409).json({ error: '用户名已存在' });
+        } else if (error?.code === 'P2003') {
+            res.status(400).json({ error: '父账户不存在，请重新登录后重试' });
+        } else {
+            res.status(500).json({ error: '创建用户失败: ' + msg });
+        }
     }
 });
 
