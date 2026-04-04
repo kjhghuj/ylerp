@@ -9,6 +9,10 @@ import { PlatformCard } from './PlatformCard';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { useToast } from '../components/Toast';
 
+const genId = () => {
+    try { return crypto.randomUUID(); } catch { return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+};
+
 interface ProfitTemplate {
     id?: string;
     name: string;
@@ -94,7 +98,7 @@ export const ProfitCalculator: React.FC = () => {
         if (!templatesLoaded || allTemplates.length === 0) return;
         const siteTemplates = allTemplates.filter(tpl => tpl.country === siteCountry);
         setNodes(siteTemplates.map(tpl => ({
-            id: tpl.id || crypto.randomUUID(),
+            id: tpl.id || genId(),
             templateId: tpl.id,
             platform: tpl.platform || 'other',
             country: tpl.country,
@@ -152,7 +156,7 @@ export const ProfitCalculator: React.FC = () => {
             };
 
             setNodes([{
-                id: crypto.randomUUID(),
+                id: genId(),
                 platform: 'other',
                 country: currency,
                 name: '导入数据',
@@ -178,7 +182,7 @@ export const ProfitCalculator: React.FC = () => {
 
     const handleAddNodeFromTemplate = (tpl: ProfitTemplate) => {
         setNodes(prev => [...prev, {
-            id: crypto.randomUUID(),
+            id: genId(),
             templateId: tpl.id,
             platform: tpl.platform || 'other',
             country: tpl.country,
@@ -190,7 +194,7 @@ export const ProfitCalculator: React.FC = () => {
 
     const handleAddBlankNode = () => {
         setNodes(prev => [...prev, {
-            id: crypto.randomUUID(),
+            id: genId(),
             platform: selectedPlatform,
             country: siteCountry,
             name: '未命名节点',
