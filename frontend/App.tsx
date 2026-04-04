@@ -17,6 +17,7 @@ import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
 import { Globe, Menu, LogOut, Lock } from 'lucide-react';
+import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
@@ -39,7 +40,7 @@ const MainContent: React.FC = () => {
 
   const renderView = () => {
     const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-records', 'pricing', 'product-list'];
-    if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !(user.permissions || []).includes(currentView)) {
+    if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !hasPermission(user.permissions || [], currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
           <div className="p-4 bg-slate-100 rounded-2xl">

@@ -105,7 +105,12 @@ export const getModuleKeyFromSubKey = (subKey: string): string | undefined => {
 export const hasPermission = (userPermissions: string[], permissionKey: string): boolean => {
     if (userPermissions.includes(permissionKey)) return true;
     const moduleKey = permissionKey.includes('.') ? permissionKey.split('.')[0] : permissionKey;
-    return userPermissions.includes(moduleKey);
+    if (userPermissions.includes(moduleKey)) return true;
+    if (!permissionKey.includes('.')) {
+        const subKeys = getSubKeysForModule(permissionKey);
+        return subKeys.some(sk => userPermissions.includes(sk));
+    }
+    return false;
 };
 
 export const expandPermissions = (permissions: string[]): string[] => {
