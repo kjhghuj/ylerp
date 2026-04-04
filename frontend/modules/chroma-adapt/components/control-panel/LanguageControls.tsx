@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { Wand2, Loader2, Upload, Images } from 'lucide-react';
 import { ChromaAppState, ProcessingState, TranslationTarget, TargetFont } from '../../chromaTypes';
+import HelpTooltip from '../HelpTooltip';
 
 interface LanguageControlsProps {
   state: ChromaAppState;
@@ -14,6 +14,29 @@ interface LanguageControlsProps {
   onPipelineBatchUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onBatchTranslateStart?: () => void;
 }
+
+const helpContent: Record<string, { title: string; content: string }> = {
+  targetLanguage: {
+    title: '目标语言',
+    content: '选择您希望将海报中的文字翻译成的目标语言。\n\nAI 会自动识别原始图片中的文字语言，并将其翻译为您选择的目标语言，同时尽量保持原始字体风格和排版布局。'
+  },
+  fontStyle: {
+    title: '字体风格',
+    content: '选择翻译后文字的字体风格。\n\n不同风格适用于不同场景：\n• 手写体：适合温馨、个性化的设计\n• 衬线体：适合正式、优雅的海报\n• 无衬线体：适合现代、简洁的设计\n• 像素风：适合复古、游戏相关主题\n• 萌系：适合可爱、年轻化的风格'
+  },
+  translate: {
+    title: '翻译生成',
+    content: '点击后 AI 将执行以下步骤：\n\n1. 识别原始图片中的所有文字\n2. 将文字翻译为目标语言\n3. 使用选择的字体风格重新渲染\n4. 将翻译后的文字替换回原图对应位置\n\n首次处理可能需要 10-30 秒。'
+  },
+  batchUpload: {
+    title: '批量上传',
+    content: '一次上传多张图片进行批量翻译。\n\n使用步骤：\n1. 点击"批量上传"选择多张图片\n2. 等待图片加载到队列\n3. 点击"批量翻译"开始处理\n\n所有图片将使用相同的目标语言和字体设置。'
+  },
+  batchTranslate: {
+    title: '批量翻译',
+    content: '开始批量处理队列中的所有图片。\n\n每张图片会依次处理，处理完成后可在结果区域查看和下载。处理速度取决于图片数量和复杂度。'
+  }
+};
 
 const LanguageControls: React.FC<LanguageControlsProps> = ({
   state,
@@ -34,6 +57,7 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
         <div className="flex items-center gap-2">
           <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.targetStep}</span>
           <h2 className="text-sm font-bold text-slate-800">{t.targetLanguage}</h2>
+          <HelpTooltip {...helpContent.targetLanguage} />
         </div>
         <div className="grid grid-cols-5 gap-1.5">
           {targetLanguages.map((lang) => (
@@ -58,6 +82,7 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
           <div className="flex items-center gap-2">
             <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.fontStep}</span>
             <h2 className="text-sm font-bold text-slate-800">{t.fontStyle}</h2>
+            <HelpTooltip {...helpContent.fontStyle} />
           </div>
           <div className="flex gap-1.5">
             {fontOptions.map((font) => (
@@ -82,6 +107,7 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
         <div className="flex items-center gap-2">
           <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.translateStep}</span>
           <h2 className="text-sm font-bold text-slate-800">{t.translateAction}</h2>
+          <HelpTooltip {...helpContent.translate} />
         </div>
 
         <div className="space-y-2">
@@ -114,6 +140,7 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
               >
                 <Upload className="w-4 h-4" />
                 {t.batchUpload || 'Batch Upload'}
+                <span className="ml-1"><HelpTooltip {...helpContent.batchUpload} /></span>
               </button>
             </div>
           )}
@@ -130,6 +157,7 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Images className="w-4 h-4" />}
               2. {t.batchTranslate || 'Batch Translate'} ({state.pipelineQueue.length})
+              <span className="ml-1"><HelpTooltip {...helpContent.batchTranslate} /></span>
             </button>
           )}
         </div>

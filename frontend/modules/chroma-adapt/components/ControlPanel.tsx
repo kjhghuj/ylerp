@@ -8,6 +8,7 @@ import StyleControls from './StyleControls';
 import ImageUploadSection from './control-panel/ImageUploadSection';
 import LanguageControls from './control-panel/LanguageControls';
 import EditPromptSection from './control-panel/EditPromptSection';
+import HelpTooltip from './HelpTooltip';
 
 
 interface ControlPanelProps {
@@ -115,6 +116,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="flex items-center gap-2">
                 <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.paletteStep}</span>
                 <h2 className="text-sm font-bold text-slate-800">{t.extractedPalette}</h2>
+                <HelpTooltip title="提取的色彩方案" content="AI 从参考图中提取的色彩方案。\n\n包含三种色彩类型：\n• 主色：图片中面积最大的颜色\n• 辅助色：搭配主色的次要颜色\n• 点缀色：用于细节和亮点的小面积颜色\n\n提取完成后，这些颜色将被映射应用到原始海报上。" />
               </div>
               <ColorPaletteDisplay
                 palette={state.extractedPalette}
@@ -129,6 +131,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               <div className="flex items-center gap-2">
                 <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{t.configStep}</span>
                 <h2 className="text-sm font-bold text-slate-800">{t.configuration}</h2>
+                <HelpTooltip title="色彩适配配置" content="控制色彩适配时保留或替换的元素：\n\n• 替换产品：将原图中的产品替换为参考图中的产品\n• 保持布局：保留原始海报的整体布局结构\n• 保持字体：保留原始文字的字体风格\n• 保持质感：保留图片的材质纹理效果\n• 保持光影：保留原始光照和阴影效果\n• 仅变色文字：只改变文字颜色，不改变其他元素\n\n根据需要灵活组合这些选项。" />
               </div>
               <StyleControls
                 config={state.styleConfig}
@@ -171,9 +174,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {state.mode === 'COLOR_ADAPT' && (
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <label className="text-sm font-bold text-slate-700">{t.concurrentCount}</label>
                 <span className="text-[10px] text-slate-400">{t.concurrentCountDesc}</span>
+                <HelpTooltip title="并发生成数量" content="选择同时生成的效果图数量。\n\n• ×1：生成 1 张效果图，速度最快\n• ×2：同时生成 2 张，提供更多选择\n• ×3：同时生成 3 张，推荐使用\n• ×4：同时生成 4 张，效果最丰富\n\n数量越多，处理时间越长，但能提供更多配色方案供选择。" />
               </div>
               <div className="flex gap-2">
                 {[1, 2, 3, 4].map((n) => (

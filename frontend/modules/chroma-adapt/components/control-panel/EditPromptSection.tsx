@@ -1,7 +1,7 @@
-
 import React from 'react';
 import { Loader2, Pencil, Sparkles, Zap, Wand2, Images, Palette } from 'lucide-react';
 import { ChromaAppState, ProcessingState, SecondaryWorkflowMode, ColorWorkflowMode } from '../../chromaTypes';
+import HelpTooltip from '../HelpTooltip';
 
 interface EditPromptSectionProps {
   state: ChromaAppState;
@@ -18,6 +18,41 @@ interface EditPromptSectionProps {
   onSecondaryWorkflowModeChange?: (mode: SecondaryWorkflowMode) => void;
   onColorWorkflowModeChange?: (mode: ColorWorkflowMode) => void;
 }
+
+const helpContent: Record<string, { title: string; content: string }> = {
+  editPrompt: {
+    title: '修改需求',
+    content: '描述您希望对图片进行的具体修改。\n\n示例：\n• "把背景换成海滩场景"\n• "给人物戴上一顶红色帽子"\n• "将图片中的文字改为金色"\n• "移除图片右下角的水印"\n\n提示：描述越具体，AI 修改效果越精准。'
+  },
+  editUserInput: {
+    title: '补充参考文字',
+    content: '可选的补充说明，帮助 AI 更好地理解您的需求。\n\n可以输入：\n• 图片中需要保留的关键元素\n• 特殊的文字内容（如品牌名、标语等）\n• 希望保持的风格或氛围\n\n此为可选项，不填写也不影响使用。'
+  },
+  secondaryPrompt: {
+    title: '副图生成提示',
+    content: '描述您想要生成的副图效果。\n\n示例：\n• "生成一张适合发朋友圈的1:1产品特写，背景更简约"\n• "生成一张白底产品图，适合上架电商平台"\n• "生成一张节日氛围的产品场景图"\n\nAI 会基于参考底图和您的描述来生成新图片。'
+  },
+  secondaryBatch: {
+    title: '批量生成',
+    content: '上传多张图片，AI 将根据提示词批量生成新图片。\n\n使用步骤：\n1. 点击上传区域选择多张图片\n2. 确认队列中的图片无误\n3. 点击"批量生成"开始处理\n\n支持 JPG、PNG、WebP 格式，建议单次不超过10张。'
+  },
+  colorAutoAdapt: {
+    title: '自动色彩适配',
+    content: 'AI 自动分析两张图片的色彩风格，并将参考图的色调应用到原始海报上。\n\nAI 会智能处理：\n• 提取参考图的主色、辅助色、点缀色\n• 自动映射到原始海报的对应区域\n• 保持原图的布局、字体、纹理不变\n\n点击"分析颜色"即可开始。'
+  },
+  colorCustomPrompt: {
+    title: '自定义色彩提示',
+    content: '手动描述您想要的色彩调整效果。\n\n示例：\n• "将主色调改为暖色系，使用橙色和金色"\n• "保持整体色调不变，将蓝色改为紫色"\n• "使用莫兰迪色系，整体偏灰调"\n\nAI 会根据您的描述精确调整色彩。'
+  },
+  colorAnalyze: {
+    title: '分析颜色',
+    content: '点击后 AI 将执行两步操作：\n\n第一步：分析原始海报和参考图的色彩方案\n第二步：将参考图的色调智能映射到原始海报\n\n分析完成后可以直接生成效果图。'
+  },
+  secondaryAnalyze: {
+    title: '分析规划',
+    content: 'AI 将分析参考底图并生成创作规划。\n\n分析内容包括：\n• 识别图片中的主要元素和构图\n• 根据您的提示词制定生成方案\n• 规划色彩、布局、风格等细节\n\n分析完成后将自动开始生成图片。'
+  }
+};
 
 const EditPromptSection: React.FC<EditPromptSectionProps> = ({
   state,
@@ -36,31 +71,44 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 }) => {
   const isProcessing = state.status === ProcessingState.GENERATING || state.status === ProcessingState.ANALYZING;
 
-  const StepHeader = ({ step, title }: { step: string, title: string }) => (
+  const StepHeader = ({ step, title, helpKey }: { step: string, title: string, helpKey?: string }) => (
     <div className="flex items-center gap-2 mb-3">
       <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{step}</span>
       <h2 className="text-sm font-bold text-slate-800">{title}</h2>
+      {helpKey && helpContent[helpKey] && <HelpTooltip {...helpContent[helpKey]} />}
     </div>
   );
 
   if (state.mode === 'IMAGE_EDIT') {
     return (
       <div className="space-y-3">
-        <StepHeader step={t.promptStep} title={t.editInstructions} />
-        <textarea
-          value={state.editPrompt}
-          onChange={(e) => onEditPromptChange?.(e.target.value)}
-          placeholder={t.editPromptPlaceholder}
-          className="w-full h-28 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
-          disabled={isProcessing}
-        />
-        <textarea
-          value={state.editUserInput}
-          onChange={(e) => onEditUserInputChange?.(e.target.value)}
-          placeholder={t.editUserInputPlaceholder}
-          className="w-full h-20 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
-          disabled={isProcessing}
-        />
+        <StepHeader step={t.promptStep} title={t.editInstructions} helpKey="editPrompt" />
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-bold text-slate-600">{t.editInstruction || '修改需求'}</label>
+            <HelpTooltip {...helpContent.editPrompt} />
+          </div>
+          <textarea
+            value={state.editPrompt}
+            onChange={(e) => onEditPromptChange?.(e.target.value)}
+            placeholder={t.editPlaceholder}
+            className="w-full h-28 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+            disabled={isProcessing}
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs font-bold text-slate-600">{t.genRequirement || '补充参考文字'}</label>
+            <HelpTooltip {...helpContent.editUserInput} />
+          </div>
+          <textarea
+            value={state.editUserInput}
+            onChange={(e) => onEditUserInputChange?.(e.target.value)}
+            placeholder={t.editUserInputPlaceholder || '可选：输入补充说明，帮助AI更好理解需求...'}
+            className="w-full h-20 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+            disabled={isProcessing}
+          />
+        </div>
       </div>
     );
   }
@@ -73,7 +121,7 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 
     return (
       <div className="space-y-4">
-        <StepHeader step={t.promptStep} title={t.secondaryPrompt} />
+        <StepHeader step={t.promptStep} title={t.secondaryPrompt} helpKey="secondaryPrompt" />
 
         <div className="flex gap-2">
           {workflowModes.map((mode) => (
@@ -112,6 +160,7 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Zap size={16} />}
               1. {t.analyze || 'Analyze & Plan'}
+              <span className="ml-1"><HelpTooltip {...helpContent.secondaryAnalyze} /></span>
             </button>
           </div>
         ) : (
@@ -174,6 +223,7 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Wand2 size={16} />}
               {t.batchGenerate || 'Batch Generate'}
+              <span className="ml-1"><HelpTooltip {...helpContent.secondaryBatch} /></span>
             </button>
           </div>
         )}
@@ -189,7 +239,7 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 
     return (
       <div className="space-y-4">
-        <StepHeader step={t.promptStep} title={t.colorPrompt || 'Color Adaptation'} />
+        <StepHeader step={t.promptStep} title={t.colorPrompt || 'Color Adaptation'} helpKey={state.colorWorkflowMode === 'single_model' ? 'colorAutoAdapt' : 'colorCustomPrompt'} />
 
         <div className="flex gap-2">
           {colorModes.map((mode) => (
@@ -229,6 +279,7 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
         >
           {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Sparkles size={16} />}
           1. {t.analyzeColor || 'Analyze Colors'}
+          <span className="ml-1"><HelpTooltip {...helpContent.colorAnalyze} /></span>
         </button>
       </div>
     );
