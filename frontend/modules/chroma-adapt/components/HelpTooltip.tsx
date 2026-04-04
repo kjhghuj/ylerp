@@ -11,13 +11,15 @@ const HelpTooltip: React.FC<HelpTooltipProps> = ({ title, content }) => {
 
     return (
         <>
-            <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
-                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-300 hover:text-brand-500 hover:bg-brand-50 transition-colors"
+            <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsOpen(true); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); setIsOpen(true); } }}
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-slate-300 hover:text-brand-500 hover:bg-brand-50 transition-colors cursor-pointer"
             >
                 <HelpCircle size={14} />
-            </button>
+            </span>
 
             {isOpen && (
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-sm" onClick={() => setIsOpen(false)}>
