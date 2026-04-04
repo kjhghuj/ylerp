@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -70,6 +70,14 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         children: [
             { key: 'pricing.calc', label: '定价计算', labelEn: 'Calculate', icon: Calculator },
             { key: 'pricing.save', label: '保存方案', labelEn: 'Save Plan', icon: FileText },
+        ]
+    },
+    {
+        key: 'chroma-adapt', label: '图片制作', labelEn: 'Image Studio', icon: Image,
+        children: [
+            { key: 'chroma-adapt.translate', label: '图片翻译', labelEn: 'Translate', icon: Edit3 },
+            { key: 'chroma-adapt.edit', label: '图片编辑', labelEn: 'Edit', icon: Settings },
+            { key: 'chroma-adapt.generate', label: 'AI生成', labelEn: 'Generate', icon: Image },
         ]
     },
 ];
