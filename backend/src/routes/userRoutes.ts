@@ -55,6 +55,11 @@ router.post('/', authorize('owner'), async (req, res) => {
         const validRoles = ['admin', 'viewer'];
         const finalRole = validRoles.includes(role) ? role : 'viewer';
 
+        const currentUser = await prisma.user.findUnique({ where: { id: req.user!.id } });
+        if (!currentUser) {
+            return res.status(401).json({ error: '当前账户不存在，请重新登录' });
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = await prisma.user.create({
@@ -63,7 +68,7 @@ router.post('/', authorize('owner'), async (req, res) => {
                 password: hashedPassword,
                 displayName,
                 role: finalRole,
-                parentId: req.user!.id,
+                parentId: currentUser.id,
                 permissions: Array.isArray(permissions) ? permissions : [],
             },
             select: {

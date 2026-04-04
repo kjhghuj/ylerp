@@ -29,15 +29,12 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const authHeader = req.headers.authorization;
 
     if (process.env.NODE_ENV !== 'production' && authHeader === 'Bearer dev-token') {
-        try {
-            const owner = await prisma.user.findFirst({ where: { role: 'owner' } });
-            if (owner) {
-                req.user = { id: owner.id, username: owner.username, role: owner.role };
-            } else {
-                req.user = { id: 'dev-admin-id', username: 'admin', role: 'owner' };
-            }
-        } catch (e) {
-            req.user = { id: 'dev-admin-id', username: 'admin', role: 'owner' };
+        const owner = await prisma.user.findFirst({ where: { role: 'owner' } });
+        if (owner) {
+            req.user = { id: owner.id, username: owner.username, role: owner.role };
+        } else {
+            res.status(401).json({ error: '开发环境无 owner 账户，请先运行 seed：npx tsx prisma/seed.ts' });
+            return;
         }
         return next();
     }
