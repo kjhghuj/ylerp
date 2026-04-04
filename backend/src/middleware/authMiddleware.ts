@@ -22,6 +22,7 @@ declare global {
  * Verify JWT token and attach user to request
  */
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -29,13 +30,15 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const authHeader = req.headers.authorization;
 
     if (process.env.NODE_ENV !== 'production' && authHeader === 'Bearer dev-token') {
-        const owner = await prisma.user.findFirst({ where: { role: 'owner' } });
-        if (owner) {
-            req.user = { id: owner.id, username: owner.username, role: owner.role };
-        } else {
-            res.status(401).json({ error: '开发环境无 owner 账户，请先运行 seed：npx tsx prisma/seed.ts' });
-            return;
+        let owner = await prisma.user.findFirst({ where: { role: 'owner' } });
+        if (!owner) {
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            owner = await prisma.user.create({
+                data: { username: 'admin', password: hashedPassword, displayName: '管理员', role: 'owner', isActive: true },
+            });
+            console.log('[Dev] 自动创建 owner 账户: admin / admin123');
         }
+        req.user = { id: owner.id, username: owner.username, role: owner.role };
         return next();
     }
 
