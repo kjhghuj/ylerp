@@ -38,6 +38,7 @@ docker image prune -f
 docker builder prune -f --filter "until=24h"
 
 log "重启 webhook 服务..."
+systemctl daemon-reload
 systemctl restart webhook
 
 log "========== 部署完成 =========="
