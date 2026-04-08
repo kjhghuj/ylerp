@@ -19,6 +19,7 @@ interface ProfitTemplate {
     country: string;
     platform?: PlatformType;
     data: any;
+    productId?: string;
 }
 
 interface PlatformNode {
@@ -291,11 +292,11 @@ export const ProfitCalculator: React.FC = () => {
         for (const n of nodes) {
             try {
                 const tplName = n.name || n.platform;
-                const existing = allTemplates.find(
-                    t => t.id === n.templateId && t.productId === savedProductId
+                const isDuplicate = allTemplates.some(
+                    t => t.productId === savedProductId && t.name === tplName && t.platform === n.platform
                 );
-                if (existing) continue;
-                await api.post('/templates', {
+                if (isDuplicate) continue;
+                const response = await api.post('/templates', {
                     name: tplName,
                     country: n.country,
                     platform: n.platform,
@@ -303,6 +304,7 @@ export const ProfitCalculator: React.FC = () => {
                     data: n.data,
                     productId: savedProductId,
                 });
+                setAllTemplates(prev => [...prev, response.data]);
             } catch (error) {
                 console.error('Failed to save linked template:', error);
             }

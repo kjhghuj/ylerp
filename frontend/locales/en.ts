@@ -425,6 +425,7 @@ export const en = {
       fixedType: 'Fixed',
       couponPlatformRatio: 'Platform Share',
       platformCoupon: 'Platform Coupon',
+      platformCouponRate: 'Platform Coupon Rate',
       commission: 'Commission Rate',
       transactionFee: 'Transaction Fee',
       damageReturn: 'Damage Return Rate',

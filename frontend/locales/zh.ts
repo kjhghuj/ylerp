@@ -425,6 +425,7 @@ export const zh = {
       fixedType: '固定',
       couponPlatformRatio: '平台出资比例',
       platformCoupon: '平台优惠券',
+      platformCouponRate: '平台优惠券比例',
       commission: '佣金率',
       transactionFee: '交易费率',
       damageReturn: '货损退货率',

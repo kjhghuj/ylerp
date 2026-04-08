@@ -213,7 +213,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     { label: t.detail.transactionFee, value: d.transactionFeeRate, suffix: '%' },
                     { label: t.detail.damageReturn, value: d.damageReturnRate, suffix: '%' },
                     { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: 'CNY' },
-                    { label: '平台优惠券比例', value: d.platformCouponRate, suffix: '%' },
+                    { label: t.detail.platformCouponRate, value: d.platformCouponRate, suffix: '%' },
                 ]
             },
             {

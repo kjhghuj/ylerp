@@ -105,12 +105,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const strings = translations[language];
 
   const addProduct = async (p: ProductCalcData) => {
-    try {
-      const res = await api.post('/products', p);
-      const saved = res.data;
-      setProducts(prev => [...prev, saved]);
-      return saved;
-    } catch (e) { console.error('Error adding product', e); }
+    const res = await api.post('/products', p);
+    const saved = res.data;
+    setProducts(prev => [...prev, saved]);
+    return saved;
   };
   const updateProduct = async (p: ProductCalcData) => {
     try {
