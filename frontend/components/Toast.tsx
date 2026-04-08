@@ -24,16 +24,25 @@ const icons: Record<ToastType, React.ReactNode> = {
     info: <Info size={18} />,
 };
 
-const styleMap: Record<ToastType, string> = {
-    success: 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-emerald-100',
-    error: 'bg-red-50 border-red-200 text-red-700 shadow-red-100',
-    info: 'bg-blue-50 border-blue-200 text-blue-700 shadow-blue-100',
+const styleMap: Record<ToastType, { light: string; dark: string }> = {
+    success: {
+        light: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+        dark: 'dark:bg-emerald-900/30 dark:border-emerald-800/40 dark:text-emerald-300',
+    },
+    error: {
+        light: 'bg-red-50 border-red-200 text-red-700',
+        dark: 'dark:bg-red-900/30 dark:border-red-800/40 dark:text-red-300',
+    },
+    info: {
+        light: 'bg-blue-50 border-blue-200 text-blue-700',
+        dark: 'dark:bg-blue-900/30 dark:border-blue-800/40 dark:text-blue-300',
+    },
 };
 
-const iconColorMap: Record<ToastType, string> = {
-    success: 'text-emerald-500',
-    error: 'text-red-500',
-    info: 'text-blue-500',
+const iconColorMap: Record<ToastType, { light: string; dark: string }> = {
+    success: { light: 'text-emerald-500', dark: 'dark:text-emerald-400' },
+    error: { light: 'text-red-500', dark: 'dark:text-red-400' },
+    info: { light: 'text-blue-500', dark: 'dark:text-blue-400' },
 };
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -62,14 +71,14 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                             pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl border shadow-lg backdrop-blur-sm
                             min-w-[280px] max-w-[400px]
                             transition-all duration-300 ease-out
-                            ${styleMap[toast.type]}
+                            ${styleMap[toast.type].light} ${styleMap[toast.type].dark}
                             ${toast.closing
                                 ? 'opacity-0 translate-x-8 scale-95'
                                 : 'opacity-100 translate-x-0 scale-100 animate-[slideIn_0.3s_ease-out]'
                             }
                         `}
                     >
-                        <span className={`shrink-0 ${iconColorMap[toast.type]}`}>{icons[toast.type]}</span>
+                        <span className={`shrink-0 ${iconColorMap[toast.type].light} ${iconColorMap[toast.type].dark}`}>{icons[toast.type]}</span>
                         <span className="flex-1 text-sm font-bold">{toast.message}</span>
                     </div>
                 ))}
