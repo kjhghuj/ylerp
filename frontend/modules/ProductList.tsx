@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../StoreContext';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
-    ChevronLeft, ChevronRight, X, Calculator, List, ArrowUpRight, Package, Layers
+    ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
@@ -93,14 +93,6 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             setLinkedTemplates([]);
         }
         setLoadingTemplates(false);
-    };
-
-    const handleImportToCalculator = () => {
-        if (selectedProduct) {
-            setCalculatorImport(selectedProduct);
-            setShowDetailModal(false);
-            onNavigate('profit');
-        }
     };
 
     const handleImportTemplate = (tpl: LinkedTemplate) => {
@@ -295,9 +287,6 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={handleImportToCalculator} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-sm">
-                                    <Calculator size={14} /> {t.modals.importCalculator}
-                                </button>
                                 <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"><X size={20} /></button>
                             </div>
                         </div>
