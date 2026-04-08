@@ -263,7 +263,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {currentProducts.map(p => (
-                                <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
                                     <td className="p-3 pl-4 font-bold text-slate-800 truncate max-w-[180px]">{p.name}</td>
                                     <td className="p-3 text-slate-500 font-mono text-xs">{p.sku}</td>
                                     <td className="p-3 text-right text-slate-700 font-mono">{p.totalRevenue?.toFixed(2)}</td>
