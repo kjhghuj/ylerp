@@ -4,6 +4,13 @@ import { translations } from './translations';
 
 type Language = 'zh' | 'en';
 
+export interface ImportedNode {
+    name: string;
+    country: string;
+    platform: string;
+    data: Record<string, any>;
+}
+
 interface StoreContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -16,6 +23,8 @@ interface StoreContextType {
 
   calculatorImport: ProductCalcData | null;
   setCalculatorImport: (p: ProductCalcData | null) => void;
+  calculatorImportNodes: ImportedNode[];
+  setCalculatorImportNodes: (nodes: ImportedNode[]) => void;
 
   financeRecords: FinanceRecord[];
   addTransaction: (t: FinanceRecord) => Promise<void>;
@@ -61,6 +70,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [skuGroupMappings, setSkuGroupMappings] = useState<SkuGroupMapping[]>([]);
   const [restockRecords, setRestockRecords] = useState<RestockRecord[]>([]);
   const [calculatorImport, setCalculatorImport] = useState<ProductCalcData | null>(null);
+  const [calculatorImportNodes, setCalculatorImportNodes] = useState<ImportedNode[]>([]);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -257,6 +267,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       language, setLanguage, strings, loading,
       products, addProduct, updateProduct, deleteProduct,
       calculatorImport, setCalculatorImport,
+      calculatorImportNodes, setCalculatorImportNodes,
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,

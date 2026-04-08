@@ -22,7 +22,7 @@ interface ProductListProps {
 }
 
 export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
-    const { products, deleteProduct, setCalculatorImport, strings } = useStore();
+    const { products, deleteProduct, setCalculatorImport, setCalculatorImportNodes, strings } = useStore();
     const t = strings.productList;
 
     const [activeTab, setActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>('MY');
@@ -121,6 +121,26 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             warehouseOperationFee: Number(tpl.data.warehouseOperationFee) || 0,
         };
         setCalculatorImport(merged);
+        const importNodes = linkedTemplates.map(t => ({
+            name: t.name,
+            country: t.country,
+            platform: t.platform || 'other',
+            data: {
+                baseShippingFee: Number(t.data.baseShippingFee) || 0,
+                extraShippingFee: Number(t.data.extraShippingFee) || 0,
+                crossBorderFee: Number(t.data.crossBorderFee) || 0,
+                platformCommissionRate: Number(t.data.platformCommissionRate) || 0,
+                transactionFeeRate: Number(t.data.transactionFeeRate) || 0,
+                platformCoupon: Number(t.data.platformCoupon) || 0,
+                platformCouponRate: Number(t.data.platformCouponRate) || 0,
+                damageReturnRate: Number(t.data.damageReturnRate) || 0,
+                mdvServiceFeeRate: Number(t.data.mdvServiceFeeRate) || 0,
+                fssServiceFeeRate: Number(t.data.fssServiceFeeRate) || 0,
+                ccbServiceFeeRate: Number(t.data.ccbServiceFeeRate) || 0,
+                warehouseOperationFee: Number(t.data.warehouseOperationFee) || 0,
+            },
+        }));
+        setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
     };

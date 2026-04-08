@@ -38,7 +38,7 @@ const DEFAULT_NODE_DATA = {
 };
 
 export const ProfitCalculator: React.FC = () => {
-    const { addProduct, updateProduct, strings, calculatorImport, setCalculatorImport } = useStore();
+    const { addProduct, updateProduct, strings, calculatorImport, setCalculatorImport, calculatorImportNodes, setCalculatorImportNodes } = useStore();
     const { showToast } = useToast();
     const t = strings.profit;
 
@@ -147,32 +147,43 @@ export const ProfitCalculator: React.FC = () => {
             }
             setSiteCountry(currency);
 
-            const nodeData = {
-                baseShippingFee: calculatorImport.baseShippingFee || 0,
-                extraShippingFee: calculatorImport.extraShippingFee || 0,
-                crossBorderFee: calculatorImport.crossBorderFee || 0,
-                platformCommissionRate: calculatorImport.platformCommissionRate || 0,
-                transactionFeeRate: calculatorImport.transactionFeeRate || 0,
-                platformCoupon: calculatorImport.platformCoupon || 0,
-                platformCouponRate: calculatorImport.platformCouponRate || 0,
-                damageReturnRate: calculatorImport.damageReturnRate || 0,
-                mdvServiceFeeRate: calculatorImport.mdvServiceFeeRate || 0,
-                fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
-                ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
-                warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
-            };
+            if (calculatorImportNodes.length > 0) {
+                setNodes(calculatorImportNodes.map(n => ({
+                    id: genId(),
+                    platform: n.platform || 'other',
+                    country: n.country,
+                    name: n.name,
+                    data: { ...DEFAULT_NODE_DATA, ...n.data }
+                })));
+                setCalculatorImportNodes([]);
+            } else {
+                const nodeData = {
+                    baseShippingFee: calculatorImport.baseShippingFee || 0,
+                    extraShippingFee: calculatorImport.extraShippingFee || 0,
+                    crossBorderFee: calculatorImport.crossBorderFee || 0,
+                    platformCommissionRate: calculatorImport.platformCommissionRate || 0,
+                    transactionFeeRate: calculatorImport.transactionFeeRate || 0,
+                    platformCoupon: calculatorImport.platformCoupon || 0,
+                    platformCouponRate: calculatorImport.platformCouponRate || 0,
+                    damageReturnRate: calculatorImport.damageReturnRate || 0,
+                    mdvServiceFeeRate: calculatorImport.mdvServiceFeeRate || 0,
+                    fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
+                    ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
+                    warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
+                };
 
-            setNodes([{
-                id: genId(),
-                platform: 'other',
-                country: currency,
-                name: '导入数据',
-                data: nodeData
-            }]);
+                setNodes([{
+                    id: genId(),
+                    platform: 'other',
+                    country: currency,
+                    name: '导入数据',
+                    data: nodeData
+                }]);
+            }
 
             setCalculatorImport(null);
         }
-    }, [calculatorImport, setCalculatorImport]);
+    }, [calculatorImport, setCalculatorImport, calculatorImportNodes, setCalculatorImportNodes]);
 
     const handleGlobalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
