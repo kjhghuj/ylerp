@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../StoreContext';
 import { Save, Calculator, Plus, Box, Building, Trash2, ChevronDown } from 'lucide-react';
 import api from '../src/api';
@@ -64,7 +64,6 @@ export const ProfitCalculator: React.FC = () => {
     const [rates, setRates] = useState<Record<string, number>>({ MYR: 0, PHP: 0, SGD: 0, THB: 0, IDR: 0 });
 
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
-    const isImportingRef = useRef(false);
 
     const fetchTemplates = async () => {
         try {
@@ -96,27 +95,9 @@ export const ProfitCalculator: React.FC = () => {
         fetchRates();
     }, []);
 
-    useEffect(() => {
-        if (!templatesLoaded || allTemplates.length === 0) return;
-        if (isImportingRef.current) {
-            isImportingRef.current = false;
-            return;
-        }
-        const siteTemplates = allTemplates.filter(tpl => tpl.country === siteCountry);
-        setNodes(siteTemplates.map(tpl => ({
-            id: tpl.id || genId(),
-            templateId: tpl.id,
-            platform: tpl.platform || 'other',
-            country: tpl.country,
-            name: tpl.name,
-            data: { ...DEFAULT_NODE_DATA, ...tpl.data }
-        })));
-    }, [siteCountry, templatesLoaded]);
-
     // Handle data import from Product List
     useEffect(() => {
         if (calculatorImport) {
-            isImportingRef.current = true;
             const globalData = {
                 name: calculatorImport.name,
                 sku: calculatorImport.sku,
