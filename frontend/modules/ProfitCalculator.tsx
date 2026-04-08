@@ -238,12 +238,9 @@ export const ProfitCalculator: React.FC = () => {
             showToast('Please enter Name and SKU', 'error');
             return;
         }
-        
-        // Pick the first node as the representative data to save back to the legacy product system.
-        // For a full system refactor, Product model would need multiple pricing nodes.
-        // For now, we save the global inputs + node 0 (if exists) 
+
         const node = nodes.length > 0 ? nodes[0] : { country: 'MYR', data: DEFAULT_NODE_DATA };
-        
+
         let c: 'MY' | 'SG' | 'PH' | 'TH' | 'ID' | 'CN' = 'MY';
         if (node.country === 'SGD') c = 'SG';
         else if (node.country === 'PHP') c = 'PH';
@@ -264,7 +261,7 @@ export const ProfitCalculator: React.FC = () => {
             vatRate: Number(globalInputs.vatRate) || 0,
             corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
             platformInfrastructureFee: Number(globalInputs.platformInfrastructureFee) || 0,
-            
+
             totalRevenue: Number(globalInputs.totalRevenue) || 0,
             baseShippingFee: Number(node.data.baseShippingFee) || 0,
             extraShippingFee: Number(node.data.extraShippingFee) || 0,
@@ -278,17 +275,39 @@ export const ProfitCalculator: React.FC = () => {
             fssServiceFeeRate: Number(node.data.fssServiceFeeRate) || 0,
             ccbServiceFeeRate: Number(node.data.ccbServiceFeeRate) || 0,
             warehouseOperationFee: Number(node.data.warehouseOperationFee) || 0,
-            
+
             shipping: 0, fees: 0, marketing: 0, taxes: 0, profit: 0, margin: 0, costMargin: 0
-            // The backend or hooks recalculate these based on the current inputs formula when save happens,
-            // or we omit them if backend ignores them. ProductCalcData requires them in types though!
         };
+
+        let savedProductId = editingProductId;
 
         if (editingProductId) {
             await updateProduct({ ...productData, id: editingProductId });
         } else {
-            await addProduct(productData);
+            const saved = await addProduct(productData);
+            savedProductId = saved.id;
         }
+
+        for (const n of nodes) {
+            try {
+                const tplName = n.name || n.platform;
+                const existing = allTemplates.find(
+                    t => t.id === n.templateId && t.productId === savedProductId
+                );
+                if (existing) continue;
+                await api.post('/templates', {
+                    name: tplName,
+                    country: n.country,
+                    platform: n.platform,
+                    type: 'profit',
+                    data: n.data,
+                    productId: savedProductId,
+                });
+            } catch (error) {
+                console.error('Failed to save linked template:', error);
+            }
+        }
+
         showToast(editingProductId ? t.actions.updated : t.actions.saved);
     };
 

@@ -399,7 +399,10 @@ export const en = {
     },
     modals: {
       detailTitle: 'Product Details',
-      importCalculator: 'Import to Calculator'
+      importCalculator: 'Import to Calculator',
+      tabProduct: 'Product Data',
+      noTemplates: 'No linked templates',
+      noTemplatesHint: 'Templates are auto-created when saving products from Profit Calculator'
     },
     detail: {
       baseInfo: 'Basic Info',

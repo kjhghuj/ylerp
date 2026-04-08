@@ -399,7 +399,10 @@ export const zh = {
     },
     modals: {
       detailTitle: '商品详情',
-      importCalculator: '导入至利润计算器'
+      importCalculator: '导入至利润计算器',
+      tabProduct: '商品数据',
+      noTemplates: '暂无关联模版',
+      noTemplatesHint: '在利润计算器中保存商品时，会自动创建关联模版'
     },
     detail: {
       baseInfo: '基本信息',

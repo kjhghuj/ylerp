@@ -7,9 +7,13 @@ const prisma = new PrismaClient();
 router.get('/', async (req, res) => {
     try {
         const userId = req.user!.id;
-        const { type } = req.query;
+        const { type, productId } = req.query;
         const templates = await prisma.profitTemplate.findMany({
-            where: { userId, ...(type ? { type: String(type) } : {}) },
+            where: {
+                userId,
+                ...(type ? { type: String(type) } : {}),
+                ...(productId ? { productId: String(productId) } : {}),
+            },
             orderBy: { createdAt: 'desc' }
         });
         res.json(templates);
@@ -38,7 +42,7 @@ router.get('/:country', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user!.id;
-        const { name, country, data, type, platform } = req.body;
+        const { name, country, data, type, platform, productId } = req.body;
 
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -51,7 +55,8 @@ router.post('/', async (req, res) => {
                 data,
                 type: type || 'profit',
                 platform,
-                userId
+                userId,
+                ...(productId ? { productId } : {}),
             }
         });
         res.status(201).json(template);

@@ -48,6 +48,7 @@ model Product {
   costMargin                Float
   userId                    String
   user                      User    @relation(fields: [userId], references: [id])
+  templates                 ProfitTemplate[]
 }
 
 model FinanceRecord {
@@ -115,6 +116,8 @@ model ProfitTemplate {
   createdAt DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [id])
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
 }
 
 model User {

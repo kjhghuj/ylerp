@@ -2,10 +2,20 @@ import React, { useState } from 'react';
 import { useStore } from '../StoreContext';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
-    ChevronLeft, ChevronRight, X, Calculator, List, ArrowUpRight
+    ChevronLeft, ChevronRight, X, Calculator, List, ArrowUpRight, Package, Layers
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
+import api from '../src/api';
+
+interface LinkedTemplate {
+    id: string;
+    name: string;
+    country: string;
+    platform?: string;
+    data: Record<string, any>;
+    createdAt: string;
+}
 
 interface ProductListProps {
     onNavigate: (view: AppState['currentView']) => void;
@@ -22,6 +32,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<ProductCalcData | null>(null);
+    const [linkedTemplates, setLinkedTemplates] = useState<LinkedTemplate[]>([]);
+    const [modalActiveTab, setModalActiveTab] = useState(0);
+    const [loadingTemplates, setLoadingTemplates] = useState(false);
 
     const filteredProducts = products.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,9 +79,20 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         writeFile(wb, `Product_List_${activeTab}.xlsx`);
     };
 
-    const handleView = (product: ProductCalcData) => {
+    const handleView = async (product: ProductCalcData) => {
         setSelectedProduct(product);
         setShowDetailModal(true);
+        setModalActiveTab(0);
+        setLoadingTemplates(true);
+        setLinkedTemplates([]);
+        try {
+            const res = await api.get(`/templates?type=profit&productId=${product.id}`);
+            setLinkedTemplates(res.data || []);
+        } catch (error) {
+            console.error('Failed to fetch linked templates:', error);
+            setLinkedTemplates([]);
+        }
+        setLoadingTemplates(false);
     };
 
     const handleImportToCalculator = () => {
@@ -77,6 +101,28 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             setShowDetailModal(false);
             onNavigate('profit');
         }
+    };
+
+    const handleImportTemplate = (tpl: LinkedTemplate) => {
+        if (!selectedProduct) return;
+        const merged: ProductCalcData = {
+            ...selectedProduct,
+            baseShippingFee: Number(tpl.data.baseShippingFee) || 0,
+            extraShippingFee: Number(tpl.data.extraShippingFee) || 0,
+            crossBorderFee: Number(tpl.data.crossBorderFee) || 0,
+            platformCommissionRate: Number(tpl.data.platformCommissionRate) || 0,
+            transactionFeeRate: Number(tpl.data.transactionFeeRate) || 0,
+            platformCoupon: Number(tpl.data.platformCoupon) || 0,
+            platformCouponRate: Number(tpl.data.platformCouponRate) || 0,
+            damageReturnRate: Number(tpl.data.damageReturnRate) || 0,
+            mdvServiceFeeRate: Number(tpl.data.mdvServiceFeeRate) || 0,
+            fssServiceFeeRate: Number(tpl.data.fssServiceFeeRate) || 0,
+            ccbServiceFeeRate: Number(tpl.data.ccbServiceFeeRate) || 0,
+            warehouseOperationFee: Number(tpl.data.warehouseOperationFee) || 0,
+        };
+        setCalculatorImport(merged);
+        setShowDetailModal(false);
+        onNavigate('profit');
     };
 
     const handleQuickImport = (product: ProductCalcData) => {
@@ -92,7 +138,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const countryMap: Record<string, string> = { MY: 'MYR', SG: 'SGD', PH: 'PHP', TH: 'THB', ID: 'IDR' };
 
-    const detailSections = [
+    const productDetailSections = [
         {
             title: t.detail.baseInfo,
             items: [
@@ -157,6 +203,64 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         },
     ];
 
+    const templateDetailSections = (tpl: LinkedTemplate) => {
+        const d = tpl.data;
+        return [
+            {
+                title: t.detail.platformRates,
+                items: [
+                    { label: t.detail.commission, value: d.platformCommissionRate, suffix: '%' },
+                    { label: t.detail.transactionFee, value: d.transactionFeeRate, suffix: '%' },
+                    { label: t.detail.damageReturn, value: d.damageReturnRate, suffix: '%' },
+                    { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: 'CNY' },
+                    { label: '平台优惠券比例', value: d.platformCouponRate, suffix: '%' },
+                ]
+            },
+            {
+                title: t.detail.fees,
+                items: [
+                    { label: t.detail.baseShipping, value: d.baseShippingFee, suffix: 'CNY' },
+                    { label: t.detail.extraShipping, value: d.extraShippingFee, suffix: 'CNY/10g' },
+                    { label: t.detail.crossBorder, value: d.crossBorderFee, suffix: 'CNY' },
+                    { label: t.detail.warehouseFee, value: d.warehouseOperationFee, suffix: 'CNY' },
+                ]
+            },
+            {
+                title: t.detail.serviceRates,
+                items: [
+                    { label: t.detail.mdvFee, value: d.mdvServiceFeeRate, suffix: '%' },
+                    { label: t.detail.fssFee, value: d.fssServiceFeeRate, suffix: '%' },
+                    { label: t.detail.ccbFee, value: d.ccbServiceFeeRate, suffix: '%' },
+                ]
+            },
+        ];
+    };
+
+    const tabItems = [
+        { label: t.modals.tabProduct || '商品数据', icon: Package },
+        ...linkedTemplates.map((tpl, i) => ({
+            label: tpl.name || tpl.platform || `模版 ${i + 1}`,
+            icon: Layers,
+        }))
+    ];
+
+    const renderDetailSection = (section: any) => (
+        <div key={section.title}>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{section.title}</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {section.items.map((item: any) => (
+                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
+                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
+                        <span className="text-sm font-bold text-slate-700">
+                            {item.value !== undefined && item.value !== null ? item.value : '-'}
+                            {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
     return (
         <div className="space-y-6 h-full flex flex-col">
             {showDetailModal && selectedProduct && (
@@ -177,23 +281,59 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"><X size={20} /></button>
                             </div>
                         </div>
+
+                        <div className="border-b border-slate-100 px-5 shrink-0">
+                            <div className="flex gap-1 overflow-x-auto">
+                                {tabItems.map((tab, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setModalActiveTab(idx)}
+                                        className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all duration-200 rounded-t-lg whitespace-nowrap flex items-center gap-1.5
+                                            ${modalActiveTab === idx
+                                                ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50'
+                                                : 'border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200'
+                                            }`}
+                                    >
+                                        <tab.icon size={13} />
+                                        {tab.label}
+                                    </button>
+                                ))}
+                                {loadingTemplates && (
+                                    <div className="px-4 py-2.5 text-xs text-slate-400 animate-pulse">加载中...</div>
+                                )}
+                            </div>
+                        </div>
+
                         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                            {detailSections.map((section) => (
-                                <div key={section.title}>
-                                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{section.title}</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                        {section.items.map((item) => (
-                                            <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                <span className="text-sm font-bold text-slate-700">
-                                                    {item.value !== undefined && item.value !== null ? item.value : '-'}
-                                                    {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
-                                                </span>
-                                            </div>
-                                        ))}
+                            {modalActiveTab === 0 && productDetailSections.map(renderDetailSection)}
+
+                            {modalActiveTab > 0 && linkedTemplates[modalActiveTab - 1] && (
+                                <>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                                            {linkedTemplates[modalActiveTab - 1].platform && (
+                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{linkedTemplates[modalActiveTab - 1].platform}</span>
+                                            )}
+                                            <span>{linkedTemplates[modalActiveTab - 1].country}</span>
+                                        </div>
+                                        <button
+                                            onClick={() => handleImportTemplate(linkedTemplates[modalActiveTab - 1])}
+                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                                        >
+                                            <ArrowUpRight size={13} /> {t.modals.importCalculator}
+                                        </button>
                                     </div>
+                                    {templateDetailSections(linkedTemplates[modalActiveTab - 1]).map(renderDetailSection)}
+                                </>
+                            )}
+
+                            {modalActiveTab > 0 && !loadingTemplates && linkedTemplates.length === 0 && (
+                                <div className="text-center py-12 text-slate-400">
+                                    <Layers size={40} className="mx-auto mb-3 opacity-30" />
+                                    <p className="text-sm font-medium">{t.modals.noTemplates || '暂无关联模版'}</p>
+                                    <p className="text-xs mt-1">{t.modals.noTemplatesHint || '在利润计算器中保存商品时，会自动创建关联模版'}</p>
                                 </div>
-                            ))}
+                            )}
                         </div>
                     </div>
                 </div>

@@ -107,7 +107,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const addProduct = async (p: ProductCalcData) => {
     try {
       const res = await api.post('/products', p);
-      setProducts(prev => [...prev, res.data]);
+      const saved = res.data;
+      setProducts(prev => [...prev, saved]);
+      return saved;
     } catch (e) { console.error('Error adding product', e); }
   };
   const updateProduct = async (p: ProductCalcData) => {
