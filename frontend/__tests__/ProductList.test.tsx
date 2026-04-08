@@ -74,6 +74,7 @@ const mockStrings = {
 
 const mockDeleteProduct = vi.fn();
 const mockSetCalculatorImport = vi.fn();
+const mockSetCalculatorImportNodes = vi.fn();
 const mockOnNavigate = vi.fn();
 
 const { mockApiGet, mockUseStore } = vi.hoisted(() => {
@@ -82,6 +83,7 @@ const { mockApiGet, mockUseStore } = vi.hoisted(() => {
     products: mockProducts,
     deleteProduct: mockDeleteProduct,
     setCalculatorImport: mockSetCalculatorImport,
+    setCalculatorImportNodes: mockSetCalculatorImportNodes,
     strings: mockStrings,
   });
   return { mockApiGet, mockUseStore };
@@ -160,7 +162,7 @@ describe('ProductList', () => {
     fireEvent.doubleClick(row!);
 
     await waitFor(() => {
-      expect(screen.getByText('导入至利润计算器')).toBeInTheDocument();
+      expect(screen.getByText('商品数据')).toBeInTheDocument();
     });
   });
 
@@ -205,15 +207,26 @@ describe('ProductList', () => {
   });
 
   it('should call setCalculatorImport and navigate on import button click', async () => {
+    const mockTemplates = [
+      { id: 't1', name: 'Shopee模版', country: 'MYR', platform: 'shopee', data: { baseShippingFee: 10 }, createdAt: '2026-04-08' },
+    ];
+    mockApiGet.mockResolvedValue({ data: mockTemplates });
+
     render(<ProductList onNavigate={mockOnNavigate} />);
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getAllByText('导入至利润计算器').length).toBeGreaterThan(0);
+      expect(screen.getByText('Shopee模版')).toBeInTheDocument();
     });
 
-    const importButtons = screen.getAllByText('导入至利润计算器');
-    fireEvent.click(importButtons[0]);
+    const templateTab = screen.getByText('Shopee模版');
+    fireEvent.click(templateTab);
+
+    await waitFor(() => {
+      expect(screen.getByText('导入至利润计算器')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('导入至利润计算器'));
 
     expect(mockSetCalculatorImport).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'p1', name: '商品A' })

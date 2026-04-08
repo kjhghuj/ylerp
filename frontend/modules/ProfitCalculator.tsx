@@ -38,23 +38,32 @@ const DEFAULT_NODE_DATA = {
 };
 
 export const ProfitCalculator: React.FC = () => {
-    const { addProduct, updateProduct, strings, calculatorImport, setCalculatorImport, calculatorImportNodes, setCalculatorImportNodes } = useStore();
+    const {
+        addProduct, updateProduct, strings,
+        calculatorImport, setCalculatorImport,
+        calculatorImportNodes, setCalculatorImportNodes,
+        profitGlobalInputs, setProfitGlobalInputs,
+        profitSiteCountry, setProfitSiteCountry,
+        profitNodes, setProfitNodes,
+        profitEditingProductId, setProfitEditingProductId,
+    } = useStore();
     const { showToast } = useToast();
     const t = strings.profit;
 
-    // --- Global Inputs State ---
-    const [globalInputs, setGlobalInputs] = useState({
-        name: '', sku: '', totalRevenue: 0, purchaseCost: 0, productWeight: 0, firstWeight: 50,
-        supplierTaxPoint: 0, supplierInvoice: 'no',
-        sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-        adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
-    });
-
-    const [siteCountry, setSiteCountry] = useState('MYR');
-    const [editingProductId, setEditingProductId] = useState<string | null>(null);
-
-    // --- Matrix State ---
-    const [nodes, setNodes] = useState<PlatformNode[]>([]);
+    const globalInputs = profitGlobalInputs;
+    const setGlobalInputs = setProfitGlobalInputs;
+    const siteCountry = profitSiteCountry;
+    const setSiteCountry = setProfitSiteCountry;
+    const nodes = profitNodes as PlatformNode[];
+    const setNodes = (newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
+        if (typeof newNodes === 'function') {
+            setProfitNodes(newNodes(profitNodes as PlatformNode[]));
+        } else {
+            setProfitNodes(newNodes);
+        }
+    };
+    const editingProductId = profitEditingProductId;
+    const setEditingProductId = setProfitEditingProductId;
     const [allTemplates, setAllTemplates] = useState<ProfitTemplate[]>([]);
     
     // --- Add Node Menu State ---

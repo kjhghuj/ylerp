@@ -26,6 +26,15 @@ interface StoreContextType {
   calculatorImportNodes: ImportedNode[];
   setCalculatorImportNodes: (nodes: ImportedNode[]) => void;
 
+  profitGlobalInputs: Record<string, any>;
+  setProfitGlobalInputs: (inputs: Record<string, any>) => void;
+  profitSiteCountry: string;
+  setProfitSiteCountry: (country: string) => void;
+  profitNodes: any[];
+  setProfitNodes: (nodes: any[]) => void;
+  profitEditingProductId: string | null;
+  setProfitEditingProductId: (id: string | null) => void;
+
   financeRecords: FinanceRecord[];
   addTransaction: (t: FinanceRecord) => Promise<void>;
   updateTransaction: (t: FinanceRecord) => Promise<void>;
@@ -71,6 +80,16 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [restockRecords, setRestockRecords] = useState<RestockRecord[]>([]);
   const [calculatorImport, setCalculatorImport] = useState<ProductCalcData | null>(null);
   const [calculatorImportNodes, setCalculatorImportNodes] = useState<ImportedNode[]>([]);
+
+  const [profitGlobalInputs, setProfitGlobalInputs] = useState<Record<string, any>>({
+    name: '', sku: '', totalRevenue: 0, purchaseCost: 0, productWeight: 0, firstWeight: 50,
+    supplierTaxPoint: 0, supplierInvoice: 'no',
+    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+    adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
+  });
+  const [profitSiteCountry, setProfitSiteCountry] = useState('MYR');
+  const [profitNodes, setProfitNodes] = useState<any[]>([]);
+  const [profitEditingProductId, setProfitEditingProductId] = useState<string | null>(null);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -268,6 +287,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       products, addProduct, updateProduct, deleteProduct,
       calculatorImport, setCalculatorImport,
       calculatorImportNodes, setCalculatorImportNodes,
+      profitGlobalInputs, setProfitGlobalInputs,
+      profitSiteCountry, setProfitSiteCountry,
+      profitNodes, setProfitNodes,
+      profitEditingProductId, setProfitEditingProductId,
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,
