@@ -21,7 +21,6 @@ import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
   });
@@ -39,7 +38,6 @@ const MainContent: React.FC = () => {
 
   const handleViewChange = (view: AppState['currentView']) => {
     setCurrentView(view);
-    setIsMobileMenuOpen(false);
   };
 
   if (loading) {
@@ -99,10 +97,6 @@ const MainContent: React.FC = () => {
       <Sidebar
         currentView={currentView}
         onChangeView={handleViewChange}
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-        darkMode={darkMode}
-        onToggleDarkMode={() => setDarkMode(!darkMode)}
       />
 
       <main className="h-full overflow-hidden flex flex-col w-full pt-14">

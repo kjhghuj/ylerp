@@ -8,13 +8,9 @@ import { hasPermission } from './PermissionTree';
 interface SidebarProps {
   currentView: AppState['currentView'];
   onChangeView: (view: AppState['currentView']) => void;
-  isOpen?: boolean;
-  onClose?: () => void;
-  darkMode: boolean;
-  onToggleDarkMode: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen, onClose, darkMode, onToggleDarkMode }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
   const { strings } = useStore();
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -69,13 +65,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isO
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [drawerOpen, userMenuOpen]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setDrawerOpen(true);
-      onClose?.();
-    }
-  }, [isOpen, onClose]);
 
   const handleNav = (view: AppState['currentView']) => {
     onChangeView(view);
