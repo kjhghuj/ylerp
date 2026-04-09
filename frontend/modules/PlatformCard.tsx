@@ -105,9 +105,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             const extraWeight = g.productWeight - safeData.firstWeight;
             shippingFee += safeData.extraShippingFee * (extraWeight / 10);
         }
-        // 加上新加坡尾程物流费用
+        // 加上新加坡尾程物流费用（新加坡币转人民币）
         if (country === 'SGD') {
-            shippingFee += safeData.lastMileFee || 0;
+            const lastMileFeeCNY = (safeData.lastMileFee || 0) / rateToCNY;
+            shippingFee += lastMileFeeCNY;
         }
 
         const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
