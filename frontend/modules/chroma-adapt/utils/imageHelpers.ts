@@ -72,72 +72,73 @@ export const exportImage = async (imageSrc: string, filter: string, filename: st
   return new Promise<void>((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
+    
+    // 处理 base64 或普通 URL
+    const isBase64 = imageSrc.startsWith('data:');
     img.src = imageSrc;
 
     const timeout = setTimeout(() => {
-      reject(new Error('Image load timeout'));
+      reject(new Error('Image load timeout (10s)'));
     }, 10000);
+
+    const drawAndExport = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+
+        canvas.width = img.naturalWidth || img.width || 1024;
+        canvas.height = img.naturalHeight || img.height || 1024;
+
+        // 应用滤镜
+        if (filter && filter !== 'none') {
+          ctx.filter = filter;
+        }
+
+        ctx.drawImage(img, 0, 0);
+        
+        const link = document.createElement('a');
+        link.download = filename;
+        link.href = canvas.toDataURL('image/png');
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        resolve();
+      } catch (error) {
+        reject(new Error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
+      }
+    };
 
     img.onload = () => {
       clearTimeout(timeout);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-
-      canvas.width = img.width;
-      canvas.height = img.height;
-
-      ctx.filter = filter;
-
-      try {
-        ctx.drawImage(img, 0, 0);
-      } catch (drawError) {
-        reject(new Error('Failed to draw image to canvas'));
-        return;
-      }
-
-      const link = document.createElement('a');
-      link.download = filename;
-      link.href = canvas.toDataURL('image/png');
-
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      resolve();
+      drawAndExport();
     };
 
     img.onerror = () => {
-       clearTimeout(timeout);
-       if (imageSrc.startsWith('data:')) {
-         try {
-           const canvas = document.createElement('canvas');
-           const ctx = canvas.getContext('2d');
-           if (!ctx) {
-             reject(new Error('Could not get canvas context'));
-             return;
-           }
-           canvas.width = img.width || 100;
-           canvas.height = img.height || 100;
-           ctx.drawImage(img, 0, 0);
-           const link = document.createElement('a');
-           link.download = filename;
-           link.href = canvas.toDataURL('image/png');
-           document.body.appendChild(link);
-           link.click();
-           document.body.removeChild(link);
-           resolve();
-           return;
-         } catch (e) {
-           reject(new Error('Failed to export base64 image'));
-           return;
-         }
-       }
-       reject(new Error('Failed to load image for export'));
-     };
+      clearTimeout(timeout);
+      
+      // 如果是 base64 图片，尝试直接绘制
+      if (isBase64) {
+        console.warn('Image onerror triggered for base64, attempting direct draw...');
+        // 给浏览器一点时间解码 base64
+        setTimeout(() => {
+          try {
+            drawAndExport();
+          } catch (e) {
+            reject(new Error(`Failed to export base64 image: ${e instanceof Error ? e.message : 'Unknown error'}`));
+          }
+        }, 100);
+        return;
+      }
+      
+      // 非 base64 图片，可能是 CORS 问题
+      reject(new Error(`Failed to load image: ${imageSrc.substring(0, 50)}... Try checking CORS settings or use base64 format`));
+    };
   });
 };
