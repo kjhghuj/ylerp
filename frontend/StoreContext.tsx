@@ -30,8 +30,8 @@ interface StoreContextType {
   setProfitGlobalInputs: (inputs: Record<string, any>) => void;
   profitSiteCountry: string;
   setProfitSiteCountry: (country: string) => void;
-  profitNodes: any[];
-  setProfitNodes: (nodes: any[]) => void;
+  profitNodes: Record<string, any[]>;
+  setProfitNodes: (nodes: Record<string, any[]>) => void;
   profitEditingProductId: string | null;
   setProfitEditingProductId: (id: string | null) => void;
 
@@ -93,7 +93,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
   });
   const [profitSiteCountry, setProfitSiteCountry] = useState('MYR');
-  const [profitNodes, setProfitNodes] = useState<any[]>([]);
+  const [profitNodes, setProfitNodes] = useState<Record<string, any[]>>({
+    MYR: [],
+    SGD: [],
+    PHP: [],
+    THB: [],
+    IDR: [],
+  });
   const [profitEditingProductId, setProfitEditingProductId] = useState<string | null>(null);
 
   const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>('MY');

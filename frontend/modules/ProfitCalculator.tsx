@@ -57,12 +57,13 @@ export const ProfitCalculator: React.FC = () => {
     const setGlobalInputs = setProfitGlobalInputs;
     const siteCountry = profitSiteCountry;
     const setSiteCountry = setProfitSiteCountry;
-    const nodes = profitNodes as PlatformNode[];
+    const nodes = profitNodes[siteCountry] || [];
     const setNodes = (newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
         if (typeof newNodes === 'function') {
-            setProfitNodes(newNodes(profitNodes as PlatformNode[]));
+            const updatedNodes = newNodes(nodes as PlatformNode[]);
+            setProfitNodes({ ...profitNodes, [siteCountry]: updatedNodes });
         } else {
-            setProfitNodes(newNodes);
+            setProfitNodes({ ...profitNodes, [siteCountry]: newNodes });
         }
     };
     const editingProductId = profitEditingProductId;
