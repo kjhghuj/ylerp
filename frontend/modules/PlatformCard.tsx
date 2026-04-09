@@ -134,6 +134,34 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const renderInput = (key: string) => {
         const isMoney = isMoneyField(key);
+        // 尾程物流费特殊处理：输入框显示人民币，下方显示新加坡币
+        if (key === 'lastMileFee' && country === 'SGD') {
+            const valueSGD = Number(data[key]) || 0;
+            const valueCNY = valueSGD / rateToCNY;
+            return (
+                <div key={key} className="col-span-1">
+                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={t.inputs[key] || key}>{t.inputs[key] || key}</label>
+                    <div className="relative">
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            name={key}
+                            value={valueCNY.toFixed(2)}
+                            onChange={(e) => {
+                                const valueCNYInput = parseFloat(e.target.value) || 0;
+                                const valueSGDConverted = valueCNYInput * rateToCNY;
+                                onUpdate(nodeId, { [key]: valueSGDConverted });
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100`}
+                        />
+                    </div>
+                    <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
+                        <span>≈ {valueSGD.toFixed(2)} SGD</span>
+                    </div>
+                </div>
+            );
+        }
         return (
             <NumberInput 
                 key={key} 
