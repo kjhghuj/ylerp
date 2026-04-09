@@ -86,24 +86,74 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [calculatorImport, setCalculatorImport] = useState<ProductCalcData | null>(null);
   const [calculatorImportNodes, setCalculatorImportNodes] = useState<ImportedNode[]>([]);
 
-  const [profitGlobalInputs, setProfitGlobalInputs] = useState<Record<string, any>>({
-    name: '', sku: '', totalRevenue: 0, purchaseCost: 0, productWeight: 0, firstWeight: 50,
-    supplierTaxPoint: 0, supplierInvoice: 'no',
-    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-    adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
+  // Profit Calculator persistent state
+  const [profitGlobalInputs, setProfitGlobalInputs] = useState<Record<string, any>>(() => {
+    const saved = localStorage.getItem('yl-profit-global-inputs');
+    return saved ? JSON.parse(saved) : {
+      name: '', sku: '', totalRevenue: 0, purchaseCost: 0, productWeight: 0, firstWeight: 50,
+      supplierTaxPoint: 0, supplierInvoice: 'no',
+      sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+      adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
+    };
   });
-  const [profitSiteCountry, setProfitSiteCountry] = useState('MYR');
-  const [profitNodes, setProfitNodes] = useState<Record<string, any[]>>({
-    MYR: [],
-    SGD: [],
-    PHP: [],
-    THB: [],
-    IDR: [],
-  });
-  const [profitEditingProductId, setProfitEditingProductId] = useState<string | null>(null);
 
-  const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>('MY');
-  const [productListCurrentPage, setProductListCurrentPage] = useState(1);
+  const [profitSiteCountry, setProfitSiteCountry] = useState<string>(() => {
+    return localStorage.getItem('yl-profit-site-country') || 'MYR';
+  });
+
+  const [profitNodes, setProfitNodes] = useState<Record<string, any[]>>(() => {
+    const saved = localStorage.getItem('yl-profit-nodes');
+    return saved ? JSON.parse(saved) : {
+      MYR: [],
+      SGD: [],
+      PHP: [],
+      THB: [],
+      IDR: [],
+    };
+  });
+
+  const [profitEditingProductId, setProfitEditingProductId] = useState<string | null>(() => {
+    return localStorage.getItem('yl-profit-editing-product-id');
+  });
+
+  // Product List persistent state
+  const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>(() => {
+    return localStorage.getItem('yl-product-list-active-tab') as any || 'MY';
+  });
+
+  const [productListCurrentPage, setProductListCurrentPage] = useState<number>(() => {
+    const saved = localStorage.getItem('yl-product-list-current-page');
+    return saved ? parseInt(saved, 10) : 1;
+  });
+
+  // Save to localStorage when state changes
+  React.useEffect(() => {
+    localStorage.setItem('yl-profit-global-inputs', JSON.stringify(profitGlobalInputs));
+  }, [profitGlobalInputs]);
+
+  React.useEffect(() => {
+    localStorage.setItem('yl-profit-site-country', profitSiteCountry);
+  }, [profitSiteCountry]);
+
+  React.useEffect(() => {
+    localStorage.setItem('yl-profit-nodes', JSON.stringify(profitNodes));
+  }, [profitNodes]);
+
+  React.useEffect(() => {
+    if (profitEditingProductId) {
+      localStorage.setItem('yl-profit-editing-product-id', profitEditingProductId);
+    } else {
+      localStorage.removeItem('yl-profit-editing-product-id');
+    }
+  }, [profitEditingProductId]);
+
+  React.useEffect(() => {
+    localStorage.setItem('yl-product-list-active-tab', productListActiveTab);
+  }, [productListActiveTab]);
+
+  React.useEffect(() => {
+    localStorage.setItem('yl-product-list-current-page', productListCurrentPage.toString());
+  }, [productListCurrentPage]);
 
   React.useEffect(() => {
     const fetchData = async () => {
