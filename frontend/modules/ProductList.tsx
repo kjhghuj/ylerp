@@ -17,6 +17,18 @@ interface LinkedTemplate {
     createdAt: string;
 }
 
+// 将货币代码转换为国家代码
+const currencyToCountry = (currency: string): string => {
+    const map: Record<string, string> = {
+        'SGD': 'SG',
+        'MYR': 'MY',
+        'PHP': 'PH',
+        'THB': 'TH',
+        'IDR': 'ID',
+    };
+    return map[currency] || 'MY';
+};
+
 interface ProductListProps {
     onNavigate: (view: AppState['currentView']) => void;
 }
@@ -102,14 +114,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             setAllLinkedTemplates(allTemplates);
             
             // 只显示当前站点的模板
-            const siteTemplates = allTemplates.filter((tpl: LinkedTemplate) => {
-                const templateCountry = tpl.country === 'SGD' ? 'SG' : 
-                                       tpl.country === 'MYR' ? 'MY' : 
-                                       tpl.country === 'PHP' ? 'PH' : 
-                                       tpl.country === 'THB' ? 'TH' : 
-                                       tpl.country === 'IDR' ? 'ID' : 'MY';
-                return templateCountry === activeTab;
-            });
+            const siteTemplates = allTemplates.filter((tpl: LinkedTemplate) => 
+                currencyToCountry(tpl.country) === activeTab
+            );
             setLinkedTemplates(siteTemplates);
         } catch (error) {
             console.error('Failed to fetch linked templates:', error);
@@ -121,44 +128,27 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const handleImportTemplate = (tpl: LinkedTemplate) => {
         if (!selectedProduct) return;
+        
+        // 合并当前模板数据到产品
         const merged: ProductCalcData = {
             ...selectedProduct,
-            baseShippingFee: Number(tpl.data.baseShippingFee) || 0,
-            extraShippingFee: Number(tpl.data.extraShippingFee) || 0,
-            crossBorderFee: Number(tpl.data.crossBorderFee) || 0,
-            platformCommissionRate: Number(tpl.data.platformCommissionRate) || 0,
-            transactionFeeRate: Number(tpl.data.transactionFeeRate) || 0,
-            platformCoupon: Number(tpl.data.platformCoupon) || 0,
-            platformCouponRate: Number(tpl.data.platformCouponRate) || 0,
-            damageReturnRate: Number(tpl.data.damageReturnRate) || 0,
-            mdvServiceFeeRate: Number(tpl.data.mdvServiceFeeRate) || 0,
-            fssServiceFeeRate: Number(tpl.data.fssServiceFeeRate) || 0,
-            ccbServiceFeeRate: Number(tpl.data.ccbServiceFeeRate) || 0,
-            warehouseOperationFee: Number(tpl.data.warehouseOperationFee) || 0,
-            lastMileFee: Number(tpl.data.lastMileFee) || 0,
+            ...Object.fromEntries(
+                Object.entries(tpl.data).map(([key, value]) => [key, Number(value) || 0])
+            ),
         };
+        
         setCalculatorImport(merged);
+        
         // 导入所有站点的模板
         const importNodes = allLinkedTemplates.map(t => ({
             name: t.name,
             country: t.country,
             platform: t.platform || 'other',
-            data: {
-                baseShippingFee: Number(t.data.baseShippingFee) || 0,
-                extraShippingFee: Number(t.data.extraShippingFee) || 0,
-                crossBorderFee: Number(t.data.crossBorderFee) || 0,
-                platformCommissionRate: Number(t.data.platformCommissionRate) || 0,
-                transactionFeeRate: Number(t.data.transactionFeeRate) || 0,
-                platformCoupon: Number(t.data.platformCoupon) || 0,
-                platformCouponRate: Number(t.data.platformCouponRate) || 0,
-                damageReturnRate: Number(t.data.damageReturnRate) || 0,
-                mdvServiceFeeRate: Number(t.data.mdvServiceFeeRate) || 0,
-                fssServiceFeeRate: Number(t.data.fssServiceFeeRate) || 0,
-                ccbServiceFeeRate: Number(t.data.ccbServiceFeeRate) || 0,
-                warehouseOperationFee: Number(t.data.warehouseOperationFee) || 0,
-                lastMileFee: Number(t.data.lastMileFee) || 0,
-            },
+            data: Object.fromEntries(
+                Object.entries(t.data).map(([key, value]) => [key, Number(value) || 0])
+            ),
         }));
+        
         setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
