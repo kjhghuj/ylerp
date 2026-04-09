@@ -42,7 +42,7 @@ const DEFAULT_NODE_DATA = {
 
 export const ProfitCalculator: React.FC = () => {
     const {
-        addProduct, updateProduct, strings,
+        addProduct, updateProduct, products, strings,
         calculatorImport, setCalculatorImport,
         calculatorImportNodes, setCalculatorImportNodes,
         profitGlobalInputs, setProfitGlobalInputs,
@@ -252,16 +252,27 @@ export const ProfitCalculator: React.FC = () => {
             return;
         }
 
-        const node = nodes.length > 0 ? nodes[0] : { country: 'MYR', data: DEFAULT_NODE_DATA };
+        // 获取所有站点列表
+        const sites: ('SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN')[] = nodes.map(n => {
+            const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
+                'SGD': 'SG',
+                'MYR': 'MY',
+                'PHP': 'PH',
+                'THB': 'TH',
+                'IDR': 'ID',
+            };
+            return countryMap[n.country] || 'MY';
+        });
 
-        let c: 'MY' | 'SG' | 'PH' | 'TH' | 'ID' | 'CN' = 'MY';
-        if (node.country === 'SGD') c = 'SG';
-        else if (node.country === 'PHP') c = 'PH';
-        else if (node.country === 'THB') c = 'TH';
-        else if (node.country === 'IDR') c = 'ID';
+        // 使用第一个节点的数据作为主数据
+        const node = nodes.length > 0 ? nodes[0] : { country: 'MYR', data: DEFAULT_NODE_DATA };
+        const primaryCountry = sites.length > 0 ? sites[0] : 'MY';
 
         const productData: Omit<ProductCalcData, 'id'> = {
-            name: globalInputs.name, sku: globalInputs.sku, country: c,
+            name: globalInputs.name, 
+            sku: globalInputs.sku, 
+            country: primaryCountry,
+            sites: sites, // 保存所有站点
             cost: Number(globalInputs.purchaseCost) || 0,
             productWeight: Number(globalInputs.productWeight) || 0,
             firstWeight: Number(globalInputs.firstWeight) || 50,
@@ -296,7 +307,11 @@ export const ProfitCalculator: React.FC = () => {
         let savedProductId = editingProductId;
 
         if (editingProductId) {
-            await updateProduct({ ...productData, id: editingProductId });
+            // 更新商品时，合并现有的 sites
+            const existingProduct = products.find(p => p.id === editingProductId);
+            const existingSites = existingProduct?.sites || [];
+            const newSites = [...new Set([...existingSites, ...sites])];
+            await updateProduct({ ...productData, id: editingProductId, sites: newSites });
         } else {
             const saved = await addProduct(productData);
             savedProductId = saved.id;
