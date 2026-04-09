@@ -35,6 +35,11 @@ interface StoreContextType {
   profitEditingProductId: string | null;
   setProfitEditingProductId: (id: string | null) => void;
 
+  productListActiveTab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH';
+  setProductListActiveTab: (tab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH') => void;
+  productListCurrentPage: number;
+  setProductListCurrentPage: (page: number) => void;
+
   financeRecords: FinanceRecord[];
   addTransaction: (t: FinanceRecord) => Promise<void>;
   updateTransaction: (t: FinanceRecord) => Promise<void>;
@@ -90,6 +95,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [profitSiteCountry, setProfitSiteCountry] = useState('MYR');
   const [profitNodes, setProfitNodes] = useState<any[]>([]);
   const [profitEditingProductId, setProfitEditingProductId] = useState<string | null>(null);
+
+  const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>('MY');
+  const [productListCurrentPage, setProductListCurrentPage] = useState(1);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -291,6 +299,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       profitSiteCountry, setProfitSiteCountry,
       profitNodes, setProfitNodes,
       profitEditingProductId, setProfitEditingProductId,
+      productListActiveTab, setProductListActiveTab,
+      productListCurrentPage, setProductListCurrentPage,
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,

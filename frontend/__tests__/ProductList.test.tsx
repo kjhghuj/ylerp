@@ -75,6 +75,8 @@ const mockStrings = {
 const mockDeleteProduct = vi.fn();
 const mockSetCalculatorImport = vi.fn();
 const mockSetCalculatorImportNodes = vi.fn();
+const mockSetProductListActiveTab = vi.fn();
+const mockSetProductListCurrentPage = vi.fn();
 const mockOnNavigate = vi.fn();
 
 const { mockApiGet, mockUseStore } = vi.hoisted(() => {
@@ -85,6 +87,10 @@ const { mockApiGet, mockUseStore } = vi.hoisted(() => {
     setCalculatorImport: mockSetCalculatorImport,
     setCalculatorImportNodes: mockSetCalculatorImportNodes,
     strings: mockStrings,
+    productListActiveTab: 'MY' as const,
+    setProductListActiveTab: mockSetProductListActiveTab,
+    productListCurrentPage: 1,
+    setProductListCurrentPage: mockSetProductListCurrentPage,
   });
   return { mockApiGet, mockUseStore };
 });
@@ -138,8 +144,7 @@ describe('ProductList', () => {
   it('should filter products by country tab', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
     fireEvent.click(screen.getByText('新加坡'));
-    expect(screen.getByText('商品B')).toBeInTheDocument();
-    expect(screen.queryByText('商品A')).not.toBeInTheDocument();
+    expect(mockSetProductListActiveTab).toHaveBeenCalledWith('SG');
   });
 
   it('should filter products by search term', () => {

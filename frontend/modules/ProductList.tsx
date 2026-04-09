@@ -22,12 +22,18 @@ interface ProductListProps {
 }
 
 export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
-    const { products, deleteProduct, setCalculatorImport, setCalculatorImportNodes, strings } = useStore();
+    const {
+        products, deleteProduct, setCalculatorImport, setCalculatorImportNodes, strings,
+        productListActiveTab, setProductListActiveTab,
+        productListCurrentPage, setProductListCurrentPage,
+    } = useStore();
     const t = strings.productList;
 
-    const [activeTab, setActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>('MY');
+    const activeTab = productListActiveTab;
+    const setActiveTab = setProductListActiveTab;
+    const currentPage = productListCurrentPage;
+    const setCurrentPage = setProductListCurrentPage;
     const [searchTerm, setSearchTerm] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
 
     const [showDetailModal, setShowDetailModal] = useState(false);
