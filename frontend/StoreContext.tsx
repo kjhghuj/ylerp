@@ -103,7 +103,32 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const [profitNodes, setProfitNodes] = useState<Record<string, any[]>>(() => {
     const saved = localStorage.getItem('yl-profit-nodes');
-    return saved ? JSON.parse(saved) : {
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // 兼容旧数据格式：如果是数组，转换为对象结构
+        if (Array.isArray(parsed)) {
+          return {
+            MYR: parsed,
+            SGD: [],
+            PHP: [],
+            THB: [],
+            IDR: [],
+          };
+        }
+        // 新格式已经是对象，确保所有站点都存在
+        return {
+          MYR: parsed.MYR || [],
+          SGD: parsed.SGD || [],
+          PHP: parsed.PHP || [],
+          THB: parsed.THB || [],
+          IDR: parsed.IDR || [],
+        };
+      } catch (e) {
+        console.error('Failed to parse profitNodes from localStorage:', e);
+      }
+    }
+    return {
       MYR: [],
       SGD: [],
       PHP: [],
