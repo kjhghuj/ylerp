@@ -69,13 +69,35 @@ export const resizeImage = (base64Str: string, maxWidth: number = 1024, maxHeigh
 };
 
 export const exportImage = async (imageSrc: string, filter: string, filename: string = 'chroma-adapt-export.png') => {
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<void>(async (resolve, reject) => {
+    const isBase64 = imageSrc.startsWith('data:');
+    let finalImageSrc = imageSrc;
+    
+    // 如果不是 base64，尝试通过 fetch 获取 blob 并转为 base64 来绕过 CORS
+    if (!isBase64) {
+      try {
+        console.log('Attempting to fetch image via fetch to bypass CORS...');
+        const response = await fetch(imageSrc, { mode: 'cors' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const blob = await response.blob();
+        finalImageSrc = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('Failed to convert blob to base64'));
+          reader.readAsDataURL(blob);
+        });
+        console.log('Successfully converted image to base64');
+      } catch (fetchError) {
+        console.warn('Fetch failed, falling back to direct image loading:', fetchError);
+        // Fetch 失败，继续使用原始 URL
+      }
+    }
+    
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    
-    // 处理 base64 或普通 URL
-    const isBase64 = imageSrc.startsWith('data:');
-    img.src = imageSrc;
+    img.src = finalImageSrc;
 
     const timeout = setTimeout(() => {
       reject(new Error('Image load timeout (10s)'));
@@ -123,8 +145,8 @@ export const exportImage = async (imageSrc: string, filter: string, filename: st
     img.onerror = () => {
       clearTimeout(timeout);
       
-      // 如果是 base64 图片，尝试直接绘制
-      if (isBase64) {
+      // 如果是 base64 图片，尝试直接绘制（可能已经解码完成）
+      if (finalImageSrc.startsWith('data:')) {
         console.warn('Image onerror triggered for base64, attempting direct draw...');
         // 给浏览器一点时间解码 base64
         setTimeout(() => {
