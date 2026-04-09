@@ -38,6 +38,7 @@ export interface ProductCalcData {
   // Fixed Fees
   platformInfrastructureFee: number;
   warehouseOperationFee: number;
+  lastMileFee?: number;
   
   // Logic Switches
   supplierInvoice: 'yes' | 'no';

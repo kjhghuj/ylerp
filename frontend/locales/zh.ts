@@ -120,6 +120,7 @@ export const zh = {
       vatRate: '增值税率 (%)',
       corporateIncomeTaxRate: '企业所得税率 (%)',
       warehouseOperationFee: '仓库操作费',
+      lastMileFee: '尾程物流费',
     },
     results: {
       commission: '佣金',

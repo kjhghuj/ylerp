@@ -35,6 +35,28 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const [templateName, setTemplateName] = useState('');
 
+    // 新加坡站点尾程物流价格表 (SGD)
+    const calculateLastMileFee = (weightInGrams: number): number => {
+        const weightInKg = weightInGrams / 1000;
+        if (weightInKg < 1) return 2.03;
+        if (weightInKg <= 5) return 2.87;
+        if (weightInKg <= 10) return 3.38;
+        if (weightInKg <= 20) return 5.42;
+        if (weightInKg <= 30) return 10.00;
+        return 10.00; // 超过 30KG 按 30KG 计算
+    };
+
+    // 当商品重量变化时，自动更新尾程物流费用（仅新加坡）
+    React.useEffect(() => {
+        if (country === 'SGD') {
+            const productWeight = Number(globalInputs.productWeight) || 0;
+            const calculatedFee = calculateLastMileFee(productWeight);
+            if (calculatedFee !== Number(data.lastMileFee)) {
+                onUpdate(nodeId, { lastMileFee: calculatedFee });
+            }
+        }
+    }, [globalInputs.productWeight, country]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(nodeId, { [e.target.name]: e.target.value });
     };
@@ -82,6 +104,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         if (g.productWeight > safeData.firstWeight) {
             const extraWeight = g.productWeight - safeData.firstWeight;
             shippingFee += safeData.extraShippingFee * (extraWeight / 10);
+        }
+        // 加上新加坡尾程物流费用
+        if (country === 'SGD') {
+            shippingFee += safeData.lastMileFee || 0;
         }
 
         const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
@@ -159,6 +185,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
+                        {country === 'SGD' && renderInput('lastMileFee')}
                     </div>
                 </div>
             </div>

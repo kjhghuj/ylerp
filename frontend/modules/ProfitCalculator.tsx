@@ -33,8 +33,11 @@ interface PlatformNode {
 
 const DEFAULT_NODE_DATA = {
     baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
-    platformCommissionRate: 0, transactionFeeRate: 0, platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 0,
+    platformCommissionRate: 0, transactionFeeRate: 0,
+    platformCoupon: 0, platformCouponRate: 0,
+    damageReturnRate: 0,
     mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0, warehouseOperationFee: 0,
+    lastMileFee: 0,
 };
 
 export const ProfitCalculator: React.FC = () => {
@@ -160,6 +163,7 @@ export const ProfitCalculator: React.FC = () => {
                     fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
                     ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
                     warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
+                    lastMileFee: calculatorImport.lastMileFee || 0,
                 };
 
                 setNodes([{
@@ -283,6 +287,7 @@ export const ProfitCalculator: React.FC = () => {
             fssServiceFeeRate: Number(node.data.fssServiceFeeRate) || 0,
             ccbServiceFeeRate: Number(node.data.ccbServiceFeeRate) || 0,
             warehouseOperationFee: Number(node.data.warehouseOperationFee) || 0,
+            lastMileFee: Number(node.data.lastMileFee) || 0,
 
             shipping: 0, fees: 0, marketing: 0, taxes: 0, profit: 0, margin: 0, costMargin: 0
         };

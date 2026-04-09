@@ -118,8 +118,9 @@ export const en = {
       platformInfrastructureFee: 'Infra Fee',
       adROI: 'Ad ROI',
       vatRate: 'VAT Rate (%)',
-      corporateIncomeTaxRate: 'Corp Tax Rate (%)',
+      corporateIncomeTaxRate: 'Corp Income Tax Rate (%)',
       warehouseOperationFee: 'Whse Op Fee',
+      lastMileFee: 'Last Mile Fee',
     },
     results: {
       commission: 'Commission',
