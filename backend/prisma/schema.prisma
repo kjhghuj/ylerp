@@ -36,6 +36,7 @@ model Product {
   ccbServiceFeeRate         Float
   platformInfrastructureFee Float
   warehouseOperationFee     Float
+  lastMileFee               Float   @default(0)
   supplierInvoice           String
   quantityPerBox            Float?
   volume                    String?
