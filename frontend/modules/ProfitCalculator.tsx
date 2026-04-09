@@ -325,14 +325,21 @@ export const ProfitCalculator: React.FC = () => {
             savedProductId = saved.id;
         }
 
+        // 保存商品后，同步保存所有站点的模板
+        // 1. 先删除该商品的所有旧模板
+        if (savedProductId) {
+            try {
+                await api.delete(`/templates?productId=${savedProductId}&type=profit`);
+            } catch (error) {
+                console.error('Failed to delete old templates:', error);
+            }
+        }
+
+        // 2. 为每个节点创建新模板
         for (const n of nodes) {
             try {
                 const tplName = n.name || n.platform;
-                const isDuplicate = allTemplates.some(
-                    t => t.productId === savedProductId && t.name === tplName && t.platform === n.platform
-                );
-                if (isDuplicate) continue;
-                const response = await api.post('/templates', {
+                await api.post('/templates', {
                     name: tplName,
                     country: n.country,
                     platform: n.platform,
@@ -340,7 +347,6 @@ export const ProfitCalculator: React.FC = () => {
                     data: n.data,
                     productId: savedProductId,
                 });
-                setAllTemplates(prev => [...prev, response.data]);
             } catch (error) {
                 console.error('Failed to save linked template:', error);
             }
