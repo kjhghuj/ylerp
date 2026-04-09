@@ -38,14 +38,17 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<ProductCalcData | null>(null);
-    const [linkedTemplates, setLinkedTemplates] = useState<LinkedTemplate[]>([]);
+    const [linkedTemplates, setLinkedTemplates] = useState<LinkedTemplate[]>([]); // 当前站点的模板
+    const [allLinkedTemplates, setAllLinkedTemplates] = useState<LinkedTemplate[]>([]); // 所有站点的模板
     const [modalActiveTab, setModalActiveTab] = useState(0);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
 
     const filteredProducts = products.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             p.sku?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCountry = (p.country || 'MY') === activeTab;
+        // 检查产品是否包含当前站点（优先使用 sites 字段，兼容旧数据使用 country 字段）
+        const productSites = p.sites || (p.country ? [p.country] : []);
+        const matchesCountry = productSites.includes(activeTab);
         return matchesSearch && matchesCountry;
     });
 
@@ -91,12 +94,27 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         setModalActiveTab(0);
         setLoadingTemplates(true);
         setLinkedTemplates([]);
+        setAllLinkedTemplates([]);
         try {
+            // 获取该产品的所有模板
             const res = await api.get(`/templates?type=profit&productId=${product.id}`);
-            setLinkedTemplates(res.data || []);
+            const allTemplates = res.data || [];
+            setAllLinkedTemplates(allTemplates);
+            
+            // 只显示当前站点的模板
+            const siteTemplates = allTemplates.filter((tpl: LinkedTemplate) => {
+                const templateCountry = tpl.country === 'SGD' ? 'SG' : 
+                                       tpl.country === 'MYR' ? 'MY' : 
+                                       tpl.country === 'PHP' ? 'PH' : 
+                                       tpl.country === 'THB' ? 'TH' : 
+                                       tpl.country === 'IDR' ? 'ID' : 'MY';
+                return templateCountry === activeTab;
+            });
+            setLinkedTemplates(siteTemplates);
         } catch (error) {
             console.error('Failed to fetch linked templates:', error);
             setLinkedTemplates([]);
+            setAllLinkedTemplates([]);
         }
         setLoadingTemplates(false);
     };
@@ -117,9 +135,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             fssServiceFeeRate: Number(tpl.data.fssServiceFeeRate) || 0,
             ccbServiceFeeRate: Number(tpl.data.ccbServiceFeeRate) || 0,
             warehouseOperationFee: Number(tpl.data.warehouseOperationFee) || 0,
+            lastMileFee: Number(tpl.data.lastMileFee) || 0,
         };
         setCalculatorImport(merged);
-        const importNodes = linkedTemplates.map(t => ({
+        // 导入所有站点的模板
+        const importNodes = allLinkedTemplates.map(t => ({
             name: t.name,
             country: t.country,
             platform: t.platform || 'other',
@@ -136,6 +156,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 fssServiceFeeRate: Number(t.data.fssServiceFeeRate) || 0,
                 ccbServiceFeeRate: Number(t.data.ccbServiceFeeRate) || 0,
                 warehouseOperationFee: Number(t.data.warehouseOperationFee) || 0,
+                lastMileFee: Number(t.data.lastMileFee) || 0,
             },
         }));
         setCalculatorImportNodes(importNodes);

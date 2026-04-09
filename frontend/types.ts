@@ -4,6 +4,7 @@ export interface ProductCalcData {
   name: string;
   sku: string;
   country?: 'SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID'; // Country Code
+  sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID')[]; // All sites this product belongs to
   totalRevenue: number; // Selling Price
   cost: number; // Purchase Cost
   
