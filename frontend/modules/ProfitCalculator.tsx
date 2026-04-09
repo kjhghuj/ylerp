@@ -252,16 +252,24 @@ export const ProfitCalculator: React.FC = () => {
             return;
         }
 
-        // 获取所有站点列表
-        const sites: ('SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN')[] = nodes.map(n => {
-            const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
-                'SGD': 'SG',
-                'MYR': 'MY',
-                'PHP': 'PH',
-                'THB': 'TH',
-                'IDR': 'ID',
-            };
-            return countryMap[n.country] || 'MY';
+        // 获取所有站点列表 - 从 profitNodes 对象的所有站点中提取
+        const sites: ('SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN')[] = [];
+        const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
+            'SGD': 'SG',
+            'MYR': 'MY',
+            'PHP': 'PH',
+            'THB': 'TH',
+            'IDR': 'ID',
+        };
+        
+        // 遍历所有站点，收集有节点的站点
+        Object.entries(profitNodes).forEach(([currency, nodeArray]) => {
+            if (nodeArray && (nodeArray as any[]).length > 0) {
+                const countryCode = countryMap[currency] || 'MY';
+                if (!sites.includes(countryCode)) {
+                    sites.push(countryCode);
+                }
+            }
         });
 
         // 使用第一个节点的数据作为主数据
@@ -306,23 +314,13 @@ export const ProfitCalculator: React.FC = () => {
 
         let savedProductId = editingProductId;
 
-        console.log('💾 Saving product:', {
-            name: globalInputs.name,
-            sku: globalInputs.sku,
-            sites,
-            primaryCountry,
-            nodesCount: nodes.length,
-        });
-
         if (editingProductId) {
             // 更新商品时，合并现有的 sites
             const existingProduct = products.find(p => p.id === editingProductId);
             const existingSites = existingProduct?.sites || [];
             const newSites = [...new Set([...existingSites, ...sites])];
-            console.log('📝 Updating product with sites:', newSites);
             await updateProduct({ ...productData, id: editingProductId, sites: newSites });
         } else {
-            console.log('➕ Creating new product with sites:', sites);
             const saved = await addProduct(productData);
             savedProductId = saved.id;
         }
