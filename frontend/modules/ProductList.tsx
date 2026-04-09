@@ -61,6 +61,19 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         // 检查产品是否包含当前站点（优先使用 sites 字段，兼容旧数据使用 country 字段）
         const productSites = p.sites || (p.country ? [p.country] : []);
         const matchesCountry = productSites.includes(activeTab);
+        
+        // 调试日志：显示每个产品的站点信息
+        if (p.name.includes('商品 A') || p.name.includes('测试')) {
+            console.log('🔍 Product filter check:', {
+                name: p.name,
+                sku: p.sku,
+                sites: p.sites,
+                country: p.country,
+                activeTab,
+                matches: matchesCountry,
+            });
+        }
+        
         return matchesSearch && matchesCountry;
     });
 

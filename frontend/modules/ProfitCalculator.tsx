@@ -306,13 +306,23 @@ export const ProfitCalculator: React.FC = () => {
 
         let savedProductId = editingProductId;
 
+        console.log('💾 Saving product:', {
+            name: globalInputs.name,
+            sku: globalInputs.sku,
+            sites,
+            primaryCountry,
+            nodesCount: nodes.length,
+        });
+
         if (editingProductId) {
             // 更新商品时，合并现有的 sites
             const existingProduct = products.find(p => p.id === editingProductId);
             const existingSites = existingProduct?.sites || [];
             const newSites = [...new Set([...existingSites, ...sites])];
+            console.log('📝 Updating product with sites:', newSites);
             await updateProduct({ ...productData, id: editingProductId, sites: newSites });
         } else {
+            console.log('➕ Creating new product with sites:', sites);
             const saved = await addProduct(productData);
             savedProductId = saved.id;
         }
