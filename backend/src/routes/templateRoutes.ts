@@ -83,28 +83,4 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
-// 批量删除模板（用于同步保存）
-router.delete('/', async (req, res) => {
-    try {
-        const userId = req.user!.id;
-        const { productId, type } = req.query;
-        
-        if (!productId) {
-            return res.status(400).json({ error: 'productId is required' });
-        }
-
-        await prisma.profitTemplate.deleteMany({
-            where: {
-                userId,
-                productId: String(productId),
-                ...(type ? { type: String(type) } : {}),
-            }
-        });
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Error deleting templates:', error);
-        res.status(500).json({ error: 'Failed to delete templates' });
-    }
-});
-
 export default router;
