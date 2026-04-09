@@ -37,6 +37,7 @@ model Product {
   platformInfrastructureFee Float
   warehouseOperationFee     Float
   lastMileFee               Float   @default(0)
+  sites                     String[] @default([])
   supplierInvoice           String
   quantityPerBox            Float?
   volume                    String?
