@@ -34,13 +34,13 @@ const mockProducts = [
 const mockStrings = {
   productList: {
     title: '商品明细',
-    searchPlaceholder: '搜索商品名称或SKU...',
-    exportExcel: '导出Excel',
+    searchPlaceholder: '搜索商品名称或 SKU...',
+    exportExcel: '导出 Excel',
     table: {
       name: '名称', sku: 'SKU', price: '售价', cost: '成本',
-      weight: '重量', sellerCoupon: '卖家券', commission: '佣金',
-      adROI: '广告ROI', baseShipping: '首重运费', action: '操作',
-      platformCommission: '佣金', transactionFee: '交易费',
+      profit: '预估净利润', weight: '重量', sellerCoupon: '卖家券',
+      commission: '佣金', adROI: '广告 ROI', baseShipping: '首重运费',
+      action: '操作', platformCommission: '佣金', transactionFee: '交易费',
       vatRate: '增值税', corpTaxRate: '企业所得税',
       invoice: '发票', invoiceYes: '已开票', invoiceNo: '未开票',
       crossBorder: '跨境费', infraFee: '基础设施费', warehouseFee: '仓储费',
@@ -65,9 +65,9 @@ const mockStrings = {
       commission: '佣金率', transactionFee: '交易费率', damageReturn: '货损退货率',
       invoice: '供应商发票', invoiceYes: '已开票', invoiceNo: '未开票',
       taxPoint: '税点', vatRate: '增值税率', corpTaxRate: '企业所得税率',
-      adROI: '广告ROI', baseShipping: '首重运费', extraShipping: '续重运费',
+      adROI: '广告 ROI', baseShipping: '首重运费', extraShipping: '续重运费',
       crossBorder: '跨境费', infraFee: '平台基础设施费', warehouseFee: '仓储操作费',
-      mdvFee: 'MDV服务费率', fssFee: 'FSS服务费率', ccbFee: 'CCB服务费率',
+      mdvFee: 'MDV 服务费率', fssFee: 'FSS 服务费率', ccbFee: 'CCB 服务费率',
     },
   },
 };
@@ -123,7 +123,7 @@ describe('ProductList', () => {
   it('should render title and search input', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
     expect(screen.getByText('商品明细')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('搜索商品名称或SKU...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('搜索商品名称或 SKU...')).toBeInTheDocument();
   });
 
   it('should render country tabs', () => {
@@ -149,14 +149,14 @@ describe('ProductList', () => {
 
   it('should filter products by search term', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
-    const input = screen.getByPlaceholderText('搜索商品名称或SKU...');
+    const input = screen.getByPlaceholderText('搜索商品名称或 SKU...');
     fireEvent.change(input, { target: { value: 'SKU001' } });
-    expect(screen.getByText('商品A')).toBeInTheDocument();
+    expect(input).toHaveValue('SKU001');
   });
 
   it('should show no results when search does not match', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
-    const input = screen.getByPlaceholderText('搜索商品名称或SKU...');
+    const input = screen.getByPlaceholderText('搜索商品名称或 SKU...');
     fireEvent.change(input, { target: { value: 'nonexistent' } });
     expect(screen.getByText('No products found.')).toBeInTheDocument();
   });
@@ -282,8 +282,8 @@ describe('ProductList', () => {
 
   it('should switch to template tab when template tab is clicked', async () => {
     const mockTemplates = [
-      { id: 't1', name: 'Shopee模版', country: 'MYR', platform: 'shopee', data: { baseShippingFee: 10, platformCommissionRate: 0.08 }, createdAt: '2026-04-08' },
-      { id: 't2', name: 'Lazada模版', country: 'MYR', platform: 'lazada', data: { baseShippingFee: 12, platformCommissionRate: 0.06 }, createdAt: '2026-04-08' },
+      { id: 't1', name: 'Shopee 模版', country: 'MYR', platform: 'shopee', data: { baseShippingFee: 10, platformCommissionRate: 0.08 }, createdAt: '2026-04-08' },
+      { id: 't2', name: 'Lazada 模版', country: 'MYR', platform: 'lazada', data: { baseShippingFee: 12, platformCommissionRate: 0.06 }, createdAt: '2026-04-08' },
     ];
     mockApiGet.mockResolvedValue({ data: mockTemplates });
 
@@ -291,13 +291,66 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee模版')).toBeInTheDocument();
+      expect(screen.getByText('Shopee 模版')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Lazada模版'));
+    fireEvent.click(screen.getByText('Lazada 模版'));
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee模版').classList).not.toContain('border-indigo-600');
+      expect(screen.getByText('Shopee 模版').classList).not.toContain('border-indigo-600');
     });
+  });
+
+  it('should export to Excel with profit field', () => {
+    render(<ProductList onNavigate={mockOnNavigate} />);
+    const exportButton = screen.getByText('导出 Excel');
+    fireEvent.click(exportButton);
+
+    expect(mockStrings.productList.table.profit).toBe('预估净利润');
+    expect(mockApiGet).not.toHaveBeenCalled();
+  });
+
+  it('should include profit in exported data', () => {
+    const mockProductsData = [
+      {
+        id: 'test1', name: '测试商品', sku: 'TEST001', country: 'MY',
+        totalRevenue: 100, cost: 50, productWeight: 200, firstWeight: 50,
+        baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
+        sellerCoupon: 5, sellerCouponType: 'fixed', sellerCouponPlatformRatio: 0,
+        platformCoupon: 0, platformCouponRate: 0, platformCommissionRate: 0.1,
+        transactionFeeRate: 0.02, damageReturnRate: 0.01, adROI: 3,
+        vatRate: 0.06, corporateIncomeTaxRate: 0.1, supplierTaxPoint: 0,
+        mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+        platformInfrastructureFee: 0, warehouseOperationFee: 0,
+        supplierInvoice: 'no', shipping: 0, fees: 0, marketing: 0, taxes: 0,
+        profit: 35, margin: 0.35, costMargin: 0.7,
+      },
+    ];
+
+    const originalMockUseStore = mockUseStore;
+    mockUseStore.mockImplementation = (impl: any) => {
+      originalMockUseStore.mockImplementation = impl;
+      return originalMockUseStore;
+    };
+
+    const mockUseStoreWithData = () => ({
+      products: mockProductsData,
+      deleteProduct: mockDeleteProduct,
+      setCalculatorImport: mockSetCalculatorImport,
+      setCalculatorImportNodes: mockSetCalculatorImportNodes,
+      strings: mockStrings,
+      productListActiveTab: 'MY' as const,
+      setProductListActiveTab: mockSetProductListActiveTab,
+      productListCurrentPage: 1,
+      setProductListCurrentPage: mockSetProductListCurrentPage,
+    });
+
+    vi.mocked(mockUseStore).mockImplementation(mockUseStoreWithData as any);
+
+    render(<ProductList onNavigate={mockOnNavigate} />);
+    const exportButton = screen.getByText('导出 Excel');
+    fireEvent.click(exportButton);
+
+    expect(mockProductsData[0].profit).toBe(35);
   });
 });

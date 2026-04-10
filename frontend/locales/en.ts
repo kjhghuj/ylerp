@@ -376,6 +376,7 @@ export const en = {
       sku: 'SKU',
       price: 'Price',
       cost: 'Cost',
+      profit: 'Est. Net Profit',
       weight: 'Weight',
       sellerCoupon: 'Seller Coupon',
       commission: 'Commission',

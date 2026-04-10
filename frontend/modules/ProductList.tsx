@@ -81,6 +81,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             [t.table.sku]: p.sku,
             [t.table.price]: p.totalRevenue,
             [t.table.cost]: p.cost,
+            [t.table.profit]: p.profit,
             [t.table.weight]: p.productWeight,
             [t.table.sellerCoupon]: p.sellerCoupon + (p.sellerCouponType === 'percent' ? '%' : ''),
             [t.table.platformCommission]: p.platformCommissionRate + '%',

@@ -59,12 +59,13 @@ export const ProfitCalculator: React.FC = () => {
     const setSiteCountry = setProfitSiteCountry;
     const nodes = profitNodes[siteCountry] || [];
     const setNodes = (newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
-        if (typeof newNodes === 'function') {
-            const updatedNodes = newNodes(nodes as PlatformNode[]);
-            setProfitNodes({ ...profitNodes, [siteCountry]: updatedNodes });
-        } else {
-            setProfitNodes({ ...profitNodes, [siteCountry]: newNodes });
-        }
+        setProfitNodes(prev => {
+            const currentNodes = prev[siteCountry] || [];
+            const resolved = typeof newNodes === 'function'
+                ? newNodes(currentNodes as PlatformNode[])
+                : newNodes;
+            return { ...prev, [siteCountry]: resolved };
+        });
     };
     const editingProductId = profitEditingProductId;
     const setEditingProductId = setProfitEditingProductId;
@@ -141,40 +142,53 @@ export const ProfitCalculator: React.FC = () => {
             }
             setSiteCountry(currency);
 
-            if (calculatorImportNodes.length > 0) {
-                setNodes(calculatorImportNodes.map(n => ({
+            const importNodeList = calculatorImportNodes.length > 0
+                ? calculatorImportNodes.map(n => ({
                     id: genId(),
                     platform: n.platform || 'other',
                     country: n.country,
                     name: n.name,
                     data: { ...DEFAULT_NODE_DATA, ...n.data }
-                })));
-                setCalculatorImportNodes([]);
-            } else {
-                const nodeData = {
-                    baseShippingFee: calculatorImport.baseShippingFee || 0,
-                    extraShippingFee: calculatorImport.extraShippingFee || 0,
-                    crossBorderFee: calculatorImport.crossBorderFee || 0,
-                    platformCommissionRate: calculatorImport.platformCommissionRate || 0,
-                    transactionFeeRate: calculatorImport.transactionFeeRate || 0,
-                    platformCoupon: calculatorImport.platformCoupon || 0,
-                    platformCouponRate: calculatorImport.platformCouponRate || 0,
-                    damageReturnRate: calculatorImport.damageReturnRate || 0,
-                    mdvServiceFeeRate: calculatorImport.mdvServiceFeeRate || 0,
-                    fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
-                    ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
-                    warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
-                    lastMileFee: calculatorImport.lastMileFee || 0,
-                };
-
-                setNodes([{
+                }))
+                : [{
                     id: genId(),
-                    platform: 'other',
+                    platform: 'other' as PlatformType,
                     country: currency,
                     name: '导入数据',
-                    data: nodeData
-                }]);
+                    data: {
+                        baseShippingFee: calculatorImport.baseShippingFee || 0,
+                        extraShippingFee: calculatorImport.extraShippingFee || 0,
+                        crossBorderFee: calculatorImport.crossBorderFee || 0,
+                        platformCommissionRate: calculatorImport.platformCommissionRate || 0,
+                        transactionFeeRate: calculatorImport.transactionFeeRate || 0,
+                        platformCoupon: calculatorImport.platformCoupon || 0,
+                        platformCouponRate: calculatorImport.platformCouponRate || 0,
+                        damageReturnRate: calculatorImport.damageReturnRate || 0,
+                        mdvServiceFeeRate: calculatorImport.mdvServiceFeeRate || 0,
+                        fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
+                        ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
+                        warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
+                        lastMileFee: calculatorImport.lastMileFee || 0,
+                    },
+                }];
+
+            if (calculatorImportNodes.length > 0) {
+                setCalculatorImportNodes([]);
             }
+
+            const groupedNodes: Record<string, PlatformNode[]> = {};
+            for (const n of importNodeList) {
+                const nodeCountry = n.country || currency;
+                if (!groupedNodes[nodeCountry]) groupedNodes[nodeCountry] = [];
+                groupedNodes[nodeCountry].push(n as PlatformNode);
+            }
+            setProfitNodes(prev => {
+                const updated = { ...prev };
+                for (const [countryKey, nodesArr] of Object.entries(groupedNodes)) {
+                    updated[countryKey] = nodesArr;
+                }
+                return updated;
+            });
 
             setCalculatorImport(null);
         }
@@ -252,7 +266,6 @@ export const ProfitCalculator: React.FC = () => {
             return;
         }
 
-        // 获取所有站点列表 - 从 profitNodes 对象的所有站点中提取
         const sites: ('SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN')[] = [];
         const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
             'SGD': 'SG',
@@ -262,7 +275,6 @@ export const ProfitCalculator: React.FC = () => {
             'IDR': 'ID',
         };
         
-        // 遍历所有站点，收集有节点的站点
         Object.entries(profitNodes).forEach(([currency, nodeArray]) => {
             if (nodeArray && (nodeArray as any[]).length > 0) {
                 const countryCode = countryMap[currency] || 'MY';
@@ -272,7 +284,6 @@ export const ProfitCalculator: React.FC = () => {
             }
         });
 
-        // 使用第一个节点的数据作为主数据
         const node = nodes.length > 0 ? nodes[0] : { country: 'MYR', data: DEFAULT_NODE_DATA };
         const primaryCountry = sites.length > 0 ? sites[0] : 'MY';
 
@@ -280,7 +291,7 @@ export const ProfitCalculator: React.FC = () => {
             name: globalInputs.name, 
             sku: globalInputs.sku, 
             country: primaryCountry,
-            sites: sites, // 保存所有站点
+            sites: sites,
             cost: Number(globalInputs.purchaseCost) || 0,
             productWeight: Number(globalInputs.productWeight) || 0,
             firstWeight: Number(globalInputs.firstWeight) || 50,
@@ -312,17 +323,27 @@ export const ProfitCalculator: React.FC = () => {
             shipping: 0, fees: 0, marketing: 0, taxes: 0, profit: 0, margin: 0, costMargin: 0
         };
 
-        let savedProductId = editingProductId;
+        let savedProductId: string | null = editingProductId;
+        const isUpdate = !!editingProductId;
 
-        if (editingProductId) {
-            // 更新商品时，合并现有的 sites
-            const existingProduct = products.find(p => p.id === editingProductId);
-            const existingSites = existingProduct?.sites || [];
-            const newSites = [...new Set([...existingSites, ...sites])];
-            await updateProduct({ ...productData, id: editingProductId, sites: newSites });
-        } else {
-            const saved = await addProduct(productData);
-            savedProductId = saved.id;
+        try {
+            if (editingProductId) {
+                const existingProduct = products.find(p => p.id === editingProductId);
+                const existingSites = existingProduct?.sites || [];
+                const newSites = [...new Set([...existingSites, ...sites])];
+                await updateProduct({ ...productData, id: editingProductId, sites: newSites });
+            } else {
+                const saved = await addProduct(productData);
+                savedProductId = saved?.id || null;
+                if (!savedProductId) {
+                    showToast('Failed to save product: no ID returned', 'error');
+                    return;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to save product:', error);
+            showToast('Failed to save product', 'error');
+            return;
         }
 
         for (const n of nodes) {
@@ -332,13 +353,6 @@ export const ProfitCalculator: React.FC = () => {
                     t => t.productId === savedProductId && t.name === tplName && t.platform === n.platform
                 );
                 if (isDuplicate) continue;
-                
-                console.log('💾 Saving template:', {
-                    name: tplName,
-                    country: n.country,
-                    platform: n.platform,
-                    productId: savedProductId,
-                });
                 
                 const response = await api.post('/templates', {
                     name: tplName,
@@ -354,7 +368,8 @@ export const ProfitCalculator: React.FC = () => {
             }
         }
 
-        showToast(editingProductId ? t.actions.updated : t.actions.saved);
+        setEditingProductId(null);
+        showToast(isUpdate ? t.actions.updated : t.actions.saved);
     };
 
     return (

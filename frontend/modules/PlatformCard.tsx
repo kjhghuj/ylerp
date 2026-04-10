@@ -47,21 +47,35 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     // 当商品重量变化时，自动更新尾程物流费用（仅新加坡）
+    // 逻辑：首重重量为 0 时计算尾程物流费，首重重量不为 0 时不计算（设为 0）
     React.useEffect(() => {
         if (country === 'SGD') {
             const productWeight = Number(globalInputs.productWeight) || 0;
-            const calculatedFee = calculateLastMileFee(productWeight);
-            if (calculatedFee !== Number(data.lastMileFee)) {
-                onUpdate(nodeId, { lastMileFee: calculatedFee });
+            const firstWeight = Number(globalInputs.firstWeight) || 0;
+            const currentLastMileFee = Number(data.lastMileFee) || 0;
+            
+            // 首重重量为 0 时才计算尾程物流费
+            if (firstWeight === 0) {
+                const calculatedFee = calculateLastMileFee(productWeight);
+                // 只有当计算结果与当前值不同时才更新，避免无限循环
+                if (Math.abs(calculatedFee - currentLastMileFee) > 0.001) {
+                    onUpdate(nodeId, { lastMileFee: calculatedFee });
+                }
+            } else {
+                // 首重重量不为 0 时，尾程物流费设为 0
+                if (currentLastMileFee !== 0) {
+                    onUpdate(nodeId, { lastMileFee: 0 });
+                }
             }
         }
-    }, [globalInputs.productWeight, country]);
+    }, [globalInputs.productWeight, globalInputs.firstWeight, country]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(nodeId, { [e.target.name]: e.target.value });
     };
 
     const results = useMemo(() => {
+        const safeRate = rateToCNY || 1;
         const safeData = Object.fromEntries(
             Object.entries(data).map(([k, v]) => [k, Number(v) || 0])
         ) as any;
@@ -92,8 +106,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
         const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
 
-        const mdvCapCNY = 25 / rateToCNY;
-        const otherCapCNY = 12.5 / rateToCNY;
+        const mdvCapCNY = 25 / safeRate;
+        const otherCapCNY = 12.5 / safeRate;
 
         const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.mdvServiceFeeRate / 100), mdvCapCNY);
         const fssServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.fssServiceFeeRate / 100), otherCapCNY);
@@ -105,9 +119,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             const extraWeight = g.productWeight - safeData.firstWeight;
             shippingFee += safeData.extraShippingFee * (extraWeight / 10);
         }
-        // 加上新加坡尾程物流费用（新加坡币转人民币）
         if (country === 'SGD') {
-            const lastMileFeeCNY = (safeData.lastMileFee || 0) / rateToCNY;
+            const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRate;
             shippingFee += lastMileFeeCNY;
         }
 
@@ -116,7 +129,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const platformFee = commission + transactionFee + serviceFee + adFee + safeData.warehouseOperationFee + damage;
         
         const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
-        const finalRevenueLocal = finalRevenueCNY * rateToCNY;
+        const finalRevenueLocal = finalRevenueCNY * safeRate;
 
         return {
             purchaseCost: g.purchaseCost,
@@ -125,7 +138,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
             margin: g.totalRevenue > 0 ? (finalRevenueCNY / g.totalRevenue) * 100 : 0
         };
-    }, [data, globalInputs, rateToCNY]);
+    }, [data, globalInputs, rateToCNY, country]);
 
     const isMoneyField = (key: string) => [
         'platformCoupon', 'baseShippingFee', 
@@ -137,7 +150,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         // 尾程物流费特殊处理：输入框显示人民币，下方显示新加坡币
         if (key === 'lastMileFee' && country === 'SGD') {
             const valueSGD = Number(data[key]) || 0;
-            const valueCNY = valueSGD / rateToCNY;
+            // 安全检查：避免除以 0 或 undefined
+            const safeRate = rateToCNY || 1;
+            const valueCNY = valueSGD / safeRate;
             return (
                 <div key={key} className="col-span-1">
                     <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={t.inputs[key] || key}>{t.inputs[key] || key}</label>
@@ -149,7 +164,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             value={valueCNY.toFixed(2)}
                             onChange={(e) => {
                                 const valueCNYInput = parseFloat(e.target.value) || 0;
-                                const valueSGDConverted = valueCNYInput * rateToCNY;
+                                const valueSGDConverted = valueCNYInput * safeRate;
                                 onUpdate(nodeId, { [key]: valueSGDConverted });
                             }}
                             onFocus={(e) => e.target.select()}
@@ -214,7 +229,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
-                        {country === 'SGD' && renderInput('lastMileFee')}
+                        {country === 'SGD' && (Number(globalInputs.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
                     </div>
                 </div>
             </div>
