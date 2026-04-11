@@ -184,6 +184,8 @@ export const zh = {
       },
       saveToLibrary: '存入商品库',
       updateLibrary: '更新商品库',
+      switchToLocal: '切换本土货币计算',
+      switchToCNY: '切换人民币计算',
       saveTemplate: '保存',
       templateName: '存为新模板名',
       netProfitCNY: '预估净利润 (CNY)',

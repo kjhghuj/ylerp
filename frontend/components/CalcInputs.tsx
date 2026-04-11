@@ -15,9 +15,47 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
     </div>
 );
 
-export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '' }: any) => {
+export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false }: any) => {
     const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
-    const convertedValue = (exchangeRate > 0 && currencyCode) ? (safeValue * exchangeRate).toFixed(2) : null;
+    const safeRate = exchangeRate > 0 ? exchangeRate : 0;
+
+    if (invertCurrency && safeRate > 0 && currencyCode) {
+        const displayValue = (safeValue / safeRate).toFixed(2);
+        const originalValue = safeValue.toFixed(2);
+        return (
+            <div className={colSpan}>
+                <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={label}>{label}</label>
+                <div className="relative">
+                    <input
+                        type="text"
+                        inputMode="decimal"
+                        name={name}
+                        value={displayValue}
+                        onChange={(e) => {
+                            const localValue = parseFloat(e.target.value) || 0;
+                            const cnyValue = localValue * safeRate;
+                            onChange({ target: { name, value: String(cnyValue) } });
+                        }}
+                        onFocus={(e) => e.target.select()}
+                        className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all
+                            ${highlight
+                                ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                    />
+                    {suffix && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold pointer-events-none">
+                            {suffix}
+                        </div>
+                    )}
+                </div>
+                <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
+                    <span>≈ {originalValue} CNY</span>
+                </div>
+            </div>
+        );
+    }
+
+    const convertedValue = (safeRate > 0 && currencyCode) ? (safeValue * safeRate).toFixed(2) : null;
 
     return (
         <div className={colSpan}>

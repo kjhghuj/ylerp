@@ -184,6 +184,8 @@ export const en = {
       },
       saveToLibrary: 'Save to Library',
       updateLibrary: 'Update Library',
+      switchToLocal: 'Local Currency',
+      switchToCNY: 'CNY Currency',
       saveTemplate: 'Save',
       templateName: 'Save as template name',
       netProfitCNY: 'Est. Net Profit (CNY)',

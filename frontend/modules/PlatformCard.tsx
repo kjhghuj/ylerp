@@ -15,10 +15,11 @@ interface PlatformCardProps {
     onUpdate: (id: string, partialData: any) => void;
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
+    useLocalCurrency?: boolean;
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate
+    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -51,24 +52,21 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     React.useEffect(() => {
         if (country === 'SGD') {
             const productWeight = Number(globalInputs.productWeight) || 0;
-            const firstWeight = Number(globalInputs.firstWeight) || 0;
+            const firstWeight = Number(data.firstWeight) || 0;
             const currentLastMileFee = Number(data.lastMileFee) || 0;
             
-            // 首重重量为 0 时才计算尾程物流费
             if (firstWeight === 0) {
                 const calculatedFee = calculateLastMileFee(productWeight);
-                // 只有当计算结果与当前值不同时才更新，避免无限循环
                 if (Math.abs(calculatedFee - currentLastMileFee) > 0.001) {
                     onUpdate(nodeId, { lastMileFee: calculatedFee });
                 }
             } else {
-                // 首重重量不为 0 时，尾程物流费设为 0
                 if (currentLastMileFee !== 0) {
                     onUpdate(nodeId, { lastMileFee: 0 });
                 }
             }
         }
-    }, [globalInputs.productWeight, globalInputs.firstWeight, country]);
+    }, [globalInputs.productWeight, data.firstWeight, country]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(nodeId, { [e.target.name]: e.target.value });
@@ -141,51 +139,49 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     }, [data, globalInputs, rateToCNY, country]);
 
     const isMoneyField = (key: string) => [
-        'platformCoupon', 'baseShippingFee', 
-        'extraShippingFee', 'crossBorderFee', 'warehouseOperationFee'
+        'platformCoupon', 'baseShippingFee',
+        'extraShippingFee', 'crossBorderFee', 'warehouseOperationFee', 'lastMileFee'
     ].includes(key);
 
     const renderInput = (key: string) => {
         const isMoney = isMoneyField(key);
-        // 尾程物流费特殊处理：输入框显示人民币，下方显示新加坡币
-        if (key === 'lastMileFee' && country === 'SGD') {
-            const valueSGD = Number(data[key]) || 0;
-            // 安全检查：避免除以 0 或 undefined
+        if (isMoney && !useLocalCurrency) {
             const safeRate = rateToCNY || 1;
-            const valueCNY = valueSGD / safeRate;
+            const localValue = Number(data[key]) || 0;
+            const cnyValue = localValue / safeRate;
             return (
                 <div key={key} className="col-span-1">
-                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={t.inputs[key] || key}>{t.inputs[key] || key}</label>
+                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
                     <div className="relative">
                         <input
                             type="text"
                             inputMode="decimal"
                             name={key}
-                            value={valueCNY.toFixed(2)}
+                            value={cnyValue.toFixed(2)}
                             onChange={(e) => {
-                                const valueCNYInput = parseFloat(e.target.value) || 0;
-                                const valueSGDConverted = valueCNYInput * safeRate;
-                                onUpdate(nodeId, { [key]: valueSGDConverted });
+                                const cnyInput = parseFloat(e.target.value) || 0;
+                                const localConverted = cnyInput * safeRate;
+                                onUpdate(nodeId, { [key]: localConverted });
                             }}
                             onFocus={(e) => e.target.select()}
-                            className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100`}
+                            className="w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
                         />
                     </div>
                     <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
-                        <span>≈ {valueSGD.toFixed(2)} SGD</span>
+                        <span>≈ {localValue.toFixed(2)} {country}</span>
                     </div>
                 </div>
             );
         }
         return (
-            <NumberInput 
-                key={key} 
-                label={t.inputs[key] || key} 
-                name={key} 
-                value={data[key] ?? ''} 
-                onChange={handleChange} 
-                exchangeRate={isMoney ? rateToCNY : undefined}
-                currencyCode={isMoney ? country : undefined}
+            <NumberInput
+                key={key}
+                label={isMoney ? `${t.inputs[key] || key} (${country})` : (t.inputs[key] || key)}
+                name={key}
+                value={data[key] ?? ''}
+                onChange={handleChange}
+                exchangeRate={isMoney && useLocalCurrency ? rateToCNY : undefined}
+                currencyCode={isMoney && useLocalCurrency ? country : undefined}
             />
         );
     };
@@ -229,7 +225,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
-                        {country === 'SGD' && (Number(globalInputs.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
+                        {country === 'SGD' && (Number(data.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
                     </div>
                 </div>
             </div>

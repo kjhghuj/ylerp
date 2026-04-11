@@ -115,19 +115,19 @@ describe('PlatformCard', () => {
 
   it('should show last mile fee input when firstWeight is 0 for Singapore', () => {
     render(<PlatformCard {...mockPlatformCardProps} />);
-    expect(screen.getByText('尾程物流费')).toBeInTheDocument();
+    expect(screen.getByText(/尾程物流费/)).toBeInTheDocument();
   });
 
   it('should hide last mile fee input when firstWeight is not 0 for Singapore', () => {
     const propsWithFirstWeight = {
       ...mockPlatformCardProps,
-      globalInputs: {
-        ...mockPlatformCardProps.globalInputs,
+      data: {
+        ...mockPlatformCardProps.data,
         firstWeight: 50,
       },
     };
     render(<PlatformCard {...propsWithFirstWeight} />);
-    expect(screen.queryByText('尾程物流费')).not.toBeInTheDocument();
+    expect(screen.queryByText(/尾程物流费/)).not.toBeInTheDocument();
   });
 
   it('should not show last mile fee input for non-Singapore countries', () => {
@@ -253,13 +253,10 @@ describe('PlatformCard', () => {
 
     const propsWithFirstWeight = {
       ...mockPlatformCardProps,
-      globalInputs: {
-        ...mockPlatformCardProps.globalInputs,
-        firstWeight: 100,
-      },
       data: {
         ...mockPlatformCardProps.data,
         lastMileFee: 2.03,
+        firstWeight: 100,
       },
     };
 
@@ -303,7 +300,7 @@ describe('PlatformCard', () => {
     }).not.toThrow();
 
     // Should display value without crashing
-    expect(screen.getByText('尾程物流费')).toBeInTheDocument();
+    expect(screen.getByText(/尾程物流费/)).toBeInTheDocument();
   });
 
   it('should update last mile fee when user manually edits the input', () => {

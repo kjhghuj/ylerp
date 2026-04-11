@@ -4,6 +4,7 @@ import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { hasPermission } from './PermissionTree';
+import { version } from '../package.json';
 
 interface SidebarProps {
   currentView: AppState['currentView'];
@@ -93,6 +94,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain rounded-md" />
             <span className="font-bold text-base hidden sm:inline" style={{ color: 'var(--text-primary)' }}>阳零ERP</span>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded hidden sm:inline" style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--bg-card-hover)' }}>v{version}</span>
           </div>
 
           <nav className="hidden lg:flex items-center gap-1 ml-4">
@@ -198,6 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
             <div className="flex items-center gap-2">
               <img src="/logo.png" alt="Logo" className="w-7 h-7 object-contain rounded-md" />
               <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>阳零ERP</span>
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded" style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--bg-card-hover)' }}>v{version}</span>
             </div>
             <button onClick={() => setDrawerOpen(false)} className="p-1.5 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
               <X size={18} />

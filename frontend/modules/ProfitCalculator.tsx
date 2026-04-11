@@ -76,6 +76,7 @@ export const ProfitCalculator: React.FC = () => {
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
 
     const [rates, setRates] = useState<Record<string, number>>({ MYR: 0, PHP: 0, SGD: 0, THB: 0, IDR: 0 });
+    const [useLocalCurrency, setUseLocalCurrency] = useState(false);
 
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
@@ -454,21 +455,49 @@ export const ProfitCalculator: React.FC = () => {
                             <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.globalBaseDesc}</div>
                         </div>
                     </div>
-                    <select
-                        value={siteCountry}
-                        onChange={e => setSiteCountry(e.target.value)}
-                        className="text-xs font-bold px-3 py-2 pr-8 bg-blue-50 border border-blue-200 rounded-lg outline-none appearance-none cursor-pointer hover:bg-blue-100/50 text-blue-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
-                    >
-                        {Object.entries(t.matrix.sites || {}).map(([code, name]: [any, any]) => (
-                            <option key={code} value={code}>{name} ({code})</option>
-                        ))}
-                    </select>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setUseLocalCurrency(prev => !prev)}
+                            className={`text-xs font-bold px-3 py-2 rounded-lg transition-all border ${useLocalCurrency
+                                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/50'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/50'}`}
+                        >
+                            {useLocalCurrency ? t.matrix.switchToCNY : t.matrix.switchToLocal}
+                        </button>
+                        <select
+                            value={siteCountry}
+                            onChange={e => setSiteCountry(e.target.value)}
+                            className="text-xs font-bold px-3 py-2 pr-8 bg-blue-50 border border-blue-200 rounded-lg outline-none appearance-none cursor-pointer hover:bg-blue-100/50 text-blue-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                        >
+                            {Object.entries(t.matrix.sites || {}).map(([code, name]: [any, any]) => (
+                                <option key={code} value={code}>{name} ({code})</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <TextInput label={t.inputs.name} name="name" value={globalInputs.name} onChange={handleGlobalChange} />
                     <TextInput label={t.inputs.sku} name="sku" value={globalInputs.sku} onChange={handleGlobalChange} />
-                    <NumberInput label={`${t.inputs.totalRevenue} (CNY)`} name="totalRevenue" value={globalInputs.totalRevenue} onChange={handleGlobalChange} highlight exchangeRate={rates[siteCountry] || 0} currencyCode={siteCountry} />
-                    <NumberInput label={`${t.inputs.cost} (CNY)`} name="purchaseCost" value={globalInputs.purchaseCost} onChange={handleGlobalChange} highlight exchangeRate={rates[siteCountry] || 0} currencyCode={siteCountry} />
+                    <NumberInput
+                        label={useLocalCurrency ? `${t.inputs.totalRevenue} (${siteCountry})` : `${t.inputs.totalRevenue} (CNY)`}
+                        name="totalRevenue"
+                        value={globalInputs.totalRevenue}
+                        onChange={handleGlobalChange}
+                        highlight
+                        exchangeRate={rates[siteCountry] || 0}
+                        currencyCode={siteCountry}
+                        invertCurrency={useLocalCurrency}
+                    />
+                    <NumberInput
+                        label={useLocalCurrency ? `${t.inputs.cost} (${siteCountry})` : `${t.inputs.cost} (CNY)`}
+                        name="purchaseCost"
+                        value={globalInputs.purchaseCost}
+                        onChange={handleGlobalChange}
+                        highlight
+                        exchangeRate={rates[siteCountry] || 0}
+                        currencyCode={siteCountry}
+                        invertCurrency={useLocalCurrency}
+                    />
                     <NumberInput label={t.inputs.weight} name="productWeight" value={globalInputs.productWeight} onChange={handleGlobalChange} />
                     <SelectInput label={t.inputs.supplierInvoice} name="supplierInvoice" value={globalInputs.supplierInvoice} onChange={handleGlobalChange} options={[{ value: 'yes', label: t.inputs.invoiceYes }, { value: 'no', label: t.inputs.invoiceNo }]} />
                     <NumberInput label={t.inputs.supplierTax} name="supplierTaxPoint" value={globalInputs.supplierTaxPoint} onChange={handleGlobalChange} suffix="%" />
@@ -481,7 +510,10 @@ export const ProfitCalculator: React.FC = () => {
                         </div>
                         {globalInputs.sellerCouponType === 'fixed' && (
                             <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
-                                <span>≈ {(Number(globalInputs.sellerCoupon) || 0) * (rates[siteCountry] || 0)} {siteCountry}</span>
+                                {useLocalCurrency
+                                    ? <span>≈ {(Number(globalInputs.sellerCoupon) || 0).toFixed(2)} CNY</span>
+                                    : <span>≈ {(Number(globalInputs.sellerCoupon) || 0) * (rates[siteCountry] || 0)} {siteCountry}</span>
+                                }
                             </div>
                         )}
                     </div>
@@ -489,7 +521,15 @@ export const ProfitCalculator: React.FC = () => {
                     <NumberInput label={t.inputs.adRoi} name="adROI" value={globalInputs.adROI} onChange={handleGlobalChange} />
                     <NumberInput label={t.inputs.vat} name="vatRate" value={globalInputs.vatRate} onChange={handleGlobalChange} suffix="%" />
                     <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={handleGlobalChange} suffix="%" />
-                    <NumberInput label={t.inputs.infraFee} name="platformInfrastructureFee" value={globalInputs.platformInfrastructureFee} onChange={handleGlobalChange} exchangeRate={rates[siteCountry] || 0} currencyCode={siteCountry} />
+                    <NumberInput
+                        label={useLocalCurrency ? `${t.inputs.infraFee} (${siteCountry})` : `${t.inputs.infraFee} (CNY)`}
+                        name="platformInfrastructureFee"
+                        value={globalInputs.platformInfrastructureFee}
+                        onChange={handleGlobalChange}
+                        exchangeRate={rates[siteCountry] || 0}
+                        currencyCode={siteCountry}
+                        invertCurrency={useLocalCurrency}
+                    />
                 </div>
             </div>
 
@@ -516,6 +556,7 @@ export const ProfitCalculator: React.FC = () => {
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}
                             onSaveTemplate={handleSaveTemplate}
+                            useLocalCurrency={useLocalCurrency}
                         />
                     ))
                 )}
