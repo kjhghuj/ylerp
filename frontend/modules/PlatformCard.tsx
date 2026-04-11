@@ -157,9 +157,15 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             type="text"
                             inputMode="decimal"
                             name={key}
-                            value={cnyValue.toFixed(2)}
+                            defaultValue={cnyValue.toFixed(2)}
                             onChange={(e) => {
                                 const cnyInput = parseFloat(e.target.value) || 0;
+                                const localConverted = cnyInput * safeRate;
+                                onUpdate(nodeId, { [key]: localConverted });
+                            }}
+                            onBlur={(e) => {
+                                const cnyInput = parseFloat(e.target.value) || 0;
+                                e.target.value = cnyInput.toFixed(2);
                                 const localConverted = cnyInput * safeRate;
                                 onUpdate(nodeId, { [key]: localConverted });
                             }}

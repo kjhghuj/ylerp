@@ -20,7 +20,7 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
     const safeRate = exchangeRate > 0 ? exchangeRate : 0;
 
     if (invertCurrency && safeRate > 0 && currencyCode) {
-        const displayValue = (safeValue / safeRate).toFixed(2);
+        const displayValue = (safeValue * safeRate).toFixed(2);
         const originalValue = safeValue.toFixed(2);
         return (
             <div className={colSpan}>
@@ -30,10 +30,16 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                         type="text"
                         inputMode="decimal"
                         name={name}
-                        value={displayValue}
+                        defaultValue={displayValue}
                         onChange={(e) => {
                             const localValue = parseFloat(e.target.value) || 0;
-                            const cnyValue = localValue * safeRate;
+                            const cnyValue = localValue / safeRate;
+                            onChange({ target: { name, value: String(cnyValue) } });
+                        }}
+                        onBlur={(e) => {
+                            const localValue = parseFloat(e.target.value) || 0;
+                            e.target.value = localValue.toFixed(2);
+                            const cnyValue = localValue / safeRate;
                             onChange({ target: { name, value: String(cnyValue) } });
                         }}
                         onFocus={(e) => e.target.select()}
