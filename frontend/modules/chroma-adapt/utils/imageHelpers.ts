@@ -68,99 +68,94 @@ export const resizeImage = (base64Str: string, maxWidth: number = 1024, maxHeigh
   });
 };
 
-export const exportImage = async (imageSrc: string, filter: string, filename: string = 'chroma-adapt-export.png') => {
-  return new Promise<void>(async (resolve, reject) => {
-    const isBase64 = imageSrc.startsWith('data:');
-    let finalImageSrc = imageSrc;
-    
-    // 如果不是 base64，尝试通过 fetch 获取 blob 并转为 base64 来绕过 CORS
-    if (!isBase64) {
-      try {
-        console.log('Attempting to fetch image via fetch to bypass CORS...');
-        const response = await fetch(imageSrc, { mode: 'cors' });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        const blob = await response.blob();
-        finalImageSrc = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error('Failed to convert blob to base64'));
-          reader.readAsDataURL(blob);
-        });
-        console.log('Successfully converted image to base64');
-      } catch (fetchError) {
-        console.warn('Fetch failed, falling back to direct image loading:', fetchError);
-        // Fetch 失败，继续使用原始 URL
-      }
-    }
-    
+const loadAsBase64 = async (url: string): Promise<string> => {
+  const response = await fetch(url, { mode: 'cors' });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Failed to convert blob to base64'));
+    reader.readAsDataURL(blob);
+  });
+};
+
+const drawToCanvasAndDownload = (img: HTMLImageElement, filter: string, filename: string): void => {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not get canvas context');
+
+  canvas.width = img.naturalWidth || img.width || 1024;
+  canvas.height = img.naturalHeight || img.height || 1024;
+
+  if (filter && filter !== 'none') {
+    ctx.filter = filter;
+  }
+
+  ctx.drawImage(img, 0, 0);
+
+  const link = document.createElement('a');
+  link.download = filename;
+  link.href = canvas.toDataURL('image/png');
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const loadImage = (src: string): Promise<HTMLImageElement> => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.src = finalImageSrc;
-
     const timeout = setTimeout(() => {
       reject(new Error('Image load timeout (10s)'));
     }, 10000);
-
-    const drawAndExport = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error('Could not get canvas context'));
-          return;
-        }
-
-        canvas.width = img.naturalWidth || img.width || 1024;
-        canvas.height = img.naturalHeight || img.height || 1024;
-
-        // 应用滤镜
-        if (filter && filter !== 'none') {
-          ctx.filter = filter;
-        }
-
-        ctx.drawImage(img, 0, 0);
-        
-        const link = document.createElement('a');
-        link.download = filename;
-        link.href = canvas.toDataURL('image/png');
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        resolve();
-      } catch (error) {
-        reject(new Error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
-      }
-    };
-
     img.onload = () => {
       clearTimeout(timeout);
-      drawAndExport();
+      resolve(img);
     };
-
     img.onerror = () => {
       clearTimeout(timeout);
-      
-      // 如果是 base64 图片，尝试直接绘制（可能已经解码完成）
-      if (finalImageSrc.startsWith('data:')) {
-        console.warn('Image onerror triggered for base64, attempting direct draw...');
-        // 给浏览器一点时间解码 base64
-        setTimeout(() => {
-          try {
-            drawAndExport();
-          } catch (e) {
-            reject(new Error(`Failed to export base64 image: ${e instanceof Error ? e.message : 'Unknown error'}`));
-          }
-        }, 100);
-        return;
-      }
-      
-      // 非 base64 图片，可能是 CORS 问题
-      reject(new Error(`Failed to load image: ${imageSrc.substring(0, 50)}... Try checking CORS settings or use base64 format`));
+      reject(new Error(`Failed to load image: ${src.substring(0, 80)}...`));
     };
+    img.src = src;
   });
+};
+
+export const exportImage = async (imageSrc: string, filter: string, filename: string = 'chroma-adapt-export.png'): Promise<void> => {
+  let finalSrc = imageSrc;
+
+  if (!finalSrc.startsWith('data:')) {
+    try {
+      finalSrc = await loadAsBase64(finalSrc);
+    } catch {
+      // fallback: try loading directly
+    }
+  }
+
+  try {
+    const img = await loadImage(finalSrc);
+    drawToCanvasAndDownload(img, filter, filename);
+    return;
+  } catch (firstError) {
+    if (!finalSrc.startsWith('data:')) {
+      throw firstError;
+    }
+  }
+
+  // base64 image failed with crossOrigin, retry without it
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      const t = setTimeout(() => reject(new Error('Image load timeout')), 10000);
+      i.onload = () => { clearTimeout(t); resolve(i); };
+      i.onerror = () => { clearTimeout(t); reject(new Error('Failed to load base64 image')); };
+      i.src = finalSrc;
+    });
+    drawToCanvasAndDownload(img, filter, filename);
+  } catch (retryError) {
+    throw new Error(`Export failed: ${retryError instanceof Error ? retryError.message : 'Unknown error'}`);
+  }
 };

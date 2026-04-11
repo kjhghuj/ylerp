@@ -103,7 +103,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       size || '2048x2048',
       image_urls || undefined
     );
-    res.json(result);
+    const imageUrl = result?.data?.[0]?.url || '';
+    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, '');
+    res.json({ ...result, data: [{ url: imageDataUrl }] });
   } catch (error) {
     errorResponse(error, res);
   }
@@ -120,7 +122,9 @@ router.post('/edit', async (req: Request, res: Response) => {
       undefined,
       [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
     );
-    res.json(generated);
+    const imageUrl = generated?.data?.[0]?.url || '';
+    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, image);
+    res.json({ ...generated, data: [{ url: imageDataUrl }] });
   } catch (error) {
     errorResponse(error, res);
   }
