@@ -14,7 +14,6 @@ const mockT = {
     },
     matrix: {
         globalBase: '全局参数', globalBaseDesc: 'PARAMS',
-        switchToLocal: '切换本土货币', switchToCNY: '切换人民币',
         sites: { MYR: '马来西亚', SGD: '新加坡', PHP: '菲律宾', THB: '泰国', IDR: '印尼' },
     },
 };
@@ -29,7 +28,6 @@ const defaultGlobalInputs = {
 describe('GlobalInputsPanel', () => {
     const mockOnGlobalChange = vi.fn();
     const mockOnSetGlobalInputs = vi.fn();
-    const mockOnSetUseLocalCurrency = vi.fn();
     const mockOnSetSiteCountry = vi.fn();
 
     beforeEach(() => {
@@ -41,11 +39,9 @@ describe('GlobalInputsPanel', () => {
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
@@ -53,56 +49,36 @@ describe('GlobalInputsPanel', () => {
         expect(screen.getByText('全局参数')).toBeInTheDocument();
     });
 
-    it('should display switchToLocal button when useLocalCurrency is false', () => {
+    it('should not render currency toggle button', () => {
         render(
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
         );
-        expect(screen.getByText('切换本土货币')).toBeInTheDocument();
+        expect(screen.queryByText('切换本土货币')).not.toBeInTheDocument();
+        expect(screen.queryByText('切换人民币')).not.toBeInTheDocument();
     });
 
-    it('should display switchToCNY button when useLocalCurrency is true', () => {
+    it('should always show CNY labels for money inputs', () => {
         render(
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={true}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
         );
-        expect(screen.getByText('切换人民币')).toBeInTheDocument();
-    });
-
-    it('should call onSetUseLocalCurrency when currency toggle is clicked', () => {
-        render(
-            <GlobalInputsPanel
-                globalInputs={defaultGlobalInputs}
-                siteCountry="MYR"
-                useLocalCurrency={false}
-                rates={{ MYR: 0.65 }}
-                onGlobalChange={mockOnGlobalChange}
-                onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
-                onSetSiteCountry={mockOnSetSiteCountry}
-                t={mockT}
-            />
-        );
-        fireEvent.click(screen.getByText('切换本土货币'));
-        expect(mockOnSetUseLocalCurrency).toHaveBeenCalledWith(expect.any(Function));
+        const cnyLabels = screen.getAllByText(/CNY/);
+        expect(cnyLabels.length).toBeGreaterThanOrEqual(3);
     });
 
     it('should call onSetSiteCountry when site is changed', () => {
@@ -110,11 +86,9 @@ describe('GlobalInputsPanel', () => {
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65, SGD: 0.19 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
@@ -129,11 +103,9 @@ describe('GlobalInputsPanel', () => {
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
@@ -147,11 +119,9 @@ describe('GlobalInputsPanel', () => {
             <GlobalInputsPanel
                 globalInputs={defaultGlobalInputs}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
@@ -169,11 +139,9 @@ describe('GlobalInputsPanel', () => {
             <GlobalInputsPanel
                 globalInputs={inputsWithCoupon}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />
@@ -183,35 +151,15 @@ describe('GlobalInputsPanel', () => {
         expect(allMyr.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should show CNY equivalent when in local currency mode for fixed coupon', () => {
-        const inputsWithCoupon = { ...defaultGlobalInputs, sellerCoupon: 10, sellerCouponType: 'fixed' };
-        render(
-            <GlobalInputsPanel
-                globalInputs={inputsWithCoupon}
-                siteCountry="MYR"
-                useLocalCurrency={true}
-                rates={{ MYR: 0.65 }}
-                onGlobalChange={mockOnGlobalChange}
-                onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
-                onSetSiteCountry={mockOnSetSiteCountry}
-                t={mockT}
-            />
-        );
-        expect(screen.getByText(/10\.00 CNY/)).toBeInTheDocument();
-    });
-
     it('should not show coupon conversion for percent type', () => {
         const inputsWithPercentCoupon = { ...defaultGlobalInputs, sellerCoupon: 5, sellerCouponType: 'percent' };
         render(
             <GlobalInputsPanel
                 globalInputs={inputsWithPercentCoupon}
                 siteCountry="MYR"
-                useLocalCurrency={false}
                 rates={{ MYR: 0.65 }}
                 onGlobalChange={mockOnGlobalChange}
                 onSetGlobalInputs={mockOnSetGlobalInputs}
-                onSetUseLocalCurrency={mockOnSetUseLocalCurrency}
                 onSetSiteCountry={mockOnSetSiteCountry}
                 t={mockT}
             />

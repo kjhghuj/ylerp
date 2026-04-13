@@ -9,7 +9,6 @@ export const useProductActions = (
     allTemplates: ProfitTemplate[],
     setAllTemplates: React.Dispatch<React.SetStateAction<ProfitTemplate[]>>,
     rates: Record<string, number>,
-    useLocalCurrency: boolean,
 ) => {
     const {
         addProduct, updateProduct, products,

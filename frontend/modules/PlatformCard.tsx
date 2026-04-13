@@ -15,11 +15,10 @@ interface PlatformCardProps {
     onUpdate: (id: string, partialData: any) => void;
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
-    useLocalCurrency?: boolean;
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
+    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -35,8 +34,11 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const siteName = countryMap[country] || country;
 
     const [templateName, setTemplateName] = useState('');
+    const showLocal = rateToCNY > 0 && rateToCNY !== 1;
+    const safeRate = rateToCNY || 1;
 
-    // 新加坡站点尾程物流价格表 (SGD)
+    const toLocal = (cny: number) => cny * safeRate;
+
     const calculateLastMileFee = (weightInGrams: number): number => {
         const weightInKg = weightInGrams / 1000;
         if (weightInKg < 1) return 2.03;
@@ -44,17 +46,15 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         if (weightInKg <= 10) return 3.38;
         if (weightInKg <= 20) return 5.42;
         if (weightInKg <= 30) return 10.00;
-        return 10.00; // 超过 30KG 按 30KG 计算
+        return 10.00;
     };
 
-    // 当商品重量变化时，自动更新尾程物流费用（仅新加坡）
-    // 逻辑：首重重量为 0 时计算尾程物流费，首重重量不为 0 时不计算（设为 0）
     React.useEffect(() => {
         if (country === 'SGD') {
             const productWeight = Number(globalInputs.productWeight) || 0;
             const firstWeight = Number(data.firstWeight) || 0;
             const currentLastMileFee = Number(data.lastMileFee) || 0;
-            
+
             if (firstWeight === 0) {
                 const calculatedFee = calculateLastMileFee(productWeight);
                 if (Math.abs(calculatedFee - currentLastMileFee) > 0.001) {
@@ -73,7 +73,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     const results = useMemo(() => {
-        const safeRate = rateToCNY || 1;
+        const safeRateInner = rateToCNY || 1;
         const safeData = Object.fromEntries(
             Object.entries(data).map(([k, v]) => [k, Number(v) || 0])
         ) as any;
@@ -104,8 +104,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
         const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
 
-        const mdvCapCNY = 25 / safeRate;
-        const otherCapCNY = 12.5 / safeRate;
+        const mdvCapCNY = 25 / safeRateInner;
+        const otherCapCNY = 12.5 / safeRateInner;
 
         const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.mdvServiceFeeRate / 100), mdvCapCNY);
         const fssServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.fssServiceFeeRate / 100), otherCapCNY);
@@ -118,19 +118,20 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             shippingFee += safeData.extraShippingFee * (extraWeight / 10);
         }
         if (country === 'SGD') {
-            const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRate;
+            const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRateInner;
             shippingFee += lastMileFeeCNY;
         }
 
         const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
         const damage = g.totalRevenue * (safeData.damageReturnRate / 100);
         const platformFee = commission + transactionFee + serviceFee + adFee + safeData.warehouseOperationFee + damage;
-        
+
         const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
-        const finalRevenueLocal = finalRevenueCNY * safeRate;
+        const finalRevenueLocal = finalRevenueCNY * safeRateInner;
 
         return {
             purchaseCost: g.purchaseCost,
+            totalRevenue: g.totalRevenue,
             commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
             finalRevenueLocal, finalRevenueCNY,
             roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
@@ -145,8 +146,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const renderInput = (key: string) => {
         const isMoney = isMoneyField(key);
-        if (isMoney && !useLocalCurrency) {
-            const safeRate = rateToCNY || 1;
+        if (isMoney) {
             const localValue = Number(data[key]) || 0;
             const cnyValue = localValue / safeRate;
             return (
@@ -154,6 +154,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                     <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
                     <div className="relative">
                         <input
+                            key={`${key}-cny`}
                             type="text"
                             inputMode="decimal"
                             name={key}
@@ -182,12 +183,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         return (
             <NumberInput
                 key={key}
-                label={isMoney ? `${t.inputs[key] || key} (${country})` : (t.inputs[key] || key)}
+                label={t.inputs[key] || key}
                 name={key}
                 value={data[key] ?? ''}
                 onChange={handleChange}
-                exchangeRate={isMoney && useLocalCurrency ? rateToCNY : undefined}
-                currencyCode={isMoney && useLocalCurrency ? country : undefined}
             />
         );
     };
@@ -221,12 +220,12 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}
                         {config.fields.base.includes('damageReturnRate') && renderInput('damageReturnRate')}
-                        
+
                         {config.fields.shipping.includes('firstWeight') && renderInput('firstWeight')}
                         {config.fields.shipping.includes('baseShippingFee') && renderInput('baseShippingFee')}
                         {config.fields.shipping.includes('extraShippingFee') && renderInput('extraShippingFee')}
                         {config.fields.shipping.includes('crossBorderFee') && renderInput('crossBorderFee')}
-                        
+
                         {config.fields.services.includes('mdvServiceFeeRate') && renderInput('mdvServiceFeeRate')}
                         {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
@@ -246,48 +245,80 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         <div className={`text-4xl font-black tracking-tight transition-transform group-hover/tooltip:scale-105 ${results.finalRevenueCNY > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                             <span className="text-xl text-slate-400">¥</span>{results.finalRevenueCNY.toFixed(2)}
                         </div>
+                        {showLocal && (
+                            <div className={`text-sm font-bold mt-0.5 ${results.finalRevenueLocal > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                ≈ {results.finalRevenueLocal.toFixed(2)} {country}
+                            </div>
+                        )}
                         <div className="flex gap-2 mt-2">
                             <div className="px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{t.matrix.margin}: {results.margin.toFixed(1)}%</div>
                             <div className="px-2 py-0.5 rounded text-xs font-bold bg-purple-50 text-purple-700">{t.matrix.roi}: {results.roi.toFixed(0)}%</div>
                         </div>
 
                         {/* Tooltip Detailed Breakdown */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-800/95 backdrop-blur-md text-white border border-slate-700 rounded-xl p-4 shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none z-50 transition-all duration-200 translate-y-2 group-hover/tooltip:translate-y-0 flex flex-col gap-1.5 text-[11px] font-medium">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-slate-800/95 backdrop-blur-md text-white border border-slate-700 rounded-xl p-4 shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none z-50 transition-all duration-200 translate-y-2 group-hover/tooltip:translate-y-0 flex flex-col gap-1.5 text-[11px] font-medium">
                             <div className="flex justify-between font-bold text-slate-300 pb-2 mb-1 border-b border-slate-600">
-                                <span>{t.inputs.totalRevenue || '售价 (CNY)'}</span>
-                                <span className="text-white">¥{Number(globalInputs.totalRevenue || 0).toFixed(2)}</span>
+                                <span>{t.inputs.totalRevenue || '售价'}</span>
+                                <div className="text-right">
+                                    <span className="text-white">¥{results.totalRevenue.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-400 text-[10px]">≈ {toLocal(results.totalRevenue).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.inputs.cost || '成本'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.purchaseCost.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.purchaseCost.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.purchaseCost).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.commission || '佣金'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.commission.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.commission.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.commission).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.transFee || '交易手续费'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.transactionFee.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.transactionFee.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.transactionFee).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.serviceFee || '服务费'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.serviceFee.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.serviceFee.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.serviceFee).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.shipping || '运费'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.shippingFee.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.shippingFee.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.shippingFee).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.totalTax || '税费'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.totalTax.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.totalTax.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.totalTax).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.adFee || '广告费'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.adFee.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.adFee.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.adFee).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.damage || '货损'}</span>
-                                <span className="text-rose-300 text-right">-¥{results.damage.toFixed(2)}</span>
+                                <div className="text-right">
+                                    <span className="text-rose-300">-¥{results.damage.toFixed(2)}</span>
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.damage).toFixed(2)} {country}</div>}
+                                </div>
                             </div>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800/95"></div>
                         </div>
@@ -301,7 +332,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             onChange={(e) => setTemplateName(e.target.value)}
                             className="flex-1 text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition-colors"
                         />
-                        <button 
+                        <button
                             onClick={() => { onSaveTemplate(nodeId, templateName); setTemplateName(''); }}
                             disabled={!templateName}
                             className="bg-blue-600 disabled:bg-slate-300 text-white px-4 text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"

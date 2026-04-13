@@ -283,7 +283,7 @@ describe('PlatformCard', () => {
     
     // 2.15 SGD / 2.15 rate = 1.00 CNY
     expect(screen.getByDisplayValue('1.00')).toBeInTheDocument();
-    expect(screen.getByText('≈ 2.15 SGD')).toBeInTheDocument();
+    expect(screen.getAllByText(/≈ 2\.15 SGD/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('should handle rateToCNY being 0 or undefined safely', () => {

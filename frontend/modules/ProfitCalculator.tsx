@@ -28,7 +28,6 @@ export const ProfitCalculator: React.FC = () => {
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
     const [rates, setRates] = useState<Record<string, number>>({ MYR: 0, PHP: 0, SGD: 0, THB: 0, IDR: 0 });
-    const [useLocalCurrency, setUseLocalCurrency] = useState(false);
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
 
     const fetchTemplates = async () => {
@@ -65,7 +64,7 @@ export const ProfitCalculator: React.FC = () => {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
         handleAddNodeFromTemplate, handleAddBlankNode, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
-    } = useProductActions(allTemplates, setAllTemplates, rates, useLocalCurrency);
+    } = useProductActions(allTemplates, setAllTemplates, rates);
 
     return (
         <div className="flex flex-col min-h-[calc(100vh-140px)] pb-6">
@@ -103,11 +102,9 @@ export const ProfitCalculator: React.FC = () => {
             <GlobalInputsPanel
                 globalInputs={useStore().profitGlobalInputs}
                 siteCountry={siteCountry}
-                useLocalCurrency={useLocalCurrency}
                 rates={rates}
                 onGlobalChange={handleGlobalChange}
                 onSetGlobalInputs={setGlobalInputs}
-                onSetUseLocalCurrency={setUseLocalCurrency}
                 onSetSiteCountry={setSiteCountry}
                 t={t}
             />
@@ -135,7 +132,6 @@ export const ProfitCalculator: React.FC = () => {
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}
                             onSaveTemplate={handleSaveTemplate}
-                            useLocalCurrency={useLocalCurrency}
                         />
                     ))
                 )}

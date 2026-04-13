@@ -27,6 +27,7 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                 <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={label}>{label}</label>
                 <div className="relative">
                     <input
+                        key={`${name}-inverted`}
                         type="text"
                         inputMode="decimal"
                         name={name}
@@ -68,10 +69,11 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
             <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={label}>{label}</label>
             <div className="relative">
                 <input
+                    key={`${name}-normal`}
                     type="text"
                     inputMode="decimal"
                     name={name}
-                    value={value}
+                    value={value ?? ''}
                     onChange={onChange}
                     onFocus={(e) => e.target.select()}
                     className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all

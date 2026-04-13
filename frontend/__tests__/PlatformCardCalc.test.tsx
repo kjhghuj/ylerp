@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { PlatformCard } from '../modules/PlatformCard';
 
@@ -338,5 +338,163 @@ describe('PlatformCard - Profit Calculation', () => {
     it('should not render node name when not provided', () => {
         render(<PlatformCard {...createProps({ nodeName: undefined })} />);
         expect(screen.queryByText('Test')).not.toBeInTheDocument();
+    });
+
+    describe('node card CNY mode inputs (default)', () => {
+        it('should show local equivalent under money fields in CNY mode', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 6.5,
+                },
+            });
+            render(<PlatformCard {...props} />);
+            expect(screen.getByDisplayValue('10.00')).toBeInTheDocument();
+            const localTexts = screen.getAllByText(/6\.50/);
+            expect(localTexts.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should update node with localConverted value when CNY input changes', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 6.5,
+                },
+            });
+            render(<PlatformCard {...props} />);
+            const input = screen.getByDisplayValue('10.00');
+            fireEvent.change(input, { target: { value: '20' } });
+            expect(mockOnUpdate).toHaveBeenCalledWith('node-1', expect.objectContaining({
+                baseShippingFee: expect.closeTo(13, 0.1),
+            }));
+        });
+
+        it('should show CNY label for money field inputs', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+            });
+            render(<PlatformCard {...props} />);
+            const labels = screen.getAllByText(/首重运费/);
+            expect(labels.length).toBeGreaterThanOrEqual(1);
+            expect(labels[0].textContent).toContain('CNY');
+        });
+    });
+
+    describe('finalRevenueLocal display', () => {
+        it('should display local currency profit line when rateToCNY is not 1', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const myrTexts = screen.getAllByText(/MYR/);
+            const profitMyr = myrTexts.filter(el => el.textContent?.includes('≈') && el.closest('[class*="text-sm"]'));
+            expect(profitMyr.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should not display local currency profit line when rateToCNY is 1', () => {
+            const props = createProps({
+                rateToCNY: 1,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const profitDivs = screen.queryAllByText(/≈/).filter(el =>
+                el.tagName === 'DIV' && el.textContent?.includes('MYR')
+            );
+            expect(profitDivs.length).toBe(0);
+        });
+
+        it('should not display local currency profit line when rateToCNY is 0', () => {
+            const props = createProps({
+                rateToCNY: 0,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const profitDivs = screen.queryAllByText(/≈/).filter(el =>
+                el.tagName === 'DIV' && el.textContent?.includes('MYR')
+            );
+            expect(profitDivs.length).toBe(0);
+        });
+
+        it('should show emerald color class on parent for positive local profit', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const profitDivs = screen.getAllByText(/≈/).filter(el =>
+                el.tagName === 'DIV' && el.textContent?.includes('MYR')
+            );
+            expect(profitDivs.length).toBeGreaterThanOrEqual(1);
+            expect(profitDivs[0].className).toContain('text-emerald-500');
+        });
+
+        it('should show rose color class on parent for negative local profit', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 10, purchaseCost: 200 },
+                data: { ...createProps().data, platformCommissionRate: 50, transactionFeeRate: 20 },
+            });
+            render(<PlatformCard {...props} />);
+            const profitDivs = screen.getAllByText(/≈/).filter(el =>
+                el.tagName === 'DIV' && el.textContent?.includes('MYR')
+            );
+            expect(profitDivs.length).toBeGreaterThanOrEqual(1);
+            expect(profitDivs[0].className).toContain('text-rose-500');
+        });
+    });
+
+    describe('tooltip local currency breakdown', () => {
+        it('should render tooltip container with breakdown items', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            expect(screen.getByText('佣金')).toBeInTheDocument();
+            expect(screen.getByText('交易手续费')).toBeInTheDocument();
+            expect(screen.getByText('服务费')).toBeInTheDocument();
+            expect(screen.getByText('运费')).toBeInTheDocument();
+            expect(screen.getByText('税费')).toBeInTheDocument();
+            expect(screen.getByText('广告费')).toBeInTheDocument();
+            expect(screen.getByText('货损')).toBeInTheDocument();
+        });
+
+        it('should show local currency values in tooltip when rateToCNY is not 1', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const tooltip = screen.getByText('佣金').closest('[class*="bg-slate-800"]');
+            expect(tooltip).toBeInTheDocument();
+            const localTexts = tooltip?.querySelectorAll('[class*="text-[10px]"]');
+            expect(localTexts!.length).toBeGreaterThan(0);
+            localTexts!.forEach(el => {
+                expect(el.textContent).toContain('MYR');
+            });
+        });
+
+        it('should not show local currency values in tooltip when rateToCNY is 1', () => {
+            const props = createProps({
+                rateToCNY: 1,
+                country: 'MYR',
+                globalInputs: { ...createProps().globalInputs, totalRevenue: 200, purchaseCost: 50 },
+            });
+            render(<PlatformCard {...props} />);
+            const tooltip = screen.getByText('佣金').closest('[class*="bg-slate-800"]');
+            const localTexts = tooltip?.querySelectorAll('[class*="text-[10px]"]');
+            expect(localTexts!.length).toBe(0);
+        });
     });
 });
