@@ -366,6 +366,7 @@ describe('PlatformCard - Profit Calculation', () => {
             render(<PlatformCard {...props} />);
             const input = screen.getByDisplayValue('10.00');
             fireEvent.change(input, { target: { value: '20' } });
+            fireEvent.blur(input);
             expect(mockOnUpdate).toHaveBeenCalledWith('node-1', expect.objectContaining({
                 baseShippingFee: expect.closeTo(13, 0.1),
             }));

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
@@ -35,6 +35,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const siteName = countryMap[country] || country;
 
     const [templateName, setTemplateName] = useState('');
+    const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
     const showLocal = rateToCNY > 0 && rateToCNY !== 1;
     const safeRate = rateToCNY || 1;
 
@@ -186,25 +187,27 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         if (isMoney) {
             const localValue = Number(data[key]) || 0;
             const cnyValue = localValue / safeRate;
+            const displayValue = editingCNY[key] !== undefined ? editingCNY[key] : cnyValue.toFixed(2);
             return (
                 <div key={key} className="col-span-1">
                     <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
                     <div className="relative">
                         <input
-                            key={`${key}-cny-${cnyValue.toFixed(2)}`}
                             type="text"
                             inputMode="decimal"
                             name={key}
-                            defaultValue={cnyValue.toFixed(2)}
+                            value={displayValue}
                             onChange={(e) => {
-                                const cnyInput = parseFloat(e.target.value) || 0;
-                                const localConverted = cnyInput * safeRate;
-                                onUpdate(nodeId, { [key]: localConverted });
+                                setEditingCNY(prev => ({ ...prev, [key]: e.target.value }));
                             }}
                             onBlur={(e) => {
                                 const cnyInput = parseFloat(e.target.value) || 0;
-                                e.target.value = cnyInput.toFixed(2);
                                 const localConverted = cnyInput * safeRate;
+                                setEditingCNY(prev => {
+                                    const next = { ...prev };
+                                    delete next[key];
+                                    return next;
+                                });
                                 onUpdate(nodeId, { [key]: localConverted });
                             }}
                             onFocus={(e) => e.target.select()}

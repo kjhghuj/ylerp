@@ -316,11 +316,12 @@ describe('PlatformCard', () => {
     
     const input = screen.getByDisplayValue('1.00');
     fireEvent.change(input, { target: { value: '2.00' } });
+    fireEvent.blur(input);
     
     expect(mockOnUpdate).toHaveBeenCalledWith(
       'node-1',
       expect.objectContaining({
-        lastMileFee: expect.closeTo(4.30, 0.01) // 2.00 CNY * 2.15 rate
+        lastMileFee: expect.closeTo(4.30, 0.01)
       })
     );
   });
