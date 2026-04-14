@@ -12,7 +12,6 @@ export const en = {
     finance: 'Finance Hub',
     inventory: 'Smart Restock',
     restockRecords: 'Restock Records',
-    pricing: 'Smart Pricing',
     chromaAdapt: 'Image Studio',
     productList: 'Product List',
     personalCenter: 'Profile',
@@ -345,22 +344,6 @@ export const en = {
     empty: {
       text: 'No inventory items yet. Add products in the Profit Lab.'
     }
-  },
-  pricingCalculator: {
-    title: 'Reverse Pricing Calculator',
-    subtitle: 'Calculate suggested price based on target margin.',
-    targetMargin: 'Target Cost Margin (ROI %)',
-    suggestedPrice: 'Suggested Price',
-    breakdown: 'Cost Breakdown',
-    inputs: 'Costs & Rates',
-    purchaseCost: 'Purchase Cost',
-    weight: 'Weight (g)',
-    shipping: 'Est. Shipping',
-    platformRates: 'Platform Rates Total (%)',
-    marketing: 'Ad Budget (ROI)',
-    cantCalc: 'Cannot Calculate',
-    profit: 'Est. Net Profit',
-    actualMargin: 'Net Margin'
   },
   productList: {
     title: 'Product List',

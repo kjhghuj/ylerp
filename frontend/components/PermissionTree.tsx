@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, Tag, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -63,13 +63,6 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         children: [
             { key: 'restock-records.view', label: '查看记录', labelEn: 'View Records', icon: Search },
             { key: 'restock-records.edit', label: '编辑记录', labelEn: 'Edit Records', icon: Edit3 },
-        ]
-    },
-    {
-        key: 'pricing', label: '智能定价', labelEn: 'Smart Pricing', icon: Tag,
-        children: [
-            { key: 'pricing.calc', label: '定价计算', labelEn: 'Calculate', icon: Calculator },
-            { key: 'pricing.save', label: '保存方案', labelEn: 'Save Plan', icon: FileText },
         ]
     },
     {

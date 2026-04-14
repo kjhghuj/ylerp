@@ -12,7 +12,6 @@ export const zh = {
     finance: '财务管理',
     inventory: '智能补货',
     restockRecords: '补货记录',
-    pricing: '智能定价',
     chromaAdapt: '图片制作',
     productList: '商品明细表',
     personalCenter: '个人中心',
@@ -345,22 +344,6 @@ export const zh = {
     empty: {
       text: '暂无库存数据，请先在利润模型中添加产品。'
     }
-  },
-  pricingCalculator: {
-    title: '智能反向定价',
-    subtitle: '基于目标利润率推导建议售价',
-    targetMargin: '目标收入利润率 (Margin %)',
-    suggestedPrice: '建议定价',
-    breakdown: '成本结构拆解',
-    inputs: '成本与费率设定',
-    purchaseCost: '采购成本',
-    weight: '重量 (g)',
-    shipping: '预计物流费',
-    platformRates: '平台综合费率',
-    marketing: '营销预算 (ROI)',
-    cantCalc: '无法计算 (费率过高)',
-    profit: '预估净利',
-    actualMargin: '实际收入利润率'
   },
   productList: {
     title: '商品明细列表',

@@ -19,7 +19,6 @@ describe('getAllPermissionKeys', () => {
     expect(keys).toContain('profit.calc');
     expect(keys).toContain('finance');
     expect(keys).toContain('inventory');
-    expect(keys).toContain('pricing');
     expect(keys).toContain('product-list');
     expect(keys).toContain('restock-records');
     expect(keys).toContain('chroma-adapt');
