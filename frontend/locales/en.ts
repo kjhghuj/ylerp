@@ -393,7 +393,8 @@ export const en = {
       invoiceYes: 'Yes',
       invoiceNo: 'No',
       infraFee: 'Infra Fee',
-      warehouseFee: 'Warehouse Fee'
+      warehouseFee: 'Warehouse Fee',
+      crossBorder: 'Cross-Border Fee'
     },
     pagination: {
       showing: 'Showing',

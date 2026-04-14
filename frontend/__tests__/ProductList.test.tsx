@@ -81,7 +81,7 @@ const mockOnNavigate = vi.fn();
 
 const { mockApiGet, mockUseStore } = vi.hoisted(() => {
   const mockApiGet = vi.fn();
-  const mockUseStore = () => ({
+  const mockUseStore = vi.fn(() => ({
     products: mockProducts,
     deleteProduct: mockDeleteProduct,
     setCalculatorImport: mockSetCalculatorImport,
@@ -91,7 +91,7 @@ const { mockApiGet, mockUseStore } = vi.hoisted(() => {
     setProductListActiveTab: mockSetProductListActiveTab,
     productListCurrentPage: 1,
     setProductListCurrentPage: mockSetProductListCurrentPage,
-  });
+  }));
   return { mockApiGet, mockUseStore };
 });
 
@@ -326,12 +326,6 @@ describe('ProductList', () => {
         profit: 35, margin: 0.35, costMargin: 0.7,
       },
     ];
-
-    const originalMockUseStore = mockUseStore;
-    mockUseStore.mockImplementation = (impl: any) => {
-      originalMockUseStore.mockImplementation = impl;
-      return originalMockUseStore;
-    };
 
     const mockUseStoreWithData = () => ({
       products: mockProductsData,

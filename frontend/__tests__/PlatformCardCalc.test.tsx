@@ -497,4 +497,190 @@ describe('PlatformCard - Profit Calculation', () => {
             expect(localTexts!.length).toBe(0);
         });
     });
+
+    const getProfitValue = (): number => {
+        const profitEl = screen.getByText('预估净利润 (CNY)')
+            .closest('div')?.parentElement
+            ?.querySelector('[class*="text-4xl"]');
+        expect(profitEl).toBeTruthy();
+        const text = profitEl?.textContent || '';
+        const match = text.match(/¥([\d.-]+)/);
+        expect(match).toBeTruthy();
+        return parseFloat(match![1]);
+    };
+
+    describe('precise calculation with non-1 exchange rate', () => {
+        it('should correctly convert local shipping fees to CNY in results', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 6.5,
+                    crossBorderFee: 0.65,
+                    extraShippingFee: 0,
+                    platformCoupon: 0,
+                    warehouseOperationFee: 0,
+                    platformCommissionRate: 8,
+                    transactionFeeRate: 2,
+                    damageReturnRate: 1,
+                    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+                },
+                globalInputs: {
+                    totalRevenue: 100, purchaseCost: 50, productWeight: 500,
+                    firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
+                    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                    adROI: 15, vatRate: 6, corporateIncomeTaxRate: 10,
+                    platformInfrastructureFee: 0,
+                },
+            });
+            render(<PlatformCard {...props} />);
+
+            const baseShippingFeeCNY = 6.5 / 0.65;
+            const crossBorderFeeCNY = 0.65 / 0.65;
+            const shippingFeeCNY = baseShippingFeeCNY + crossBorderFeeCNY;
+
+            const commission = 100 * 0.08;
+            const transactionFee = 100 * 0.02;
+            const adFee = 100 / 15;
+            const damage = 100 * 0.01;
+            const platformFee = commission + transactionFee + 0 + adFee + 0 + damage;
+
+            const vat = 100 * 0.06;
+            const corpTax = 100 * 0.10;
+            const totalTax = vat + corpTax;
+
+            const expectedProfit = 100 - 0 - platformFee - shippingFeeCNY - totalTax - 50;
+            expect(getProfitValue()).toBeCloseTo(expectedProfit, 1);
+        });
+
+        it('should correctly convert platformCoupon from local to CNY', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
+                    platformCoupon: 3.25,
+                    warehouseOperationFee: 0,
+                    platformCommissionRate: 8, transactionFeeRate: 2, damageReturnRate: 1,
+                    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+                },
+                globalInputs: {
+                    totalRevenue: 100, purchaseCost: 50, productWeight: 500,
+                    firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
+                    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                    adROI: 0, vatRate: 6, corporateIncomeTaxRate: 10,
+                    platformInfrastructureFee: 0,
+                },
+            });
+            render(<PlatformCard {...props} />);
+
+            const platformCouponCNY = 3.25 / 0.65;
+            const taxableRevenue = 100 - 0 - platformCouponCNY;
+            const revenueAfterCoupon = 100 - 0;
+            const commission = revenueAfterCoupon * 0.08;
+            const transactionFee = revenueAfterCoupon * 0.02;
+            const damage = 100 * 0.01;
+            const platformFee = commission + transactionFee + 0 + 0 + 0 + damage;
+            const vat = taxableRevenue * 0.06;
+            const corpTax = taxableRevenue * 0.10;
+            const totalTax = vat + corpTax;
+            const expectedProfit = 100 - 0 - platformFee - 0 - totalTax - 50;
+            expect(getProfitValue()).toBeCloseTo(expectedProfit, 1);
+        });
+
+        it('should correctly convert warehouseOperationFee from local to CNY', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
+                    platformCoupon: 0,
+                    warehouseOperationFee: 1.3,
+                    platformCommissionRate: 0, transactionFeeRate: 0, damageReturnRate: 0,
+                    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+                },
+                globalInputs: {
+                    totalRevenue: 100, purchaseCost: 50, productWeight: 500,
+                    firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
+                    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
+                    platformInfrastructureFee: 0,
+                },
+            });
+            render(<PlatformCard {...props} />);
+
+            const warehouseCNY = 1.3 / 0.65;
+            const expectedProfit = 100 - 0 - warehouseCNY - 0 - 0 - 50;
+            expect(getProfitValue()).toBeCloseTo(expectedProfit, 1);
+        });
+
+        it('should correctly compute finalRevenueLocal from CNY profit', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                globalInputs: {
+                    totalRevenue: 200, purchaseCost: 50, productWeight: 500,
+                    firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
+                    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
+                    platformInfrastructureFee: 0,
+                },
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
+                    platformCoupon: 0, warehouseOperationFee: 0,
+                    platformCommissionRate: 0, transactionFeeRate: 0, damageReturnRate: 0,
+                    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+                },
+            });
+            render(<PlatformCard {...props} />);
+            expect(getProfitValue()).toBeCloseTo(150, 1);
+
+            const myrTexts = screen.getAllByText(/≈/).filter(el =>
+                el.tagName === 'DIV' && el.textContent?.includes('MYR')
+            );
+            expect(myrTexts.length).toBeGreaterThanOrEqual(1);
+            const myrMatch = myrTexts[0].textContent?.match(/≈ ([\d.-]+) MYR/);
+            expect(myrMatch).toBeTruthy();
+            const localProfit = parseFloat(myrMatch![1]);
+            expect(localProfit).toBeCloseTo(150 * 0.65, 1);
+        });
+
+        it('should correctly handle extra shipping fee conversion with non-1 rate', () => {
+            const props = createProps({
+                rateToCNY: 0.65,
+                country: 'MYR',
+                data: {
+                    ...createProps().data,
+                    baseShippingFee: 6.5,
+                    crossBorderFee: 0,
+                    extraShippingFee: 0.65,
+                    firstWeight: 50,
+                    platformCoupon: 0, warehouseOperationFee: 0,
+                    platformCommissionRate: 0, transactionFeeRate: 0, damageReturnRate: 0,
+                    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
+                },
+                globalInputs: {
+                    totalRevenue: 100, purchaseCost: 50, productWeight: 600,
+                    firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
+                    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
+                    platformInfrastructureFee: 0,
+                },
+            });
+            render(<PlatformCard {...props} />);
+
+            const baseCNY = 6.5 / 0.65;
+            const extraShippingFeeCNY = 0.65 / 0.65;
+            const extraWeight = 600 - 50;
+            const extraCNY = extraShippingFeeCNY * (extraWeight / 10);
+            const totalShippingCNY = baseCNY + extraCNY;
+
+            const expectedProfit = 100 - 0 - 0 - totalShippingCNY - 0 - 50;
+            expect(getProfitValue()).toBeCloseTo(expectedProfit, 1);
+        });
+    });
 });

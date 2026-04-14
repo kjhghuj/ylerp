@@ -138,6 +138,15 @@ vi.mock('../components/CalcInputs', () => ({
   SelectInput: (props: any) => <select data-testid={`input-${props.name}`} value={props.value || ''} onChange={props.onChange}>{props.options?.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>,
 }));
 
+vi.mock('../modules/profit/useExchangeRates', () => ({
+  useExchangeRates: () => ({
+    rates: { MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0 },
+    isLoading: false,
+    lastUpdated: '10:30:00',
+    fetchRates: vi.fn(),
+  }),
+}));
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import { ProfitCalculator } from '../modules/ProfitCalculator';

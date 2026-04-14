@@ -407,7 +407,7 @@ export const FinanceManager: React.FC = () => {
                             onChange={handleFileUpload} 
                         />
                         <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm whitespace-nowrap">
-                            <Upload size={16} className="text-indigo-500" /> {t.actions?.import || '导入 JSON'}
+                            <Upload size={16} className="text-indigo-500" /> {(t.actions as any)?.import || '导入 JSON'}
                         </button>
                         <button onClick={openAddTransModal} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 text-sm font-bold transition whitespace-nowrap">
                             <Plus size={16} /> {t.form.add}

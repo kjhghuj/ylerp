@@ -107,13 +107,13 @@ describe('useProductActions', () => {
     });
 
     it('should return nodes for current site country', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         expect(result.current.nodes).toHaveLength(1);
         expect(result.current.nodes[0].id).toBe('node-1');
     });
 
     it('should update global inputs on handleGlobalChange', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         act(() => {
             result.current.handleGlobalChange({
                 target: { name: 'totalRevenue', value: '200' }
@@ -123,7 +123,7 @@ describe('useProductActions', () => {
     });
 
     it('should update node data on handleUpdateNode', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         act(() => {
             result.current.handleUpdateNode('node-1', { baseShippingFee: 99 });
         });
@@ -134,7 +134,7 @@ describe('useProductActions', () => {
     });
 
     it('should delete node on handleDeleteNode', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         act(() => {
             result.current.handleDeleteNode('node-1');
         });
@@ -145,7 +145,7 @@ describe('useProductActions', () => {
     });
 
     it('should add node from template on handleAddNodeFromTemplate', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         act(() => {
             result.current.handleAddNodeFromTemplate({
                 id: 'tpl-x', name: 'My Template', country: 'MYR', platform: 'lazada', data: { baseShippingFee: 50 },
@@ -173,7 +173,7 @@ describe('useProductActions', () => {
     });
 
     it('should add blank node on handleAddBlankNode', () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         act(() => {
             result.current.handleAddBlankNode('lazada');
         });
@@ -200,7 +200,7 @@ describe('useProductActions', () => {
 
     it('should validate name and sku before save', async () => {
         mockStoreReturn.profitGlobalInputs.name = '';
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -209,7 +209,7 @@ describe('useProductActions', () => {
     });
 
     it('should call addProduct for new product', async () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -225,7 +225,7 @@ describe('useProductActions', () => {
         mockStoreReturn.products = [{ id: 'existing-1', sites: ['MY'] }];
         mockStoreReturn.updateProduct.mockResolvedValue({ id: 'existing-1' });
 
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -234,7 +234,7 @@ describe('useProductActions', () => {
     });
 
     it('should show saved toast for new product', async () => {
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -246,7 +246,7 @@ describe('useProductActions', () => {
         mockStoreReturn.products = [{ id: 'existing-1', sites: ['MY'] }];
         mockStoreReturn.updateProduct.mockResolvedValue({ id: 'existing-1' });
 
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -255,7 +255,7 @@ describe('useProductActions', () => {
 
     it('should show error when addProduct returns no ID', async () => {
         mockStoreReturn.addProduct.mockResolvedValue({});
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -264,7 +264,7 @@ describe('useProductActions', () => {
 
     it('should show error when addProduct fails', async () => {
         mockStoreReturn.addProduct.mockRejectedValue(new Error('Network'));
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -273,7 +273,7 @@ describe('useProductActions', () => {
 
     it('should save templates for each node after product save', async () => {
         mockApiPost.mockResolvedValue({ data: { id: 'tpl-new' } });
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -286,12 +286,12 @@ describe('useProductActions', () => {
     });
 
     it('should skip duplicate templates when saving nodes', async () => {
-        const existingTemplates = [{
+        const existingTemplates: any[] = [{
             id: 'tpl-exist', name: 'Test Node', platform: 'shopee',
             country: 'MYR', productId: 'new-1', data: {},
         }];
         mockStoreReturn.addProduct.mockResolvedValue({ id: 'new-1' });
-        const { result } = renderHook(() => useProductActions(existingTemplates, vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions(existingTemplates, vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
@@ -305,7 +305,7 @@ describe('useProductActions', () => {
 
     it('should save template via handleSaveTemplate', async () => {
         const setAllTemplates = vi.fn();
-        const { result } = renderHook(() => useProductActions([], setAllTemplates, {}, false));
+        const { result } = renderHook(() => useProductActions([], setAllTemplates, {}));
         await act(async () => {
             await result.current.handleSaveTemplate('node-1', 'My Template');
         });
@@ -318,7 +318,7 @@ describe('useProductActions', () => {
 
     it('should handle save template error', async () => {
         mockApiPost.mockRejectedValue(new Error('Fail'));
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveTemplate('node-1', 'Template');
         });
@@ -327,7 +327,7 @@ describe('useProductActions', () => {
 
     it('should delete template via handleDeleteTemplate', async () => {
         const setAllTemplates = vi.fn();
-        const { result } = renderHook(() => useProductActions([{ id: 'tpl-1', name: 'T' }], setAllTemplates, {}, false));
+        const { result } = renderHook(() => useProductActions([{ id: 'tpl-1', name: 'T', country: 'MYR', data: {} }], setAllTemplates, {}));
         const mockEvent = { stopPropagation: vi.fn() } as any;
         await act(async () => {
             await result.current.handleDeleteTemplate('tpl-1', mockEvent);
@@ -344,7 +344,7 @@ describe('useProductActions', () => {
             PHP: [],
         };
         mockStoreReturn.addProduct.mockResolvedValue({ id: 'new-multi' });
-        const { result } = renderHook(() => useProductActions([], vi.fn(), {}, false));
+        const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });

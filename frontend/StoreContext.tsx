@@ -17,7 +17,7 @@ interface StoreContextType {
   strings: typeof translations['zh'];
 
   products: ProductCalcData[];
-  addProduct: (p: ProductCalcData) => Promise<void>;
+  addProduct: (p: Omit<ProductCalcData, 'id'>) => Promise<ProductCalcData | null>;
   updateProduct: (p: ProductCalcData) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
 
@@ -27,18 +27,18 @@ interface StoreContextType {
   setCalculatorImportNodes: (nodes: ImportedNode[]) => void;
 
   profitGlobalInputs: Record<string, any>;
-  setProfitGlobalInputs: (inputs: Record<string, any>) => void;
+  setProfitGlobalInputs: (inputs: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
   profitSiteCountry: string;
   setProfitSiteCountry: (country: string) => void;
   profitNodes: Record<string, any[]>;
-  setProfitNodes: (nodes: Record<string, any[]>) => void;
+  setProfitNodes: (nodes: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void;
   profitEditingProductId: string | null;
   setProfitEditingProductId: (id: string | null) => void;
 
   productListActiveTab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH';
   setProductListActiveTab: (tab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH') => void;
   productListCurrentPage: number;
-  setProductListCurrentPage: (page: number) => void;
+  setProductListCurrentPage: (page: number | ((prev: number) => number)) => void;
 
   financeRecords: FinanceRecord[];
   addTransaction: (t: FinanceRecord) => Promise<void>;

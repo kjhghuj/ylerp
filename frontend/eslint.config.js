@@ -24,5 +24,13 @@ export default tseslint.config(
             'no-empty': 'off',
             'no-useless-assignment': 'off',
         },
+    },
+    {
+        files: ['__tests__/**/*.{ts,tsx}'],
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'react-refresh/only-export-components': 'off',
+        },
     }
 );

@@ -1,20 +1,27 @@
 import React from 'react';
-import { Box } from 'lucide-react';
+import { Box, RefreshCw } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
 
 interface GlobalInputsPanelProps {
     globalInputs: any;
     siteCountry: string;
+    useLocalCurrency: boolean;
     rates: Record<string, number>;
     onGlobalChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     onSetGlobalInputs: (fn: (prev: any) => any) => void;
+    onSetUseLocalCurrency: React.Dispatch<React.SetStateAction<boolean>>;
     onSetSiteCountry: (country: string) => void;
     t: any;
+    currentRate: number;
+    isLoadingRate: boolean;
+    lastUpdated: string | null;
+    onRefreshRates: () => void;
 }
 
 export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
-    globalInputs, siteCountry, rates,
-    onGlobalChange, onSetGlobalInputs, onSetSiteCountry, t
+    globalInputs, siteCountry, useLocalCurrency, rates,
+    onGlobalChange, onSetGlobalInputs, onSetUseLocalCurrency, onSetSiteCountry, t,
+    currentRate, isLoadingRate, lastUpdated, onRefreshRates,
 }) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-4 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
@@ -26,6 +33,33 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 </div>
             </div>
             <div className="flex items-center gap-2">
+                {currentRate > 0 && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <span className="text-xs font-bold text-emerald-700">
+                            1 CNY ≈ {currentRate.toFixed(4)} {siteCountry}
+                        </span>
+                        {lastUpdated && (
+                            <span className="text-[10px] text-emerald-500 font-medium">
+                                {lastUpdated}
+                            </span>
+                        )}
+                        <button
+                            onClick={onRefreshRates}
+                            disabled={isLoadingRate}
+                            className="p-1 text-emerald-600 hover:text-emerald-800 transition-colors disabled:opacity-50"
+                        >
+                            <RefreshCw size={12} className={isLoadingRate ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                )}
+                <button
+                    onClick={() => onSetUseLocalCurrency(prev => !prev)}
+                    className={`text-xs font-bold px-3 py-2 rounded-lg transition-all border ${useLocalCurrency
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100/50'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100/50'}`}
+                >
+                    {useLocalCurrency ? t.matrix.switchToCNY : t.matrix.switchToLocal}
+                </button>
                 <select
                     value={siteCountry}
                     onChange={e => onSetSiteCountry(e.target.value)}
@@ -46,6 +80,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 value={globalInputs.totalRevenue}
                 onChange={onGlobalChange}
                 highlight
+                invertCurrency={useLocalCurrency}
                 exchangeRate={rates[siteCountry] || 0}
                 currencyCode={siteCountry}
             />
@@ -55,6 +90,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 value={globalInputs.purchaseCost}
                 onChange={onGlobalChange}
                 highlight
+                invertCurrency={useLocalCurrency}
                 exchangeRate={rates[siteCountry] || 0}
                 currencyCode={siteCountry}
             />
@@ -83,6 +119,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 name="platformInfrastructureFee"
                 value={globalInputs.platformInfrastructureFee}
                 onChange={onGlobalChange}
+                invertCurrency={useLocalCurrency}
                 exchangeRate={rates[siteCountry] || 0}
                 currencyCode={siteCountry}
             />

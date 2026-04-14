@@ -3,6 +3,7 @@ import { useStore } from '../StoreContext';
 import { Save, Calculator, Percent, Truck, Tag, Landmark, Box, LayoutTemplate, Trash2, RefreshCw, ArrowRight } from 'lucide-react';
 import { InputCard, NumberInput, TextInput, SelectInput, ResultRow } from '../components/CalcInputs';
 import api from '../src/api';
+import { useExchangeRates } from './profit/useExchangeRates';
 
 type CurrencyCode = 'CNY' | 'MYR' | 'PHP' | 'SGD' | 'THB' | 'IDR';
 
@@ -28,18 +29,12 @@ export const PricingCalculator: React.FC = () => {
 
     // --- Currency & Region State ---
     const [selectedCurrency, setSelectedCurrency] = useState<CurrencyCode>('MYR');
-    const [rates, setRates] = useState<Record<string, number>>({ MYR: 0, PHP: 0, SGD: 0, THB: 0, IDR: 0 });
-    const [isLoadingRates, setIsLoadingRates] = useState(false);
+    const { rates, isLoading: isLoadingRates, fetchRates } = useExchangeRates();
 
-    // --- Templates State ---
     const [templates, setTemplates] = useState<Template[]>([]);
     const [showTemplateMenu, setShowTemplateMenu] = useState(false);
     const [newTemplateName, setNewTemplateName] = useState('');
 
-    const getTemplateKey = (currency: CurrencyCode) => `pricing_templates_${currency}`;
-
-    // Load templates (reusing the same API but we'll try to distinguish by name prefix or just hope they are compatible)
-    // For now, let's just use local storage to avoid confusing Profit templates with Pricing templates if the backend isn't updated.
     useEffect(() => {
         const fetchTemplates = async () => {
              try {
@@ -52,31 +47,6 @@ export const PricingCalculator: React.FC = () => {
         };
         fetchTemplates();
     }, [selectedCurrency]);
-
-    useEffect(() => {
-        fetchRates();
-    }, []);
-
-    const fetchRates = async () => {
-        setIsLoadingRates(true);
-        try {
-            const response = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
-            if (response.ok) {
-                const data = await response.json();
-                setRates({
-                    MYR: data.rates.MYR,
-                    PHP: data.rates.PHP,
-                    SGD: data.rates.SGD,
-                    THB: data.rates.THB,
-                    IDR: data.rates.IDR
-                });
-            }
-        } catch (error) {
-            setRates({ MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0 });
-        } finally {
-            setIsLoadingRates(false);
-        }
-    };
 
     const handleSaveTemplate = async () => {
         if (!newTemplateName.trim()) return;
@@ -259,7 +229,7 @@ export const PricingCalculator: React.FC = () => {
                     {/* Region Tabs */}
                     <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 shrink-0">
                          <div className={`p-1.5 rounded ${isLoadingRates ? 'animate-spin text-slate-400' : 'text-emerald-600'}`}>
-                            <RefreshCw size={14} onClick={fetchRates} className="cursor-pointer" title={t.currency.refresh} />
+                            <RefreshCw size={14} onClick={fetchRates} className="cursor-pointer" />
                         </div>
                         <div className="h-4 w-px bg-slate-200 mx-1"></div>
                         {[

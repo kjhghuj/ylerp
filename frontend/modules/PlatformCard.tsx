@@ -15,10 +15,11 @@ interface PlatformCardProps {
     onUpdate: (id: string, partialData: any) => void;
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
+    useLocalCurrency?: boolean;
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate
+    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -66,7 +67,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 }
             }
         }
-    }, [globalInputs.productWeight, data.firstWeight, country]);
+    }, [globalInputs.productWeight, data.firstWeight, data.lastMileFee, country, nodeId, onUpdate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onUpdate(nodeId, { [e.target.name]: e.target.value });
@@ -81,6 +82,12 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             Object.entries(globalInputs).map(([k, v]) => [k, Number(v) || 0])
         ) as any;
 
+        const platformCouponCNY = safeData.platformCoupon / safeRateInner;
+        const baseShippingFeeCNY = safeData.baseShippingFee / safeRateInner;
+        const crossBorderFeeCNY = safeData.crossBorderFee / safeRateInner;
+        const extraShippingFeeCNY = safeData.extraShippingFee / safeRateInner;
+        const warehouseOperationFeeCNY = safeData.warehouseOperationFee / safeRateInner;
+
         const costTaxAmount = g.purchaseCost * (g.supplierTaxPoint / 100);
         const grossSellerCoupon = globalInputs.sellerCouponType === 'percent'
             ? g.totalRevenue * (g.sellerCoupon / 100)
@@ -88,7 +95,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const actualSellerCoupon = grossSellerCoupon * (1 - g.sellerCouponPlatformRatio / 100);
         let vat: number, corporateIncomeTax: number;
 
-        const taxableRevenue = g.totalRevenue - actualSellerCoupon - safeData.platformCoupon;
+        const taxableRevenue = g.totalRevenue - actualSellerCoupon - platformCouponCNY;
 
         if (globalInputs.supplierInvoice === 'yes') {
             vat = taxableRevenue * (g.vatRate / 100);
@@ -112,10 +119,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.ccbServiceFeeRate / 100), otherCapCNY);
         const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + g.platformInfrastructureFee;
 
-        let shippingFee = safeData.baseShippingFee + safeData.crossBorderFee;
+        let shippingFee = baseShippingFeeCNY + crossBorderFeeCNY;
         if (g.productWeight > safeData.firstWeight) {
             const extraWeight = g.productWeight - safeData.firstWeight;
-            shippingFee += safeData.extraShippingFee * (extraWeight / 10);
+            shippingFee += extraShippingFeeCNY * (extraWeight / 10);
         }
         if (country === 'SGD') {
             const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRateInner;
@@ -124,7 +131,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
         const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
         const damage = g.totalRevenue * (safeData.damageReturnRate / 100);
-        const platformFee = commission + transactionFee + serviceFee + adFee + safeData.warehouseOperationFee + damage;
+        const platformFee = commission + transactionFee + serviceFee + adFee + warehouseOperationFeeCNY + damage;
 
         const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
         const finalRevenueLocal = finalRevenueCNY * safeRateInner;
@@ -146,6 +153,36 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const renderInput = (key: string) => {
         const isMoney = isMoneyField(key);
+        if (isMoney && useLocalCurrency) {
+            const localValue = Number(data[key]) || 0;
+            const cnyEquiv = localValue / safeRate;
+            return (
+                <div key={key} className="col-span-1">
+                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{t.inputs[key] || key} ({country})</label>
+                    <div className="relative">
+                        <input
+                            key={`${key}-local`}
+                            type="text"
+                            inputMode="decimal"
+                            name={key}
+                            value={data[key] ?? ''}
+                            onChange={(e) => {
+                                onUpdate(nodeId, { [key]: e.target.value });
+                            }}
+                            onBlur={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                onUpdate(nodeId, { [key]: val.toString() });
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            className="w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
+                        />
+                    </div>
+                    <div className="text-xs text-blue-600 font-bold text-right mt-1 px-1">
+                        ≈ {cnyEquiv.toFixed(2)} CNY
+                    </div>
+                </div>
+            );
+        }
         if (isMoney) {
             const localValue = Number(data[key]) || 0;
             const cnyValue = localValue / safeRate;
@@ -154,7 +191,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                     <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
                     <div className="relative">
                         <input
-                            key={`${key}-cny`}
+                            key={`${key}-cny-${cnyValue.toFixed(2)}`}
                             type="text"
                             inputMode="decimal"
                             name={key}

@@ -7,11 +7,13 @@ import { PlatformCard } from './PlatformCard';
 import { ProfitTemplate } from './profit/types';
 import { useProfitImport } from './profit/useProfitImport';
 import { useProductActions } from './profit/useProductActions';
+import { useExchangeRates } from './profit/useExchangeRates';
 import { AddNodeMenu } from './profit/AddNodeMenu';
 import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
 import { PlatformType } from '../platformConfig';
 
 export const ProfitCalculator: React.FC = () => {
+    const store = useStore();
     const {
         strings,
         setProfitGlobalInputs: setGlobalInputs,
@@ -19,7 +21,8 @@ export const ProfitCalculator: React.FC = () => {
         setProfitSiteCountry: setSiteCountry,
         profitNodes,
         profitEditingProductId: editingProductId,
-    } = useStore();
+        profitGlobalInputs,
+    } = store;
     const t = strings.profit;
 
     useProfitImport();
@@ -27,37 +30,24 @@ export const ProfitCalculator: React.FC = () => {
     const [allTemplates, setAllTemplates] = useState<ProfitTemplate[]>([]);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
-    const [rates, setRates] = useState<Record<string, number>>({ MYR: 0, PHP: 0, SGD: 0, THB: 0, IDR: 0 });
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
+    const [useLocalCurrency, setUseLocalCurrency] = useState(false);
 
-    const fetchTemplates = async () => {
-        try {
-            const response = await api.get(`/templates?type=profit`);
-            setAllTemplates(response.data);
-            setTemplatesLoaded(true);
-        } catch (error) {
-            console.error('Failed to fetch templates:', error);
-            setAllTemplates([]);
-            setTemplatesLoaded(true);
-        }
-    };
-
-    const fetchRates = async () => {
-        try {
-            const response = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
-            if (response.ok) {
-                const data = await response.json();
-                setRates(data.rates);
-            }
-        } catch (error) {
-            console.warn("Using fallback rates");
-            setRates({ MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0 });
-        }
-    };
+    const { rates, isLoading, lastUpdated, fetchRates: refreshRates } = useExchangeRates();
 
     useEffect(() => {
+        const fetchTemplates = async () => {
+            try {
+                const response = await api.get(`/templates?type=profit`);
+                setAllTemplates(response.data);
+                setTemplatesLoaded(true);
+            } catch (error) {
+                console.error('Failed to fetch templates:', error);
+                setAllTemplates([]);
+                setTemplatesLoaded(true);
+            }
+        };
         fetchTemplates();
-        fetchRates();
     }, []);
 
     const {
@@ -100,13 +90,19 @@ export const ProfitCalculator: React.FC = () => {
 
             {/* Global Product Inputs */}
             <GlobalInputsPanel
-                globalInputs={useStore().profitGlobalInputs}
+                globalInputs={profitGlobalInputs}
                 siteCountry={siteCountry}
+                useLocalCurrency={useLocalCurrency}
                 rates={rates}
                 onGlobalChange={handleGlobalChange}
                 onSetGlobalInputs={setGlobalInputs}
+                onSetUseLocalCurrency={setUseLocalCurrency}
                 onSetSiteCountry={setSiteCountry}
                 t={t}
+                currentRate={rates[siteCountry] || 0}
+                isLoadingRate={isLoading}
+                lastUpdated={lastUpdated}
+                onRefreshRates={refreshRates}
             />
 
             {/* Matrix Scroll Area */}
@@ -126,12 +122,13 @@ export const ProfitCalculator: React.FC = () => {
                             country={node.country}
                             nodeName={node.name}
                             data={node.data}
-                            globalInputs={useStore().profitGlobalInputs}
+                            globalInputs={profitGlobalInputs}
                             rateToCNY={rates[node.country] || 1}
                             strings={t}
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}
                             onSaveTemplate={handleSaveTemplate}
+                            useLocalCurrency={useLocalCurrency}
                         />
                     ))
                 )}

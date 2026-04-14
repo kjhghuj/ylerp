@@ -393,7 +393,8 @@ export const zh = {
       invoiceYes: '有票',
       invoiceNo: '无票',
       infraFee: '平台基础设施费',
-      warehouseFee: '仓储操作费'
+      warehouseFee: '仓储操作费',
+      crossBorder: '跨境运费'
     },
     pagination: {
       showing: '显示',

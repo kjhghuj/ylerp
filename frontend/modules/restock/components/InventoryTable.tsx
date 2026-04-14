@@ -119,7 +119,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
                     currentStock: syntheticItem.currentStock,
                     avgDailySales: group.totalDailySales,
                     suggestedQty: calc.restockQty,
-                    estimatedDays: calc.daysCovered,
+                    estimatedDays: Number(calc.daysCovered) || 0,
                 };
             });
             await addRestockRecord(`补货记录 ${dateStr}`, items);
