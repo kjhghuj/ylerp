@@ -438,4 +438,28 @@ describe('PlatformCard', () => {
     // May be called once initially, but not repeatedly
     expect(lastMileFeeUpdates.length).toBeLessThanOrEqual(1);
   });
+
+  it('should not render MDV/FSS/CCB fields for MYR country', () => {
+    const myrProps = createValidProps({ country: 'MYR' });
+    render(<PlatformCard {...myrProps} />);
+    expect(screen.queryByText('MDV 服务费率')).not.toBeInTheDocument();
+    expect(screen.queryByText('FSS 服务费率')).not.toBeInTheDocument();
+    expect(screen.queryByText('CCB 服务费率')).not.toBeInTheDocument();
+  });
+
+  it('should not render MDV/FSS/CCB fields for SGD country', () => {
+    const sgdProps = createValidProps({ country: 'SGD' });
+    render(<PlatformCard {...sgdProps} />);
+    expect(screen.queryByText('MDV 服务费率')).not.toBeInTheDocument();
+    expect(screen.queryByText('FSS 服务费率')).not.toBeInTheDocument();
+    expect(screen.queryByText('CCB 服务费率')).not.toBeInTheDocument();
+  });
+
+  it('should render MDV/FSS/CCB fields for PHP country', () => {
+    const phpProps = createValidProps({ country: 'PHP' });
+    render(<PlatformCard {...phpProps} />);
+    expect(screen.getByText('MDV 服务费率')).toBeInTheDocument();
+    expect(screen.getByText('FSS 服务费率')).toBeInTheDocument();
+    expect(screen.getByText('CCB 服务费率')).toBeInTheDocument();
+  });
 });

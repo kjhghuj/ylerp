@@ -112,12 +112,17 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
         const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
 
+        const noServiceFeeCountry = country === 'MYR' || country === 'SGD';
+        const mdvRate = noServiceFeeCountry ? 0 : safeData.mdvServiceFeeRate;
+        const fssRate = noServiceFeeCountry ? 0 : safeData.fssServiceFeeRate;
+        const ccbRate = noServiceFeeCountry ? 0 : safeData.ccbServiceFeeRate;
+
         const mdvCapCNY = 25 / safeRateInner;
         const otherCapCNY = 12.5 / safeRateInner;
 
-        const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.mdvServiceFeeRate / 100), mdvCapCNY);
-        const fssServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.fssServiceFeeRate / 100), otherCapCNY);
-        const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (safeData.ccbServiceFeeRate / 100), otherCapCNY);
+        const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (mdvRate / 100), mdvCapCNY);
+        const fssServiceFee = Math.min(revenueAfterSellerCoupon * (fssRate / 100), otherCapCNY);
+        const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (ccbRate / 100), otherCapCNY);
         const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + g.platformInfrastructureFee;
 
         let shippingFee = baseShippingFeeCNY + crossBorderFeeCNY;
@@ -266,9 +271,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.shipping.includes('extraShippingFee') && renderInput('extraShippingFee')}
                         {config.fields.shipping.includes('crossBorderFee') && renderInput('crossBorderFee')}
 
-                        {config.fields.services.includes('mdvServiceFeeRate') && renderInput('mdvServiceFeeRate')}
-                        {config.fields.services.includes('fssServiceFeeRate') && renderInput('fssServiceFeeRate')}
-                        {config.fields.services.includes('ccbServiceFeeRate') && renderInput('ccbServiceFeeRate')}
+                        {config.fields.services.includes('mdvServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('mdvServiceFeeRate')}
+                        {config.fields.services.includes('fssServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('fssServiceFeeRate')}
+                        {config.fields.services.includes('ccbServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
                         {country === 'SGD' && (Number(data.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
                     </div>
