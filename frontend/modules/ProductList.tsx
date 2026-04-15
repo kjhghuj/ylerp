@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useStore } from '../StoreContext';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
-    ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers
+    ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers,
+    Upload, Download
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
@@ -41,12 +42,13 @@ interface ProductListProps {
 
 export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const {
-        products, deleteProduct, setCalculatorImport, setCalculatorImportNodes, strings,
+        products, deleteProduct, addProduct, setCalculatorImport, setCalculatorImportNodes, strings,
         productListActiveTab, setProductListActiveTab,
         productListCurrentPage, setProductListCurrentPage,
     } = useStore();
     const t = strings.productList;
     const { rates: exchangeRates } = useExchangeRates();
+    const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
     const activeTab = productListActiveTab;
     const setActiveTab = setProductListActiveTab;
@@ -90,6 +92,90 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         const wb = utils.book_new();
         utils.book_append_sheet(wb, ws, `${activeTab}_Products`);
         writeFile(wb, `Product_List_${activeTab}.xlsx`);
+    };
+
+    const handleExportJSON = () => {
+        if (filteredProducts.length === 0) return alert('没有可导出的商品数据');
+
+        const exportData = filteredProducts.map(p => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            country: p.country,
+            sites: p.sites,
+            cost: p.cost,
+            productWeight: p.productWeight,
+            supplierInvoice: p.supplierInvoice,
+            supplierTaxPoint: p.supplierTaxPoint,
+            sellerCouponType: p.sellerCouponType,
+            sellerCoupon: p.sellerCoupon,
+            sellerCouponPlatformRatio: p.sellerCouponPlatformRatio,
+            adROI: p.adROI,
+        }));
+
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `products-export-${activeTab}-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const text = e.target?.result as string;
+                const rawData = JSON.parse(text);
+
+                if (!Array.isArray(rawData)) {
+                    alert('导入失败：JSON 格式错误，应为商品数组');
+                    return;
+                }
+
+                let importedCount = 0;
+                for (const item of rawData) {
+                    if (!item.name || !item.sku) continue;
+
+                    const productData: Omit<ProductCalcData, 'id'> = {
+                        name: item.name,
+                        sku: item.sku,
+                        country: item.country || activeTab,
+                        sites: item.sites || [activeTab],
+                        cost: Number(item.cost) || 0,
+                        productWeight: Number(item.productWeight) || 0,
+                        supplierInvoice: item.supplierInvoice || 'no',
+                        supplierTaxPoint: Number(item.supplierTaxPoint) || 0,
+                        sellerCouponType: item.sellerCouponType || 'fixed',
+                        sellerCoupon: Number(item.sellerCoupon) || 0,
+                        sellerCouponPlatformRatio: Number(item.sellerCouponPlatformRatio) || 0,
+                        adROI: Number(item.adROI) || 15,
+                    };
+
+                    await addProduct(productData);
+                    importedCount++;
+                }
+
+                if (importedCount > 0) {
+                    alert(`导入成功！共导入了 ${importedCount} 条商品数据。`);
+                } else {
+                    alert('未找到有效的可导入数据，请检查 JSON 格式。');
+                }
+            } catch (error) {
+                console.error('Failed to parse JSON', error);
+                alert('文件解析失败，请确保格式是正确的 JSON');
+            } finally {
+                if (jsonFileInputRef.current) jsonFileInputRef.current.value = '';
+            }
+        };
+        reader.readAsText(file);
     };
 
     const handleView = async (product: ProductCalcData) => {
@@ -457,6 +543,19 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         </div>
                         <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition shadow-sm font-medium text-sm">
                             <FileSpreadsheet size={16} /> {t.exportExcel}
+                        </button>
+                        <input
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            ref={jsonFileInputRef}
+                            onChange={handleImportJSON}
+                        />
+                        <button onClick={() => jsonFileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm">
+                            <Upload size={16} className="text-indigo-500" /> 导入 JSON
+                        </button>
+                        <button onClick={handleExportJSON} disabled={filteredProducts.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm ${filteredProducts.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600'}`}>
+                            <Download size={16} className={filteredProducts.length === 0 ? "text-slate-300" : "text-emerald-500"} /> 导出 JSON
                         </button>
                     </div>
                 </div>
