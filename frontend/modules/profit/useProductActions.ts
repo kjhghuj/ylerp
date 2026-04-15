@@ -108,61 +108,40 @@ export const useProductActions = (
         const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
             'SGD': 'SG', 'MYR': 'MY', 'PHP': 'PH', 'THB': 'TH', 'IDR': 'ID',
         };
+        const countryCode = countryMap[siteCountry] || 'MY';
 
-        const sites: ('SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN')[] = [];
-        Object.entries(profitNodes).forEach(([currency, nodeArray]) => {
-            if (nodeArray && (nodeArray as any[]).length > 0) {
-                const countryCode = countryMap[currency] || 'MY';
-                if (!sites.includes(countryCode)) sites.push(countryCode);
-            }
-        });
-
-        const node = nodes.length > 0 ? nodes[0] : { country: 'MYR', data: DEFAULT_NODE_DATA };
-        const primaryCountry = sites.length > 0 ? sites[0] : 'MY';
+        const firstNodeData = nodes.length > 0 ? nodes[0].data : {};
 
         const productData: Omit<ProductCalcData, 'id'> = {
             name: globalInputs.name,
             sku: globalInputs.sku,
-            country: primaryCountry,
-            sites: sites,
+            country: countryCode,
+            sites: [countryCode],
             cost: Number(globalInputs.purchaseCost) || 0,
             productWeight: Number(globalInputs.productWeight) || 0,
-            firstWeight: Number(globalInputs.firstWeight) || 50,
             supplierTaxPoint: Number(globalInputs.supplierTaxPoint) || 0,
             supplierInvoice: globalInputs.supplierInvoice,
-            sellerCouponType: globalInputs.sellerCouponType || 'fixed',
-            sellerCoupon: Number(globalInputs.sellerCoupon) || 0,
-            sellerCouponPlatformRatio: Number(globalInputs.sellerCouponPlatformRatio) || 0,
-            adROI: Number(globalInputs.adROI) || 0,
-            vatRate: Number(globalInputs.vatRate) || 0,
-            corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
-            platformInfrastructureFee: Number(globalInputs.platformInfrastructureFee) || 0,
-            totalRevenue: Number(globalInputs.totalRevenue) || 0,
-            baseShippingFee: Number(node.data.baseShippingFee) || 0,
-            extraShippingFee: Number(node.data.extraShippingFee) || 0,
-            crossBorderFee: Number(node.data.crossBorderFee) || 0,
-            platformCommissionRate: Number(node.data.platformCommissionRate) || 0,
-            transactionFeeRate: Number(node.data.transactionFeeRate) || 0,
-            platformCoupon: Number(node.data.platformCoupon) || 0,
-            platformCouponRate: Number(node.data.platformCouponRate) || 0,
-            damageReturnRate: Number(node.data.damageReturnRate) || 0,
-            mdvServiceFeeRate: Number(node.data.mdvServiceFeeRate) || 0,
-            fssServiceFeeRate: Number(node.data.fssServiceFeeRate) || 0,
-            ccbServiceFeeRate: Number(node.data.ccbServiceFeeRate) || 0,
-            warehouseOperationFee: Number(node.data.warehouseOperationFee) || 0,
-            lastMileFee: Number(node.data.lastMileFee) || 0,
-            shipping: 0, fees: 0, marketing: 0, taxes: 0, profit: 0, margin: 0, costMargin: 0
+            sellerCoupon: Number(firstNodeData.sellerCoupon) || 0,
+            sellerCouponPlatformRatio: Number(firstNodeData.sellerCouponPlatformRatio) || 0,
+            sellerCouponType: firstNodeData.sellerCouponType || 'fixed',
+            adROI: Number(firstNodeData.adROI) || 15,
         };
 
-        let savedProductId: string | null = editingProductId;
-        const isUpdate = !!editingProductId;
+        const existingProduct = products.find(
+            p => p.name === globalInputs.name && p.sku === globalInputs.sku
+        );
+
+        const isUpdate = !!existingProduct;
+        let savedProductId: string | null = existingProduct?.id || null;
 
         try {
-            if (editingProductId) {
-                const existingProduct = products.find(p => p.id === editingProductId);
-                const existingSites = existingProduct?.sites || [];
-                const newSites = [...new Set([...existingSites, ...sites])];
-                await updateProduct({ ...productData, id: editingProductId, sites: newSites });
+            if (isUpdate && existingProduct) {
+                const existingSites = existingProduct.sites || [];
+                const newSites = existingSites.includes(countryCode)
+                    ? existingSites
+                    : [...existingSites, countryCode];
+                await updateProduct({ ...productData, id: existingProduct.id, sites: newSites });
+                savedProductId = existingProduct.id;
             } else {
                 const saved = await addProduct(productData);
                 savedProductId = saved?.id || null;
@@ -180,19 +159,32 @@ export const useProductActions = (
         for (const n of nodes) {
             try {
                 const tplName = n.name || n.platform;
-                const isDuplicate = allTemplates.some(
+                const existingTpl = allTemplates.find(
                     t => t.productId === savedProductId && t.name === tplName && t.platform === n.platform
                 );
-                if (isDuplicate) continue;
-                const response = await api.post('/templates', {
-                    name: tplName,
-                    country: n.country,
-                    platform: n.platform,
-                    type: 'profit',
-                    data: n.data,
-                    productId: savedProductId,
-                });
-                setAllTemplates(prev => [...prev, response.data]);
+                if (existingTpl) {
+                    await api.put(`/templates/${existingTpl.id}`, {
+                        name: tplName,
+                        country: n.country,
+                        platform: n.platform,
+                        type: 'profit',
+                        data: n.data,
+                        productId: savedProductId,
+                    });
+                    setAllTemplates(prev => prev.map(t =>
+                        t.id === existingTpl.id ? { ...t, data: n.data } : t
+                    ));
+                } else {
+                    const response = await api.post('/templates', {
+                        name: tplName,
+                        country: n.country,
+                        platform: n.platform,
+                        type: 'profit',
+                        data: n.data,
+                        productId: savedProductId,
+                    });
+                    setAllTemplates(prev => [...prev, response.data]);
+                }
             } catch (error) {
                 console.error('Failed to save linked template:', error);
             }

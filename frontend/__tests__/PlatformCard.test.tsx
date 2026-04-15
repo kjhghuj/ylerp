@@ -60,6 +60,14 @@ const mockPlatformCardProps = {
   country: 'SGD',
   nodeName: '测试节点',
   data: {
+    totalRevenue: 100,
+    sellerCoupon: 0,
+    sellerCouponPlatformRatio: 0,
+    adROI: 15,
+    vatRate: 6,
+    corporateIncomeTaxRate: 10,
+    platformInfrastructureFee: 0,
+    firstWeight: 0,
     baseShippingFee: 0,
     extraShippingFee: 0,
     crossBorderFee: 0,
@@ -76,18 +84,9 @@ const mockPlatformCardProps = {
   },
   globalInputs: {
     productWeight: 500,
-    firstWeight: 0,
-    totalRevenue: 100,
     purchaseCost: 50,
-    sellerCoupon: 0,
-    sellerCouponType: 'fixed' as const,
-    sellerCouponPlatformRatio: 0,
-    vatRate: 6,
-    corporateIncomeTaxRate: 10,
     supplierTaxPoint: 0,
     supplierInvoice: 'no' as const,
-    adROI: 15,
-    platformInfrastructureFee: 0,
   },
   rateToCNY: 2.15,
   strings: mockStrings,
@@ -144,8 +143,7 @@ describe('PlatformCard', () => {
       ...mockPlatformCardProps,
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        productWeight: 500, // 0.5kg
-        firstWeight: 0,
+        productWeight: 500,
       },
     };
 
@@ -164,8 +162,7 @@ describe('PlatformCard', () => {
       ...mockPlatformCardProps,
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        productWeight: 3000, // 3kg
-        firstWeight: 0,
+        productWeight: 3000,
       },
     };
 
@@ -184,8 +181,7 @@ describe('PlatformCard', () => {
       ...mockPlatformCardProps,
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        productWeight: 8000, // 8kg
-        firstWeight: 0,
+        productWeight: 8000,
       },
     };
 
@@ -204,8 +200,7 @@ describe('PlatformCard', () => {
       ...mockPlatformCardProps,
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        productWeight: 15000, // 15kg
-        firstWeight: 0,
+        productWeight: 15000,
       },
     };
 
@@ -224,8 +219,7 @@ describe('PlatformCard', () => {
       ...mockPlatformCardProps,
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        productWeight: 25000, // 25kg
-        firstWeight: 0,
+        productWeight: 25000,
       },
     };
 
@@ -406,7 +400,6 @@ describe('PlatformCard', () => {
     const propsWithUndefined = createValidProps({
       globalInputs: {
         ...mockPlatformCardProps.globalInputs,
-        firstWeight: undefined,
         productWeight: undefined,
       },
     });

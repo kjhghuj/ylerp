@@ -24,7 +24,7 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
         const originalValue = safeValue.toFixed(2);
         return (
             <div className={colSpan}>
-                <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={label}>{label}</label>
+                <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
                 <div className="relative">
                     <input
                         key={`${name}-inverted`}
@@ -44,18 +44,18 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                             onChange({ target: { name, value: String(cnyValue) } });
                         }}
                         onFocus={(e) => e.target.select()}
-                        className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all
+                        className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
                             ${highlight
                                 ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                                 : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                     />
                     {suffix && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold pointer-events-none">
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
                             {suffix}
                         </div>
                     )}
                 </div>
-                <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
+                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                     <span>≈ {originalValue} CNY</span>
                 </div>
             </div>
@@ -66,7 +66,7 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
 
     return (
         <div className={colSpan}>
-            <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={label}>{label}</label>
+            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
             <div className="relative">
                 <input
                     key={`${name}-normal`}
@@ -76,19 +76,19 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                     value={value ?? ''}
                     onChange={onChange}
                     onFocus={(e) => e.target.select()}
-                    className={`w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all
+                    className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
                         ${highlight
                             ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                             : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                 />
                 {suffix && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold pointer-events-none">
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
                         {suffix}
                     </div>
                 )}
             </div>
             {convertedValue && (
-                <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
+                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                     <span>≈ {convertedValue} {currencyCode}</span>
                 </div>
             )}
@@ -96,32 +96,32 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
     );
 };
 
-export const TextInput = ({ label, name, value, onChange }: any) => (
-    <div className="col-span-2">
-        <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{label}</label>
+export const TextInput = ({ label, name, value, onChange, colSpan = "col-span-1" }: any) => (
+    <div className={colSpan}>
+        <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{label}</label>
         <input
             type="text"
             name={name}
             value={value}
             onChange={onChange}
-            className="w-full h-11 px-3 rounded-lg border border-slate-200 bg-white outline-none text-lg font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all"
+            className="w-full h-9 px-2 rounded-lg border border-slate-200 bg-white outline-none text-sm font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all"
         />
     </div>
 );
 
-export const SelectInput = ({ label, name, value, onChange, options }: any) => (
-    <div className="col-span-2">
-        <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{label}</label>
+export const SelectInput = ({ label, name, value, onChange, options, colSpan = "col-span-1" }: any) => (
+    <div className={colSpan}>
+        <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{label}</label>
         <div className="relative group">
             <select
                 name={name}
                 value={value}
                 onChange={onChange}
-                className="w-full h-11 px-3 appearance-none rounded-lg border border-slate-200 bg-slate-50 outline-none text-lg font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer hover:bg-slate-100/50"
+                className="w-full h-9 px-2 appearance-none rounded-lg border border-slate-200 bg-slate-50 outline-none text-sm font-bold text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer hover:bg-slate-100/50"
             >
                 {options.map((opt: any) => <option key={opt.value} value={opt.value} className="font-sans">{opt.label}</option>)}
             </select>
-            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" size={18} />
+            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" size={14} />
         </div>
     </div>
 );

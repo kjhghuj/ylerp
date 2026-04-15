@@ -3,7 +3,7 @@ import { useStore } from '../StoreContext';
 import {
     Plus, Calendar,
     TrendingUp, TrendingDown, CreditCard,
-    Check, Wallet, ArrowRightLeft, Upload, Trash2
+    Check, Wallet, ArrowRightLeft, Upload, Trash2, Download
 } from 'lucide-react';
 import { FinanceRecord } from '../types';
 import { KPICard } from './finance/components/KPICard';
@@ -131,6 +131,70 @@ export const FinanceManager: React.FC = () => {
             await clearAllTransactions();
             alert("账本数据已全部清空。");
         }
+    };
+
+    const handleExportJSON = () => {
+        if (financeRecords.length === 0) {
+            alert("没有可导出的财务数据");
+            return;
+        }
+
+        const sorted = [...financeRecords].sort((a, b) => a.date.localeCompare(b.date));
+        const monthMap: { [monthKey: string]: { [dayKey: string]: FinanceRecord[] } } = {};
+
+        sorted.forEach(record => {
+            const monthKey = record.date.substring(0, 7);
+            const dayKey = record.date;
+            if (!monthMap[monthKey]) monthMap[monthKey] = {};
+            if (!monthMap[monthKey][dayKey]) monthMap[monthKey][dayKey] = [];
+            monthMap[monthKey][dayKey].push(record);
+        });
+
+        const exportData = Object.entries(monthMap).map(([monthKey, days]) => {
+            const [year, month] = monthKey.split('-');
+            const monthLabel = `${year}年${parseInt(month)}月`;
+
+            const daysArray = Object.entries(days).map(([dayKey, records]) => {
+                const dayNum = parseInt(dayKey.split('-')[2]);
+                const dayLabel = `${dayNum}日`;
+
+                const getValue = (type: string, category: string) => {
+                    const rec = records.find(r => r.type === type && r.category === category);
+                    return rec ? rec.amount : 0;
+                };
+
+                const notes = records.map(r => r.description).filter(Boolean).join('; ');
+
+                return {
+                    date: dayLabel,
+                    expectedIncome: getValue('income', 'Revenue'),
+                    newDebt: records.filter(r => r.type === 'new_debt').reduce((s, r) => s + r.amount, 0),
+                    repayment: records.filter(r => r.type === 'debt_repayment').reduce((s, r) => s + r.amount, 0),
+                    rentUtilities: getValue('expense', 'Operations'),
+                    freightCost: getValue('expense', 'Logistics'),
+                    salary: getValue('expense', 'HR'),
+                    otherIncome: records.filter(r => r.type === 'income' && r.category !== 'Revenue').reduce((s, r) => s + r.amount, 0),
+                    otherExpense: records.filter(r => r.type === 'expense' && !['Operations', 'Logistics', 'HR'].includes(r.category)).reduce((s, r) => s + r.amount, 0),
+                    notes,
+                };
+            });
+
+            return {
+                month: monthLabel,
+                days: daysArray,
+            };
+        });
+
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `finance-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     };
 
     // --- Calculations for Top KPIs ---
@@ -408,6 +472,9 @@ export const FinanceManager: React.FC = () => {
                         />
                         <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm whitespace-nowrap">
                             <Upload size={16} className="text-indigo-500" /> {(t.actions as any)?.import || '导入 JSON'}
+                        </button>
+                        <button onClick={handleExportJSON} disabled={financeRecords.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm whitespace-nowrap ${financeRecords.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600'}`}>
+                            <Download size={16} className={financeRecords.length === 0 ? "text-slate-300" : "text-emerald-500"} /> {(t.actions as any)?.export || '导出 JSON'}
                         </button>
                         <button onClick={openAddTransModal} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 text-sm font-bold transition whitespace-nowrap">
                             <Plus size={16} /> {t.form.add}

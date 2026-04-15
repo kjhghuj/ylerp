@@ -15,8 +15,8 @@ export const Dashboard: React.FC = () => {
 
   const can = (key: string) => isOwner || hasPermission(perms, key);
 
-  const avgMargin = products.length
-    ? (products.reduce((acc, p) => acc + p.margin, 0) / products.length).toFixed(1)
+  const avgCost = products.length
+    ? (products.reduce((acc, p) => acc + p.cost, 0) / products.length).toFixed(2)
     : '0';
 
   const lowStockCount = inventory.filter(i => {
@@ -27,7 +27,7 @@ export const Dashboard: React.FC = () => {
 
   const kpiCards = [
     { label: t.kpi.balance, value: `$${accountBalance.toLocaleString()}`, icon: DollarSign, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30', perm: 'dashboard.balance' },
-    { label: t.kpi.margin, value: `${avgMargin}%`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
+    { label: t.kpi.margin, value: `¥${avgCost}`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
     { label: t.kpi.alerts, value: lowStockCount, icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30', perm: 'dashboard.alerts' },
     { label: t.kpi.debt, value: `$${totalDebt.toLocaleString()}`, icon: Package, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30', perm: 'dashboard.debt' },
   ].filter(card => can(card.perm));
@@ -121,17 +121,15 @@ export const Dashboard: React.FC = () => {
                     <tr>
                       <th className="p-3 rounded-l-lg">{t.tables.cols.product}</th>
                       <th className="p-3">{t.tables.cols.cost}</th>
-                      <th className="p-3">{t.tables.cols.revenue}</th>
-                      <th className="p-3 rounded-r-lg">{t.tables.cols.margin}</th>
+                      <th className="p-3 rounded-r-lg">{t.tables.cols.sites || '站点'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/50 dark:divide-slate-700/50">
                     {products.slice(0, 5).map(p => (
                       <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
                         <td className="p-3 font-medium text-slate-700 dark:text-slate-200">{p.name}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">${p.cost}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">${p.totalRevenue}</td>
-                        <td className={`p-3 font-bold ${p.margin > 20 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>{p.margin}%</td>
+                        <td className="p-3 text-slate-600 dark:text-slate-300">¥{p.cost}</td>
+                        <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{(p.sites || []).join(', ') || p.country || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

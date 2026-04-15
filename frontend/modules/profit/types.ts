@@ -19,7 +19,14 @@ export interface PlatformNode {
 }
 
 export const DEFAULT_NODE_DATA = {
+    totalRevenue: 0,
+    sellerCoupon: 0,
+    sellerCouponPlatformRatio: 0,
+    sellerCouponType: 'fixed',
+    adROI: 15,
+    platformInfrastructureFee: 0,
     baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
+    firstWeight: 50,
     platformCommissionRate: 0, transactionFeeRate: 0,
     platformCoupon: 0, platformCouponRate: 0,
     damageReturnRate: 0,

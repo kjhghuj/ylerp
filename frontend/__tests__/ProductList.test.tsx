@@ -5,29 +5,15 @@ import React from 'react';
 const mockProducts = [
   {
     id: 'p1', name: '商品A', sku: 'SKU001', country: 'MY',
-    totalRevenue: 100, cost: 50, productWeight: 200, firstWeight: 50,
-    baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
-    sellerCoupon: 5, sellerCouponType: 'fixed', sellerCouponPlatformRatio: 0,
-    platformCoupon: 0, platformCouponRate: 0, platformCommissionRate: 0.1,
-    transactionFeeRate: 0.02, damageReturnRate: 0.01, adROI: 3,
-    vatRate: 0.06, corporateIncomeTaxRate: 0.1, supplierTaxPoint: 0,
-    mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
-    platformInfrastructureFee: 0, warehouseOperationFee: 0,
-    supplierInvoice: 'no', shipping: 0, fees: 0, marketing: 0, taxes: 0,
-    profit: 35, margin: 0.35, costMargin: 0.7,
+    cost: 50, productWeight: 200,
+    sellerCouponType: 'fixed', supplierTaxPoint: 0,
+    supplierInvoice: 'no', sites: ['MY'],
   },
   {
     id: 'p2', name: '商品B', sku: 'SKU002', country: 'SG',
-    totalRevenue: 80, cost: 40, productWeight: 150, firstWeight: 50,
-    baseShippingFee: 8, extraShippingFee: 1.5, crossBorderFee: 0.5,
-    sellerCoupon: 3, sellerCouponType: 'percent', sellerCouponPlatformRatio: 50,
-    platformCoupon: 2, platformCouponRate: 0.05, platformCommissionRate: 0.08,
-    transactionFeeRate: 0.02, damageReturnRate: 0.02, adROI: 4,
-    vatRate: 0.07, corporateIncomeTaxRate: 0.1, supplierTaxPoint: 0.13,
-    mdvServiceFeeRate: 0.01, fssServiceFeeRate: 0.02, ccbServiceFeeRate: 0.01,
-    platformInfrastructureFee: 1, warehouseOperationFee: 2,
-    supplierInvoice: 'yes', shipping: 0, fees: 0, marketing: 0, taxes: 0,
-    profit: 20, margin: 0.25, costMargin: 0.5,
+    cost: 40, productWeight: 150,
+    sellerCouponType: 'percent', supplierTaxPoint: 0.13,
+    supplierInvoice: 'yes', sites: ['SG'],
   },
 ];
 
@@ -37,37 +23,39 @@ const mockStrings = {
     searchPlaceholder: '搜索商品名称或 SKU...',
     exportExcel: '导出 Excel',
     table: {
-      name: '名称', sku: 'SKU', price: '售价', cost: '成本',
-      profit: '预估净利润', weight: '重量', sellerCoupon: '卖家券',
-      commission: '佣金', adROI: '广告 ROI', baseShipping: '首重运费',
-      action: '操作', platformCommission: '佣金', transactionFee: '交易费',
-      vatRate: '增值税', corpTaxRate: '企业所得税',
-      invoice: '发票', invoiceYes: '已开票', invoiceNo: '未开票',
-      crossBorder: '跨境费', infraFee: '基础设施费', warehouseFee: '仓储费',
+      name: '名称', sku: 'SKU', cost: '成本',
+      weight: '重量', action: '操作', invoice: '发票',
+      invoiceYes: '已开票', invoiceNo: '未开票',
+      sites: '站点', price: '售价', sellerCoupon: '卖家券',
+      commission: '佣金', adROI: '广告ROI', baseShipping: '首重运费',
+      priceCNY: '价格(CNY)', priceLocal: '价格(本土)',
     },
     tabs: { ph: '菲律宾', my: '马来西亚', sg: '新加坡', id: '印尼', th: '泰国' },
     pagination: { showing: '显示', to: '至', of: '共', items: '条' },
     modals: {
       detailTitle: '商品详情',
       importCalculator: '导入至利润计算器',
-      tabProduct: '商品数据',
+      importAll: '导入所有站点',
+      tabProduct: '基本信息',
       noTemplates: '暂无关联模版',
       noTemplatesHint: '在利润计算器中保存商品时，会自动创建关联模版',
     },
     detail: {
-      baseInfo: '基本信息', priceCost: '售价与成本', coupon: '优惠券',
+      baseInfo: '基本信息', priceCost: '成本信息',
+      priceCoupon: '定价与优惠券',
       platformRates: '平台费率', taxAd: '税务与广告', fees: '费用',
       serviceRates: '服务费率', name: '名称', sku: 'SKU', country: '站点',
-      price: '售价', cost: '成本', weight: '重量', firstWeight: '首重',
+      cost: '成本', weight: '重量',
       sellerCoupon: '卖家优惠券', couponType: '优惠券类型', percentType: '比例',
       fixedType: '固定', couponPlatformRatio: '平台出资比例',
-      platformCoupon: '平台优惠券', platformCouponRate: '平台优惠券比例',
+      platformCoupon: '平台优惠券',
       commission: '佣金率', transactionFee: '交易费率', damageReturn: '货损退货率',
       invoice: '供应商发票', invoiceYes: '已开票', invoiceNo: '未开票',
       taxPoint: '税点', vatRate: '增值税率', corpTaxRate: '企业所得税率',
       adROI: '广告 ROI', baseShipping: '首重运费', extraShipping: '续重运费',
       crossBorder: '跨境费', infraFee: '平台基础设施费', warehouseFee: '仓储操作费',
       mdvFee: 'MDV 服务费率', fssFee: 'FSS 服务费率', ccbFee: 'CCB 服务费率',
+      price: '售价', platformCouponRate: '平台优惠券比例',
     },
   },
 };
@@ -167,7 +155,7 @@ describe('ProductList', () => {
     fireEvent.doubleClick(row!);
 
     await waitFor(() => {
-      expect(screen.getByText('商品数据')).toBeInTheDocument();
+      expect(screen.getAllByText('基本信息').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -177,7 +165,7 @@ describe('ProductList', () => {
     fireEvent.click(viewButtons[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('商品数据')).toBeInTheDocument();
+      expect(screen.getAllByText('基本信息').length).toBeGreaterThan(0);
     });
   });
 
@@ -188,15 +176,14 @@ describe('ProductList', () => {
     mockApiGet.mockResolvedValue({ data: mockTemplates });
 
     render(<ProductList onNavigate={mockOnNavigate} />);
-    const viewButtons = screen.getAllByTitle('View');
-    fireEvent.click(viewButtons[0]);
+    fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
       expect(mockApiGet).toHaveBeenCalledWith('/templates?type=profit&productId=p1');
     });
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee模版')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
     });
   });
 
@@ -205,9 +192,8 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('基本信息')).toBeInTheDocument();
-      expect(screen.getByText('售价与成本')).toBeInTheDocument();
-      expect(screen.getByText('平台费率')).toBeInTheDocument();
+      expect(screen.getAllByText('基本信息').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('成本信息').length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -221,10 +207,10 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee模版')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
     });
 
-    const templateTab = screen.getByText('Shopee模版');
+    const templateTab = screen.getByText('马来西亚 · shopee');
     fireEvent.click(templateTab);
 
     await waitFor(() => {
@@ -275,7 +261,7 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getAllByText('SKU001').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText('SKU001').length).toBeGreaterThanOrEqual(1);
       expect(screen.getAllByText('MY').length).toBeGreaterThanOrEqual(1);
     });
   });
@@ -291,60 +277,28 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee 模版')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Lazada 模版'));
+    fireEvent.click(screen.getByText('马来西亚 · lazada'));
 
     await waitFor(() => {
-      expect(screen.getByText('Shopee 模版').classList).not.toContain('border-indigo-600');
+      expect(screen.getByText('马来西亚 · shopee').classList).not.toContain('border-indigo-600');
     });
   });
 
-  it('should export to Excel with profit field', () => {
+  it('should export to Excel', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
     const exportButton = screen.getByText('导出 Excel');
     fireEvent.click(exportButton);
 
-    expect(mockStrings.productList.table.profit).toBe('预估净利润');
     expect(mockApiGet).not.toHaveBeenCalled();
   });
 
-  it('should include profit in exported data', () => {
-    const mockProductsData = [
-      {
-        id: 'test1', name: '测试商品', sku: 'TEST001', country: 'MY',
-        totalRevenue: 100, cost: 50, productWeight: 200, firstWeight: 50,
-        baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
-        sellerCoupon: 5, sellerCouponType: 'fixed', sellerCouponPlatformRatio: 0,
-        platformCoupon: 0, platformCouponRate: 0, platformCommissionRate: 0.1,
-        transactionFeeRate: 0.02, damageReturnRate: 0.01, adROI: 3,
-        vatRate: 0.06, corporateIncomeTaxRate: 0.1, supplierTaxPoint: 0,
-        mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0,
-        platformInfrastructureFee: 0, warehouseOperationFee: 0,
-        supplierInvoice: 'no', shipping: 0, fees: 0, marketing: 0, taxes: 0,
-        profit: 35, margin: 0.35, costMargin: 0.7,
-      },
-    ];
-
-    const mockUseStoreWithData = () => ({
-      products: mockProductsData,
-      deleteProduct: mockDeleteProduct,
-      setCalculatorImport: mockSetCalculatorImport,
-      setCalculatorImportNodes: mockSetCalculatorImportNodes,
-      strings: mockStrings,
-      productListActiveTab: 'MY' as const,
-      setProductListActiveTab: mockSetProductListActiveTab,
-      productListCurrentPage: 1,
-      setProductListCurrentPage: mockSetProductListCurrentPage,
-    });
-
-    vi.mocked(mockUseStore).mockImplementation(mockUseStoreWithData as any);
-
+  it('should render price and ROI columns', () => {
     render(<ProductList onNavigate={mockOnNavigate} />);
-    const exportButton = screen.getByText('导出 Excel');
-    fireEvent.click(exportButton);
-
-    expect(mockProductsData[0].profit).toBe(35);
+    expect(screen.getByText('价格(CNY)')).toBeInTheDocument();
+    expect(screen.getByText('价格(本土)')).toBeInTheDocument();
+    expect(screen.getByText('广告ROI')).toBeInTheDocument();
   });
 });

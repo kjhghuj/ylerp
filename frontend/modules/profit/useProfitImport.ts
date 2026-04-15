@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../../StoreContext';
 import { genId, DEFAULT_NODE_DATA, PlatformNode } from './types';
 
@@ -12,25 +12,20 @@ export const useProfitImport = () => {
         setProfitEditingProductId: setEditingProductId,
     } = useStore();
 
+    const processingRef = useRef(false);
+
     useEffect(() => {
-        if (!calculatorImport) return;
+        if (!calculatorImport || processingRef.current) return;
+
+        processingRef.current = true;
 
         const globalData = {
             name: calculatorImport.name,
             sku: calculatorImport.sku,
-            totalRevenue: calculatorImport.totalRevenue || 0,
             purchaseCost: calculatorImport.cost || 0,
             productWeight: calculatorImport.productWeight || 0,
-            firstWeight: calculatorImport.firstWeight || 50,
             supplierTaxPoint: calculatorImport.supplierTaxPoint || 0,
             supplierInvoice: calculatorImport.supplierInvoice || 'no',
-            sellerCouponType: calculatorImport.sellerCouponType || 'fixed',
-            sellerCoupon: calculatorImport.sellerCoupon || 0,
-            sellerCouponPlatformRatio: calculatorImport.sellerCouponPlatformRatio || 0,
-            adROI: calculatorImport.adROI || 0,
-            vatRate: calculatorImport.vatRate || 0,
-            corporateIncomeTaxRate: calculatorImport.corporateIncomeTaxRate || 0,
-            platformInfrastructureFee: calculatorImport.platformInfrastructureFee || 0,
         };
         setGlobalInputs(prev => ({ ...prev, ...globalData }));
         if (calculatorImport.id) setEditingProductId(calculatorImport.id);
@@ -59,19 +54,27 @@ export const useProfitImport = () => {
                 country: currency,
                 name: '导入数据',
                 data: {
-                    baseShippingFee: calculatorImport.baseShippingFee || 0,
-                    extraShippingFee: calculatorImport.extraShippingFee || 0,
-                    crossBorderFee: calculatorImport.crossBorderFee || 0,
-                    platformCommissionRate: calculatorImport.platformCommissionRate || 0,
-                    transactionFeeRate: calculatorImport.transactionFeeRate || 0,
-                    platformCoupon: calculatorImport.platformCoupon || 0,
-                    platformCouponRate: calculatorImport.platformCouponRate || 0,
-                    damageReturnRate: calculatorImport.damageReturnRate || 0,
-                    mdvServiceFeeRate: calculatorImport.mdvServiceFeeRate || 0,
-                    fssServiceFeeRate: calculatorImport.fssServiceFeeRate || 0,
-                    ccbServiceFeeRate: calculatorImport.ccbServiceFeeRate || 0,
-                    warehouseOperationFee: calculatorImport.warehouseOperationFee || 0,
-                    lastMileFee: calculatorImport.lastMileFee || 0,
+                    ...DEFAULT_NODE_DATA,
+                    totalRevenue: (calculatorImport as any).totalRevenue || 0,
+                    sellerCoupon: (calculatorImport as any).sellerCoupon || 0,
+                    sellerCouponPlatformRatio: (calculatorImport as any).sellerCouponPlatformRatio || 0,
+                    adROI: (calculatorImport as any).adROI || 0,
+                    vatRate: (calculatorImport as any).vatRate || 0,
+                    corporateIncomeTaxRate: (calculatorImport as any).corporateIncomeTaxRate || 0,
+                    platformInfrastructureFee: (calculatorImport as any).platformInfrastructureFee || 0,
+                    baseShippingFee: (calculatorImport as any).baseShippingFee || 0,
+                    extraShippingFee: (calculatorImport as any).extraShippingFee || 0,
+                    crossBorderFee: (calculatorImport as any).crossBorderFee || 0,
+                    platformCommissionRate: (calculatorImport as any).platformCommissionRate || 0,
+                    transactionFeeRate: (calculatorImport as any).transactionFeeRate || 0,
+                    platformCoupon: (calculatorImport as any).platformCoupon || 0,
+                    platformCouponRate: (calculatorImport as any).platformCouponRate || 0,
+                    damageReturnRate: (calculatorImport as any).damageReturnRate || 0,
+                    mdvServiceFeeRate: (calculatorImport as any).mdvServiceFeeRate || 0,
+                    fssServiceFeeRate: (calculatorImport as any).fssServiceFeeRate || 0,
+                    ccbServiceFeeRate: (calculatorImport as any).ccbServiceFeeRate || 0,
+                    warehouseOperationFee: (calculatorImport as any).warehouseOperationFee || 0,
+                    lastMileFee: (calculatorImport as any).lastMileFee || 0,
                 },
             }];
 
@@ -94,5 +97,6 @@ export const useProfitImport = () => {
         });
 
         setCalculatorImport(null);
-    }, [calculatorImport, setCalculatorImport, calculatorImportNodes, setCalculatorImportNodes]);
+        processingRef.current = false;
+    }, [calculatorImport]);
 };

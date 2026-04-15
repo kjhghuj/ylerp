@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
+import { calculateProfit, calculateLastMileFee } from './profit/calculateProfit';
 
 interface PlatformCardProps {
     nodeId: string;
@@ -41,16 +42,6 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const toLocal = (cny: number) => cny * safeRate;
 
-    const calculateLastMileFee = (weightInGrams: number): number => {
-        const weightInKg = weightInGrams / 1000;
-        if (weightInKg < 1) return 2.03;
-        if (weightInKg <= 5) return 2.87;
-        if (weightInKg <= 10) return 3.38;
-        if (weightInKg <= 20) return 5.42;
-        if (weightInKg <= 30) return 10.00;
-        return 10.00;
-    };
-
     React.useEffect(() => {
         if (country === 'SGD') {
             const productWeight = Number(globalInputs.productWeight) || 0;
@@ -75,84 +66,11 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     const results = useMemo(() => {
-        const safeRateInner = rateToCNY || 1;
-        const safeData = Object.fromEntries(
-            Object.entries(data).map(([k, v]) => [k, Number(v) || 0])
-        ) as any;
-        const g = Object.fromEntries(
-            Object.entries(globalInputs).map(([k, v]) => [k, Number(v) || 0])
-        ) as any;
-
-        const platformCouponCNY = safeData.platformCoupon / safeRateInner;
-        const baseShippingFeeCNY = safeData.baseShippingFee / safeRateInner;
-        const crossBorderFeeCNY = safeData.crossBorderFee / safeRateInner;
-        const extraShippingFeeCNY = safeData.extraShippingFee / safeRateInner;
-        const warehouseOperationFeeCNY = safeData.warehouseOperationFee / safeRateInner;
-
-        const costTaxAmount = g.purchaseCost * (g.supplierTaxPoint / 100);
-        const grossSellerCoupon = globalInputs.sellerCouponType === 'percent'
-            ? g.totalRevenue * (g.sellerCoupon / 100)
-            : g.sellerCoupon;
-        const actualSellerCoupon = grossSellerCoupon * (1 - g.sellerCouponPlatformRatio / 100);
-        let vat: number, corporateIncomeTax: number;
-
-        const taxableRevenue = g.totalRevenue - actualSellerCoupon - platformCouponCNY;
-
-        if (globalInputs.supplierInvoice === 'yes') {
-            vat = taxableRevenue * (g.vatRate / 100);
-            const corporateIncomeTaxableAmount = taxableRevenue - g.purchaseCost;
-            corporateIncomeTax = ((g.corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
-        } else {
-            vat = taxableRevenue * (g.vatRate / 100);
-            corporateIncomeTax = (g.corporateIncomeTaxRate / 100) * taxableRevenue;
-        }
-        const totalTax = vat + corporateIncomeTax;
-
-        const revenueAfterSellerCoupon = g.totalRevenue - actualSellerCoupon;
-        const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
-        const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
-
-        const noServiceFeeCountry = country === 'MYR' || country === 'SGD';
-        const mdvRate = noServiceFeeCountry ? 0 : safeData.mdvServiceFeeRate;
-        const fssRate = noServiceFeeCountry ? 0 : safeData.fssServiceFeeRate;
-        const ccbRate = noServiceFeeCountry ? 0 : safeData.ccbServiceFeeRate;
-
-        const mdvCapCNY = 25 / safeRateInner;
-        const otherCapCNY = 12.5 / safeRateInner;
-
-        const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (mdvRate / 100), mdvCapCNY);
-        const fssServiceFee = Math.min(revenueAfterSellerCoupon * (fssRate / 100), otherCapCNY);
-        const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (ccbRate / 100), otherCapCNY);
-        const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + g.platformInfrastructureFee;
-
-        let shippingFee = baseShippingFeeCNY + crossBorderFeeCNY;
-        if (g.productWeight > safeData.firstWeight) {
-            const extraWeight = g.productWeight - safeData.firstWeight;
-            shippingFee += extraShippingFeeCNY * (extraWeight / 10);
-        }
-        if (country === 'SGD') {
-            const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRateInner;
-            shippingFee += lastMileFeeCNY;
-        }
-
-        const adFee = g.adROI > 0 ? taxableRevenue / g.adROI : 0;
-        const damage = g.totalRevenue * (safeData.damageReturnRate / 100);
-        const platformFee = commission + transactionFee + serviceFee + adFee + warehouseOperationFeeCNY + damage;
-
-        const finalRevenueCNY = g.totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - g.purchaseCost;
-        const finalRevenueLocal = finalRevenueCNY * safeRateInner;
-
-        return {
-            purchaseCost: g.purchaseCost,
-            totalRevenue: g.totalRevenue,
-            commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
-            finalRevenueLocal, finalRevenueCNY,
-            roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
-            margin: g.totalRevenue > 0 ? (finalRevenueCNY / g.totalRevenue) * 100 : 0
-        };
+        return calculateProfit(data, globalInputs, rateToCNY, country);
     }, [data, globalInputs, rateToCNY, country]);
 
     const isMoneyField = (key: string) => [
+        'totalRevenue', 'sellerCoupon', 'platformInfrastructureFee',
         'platformCoupon', 'baseShippingFee',
         'extraShippingFee', 'crossBorderFee', 'warehouseOperationFee', 'lastMileFee'
     ].includes(key);
@@ -164,7 +82,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             const cnyEquiv = localValue / safeRate;
             return (
                 <div key={key} className="col-span-1">
-                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{t.inputs[key] || key} ({country})</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{t.inputs[key] || key} ({country})</label>
                     <div className="relative">
                         <input
                             key={`${key}-local`}
@@ -180,10 +98,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                                 onUpdate(nodeId, { [key]: val.toString() });
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
+                            className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
                         />
                     </div>
-                    <div className="text-xs text-blue-600 font-bold text-right mt-1 px-1">
+                    <div className="text-[10px] text-blue-600 font-bold text-right mt-0.5 px-1">
                         ≈ {cnyEquiv.toFixed(2)} CNY
                     </div>
                 </div>
@@ -195,7 +113,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             const displayValue = editingCNY[key] !== undefined ? editingCNY[key] : cnyValue.toFixed(2);
             return (
                 <div key={key} className="col-span-1">
-                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
+                    <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
                     <div className="relative">
                         <input
                             type="text"
@@ -216,10 +134,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                                 onUpdate(nodeId, { [key]: localConverted });
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="w-full h-11 px-3 rounded-lg border outline-none text-lg font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
+                            className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
                         />
                     </div>
-                    <div className="text-xs text-emerald-600 font-bold text-right mt-1 flex items-center justify-end gap-1 px-1">
+                    <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                         <span>≈ {localValue.toFixed(2)} {country}</span>
                     </div>
                 </div>
@@ -261,6 +179,25 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             {/* Configurable Inputs Block */}
             <div className="flex-1 overflow-y-auto outline-none" style={{ maxHeight: '400px' }}>
                 <div className="p-4 space-y-4">
+                    {config.fields.pricing && config.fields.pricing.length > 0 && (
+                        <div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.matrix.pricingSection || '定价与税率'}</div>
+                            <div className="grid grid-cols-2 gap-3">
+                                {config.fields.pricing.includes('totalRevenue') && renderInput('totalRevenue')}
+                                {config.fields.pricing.includes('sellerCoupon') && renderInput('sellerCoupon')}
+                                {config.fields.pricing.includes('sellerCouponPlatformRatio') && renderInput('sellerCouponPlatformRatio')}
+                                <div className="col-span-2">
+                                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{t.inputs.sellerCouponType || '优惠券类型'}</label>
+                                    <div className="flex gap-1 h-9">
+                                        <button type="button" onClick={() => onUpdate(nodeId, { sellerCouponType: 'fixed' })} className={`flex-1 px-2.5 rounded-l-lg text-xs font-bold border transition-all ${(data.sellerCouponType || 'fixed') === 'fixed' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>{t.inputs.couponFixed}</button>
+                                        <button type="button" onClick={() => onUpdate(nodeId, { sellerCouponType: 'percent' })} className={`flex-1 px-2.5 text-xs font-bold border transition-all rounded-r-lg ${(data.sellerCouponType || 'fixed') === 'percent' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>{t.inputs.couponPercent}</button>
+                                    </div>
+                                </div>
+                                {config.fields.pricing.includes('adROI') && renderInput('adROI')}
+                                {config.fields.pricing.includes('platformInfrastructureFee') && renderInput('platformInfrastructureFee')}
+                            </div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}

@@ -83,4 +83,31 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.user!.id;
+        const { id } = req.params;
+        const { name, country, data, type, platform, productId } = req.body;
+
+        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        if (!existing) return res.status(404).json({ error: 'Template not found' });
+
+        const template = await prisma.profitTemplate.update({
+            where: { id },
+            data: {
+                ...(name ? { name } : {}),
+                ...(country ? { country } : {}),
+                ...(data ? { data } : {}),
+                ...(type ? { type } : {}),
+                ...(platform !== undefined ? { platform } : {}),
+                ...(productId !== undefined ? { productId } : {}),
+            }
+        });
+        res.json(template);
+    } catch (error) {
+        console.error('Error updating template:', error);
+        res.status(500).json({ error: 'Failed to update template' });
+    }
+});
+
 export default router;

@@ -3,59 +3,16 @@ export interface ProductCalcData {
   id: string;
   name: string;
   sku: string;
-  country?: 'SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID'; // Country Code
-  sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID')[]; // All sites this product belongs to
-  totalRevenue: number; // Selling Price
-  cost: number; // Purchase Cost
-  
-  // Weights & Shipping
+  country?: 'SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID';
+  sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID')[];
+  cost: number;
   productWeight: number;
-  firstWeight: number;
-  baseShippingFee: number;
-  extraShippingFee: number; // Per 10g
-  crossBorderFee: number;
-  
-  // Coupons & Discounts
-  sellerCoupon: number;
-  sellerCouponType?: 'fixed' | 'percent';
-  sellerCouponPlatformRatio?: number;
-  platformCoupon: number;
-  platformCouponRate?: number; // New field for Percentage
-  
-  // Rates
-  platformCommissionRate: number;
-  transactionFeeRate: number;
-  damageReturnRate: number;
-  adROI: number;
-  vatRate: number;
-  corporateIncomeTaxRate: number;
-  supplierTaxPoint: number;
-  
-  // Service Fees Rates
-  mdvServiceFeeRate: number;
-  fssServiceFeeRate: number;
-  ccbServiceFeeRate: number;
-  
-  // Fixed Fees
-  platformInfrastructureFee: number;
-  warehouseOperationFee: number;
-  lastMileFee?: number;
-  
-  // Logic Switches
   supplierInvoice: 'yes' | 'no';
-  
-  // Logistics Info (New)
-  quantityPerBox?: number;
-  volume?: string; // e.g. "30x20x30"
-  
-  // Calculated Results
-  shipping: number; // Calculated Total Shipping
-  fees: number; // Calculated Total Platform Fees
-  marketing: number; // Calculated Ad Spend
-  taxes: number; // Calculated Total Taxes
-  profit: number; // Net Profit (Final Revenue)
-  margin: number; // Revenue Profit Margin
-  costMargin: number; // Cost Profit Margin
+  supplierTaxPoint: number;
+  sellerCouponType?: 'fixed' | 'percent';
+  sellerCoupon?: number;
+  sellerCouponPlatformRatio?: number;
+  adROI?: number;
 }
 
 export interface FinanceRecord {

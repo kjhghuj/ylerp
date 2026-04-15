@@ -73,10 +73,9 @@ const {
     calculatorImportNodes: [],
     setCalculatorImportNodes: vi.fn(),
     profitGlobalInputs: {
-      name: '测试商品', sku: 'SKU-TEST', totalRevenue: 100, purchaseCost: 50, productWeight: 500,
-      firstWeight: 50, supplierTaxPoint: 0, supplierInvoice: 'no',
-      sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-      adROI: 10, vatRate: 6, corporateIncomeTaxRate: 10, platformInfrastructureFee: 0,
+      name: '测试商品', sku: 'SKU-TEST', purchaseCost: 50, productWeight: 500,
+      supplierTaxPoint: 0, supplierInvoice: 'no',
+      vatRate: 6, corporateIncomeTaxRate: 10,
     },
     setProfitGlobalInputs: vi.fn(),
     profitSiteCountry: 'MYR',
@@ -85,6 +84,9 @@ const {
       MYR: [{
         id: 'node-1', platform: 'shopee', country: 'MYR', name: 'Test Node',
         data: {
+          totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+          adROI: 10,
+          platformInfrastructureFee: 0, firstWeight: 50,
           baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
           platformCommissionRate: 8, transactionFeeRate: 2,
           platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 1,
@@ -124,10 +126,10 @@ vi.mock('../components/Toast', () => ({
 
 vi.mock('../platformConfig', () => ({
   PLATFORMS: {
-    shopee: { name: 'Shopee', colors: { bg: 'bg-orange-50', border: 'border-orange-200', gradient: 'from-orange-500 to-red-500' }, fields: { base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
-    lazada: { name: 'Lazada', colors: { bg: 'bg-blue-50', border: 'border-blue-200', gradient: 'from-blue-500 to-purple-500' }, fields: { base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
-    tiktok: { name: 'TikTok', colors: { bg: 'bg-slate-50', border: 'border-slate-200', gradient: 'from-slate-600 to-slate-800' }, fields: { base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
-    other: { name: 'Other', colors: { bg: 'bg-slate-50', border: 'border-slate-200', gradient: 'from-slate-500 to-slate-700' }, fields: { base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
+    shopee: { name: 'Shopee', colors: { bg: 'bg-orange-50', border: 'border-orange-200', gradient: 'from-orange-500 to-red-500' }, fields: { pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'], base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
+    lazada: { name: 'Lazada', colors: { bg: 'bg-blue-50', border: 'border-blue-200', gradient: 'from-blue-500 to-purple-500' }, fields: { pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'], base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
+    tiktok: { name: 'TikTok', colors: { bg: 'bg-slate-50', border: 'border-slate-200', gradient: 'from-slate-600 to-slate-800' }, fields: { pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'], base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
+    other: { name: 'Other', colors: { bg: 'bg-slate-50', border: 'border-slate-200', gradient: 'from-slate-500 to-slate-700' }, fields: { pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'], base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate'], shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'], services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'] } },
   },
   PlatformType: {},
 }));
@@ -210,7 +212,7 @@ describe('ProfitCalculator - Save Product', () => {
     expect(callArg.sites).toEqual(['MY']);
   });
 
-  it('should pass lastMileFee in product data', async () => {
+  it('should not pass site-specific fields in product data', async () => {
     render(<ProfitCalculator />);
 
     await waitFor(() => {
@@ -224,9 +226,12 @@ describe('ProfitCalculator - Save Product', () => {
     });
 
     const callArg = mockAddProduct.mock.calls[0][0];
-    expect(callArg).toHaveProperty('lastMileFee');
-    expect(callArg).toHaveProperty('baseShippingFee');
-    expect(callArg).toHaveProperty('platformCommissionRate');
+    expect(callArg).not.toHaveProperty('lastMileFee');
+    expect(callArg).not.toHaveProperty('baseShippingFee');
+    expect(callArg).not.toHaveProperty('platformCommissionRate');
+    expect(callArg).not.toHaveProperty('totalRevenue');
+    expect(callArg).toHaveProperty('cost');
+    expect(callArg).toHaveProperty('productWeight');
   });
 
   it('should reset editingProductId after successful save', async () => {

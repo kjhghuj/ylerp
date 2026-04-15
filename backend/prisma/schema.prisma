@@ -8,49 +8,22 @@ generator client {
 }
 
 model Product {
-  id                        String  @id @default(uuid())
-  name                      String
-  sku                       String
-  country                   String?
-  totalRevenue              Float
-  cost                      Float
-  productWeight             Float
-  firstWeight               Float
-  baseShippingFee           Float
-  extraShippingFee          Float
-  crossBorderFee            Float
-  sellerCoupon              Float
-  sellerCouponType          String  @default("fixed")
-  sellerCouponPlatformRatio Float
-  platformCoupon            Float
-  platformCouponRate        Float?
-  platformCommissionRate    Float
-  transactionFeeRate        Float
-  damageReturnRate          Float
-  adROI                     Float
-  vatRate                   Float
-  corporateIncomeTaxRate    Float
-  supplierTaxPoint          Float
-  mdvServiceFeeRate         Float
-  fssServiceFeeRate         Float
-  ccbServiceFeeRate         Float
-  platformInfrastructureFee Float
-  warehouseOperationFee     Float
-  lastMileFee               Float   @default(0)
-  sites                     String[] @default([])
-  supplierInvoice           String
-  quantityPerBox            Float?
-  volume                    String?
-  shipping                  Float
-  fees                      Float
-  marketing                 Float
-  taxes                     Float
-  profit                    Float
-  margin                    Float
-  costMargin                Float
-  userId                    String
-  user                      User    @relation(fields: [userId], references: [id])
-  templates                 ProfitTemplate[]
+  id                String  @id @default(uuid())
+  name              String
+  sku               String
+  country           String?
+  cost              Float
+  productWeight     Float
+  supplierTaxPoint  Float
+  supplierInvoice   String
+  sellerCouponType  String  @default("fixed")
+  sellerCoupon      Float   @default(0)
+  sellerCouponPlatformRatio Float @default(0)
+  adROI             Float   @default(15)
+  sites             String[] @default([])
+  userId            String
+  user              User    @relation(fields: [userId], references: [id])
+  templates         ProfitTemplate[]
 }
 
 model FinanceRecord {

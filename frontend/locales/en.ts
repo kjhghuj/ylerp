@@ -40,6 +40,7 @@ export const en = {
         cost: 'Cost',
         revenue: 'Revenue',
         margin: 'Margin',
+        sites: 'Sites',
         stock: 'Stock',
         sales: 'Daily Sales',
         status: 'Status',
@@ -120,6 +121,8 @@ export const en = {
       corporateIncomeTaxRate: 'Corp Income Tax Rate (%)',
       warehouseOperationFee: 'Whse Op Fee',
       lastMileFee: 'Last Mile Fee',
+      sellerCouponType: 'Coupon Type',
+      sellerCouponPlatformRatio: 'Coupon Platform Share (%)',
     },
     results: {
       commission: 'Commission',
@@ -169,6 +172,7 @@ export const en = {
       addNode: 'Add Calc Node',
       globalBase: 'Global Product Base',
       globalBaseDesc: 'GLOBAL PARAMS',
+      pricingSection: 'Pricing & Tax',
       nodeEmpty: 'No Platform Nodes',
       nodeEmptyDesc: 'Click the button in the top right to add comparison nodes for different countries/platforms.',
       useTemplate: 'Use Preloaded Template',
@@ -360,6 +364,8 @@ export const en = {
       name: 'Product Name',
       sku: 'SKU',
       price: 'Price',
+      priceCNY: 'Price (CNY)',
+      priceLocal: 'Price (Local)',
       cost: 'Cost',
       profit: 'Est. Net Profit',
       weight: 'Weight',
@@ -377,7 +383,8 @@ export const en = {
       invoiceNo: 'No',
       infraFee: 'Infra Fee',
       warehouseFee: 'Warehouse Fee',
-      crossBorder: 'Cross-Border Fee'
+      crossBorder: 'Cross-Border Fee',
+      sites: 'Sites'
     },
     pagination: {
       showing: 'Showing',
@@ -388,14 +395,15 @@ export const en = {
     modals: {
       detailTitle: 'Product Details',
       importCalculator: 'Import to Calculator',
-      tabProduct: 'Product Data',
+      importAll: 'Import All Sites',
+      tabProduct: 'Basic Info',
       noTemplates: 'No linked templates',
       noTemplatesHint: 'Templates are auto-created when saving products from Profit Calculator'
     },
     detail: {
       baseInfo: 'Basic Info',
-      priceCost: 'Price & Cost',
-      coupon: 'Coupons',
+      priceCost: 'Cost Info',
+      priceCoupon: 'Pricing & Coupons',
       platformRates: 'Platform Rates',
       taxAd: 'Tax & Ads',
       fees: 'Fees',

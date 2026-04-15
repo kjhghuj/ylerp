@@ -20,6 +20,7 @@ export const ProfitCalculator: React.FC = () => {
         profitSiteCountry: siteCountry,
         setProfitSiteCountry: setSiteCountry,
         profitNodes,
+        setProfitNodes,
         profitEditingProductId: editingProductId,
         profitGlobalInputs,
     } = store;
@@ -55,6 +56,33 @@ export const ProfitCalculator: React.FC = () => {
         handleAddNodeFromTemplate, handleAddBlankNode, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
     } = useProductActions(allTemplates, setAllTemplates, rates);
+
+    const handleReset = () => {
+        setGlobalInputs(prev => ({
+            ...prev,
+            name: '',
+            sku: '',
+            purchaseCost: 0,
+            productWeight: 0,
+        }));
+        setProfitNodes(prev => {
+            const updated = { ...prev };
+            for (const country of Object.keys(updated)) {
+                updated[country] = (updated[country] || []).map((n: any) => ({
+                    ...n,
+                    data: {
+                        ...n.data,
+                        totalRevenue: 0,
+                        sellerCoupon: 0,
+                        sellerCouponPlatformRatio: 0,
+                        crossBorderFee: 0,
+                        warehouseOperationFee: 0,
+                    }
+                }));
+            }
+            return updated;
+        });
+    };
 
     return (
         <div className="flex flex-col min-h-[calc(100vh-140px)] pb-6">
@@ -103,6 +131,7 @@ export const ProfitCalculator: React.FC = () => {
                 isLoadingRate={isLoading}
                 lastUpdated={lastUpdated}
                 onRefreshRates={refreshRates}
+                onReset={handleReset}
             />
 
             {/* Matrix Scroll Area */}

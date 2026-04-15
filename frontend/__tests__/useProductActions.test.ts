@@ -18,7 +18,7 @@ const {
         profitGlobalInputs: {
             name: '测试商品', sku: 'SKU-001', totalRevenue: 100, purchaseCost: 50,
             productWeight: 500, firstWeight: 50, supplierTaxPoint: 0,
-            supplierInvoice: 'no', sellerCouponType: 'fixed', sellerCoupon: 0,
+            supplierInvoice: 'no', sellerCoupon: 0,
             sellerCouponPlatformRatio: 0, adROI: 15, vatRate: 6,
             corporateIncomeTaxRate: 10, platformInfrastructureFee: 0,
         },
@@ -82,6 +82,7 @@ import { useProductActions } from '../modules/profit/useProductActions';
 describe('useProductActions', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        mockStoreReturn.products = [];
         mockStoreReturn.profitEditingProductId = null;
         mockStoreReturn.profitNodes = {
             MYR: [{
@@ -98,7 +99,7 @@ describe('useProductActions', () => {
         mockStoreReturn.profitGlobalInputs = {
             name: '测试商品', sku: 'SKU-001', totalRevenue: 100, purchaseCost: 50,
             productWeight: 500, firstWeight: 50, supplierTaxPoint: 0,
-            supplierInvoice: 'no', sellerCouponType: 'fixed', sellerCoupon: 0,
+            supplierInvoice: 'no', sellerCoupon: 0,
             sellerCouponPlatformRatio: 0, adROI: 15, vatRate: 6,
             corporateIncomeTaxRate: 10, platformInfrastructureFee: 0,
         };
@@ -221,8 +222,11 @@ describe('useProductActions', () => {
     });
 
     it('should call updateProduct for existing product', async () => {
-        mockStoreReturn.profitEditingProductId = 'existing-1';
-        mockStoreReturn.products = [{ id: 'existing-1', sites: ['MY'] }];
+        mockStoreReturn.products = [{
+            id: 'existing-1', name: '测试商品', sku: 'SKU-001', sites: ['MY'],
+            cost: 50, productWeight: 500, supplierTaxPoint: 0,
+            supplierInvoice: 'no',
+        }];
         mockStoreReturn.updateProduct.mockResolvedValue({ id: 'existing-1' });
 
         const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
@@ -242,8 +246,11 @@ describe('useProductActions', () => {
     });
 
     it('should show updated toast for existing product', async () => {
-        mockStoreReturn.profitEditingProductId = 'existing-1';
-        mockStoreReturn.products = [{ id: 'existing-1', sites: ['MY'] }];
+        mockStoreReturn.products = [{
+            id: 'existing-1', name: '测试商品', sku: 'SKU-001', sites: ['MY'],
+            cost: 50, productWeight: 500, supplierTaxPoint: 0,
+            supplierInvoice: 'no',
+        }];
         mockStoreReturn.updateProduct.mockResolvedValue({ id: 'existing-1' });
 
         const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
@@ -273,6 +280,7 @@ describe('useProductActions', () => {
 
     it('should save templates for each node after product save', async () => {
         mockApiPost.mockResolvedValue({ data: { id: 'tpl-new' } });
+        mockStoreReturn.addProduct.mockResolvedValue({ id: 'new-1' });
         const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
@@ -337,20 +345,15 @@ describe('useProductActions', () => {
         expect(setAllTemplates).toHaveBeenCalled();
     });
 
-    it('should collect sites from all non-empty node arrays', async () => {
-        mockStoreReturn.profitNodes = {
-            MYR: [{ id: 'n1', platform: 'shopee', country: 'MYR', data: {} }],
-            SGD: [{ id: 'n2', platform: 'shopee', country: 'SGD', data: {} }],
-            PHP: [],
-        };
-        mockStoreReturn.addProduct.mockResolvedValue({ id: 'new-multi' });
+    it('should only save current site country', async () => {
+        mockStoreReturn.profitSiteCountry = 'MYR';
+        mockStoreReturn.addProduct.mockResolvedValue({ id: 'new-site' });
         const { result } = renderHook(() => useProductActions([], vi.fn(), {}));
         await act(async () => {
             await result.current.handleSaveProduct();
         });
         const callArg = mockStoreReturn.addProduct.mock.calls[0][0];
-        expect(callArg.sites).toContain('MY');
-        expect(callArg.sites).toContain('SG');
-        expect(callArg.sites).not.toContain('PH');
+        expect(callArg.sites).toEqual(['MY']);
+        expect(callArg.country).toBe('MY');
     });
 });

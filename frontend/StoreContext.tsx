@@ -88,14 +88,13 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Profit Calculator persistent state
   const [profitGlobalInputs, setProfitGlobalInputs] = useState<Record<string, any>>(() => {
-    const saved = localStorage.getItem('yl-profit-global-inputs');
-    return saved ? JSON.parse(saved) : {
-      name: '', sku: '', totalRevenue: 0, purchaseCost: 0, productWeight: 0, firstWeight: 50,
-      supplierTaxPoint: 0, supplierInvoice: 'no',
-      sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-      adROI: 15, vatRate: 1, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
-    };
-  });
+        const saved = localStorage.getItem('yl-profit-global-inputs');
+        return saved ? JSON.parse(saved) : {
+            name: '', sku: '', purchaseCost: 0, productWeight: 0,
+            supplierTaxPoint: 0, supplierInvoice: 'no',
+            vatRate: 1, corporateIncomeTaxRate: 5,
+        };
+    });
 
   const [profitSiteCountry, setProfitSiteCountry] = useState<string>(() => {
     return localStorage.getItem('yl-profit-site-country') || 'MYR';

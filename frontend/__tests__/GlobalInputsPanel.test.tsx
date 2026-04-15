@@ -11,6 +11,7 @@ const mockT = {
         couponFixed: '固定', couponPercent: '比例',
         couponPlatformRatio: '平台出资比例', adRoi: '广告ROI',
         vat: '增值税', corpTax: '企业所得税', infraFee: '基础设施费',
+        sellerCouponType: '优惠券类型',
     },
     matrix: {
         globalBase: '全局参数', globalBaseDesc: 'PARAMS',
@@ -21,10 +22,8 @@ const mockT = {
 };
 
 const defaultGlobalInputs = {
-    name: '测试商品', sku: 'SKU-001', totalRevenue: 100, purchaseCost: 50,
+    name: '测试商品', sku: 'SKU-001', purchaseCost: 50,
     productWeight: 500, supplierInvoice: 'no', supplierTaxPoint: 0,
-    sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-    adROI: 15, vatRate: 6, corporateIncomeTaxRate: 5, platformInfrastructureFee: 0,
 };
 
 describe('GlobalInputsPanel', () => {
@@ -32,8 +31,8 @@ describe('GlobalInputsPanel', () => {
     const mockOnSetGlobalInputs = vi.fn();
     const mockOnSetSiteCountry = vi.fn();
     const mockOnRefreshRates = vi.fn();
-
     const mockOnSetUseLocalCurrency = vi.fn();
+    const mockOnReset = vi.fn();
 
     const defaultProps = {
         globalInputs: defaultGlobalInputs,
@@ -49,6 +48,7 @@ describe('GlobalInputsPanel', () => {
         isLoadingRate: false,
         lastUpdated: null as string | null,
         onRefreshRates: mockOnRefreshRates,
+        onReset: mockOnReset,
     };
 
     beforeEach(() => {
@@ -79,10 +79,9 @@ describe('GlobalInputsPanel', () => {
         expect(updaterFn(true)).toBe(false);
     });
 
-    it('should always show CNY labels for money inputs', () => {
+    it('should show CNY label for cost input', () => {
         render(<GlobalInputsPanel {...defaultProps} />);
-        const cnyLabels = screen.getAllByText(/CNY/);
-        expect(cnyLabels.length).toBeGreaterThanOrEqual(3);
+        expect(screen.getByText(/成本.*CNY/)).toBeInTheDocument();
     });
 
     it('should call onSetSiteCountry when site is changed', () => {
@@ -90,33 +89,6 @@ describe('GlobalInputsPanel', () => {
         const select = screen.getByDisplayValue(/马来西亚/);
         fireEvent.change(select, { target: { value: 'SGD' } });
         expect(mockOnSetSiteCountry).toHaveBeenCalledWith('SGD');
-    });
-
-    it('should show seller coupon fixed/percent buttons', () => {
-        render(<GlobalInputsPanel {...defaultProps} />);
-        expect(screen.getByText('固定')).toBeInTheDocument();
-        expect(screen.getByText('比例')).toBeInTheDocument();
-    });
-
-    it('should call onSetGlobalInputs when coupon type buttons are clicked', () => {
-        render(<GlobalInputsPanel {...defaultProps} />);
-        fireEvent.click(screen.getByText('比例'));
-        expect(mockOnSetGlobalInputs).toHaveBeenCalled();
-        const updaterFn = mockOnSetGlobalInputs.mock.calls[0][0];
-        const result = updaterFn(defaultGlobalInputs);
-        expect(result.sellerCouponType).toBe('percent');
-    });
-
-    it('should show local currency equivalent for fixed coupon', () => {
-        render(<GlobalInputsPanel {...defaultProps} globalInputs={{ ...defaultGlobalInputs, sellerCoupon: 10, sellerCouponType: 'fixed' }} />);
-        expect(screen.getByText(/6\.50/)).toBeInTheDocument();
-        const allMyr = screen.getAllByText(/MYR/);
-        expect(allMyr.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should not show coupon conversion for percent type', () => {
-        render(<GlobalInputsPanel {...defaultProps} globalInputs={{ ...defaultGlobalInputs, sellerCoupon: 5, sellerCouponType: 'percent' }} />);
-        expect(screen.queryByText(/3\.25/)).not.toBeInTheDocument();
     });
 
     it('should display exchange rate badge when currentRate > 0', () => {

@@ -16,9 +16,15 @@ describe('profit/types', () => {
     });
 
     it('should have all required fields in DEFAULT_NODE_DATA', () => {
+        expect(DEFAULT_NODE_DATA).toHaveProperty('totalRevenue');
+        expect(DEFAULT_NODE_DATA).toHaveProperty('sellerCoupon');
+        expect(DEFAULT_NODE_DATA).toHaveProperty('sellerCouponPlatformRatio');
+        expect(DEFAULT_NODE_DATA).toHaveProperty('adROI');
+        expect(DEFAULT_NODE_DATA).toHaveProperty('platformInfrastructureFee');
         expect(DEFAULT_NODE_DATA).toHaveProperty('baseShippingFee');
         expect(DEFAULT_NODE_DATA).toHaveProperty('extraShippingFee');
         expect(DEFAULT_NODE_DATA).toHaveProperty('crossBorderFee');
+        expect(DEFAULT_NODE_DATA).toHaveProperty('firstWeight');
         expect(DEFAULT_NODE_DATA).toHaveProperty('platformCommissionRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('transactionFeeRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('platformCoupon');
@@ -31,9 +37,10 @@ describe('profit/types', () => {
         expect(DEFAULT_NODE_DATA).toHaveProperty('lastMileFee');
     });
 
-    it('should have all DEFAULT_NODE_DATA values set to 0', () => {
+    it('should have numeric values in DEFAULT_NODE_DATA', () => {
         for (const [key, value] of Object.entries(DEFAULT_NODE_DATA)) {
-            expect(value).toBe(0);
+            if (key === 'sellerCouponType') continue;
+            expect(typeof value).toBe('number');
         }
     });
 });

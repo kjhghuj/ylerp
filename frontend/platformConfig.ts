@@ -10,6 +10,7 @@ export interface PlatformConfig {
         gradient: string;
     };
     fields: {
+        pricing: string[];
         base: string[];
         shipping: string[];
         services: string[];
@@ -26,6 +27,7 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-orange-500 to-amber-500'
         },
         fields: {
+            pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'],
             base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
             services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'],
@@ -40,6 +42,7 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-indigo-600 to-blue-500'
         },
         fields: {
+            pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'],
             base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
             services: ['warehouseOperationFee'],
@@ -54,6 +57,7 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-slate-800 to-black'
         },
         fields: {
+            pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'],
             base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
             services: ['warehouseOperationFee'],
@@ -68,6 +72,7 @@ export const PLATFORMS: Record<PlatformType, PlatformConfig> = {
             gradient: 'from-slate-400 to-slate-500'
         },
         fields: {
+            pricing: ['totalRevenue', 'sellerCoupon', 'sellerCouponPlatformRatio', 'adROI', 'vatRate', 'corporateIncomeTaxRate', 'platformInfrastructureFee'],
             base: ['platformCommissionRate', 'transactionFeeRate', 'damageReturnRate', 'platformCoupon', 'platformCouponRate'],
             shipping: ['firstWeight', 'baseShippingFee', 'extraShippingFee', 'crossBorderFee'],
             services: ['mdvServiceFeeRate', 'fssServiceFeeRate', 'ccbServiceFeeRate', 'warehouseOperationFee'],

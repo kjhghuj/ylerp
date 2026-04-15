@@ -44,11 +44,9 @@ describe('useProfitImport', () => {
     it('should set global inputs from imported product data', async () => {
         mockStoreReturn.calculatorImport = {
             id: 'prod-1', name: '测试商品', sku: 'SKU-001',
-            country: 'MY', totalRevenue: 200, cost: 100,
-            productWeight: 500, firstWeight: 30,
+            country: 'MY', cost: 100,
+            productWeight: 500,
             supplierTaxPoint: 6, supplierInvoice: 'yes',
-            sellerCouponType: 'percent', sellerCoupon: 5, sellerCouponPlatformRatio: 50,
-            adROI: 10, vatRate: 6, corporateIncomeTaxRate: 5, platformInfrastructureFee: 1,
         };
 
         renderHook(() => useProfitImport(), { wrapper: wrapInProvider() });
@@ -61,19 +59,10 @@ describe('useProfitImport', () => {
         const result = updaterFn({});
         expect(result.name).toBe('测试商品');
         expect(result.sku).toBe('SKU-001');
-        expect(result.totalRevenue).toBe(200);
         expect(result.purchaseCost).toBe(100);
         expect(result.productWeight).toBe(500);
-        expect(result.firstWeight).toBe(30);
         expect(result.supplierTaxPoint).toBe(6);
         expect(result.supplierInvoice).toBe('yes');
-        expect(result.sellerCouponType).toBe('percent');
-        expect(result.sellerCoupon).toBe(5);
-        expect(result.sellerCouponPlatformRatio).toBe(50);
-        expect(result.adROI).toBe(10);
-        expect(result.vatRate).toBe(6);
-        expect(result.corporateIncomeTaxRate).toBe(5);
-        expect(result.platformInfrastructureFee).toBe(1);
     });
 
     it('should set editingProductId when import has id', async () => {
