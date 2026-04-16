@@ -292,12 +292,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         };
 
         const siteInputs = {
-            totalRevenue: Number(d.totalRevenue) || 0,
-            sellerCoupon: Number(d.sellerCoupon) || 0,
-            sellerCouponType: (d.sellerCouponType as 'fixed' | 'percent') || (selectedProduct as any)?.sellerCouponType || 'fixed',
-            sellerCouponPlatformRatio: Number(d.sellerCouponPlatformRatio) || 0,
-            platformInfrastructureFee: Number(d.platformInfrastructureFee) || 0,
-            adROI: d.adROI !== undefined && d.adROI !== null ? Number(d.adROI) : 15,
+            totalRevenue: Number(selectedProduct?.totalRevenue) || 0,
+            sellerCoupon: Number(selectedProduct?.sellerCoupon) || 0,
+            sellerCouponType: (selectedProduct?.sellerCouponType as 'fixed' | 'percent') || 'fixed',
+            sellerCouponPlatformRatio: Number(selectedProduct?.sellerCouponPlatformRatio) || 0,
+            platformInfrastructureFee: Number(selectedProduct?.platformInfrastructureFee) || 0,
+            adROI: selectedProduct?.adROI !== undefined && selectedProduct?.adROI !== null ? Number(selectedProduct.adROI) : 15,
         };
 
         return calculateProfit(profitData, globalData, siteInputs, rate, currency);
@@ -308,24 +308,6 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         const profit = computeTemplateProfit(tpl);
 
         const sections = [
-            {
-                title: t.detail.priceCoupon || '定价与优惠券',
-                items: [
-                    { label: t.table.price || '售价', value: d.totalRevenue, suffix: 'CNY' },
-                    { label: t.table.sellerCoupon || '卖家优惠券', value: d.sellerCoupon, suffix: (selectedProduct as any)?.sellerCouponType === 'percent' ? '%' : 'CNY' },
-                    { label: t.detail.couponPlatformRatio || '平台出资比例', value: d.sellerCouponPlatformRatio, suffix: '%' },
-                    { label: t.detail.platformCoupon || '平台优惠券', value: d.platformCoupon, suffix: tpl.country },
-                ]
-            },
-            {
-                title: t.detail.taxAd || '税费与广告',
-                items: [
-                    { label: t.detail.vatRate || '增值税率', value: d.vatRate, suffix: '%' },
-                    { label: t.detail.corpTaxRate || '企业所得税率', value: d.corporateIncomeTaxRate, suffix: '%' },
-                    { label: t.table.adROI || '广告ROI', value: d.adROI },
-                    { label: t.detail.infraFee || '基础设施费', value: d.platformInfrastructureFee, suffix: tpl.country },
-                ]
-            },
             {
                 title: t.detail.platformRates || '平台费率',
                 items: [
@@ -349,6 +331,20 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     { label: t.detail.mdvFee || 'MDV', value: d.mdvServiceFeeRate, suffix: '%' },
                     { label: t.detail.fssFee || 'FSS', value: d.fssServiceFeeRate, suffix: '%' },
                     { label: t.detail.ccbFee || 'CCB', value: d.ccbServiceFeeRate, suffix: '%' },
+                ]
+            },
+            {
+                title: t.detail.platformCoupon || '平台优惠券',
+                items: [
+                    { label: t.detail.platformCoupon || '平台优惠券', value: d.platformCoupon, suffix: tpl.country },
+                    { label: t.detail.platformCouponRate || '优惠券比例', value: d.platformCouponRate, suffix: '%' },
+                ]
+            },
+            {
+                title: t.detail.taxAd || '税费',
+                items: [
+                    { label: t.detail.vatRate || '增值税率', value: d.vatRate, suffix: '%' },
+                    { label: t.detail.corpTaxRate || '企业所得税率', value: d.corporateIncomeTaxRate, suffix: '%' },
                 ]
             },
         ];
@@ -481,14 +477,31 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                 { label: t.table.weight || '重量', value: `${selectedProduct.productWeight}g` },
                                                 { label: t.detail.invoice || '发票', value: selectedProduct.supplierInvoice === 'yes' ? (t.detail.invoiceYes || '有') : (t.detail.invoiceNo || '无') },
                                                 { label: t.detail.taxPoint || '税点', value: `${selectedProduct.supplierTaxPoint}%` },
-                                                { label: t.detail.couponType || '优惠券类型', value: selectedProduct.sellerCouponType === 'percent' ? (t.detail.percentType || '百分比') : (t.detail.fixedType || '固定') },
-                                                { label: t.table.sellerCoupon || '卖家优惠券', value: `${selectedProduct.sellerCoupon || 0}` },
-                                                { label: t.detail.couponPlatformRatio || '平台出资比例', value: `${selectedProduct.sellerCouponPlatformRatio || 0}%` },
-                                                { label: t.table.adROI || '广告ROI', value: `${selectedProduct.adROI || 15}` },
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                     <span className="text-xs font-medium text-slate-500">{item.label}</span>
                                                     <span className="text-sm font-bold text-slate-700">{item.value || '-'}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{'站点参数'}</h4>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                            {[
+                                                { label: t.table.priceCNY || '总收入', value: `${selectedProduct.totalRevenue?.toFixed(2)} CNY` },
+                                                { label: t.table.sellerCoupon || '卖家优惠券', value: `${selectedProduct.sellerCoupon || 0}`, suffix: selectedProduct.sellerCouponType === 'percent' ? '%' : 'CNY' },
+                                                { label: t.detail.couponPlatformRatio || '平台出资比例', value: `${selectedProduct.sellerCouponPlatformRatio || 0}%` },
+                                                { label: t.table.adROI || '广告ROI', value: `${selectedProduct.adROI !== undefined && selectedProduct.adROI !== null ? selectedProduct.adROI : 15}` },
+                                                { label: t.detail.infraFee || '基础设施费', value: `${selectedProduct.platformInfrastructureFee?.toFixed(2) || '0.00'} CNY` },
+                                                { label: t.detail.couponType || '优惠券类型', value: selectedProduct.sellerCouponType === 'percent' ? (t.detail.percentType || '百分比') : (t.detail.fixedType || '固定') },
+                                            ].map(item => (
+                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
+                                                    <span className="text-xs font-medium text-slate-500">{item.label}</span>
+                                                    <span className="text-sm font-bold text-slate-700">
+                                                        {item.value || '-'}
+                                                        {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
+                                                    </span>
                                                 </div>
                                             ))}
                                         </div>
