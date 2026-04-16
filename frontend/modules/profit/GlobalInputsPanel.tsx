@@ -124,7 +124,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     label={`${t.inputs.totalRevenue || '总收入'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
                     name="totalRevenue"
                     value={siteInputs.totalRevenue}
-                    onChange={(e) => onSiteInputChange('totalRevenue', Number(e.target.value) || 0)}
+                    onChange={(e) => onSiteInputChange('totalRevenue', parseFloat(e.target.value) || 0)}
                     highlight
                     invertCurrency={useLocalCurrency}
                     exchangeRate={rates[siteCountry] || 0}
@@ -134,7 +134,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     label={t.inputs.sellerCoupon || '卖家优惠券'}
                     name="sellerCoupon"
                     value={siteInputs.sellerCoupon}
-                    onChange={(e) => onSiteInputChange('sellerCoupon', Number(e.target.value) || 0)}
+                    onChange={(e) => onSiteInputChange('sellerCoupon', parseFloat(e.target.value) || 0)}
                     suffix={siteInputs.sellerCouponType === 'percent' ? '%' : (useLocalCurrency ? siteCountry : 'CNY')}
                 />
                 <SelectInput
@@ -151,14 +151,14 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     label={t.inputs.couponPlatformRatio || '平台出资比例'}
                     name="sellerCouponPlatformRatio"
                     value={siteInputs.sellerCouponPlatformRatio}
-                    onChange={(e) => onSiteInputChange('sellerCouponPlatformRatio', Number(e.target.value) || 0)}
+                    onChange={(e) => onSiteInputChange('sellerCouponPlatformRatio', parseFloat(e.target.value) || 0)}
                     suffix="%"
                 />
                 <NumberInput
                     label={`${t.inputs.infraFee || '基础设施费'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
                     name="platformInfrastructureFee"
                     value={siteInputs.platformInfrastructureFee}
-                    onChange={(e) => onSiteInputChange('platformInfrastructureFee', Number(e.target.value) || 0)}
+                    onChange={(e) => onSiteInputChange('platformInfrastructureFee', parseFloat(e.target.value) || 0)}
                     invertCurrency={useLocalCurrency}
                     exchangeRate={rates[siteCountry] || 0}
                     currencyCode={siteCountry}
@@ -167,7 +167,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     label={t.inputs.adROI || '广告ROI'}
                     name="adROI"
                     value={siteInputs.adROI}
-                    onChange={(e) => onSiteInputChange('adROI', Number(e.target.value) || 0)}
+                    onChange={(e) => onSiteInputChange('adROI', parseFloat(e.target.value) || 0)}
                 />
             </div>
         </div>

@@ -1,21 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { genId, DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
+import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS, genId } from '../modules/profit/types';
 
-describe('profit/types', () => {
-    it('should generate unique IDs', () => {
-        const id1 = genId();
-        const id2 = genId();
-        expect(id1).toBeTruthy();
-        expect(id2).toBeTruthy();
-        expect(id1).not.toBe(id2);
-    });
-
-    it('should generate string IDs', () => {
-        const id = genId();
-        expect(typeof id).toBe('string');
-    });
-
-    it('should have all required fields in DEFAULT_NODE_DATA', () => {
+describe('DEFAULT_NODE_DATA', () => {
+    it('should contain all node-level fields', () => {
         expect(DEFAULT_NODE_DATA).toHaveProperty('baseShippingFee');
         expect(DEFAULT_NODE_DATA).toHaveProperty('extraShippingFee');
         expect(DEFAULT_NODE_DATA).toHaveProperty('crossBorderFee');
@@ -32,7 +19,24 @@ describe('profit/types', () => {
         expect(DEFAULT_NODE_DATA).toHaveProperty('lastMileFee');
     });
 
-    it('should have all required fields in DEFAULT_SITE_INPUTS', () => {
+    it('should not contain site-level fields', () => {
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('totalRevenue');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('sellerCoupon');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('sellerCouponType');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('sellerCouponPlatformRatio');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('platformInfrastructureFee');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('adROI');
+    });
+
+    it('should have numeric defaults', () => {
+        expect(DEFAULT_NODE_DATA.firstWeight).toBe(50);
+        expect(DEFAULT_NODE_DATA.baseShippingFee).toBe(0);
+        expect(DEFAULT_NODE_DATA.platformCommissionRate).toBe(0);
+    });
+});
+
+describe('DEFAULT_SITE_INPUTS', () => {
+    it('should contain all site-level fields', () => {
         expect(DEFAULT_SITE_INPUTS).toHaveProperty('totalRevenue');
         expect(DEFAULT_SITE_INPUTS).toHaveProperty('sellerCoupon');
         expect(DEFAULT_SITE_INPUTS).toHaveProperty('sellerCouponType');
@@ -41,18 +45,26 @@ describe('profit/types', () => {
         expect(DEFAULT_SITE_INPUTS).toHaveProperty('adROI');
     });
 
-    it('should have numeric values in DEFAULT_NODE_DATA', () => {
-        for (const [key, value] of Object.entries(DEFAULT_NODE_DATA)) {
-            expect(typeof value).toBe('number');
-        }
+    it('should have correct default values', () => {
+        expect(DEFAULT_SITE_INPUTS.totalRevenue).toBe(0);
+        expect(DEFAULT_SITE_INPUTS.sellerCoupon).toBe(0);
+        expect(DEFAULT_SITE_INPUTS.sellerCouponType).toBe('fixed');
+        expect(DEFAULT_SITE_INPUTS.sellerCouponPlatformRatio).toBe(0);
+        expect(DEFAULT_SITE_INPUTS.platformInfrastructureFee).toBe(0);
+        expect(DEFAULT_SITE_INPUTS.adROI).toBe(15);
+    });
+});
+
+describe('genId', () => {
+    it('should generate unique IDs', () => {
+        const id1 = genId();
+        const id2 = genId();
+        expect(id1).not.toBe(id2);
     });
 
-    it('should have correct types in DEFAULT_SITE_INPUTS', () => {
-        expect(typeof DEFAULT_SITE_INPUTS.totalRevenue).toBe('number');
-        expect(typeof DEFAULT_SITE_INPUTS.sellerCoupon).toBe('number');
-        expect(typeof DEFAULT_SITE_INPUTS.sellerCouponType).toBe('string');
-        expect(typeof DEFAULT_SITE_INPUTS.sellerCouponPlatformRatio).toBe('number');
-        expect(typeof DEFAULT_SITE_INPUTS.platformInfrastructureFee).toBe('number');
-        expect(typeof DEFAULT_SITE_INPUTS.adROI).toBe('number');
+    it('should return a non-empty string', () => {
+        const id = genId();
+        expect(typeof id).toBe('string');
+        expect(id.length).toBeGreaterThan(0);
     });
 });
