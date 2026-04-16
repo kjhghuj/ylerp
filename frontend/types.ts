@@ -13,6 +13,8 @@ export interface ProductCalcData {
   sellerCoupon?: number;
   sellerCouponPlatformRatio?: number;
   adROI?: number;
+  totalRevenue?: number;
+  platformInfrastructureFee?: number;
 }
 
 export interface FinanceRecord {

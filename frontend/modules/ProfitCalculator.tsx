@@ -4,7 +4,7 @@ import { Save, Calculator, Building } from 'lucide-react';
 import api from '../src/api';
 
 import { PlatformCard } from './PlatformCard';
-import { ProfitTemplate } from './profit/types';
+import { ProfitTemplate, SiteLevelInputs, DEFAULT_SITE_INPUTS } from './profit/types';
 import { useProfitImport } from './profit/useProfitImport';
 import { useProductActions } from './profit/useProductActions';
 import { useExchangeRates } from './profit/useExchangeRates';
@@ -26,13 +26,21 @@ export const ProfitCalculator: React.FC = () => {
     } = store;
     const t = strings.profit;
 
-    useProfitImport();
-
     const [allTemplates, setAllTemplates] = useState<ProfitTemplate[]>([]);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [useLocalCurrency, setUseLocalCurrency] = useState(false);
+
+    const [siteInputsMap, setSiteInputsMap] = useState<Record<string, SiteLevelInputs>>({
+        'MYR': { ...DEFAULT_SITE_INPUTS },
+        'SGD': { ...DEFAULT_SITE_INPUTS },
+        'PHP': { ...DEFAULT_SITE_INPUTS },
+        'THB': { ...DEFAULT_SITE_INPUTS },
+        'IDR': { ...DEFAULT_SITE_INPUTS },
+    });
+
+    useProfitImport(siteInputsMap, setSiteInputsMap);
 
     const { rates, isLoading, lastUpdated, fetchRates: refreshRates } = useExchangeRates();
 
@@ -55,7 +63,7 @@ export const ProfitCalculator: React.FC = () => {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
         handleAddNodeFromTemplate, handleAddBlankNode, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
-    } = useProductActions(allTemplates, setAllTemplates, rates);
+    } = useProductActions(allTemplates, setAllTemplates, rates, siteInputsMap, setSiteInputsMap);
 
     const handleReset = () => {
         setGlobalInputs(prev => ({
@@ -65,6 +73,13 @@ export const ProfitCalculator: React.FC = () => {
             purchaseCost: 0,
             productWeight: 0,
         }));
+        setSiteInputsMap({
+            'MYR': { ...DEFAULT_SITE_INPUTS },
+            'SGD': { ...DEFAULT_SITE_INPUTS },
+            'PHP': { ...DEFAULT_SITE_INPUTS },
+            'THB': { ...DEFAULT_SITE_INPUTS },
+            'IDR': { ...DEFAULT_SITE_INPUTS },
+        });
         setProfitNodes(prev => {
             const updated = { ...prev };
             for (const country of Object.keys(updated)) {
@@ -72,9 +87,8 @@ export const ProfitCalculator: React.FC = () => {
                     ...n,
                     data: {
                         ...n.data,
-                        totalRevenue: 0,
-                        sellerCoupon: 0,
-                        sellerCouponPlatformRatio: 0,
+                        baseShippingFee: 0,
+                        extraShippingFee: 0,
                         crossBorderFee: 0,
                         warehouseOperationFee: 0,
                     }
@@ -132,6 +146,16 @@ export const ProfitCalculator: React.FC = () => {
                 lastUpdated={lastUpdated}
                 onRefreshRates={refreshRates}
                 onReset={handleReset}
+                siteInputs={siteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
+                onSiteInputChange={(field, value) => {
+                    setSiteInputsMap(prev => ({
+                        ...prev,
+                        [siteCountry]: {
+                            ...prev[siteCountry],
+                            [field]: value,
+                        }
+                    }));
+                }}
             />
 
             {/* Matrix Scroll Area */}
@@ -152,6 +176,7 @@ export const ProfitCalculator: React.FC = () => {
                             nodeName={node.name}
                             data={node.data}
                             globalInputs={profitGlobalInputs}
+                            siteInputs={siteInputsMap[node.country] || DEFAULT_SITE_INPUTS}
                             rateToCNY={rates[node.country] || 1}
                             strings={t}
                             onUpdate={handleUpdateNode}

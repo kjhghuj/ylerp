@@ -89,6 +89,7 @@ const mockPlatformCardProps = {
     supplierInvoice: 'no' as const,
   },
   rateToCNY: 2.15,
+  siteInputs: { totalRevenue: 100, sellerCoupon: 0, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15 },
   strings: mockStrings,
   onUpdate: mockOnUpdate,
   onDelete: mockOnDelete,

@@ -1,14 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { calculateProfit, calculateLastMileFee, type ProfitInput, type GlobalInput } from '../modules/profit/calculateProfit';
-import { DEFAULT_NODE_DATA } from '../modules/profit/types';
+import { calculateProfit, calculateLastMileFee, type ProfitInput, type GlobalInput, type SiteLevelInputs } from '../modules/profit/calculateProfit';
+import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 
 const defaultData: ProfitInput = {
-    totalRevenue: 0,
-    sellerCoupon: 0,
-    sellerCouponPlatformRatio: 0,
-    sellerCouponType: 'fixed',
-    adROI: 15,
-    platformInfrastructureFee: 0,
     baseShippingFee: 0,
     extraShippingFee: 0,
     crossBorderFee: 0,
@@ -34,9 +28,11 @@ const defaultGlobal: GlobalInput = {
     corporateIncomeTaxRate: 5,
 };
 
+const defaultSiteInputs: SiteLevelInputs = { ...DEFAULT_SITE_INPUTS };
+
 describe('calculateProfit - basic calculation', () => {
     it('should return zero profit when all inputs are zero', () => {
-        const result = calculateProfit(defaultData, defaultGlobal, 1, 'MYR');
+        const result = calculateProfit(defaultData, defaultGlobal, defaultSiteInputs, 1, 'MYR');
         expect(result.finalRevenueCNY).toBe(0);
         expect(result.totalRevenue).toBe(0);
         expect(result.roi).toBe(0);
@@ -45,8 +41,9 @@ describe('calculateProfit - basic calculation', () => {
 
     it('should calculate simple profit correctly: revenue=100, cost=50', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.totalRevenue).toBe(100);
@@ -60,10 +57,8 @@ describe('calculateProfit - basic calculation', () => {
         const result = calculateProfit(
             {
                 ...defaultData,
-                totalRevenue: 100,
                 platformCommissionRate: 8,
                 transactionFeeRate: 2,
-                adROI: 10,
                 baseShippingFee: 5,
                 crossBorderFee: 1,
                 damageReturnRate: 1,
@@ -75,6 +70,7 @@ describe('calculateProfit - basic calculation', () => {
                 vatRate: 0,
                 corporateIncomeTaxRate: 0,
             },
+            { ...defaultSiteInputs, totalRevenue: 100, adROI: 10 },
             1, 'MYR',
         );
 
@@ -89,8 +85,9 @@ describe('calculateProfit - basic calculation', () => {
 
     it('should calculate negative profit when costs exceed revenue', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 10 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 100 },
+            { ...defaultSiteInputs, totalRevenue: 10 },
             1, 'MYR',
         );
         expect(result.finalRevenueCNY).toBeLessThan(0);
@@ -102,8 +99,9 @@ describe('calculateProfit - basic calculation', () => {
 describe('calculateProfit - tax calculation', () => {
     it('should calculate VAT correctly', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 6 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.vat).toBeCloseTo(100 * 0.06, 2);
@@ -111,11 +109,9 @@ describe('calculateProfit - tax calculation', () => {
 
     it('should calculate corporate income tax WITHOUT invoice', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-            },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, corporateIncomeTaxRate: 10, vatRate: 0, supplierInvoice: 'no' },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         const expectedTaxableRevenue = 100;
@@ -124,11 +120,9 @@ describe('calculateProfit - tax calculation', () => {
 
     it('should calculate corporate income tax WITH invoice (deduct cost)', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-            },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, supplierInvoice: 'yes', supplierTaxPoint: 6, corporateIncomeTaxRate: 10, vatRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         const expectedTaxableRevenue = 100;
@@ -140,11 +134,9 @@ describe('calculateProfit - tax calculation', () => {
 
     it('should include costTaxAmount in corporate income tax when invoice=yes', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 200,
-            },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 80, supplierInvoice: 'yes', supplierTaxPoint: 13, corporateIncomeTaxRate: 5, vatRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 200 },
             1, 'MYR',
         );
         expect(result.costTaxAmount).toBeCloseTo(80 * 0.13, 2);
@@ -153,11 +145,9 @@ describe('calculateProfit - tax calculation', () => {
 
     it('should sum VAT and corporate income tax into totalTax', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-            },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 6, corporateIncomeTaxRate: 10 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.totalTax).toBeCloseTo(result.vat + result.corporateIncomeTax, 10);
@@ -167,8 +157,9 @@ describe('calculateProfit - tax calculation', () => {
 describe('calculateProfit - seller coupon', () => {
     it('should handle fixed seller coupon correctly', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'fixed' },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'fixed' },
             1, 'MYR',
         );
         expect(result.actualSellerCoupon).toBe(10);
@@ -177,8 +168,9 @@ describe('calculateProfit - seller coupon', () => {
 
     it('should handle percent seller coupon correctly', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'percent' },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'percent' },
             1, 'MYR',
         );
         expect(result.actualSellerCoupon).toBeCloseTo(10, 2);
@@ -187,8 +179,9 @@ describe('calculateProfit - seller coupon', () => {
 
     it('should handle 20% seller coupon', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 200, sellerCoupon: 20, sellerCouponType: 'percent' },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 200, sellerCoupon: 20, sellerCouponType: 'percent' },
             1, 'MYR',
         );
         expect(result.actualSellerCoupon).toBeCloseTo(40, 2);
@@ -197,8 +190,9 @@ describe('calculateProfit - seller coupon', () => {
 
     it('should deduct platform portion from seller coupon', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, sellerCoupon: 10, sellerCouponPlatformRatio: 50, sellerCouponType: 'fixed' },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponPlatformRatio: 50, sellerCouponType: 'fixed' },
             1, 'MYR',
         );
         expect(result.actualSellerCoupon).toBeCloseTo(5, 2);
@@ -206,8 +200,9 @@ describe('calculateProfit - seller coupon', () => {
 
     it('should deduct 100% platform ratio resulting in zero actual coupon', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, sellerCoupon: 10, sellerCouponPlatformRatio: 100, sellerCouponType: 'fixed' },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponPlatformRatio: 100, sellerCouponType: 'fixed' },
             1, 'MYR',
         );
         expect(result.actualSellerCoupon).toBeCloseTo(0, 2);
@@ -215,14 +210,9 @@ describe('calculateProfit - seller coupon', () => {
 
     it('should compute commission based on revenueAfterSellerCoupon', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                sellerCoupon: 10,
-                sellerCouponType: 'fixed',
-                platformCommissionRate: 8,
-            },
+            { ...defaultData, platformCommissionRate: 8 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'fixed' },
             1, 'MYR',
         );
         expect(result.revenueAfterSellerCoupon).toBeCloseTo(90, 2);
@@ -233,13 +223,9 @@ describe('calculateProfit - seller coupon', () => {
 describe('calculateProfit - currency conversion', () => {
     it('should convert local currency fees to CNY for MYR (rate=0.65)', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                baseShippingFee: 6.5,
-                crossBorderFee: 0.65,
-            },
+            { ...defaultData, baseShippingFee: 6.5, crossBorderFee: 0.65 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(10 + 1, 2);
@@ -247,8 +233,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should convert platform coupon from local currency to CNY', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, platformCoupon: 6.5 },
+            { ...defaultData, platformCoupon: 6.5 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.platformCouponCNY).toBeCloseTo(10, 2);
@@ -256,15 +243,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should convert extraShippingFee per 10g to CNY', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                firstWeight: 50,
-                baseShippingFee: 0,
-                extraShippingFee: 6.5,
-                crossBorderFee: 0,
-            },
+            { ...defaultData, firstWeight: 50, baseShippingFee: 0, extraShippingFee: 6.5, crossBorderFee: 0 },
             { ...defaultGlobal, purchaseCost: 50, productWeight: 70, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(10 * (20 / 10), 2);
@@ -272,8 +253,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should convert warehouseOperationFee to CNY', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, warehouseOperationFee: 6.5 },
+            { ...defaultData, warehouseOperationFee: 6.5 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.platformFee).toBeGreaterThanOrEqual(10);
@@ -281,8 +263,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should compute finalRevenueLocal by multiplying CNY result by rate', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.finalRevenueLocal).toBeCloseTo(result.finalRevenueCNY * 0.65, 10);
@@ -290,8 +273,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should handle rate=1 (CNY base) correctly', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, baseShippingFee: 10 },
+            { ...defaultData, baseShippingFee: 10 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(10, 2);
@@ -299,8 +283,9 @@ describe('calculateProfit - currency conversion', () => {
 
     it('should handle rate=0 as rate=1 fallback', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, baseShippingFee: 10 },
+            { ...defaultData, baseShippingFee: 10 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(10, 2);
@@ -310,15 +295,9 @@ describe('calculateProfit - currency conversion', () => {
 describe('calculateProfit - shipping fee', () => {
     it('should calculate base shipping only when weight <= firstWeight', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                baseShippingFee: 10,
-                extraShippingFee: 5,
-                crossBorderFee: 2,
-                firstWeight: 100,
-            },
+            { ...defaultData, baseShippingFee: 10, extraShippingFee: 5, crossBorderFee: 2, firstWeight: 100 },
             { ...defaultGlobal, purchaseCost: 50, productWeight: 80, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(12, 2);
@@ -326,15 +305,9 @@ describe('calculateProfit - shipping fee', () => {
 
     it('should add extra shipping fee for weight > firstWeight', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                baseShippingFee: 10,
-                extraShippingFee: 2,
-                crossBorderFee: 1,
-                firstWeight: 50,
-            },
+            { ...defaultData, baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1, firstWeight: 50 },
             { ...defaultGlobal, purchaseCost: 50, productWeight: 70, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(11 + 2 * (20 / 10), 2);
@@ -342,14 +315,9 @@ describe('calculateProfit - shipping fee', () => {
 
     it('should add lastMileFee for SGD country', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                baseShippingFee: 1.9,
-                crossBorderFee: 0,
-                lastMileFee: 3,
-            },
+            { ...defaultData, baseShippingFee: 1.9, crossBorderFee: 0, lastMileFee: 3 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.19, 'SGD',
         );
         const baseShippingCNY = 1.9 / 0.19;
@@ -359,14 +327,9 @@ describe('calculateProfit - shipping fee', () => {
 
     it('should NOT add lastMileFee for non-SGD country', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                baseShippingFee: 6.5,
-                crossBorderFee: 0,
-                lastMileFee: 3,
-            },
+            { ...defaultData, baseShippingFee: 6.5, crossBorderFee: 0, lastMileFee: 3 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.65, 'MYR',
         );
         expect(result.shippingFee).toBeCloseTo(6.5 / 0.65, 2);
@@ -376,14 +339,9 @@ describe('calculateProfit - shipping fee', () => {
 describe('calculateProfit - service fee', () => {
     it('should waive service fees for MYR country', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                mdvServiceFeeRate: 5,
-                fssServiceFeeRate: 3,
-                ccbServiceFeeRate: 2,
-            },
+            { ...defaultData, mdvServiceFeeRate: 5, fssServiceFeeRate: 3, ccbServiceFeeRate: 2 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.serviceFee).toBe(0);
@@ -391,14 +349,9 @@ describe('calculateProfit - service fee', () => {
 
     it('should waive service fees for SGD country', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                mdvServiceFeeRate: 5,
-                fssServiceFeeRate: 3,
-                ccbServiceFeeRate: 2,
-            },
+            { ...defaultData, mdvServiceFeeRate: 5, fssServiceFeeRate: 3, ccbServiceFeeRate: 2 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.19, 'SGD',
         );
         expect(result.serviceFee).toBe(0);
@@ -407,17 +360,12 @@ describe('calculateProfit - service fee', () => {
     it('should apply service fees for PHP country with cap', () => {
         const rate = 8.05;
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 100,
-                mdvServiceFeeRate: 5,
-                fssServiceFeeRate: 3,
-                ccbServiceFeeRate: 2,
-            },
+            { ...defaultData, mdvServiceFeeRate: 5, fssServiceFeeRate: 3, ccbServiceFeeRate: 2 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             rate, 'PHP',
         );
-        const totalRevenueCNY = 100 / rate;
+        const totalRevenueCNY = 100;
         const revenueAfterCouponCNY = totalRevenueCNY;
         const mdvCapCNY = 25;
         const otherCapCNY = 12.5;
@@ -429,12 +377,9 @@ describe('calculateProfit - service fee', () => {
 
     it('should apply cap when service fee exceeds cap', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 1000,
-                mdvServiceFeeRate: 10,
-            },
+            { ...defaultData, mdvServiceFeeRate: 10 },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 1000 },
             1, 'PHP',
         );
         const mdvCapCNY = 25;
@@ -445,8 +390,9 @@ describe('calculateProfit - service fee', () => {
 
     it('should include platformInfrastructureFee in serviceFee', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, platformInfrastructureFee: 5 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, platformInfrastructureFee: 5 },
             1, 'MYR',
         );
         expect(result.serviceFee).toBe(5);
@@ -456,8 +402,9 @@ describe('calculateProfit - service fee', () => {
 describe('calculateProfit - ad fee', () => {
     it('should calculate ad fee as taxableRevenue / adROI', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, adROI: 10 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, adROI: 10 },
             1, 'MYR',
         );
         expect(result.adFee).toBeCloseTo(result.taxableRevenue / 10, 4);
@@ -465,8 +412,9 @@ describe('calculateProfit - ad fee', () => {
 
     it('should return 0 ad fee when adROI is 0', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, adROI: 0 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, adROI: 0 },
             1, 'MYR',
         );
         expect(result.adFee).toBe(0);
@@ -474,8 +422,9 @@ describe('calculateProfit - ad fee', () => {
 
     it('should return 0 ad fee when adROI is negative', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, adROI: -5 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100, adROI: -5 },
             1, 'MYR',
         );
         expect(result.adFee).toBe(0);
@@ -485,8 +434,9 @@ describe('calculateProfit - ad fee', () => {
 describe('calculateProfit - damage/return', () => {
     it('should calculate damage based on totalRevenue', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, damageReturnRate: 2 },
+            { ...defaultData, damageReturnRate: 2 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.damage).toBeCloseTo(2, 2);
@@ -494,8 +444,9 @@ describe('calculateProfit - damage/return', () => {
 
     it('should handle 0% damage rate', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, damageReturnRate: 0 },
+            { ...defaultData, damageReturnRate: 0 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.damage).toBe(0);
@@ -505,8 +456,9 @@ describe('calculateProfit - damage/return', () => {
 describe('calculateProfit - ROI and margin', () => {
     it('should calculate ROI as (finalRevenueCNY / purchaseCost) * 100', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.roi).toBeCloseTo((result.finalRevenueCNY / 50) * 100, 4);
@@ -514,8 +466,9 @@ describe('calculateProfit - ROI and margin', () => {
 
     it('should calculate margin as (finalRevenueCNY / totalRevenue) * 100', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50, vatRate: 0, corporateIncomeTaxRate: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.margin).toBeCloseTo((result.finalRevenueCNY / 100) * 100, 4);
@@ -523,8 +476,9 @@ describe('calculateProfit - ROI and margin', () => {
 
     it('should return 0 ROI when purchaseCost is 0', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 0 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             1, 'MYR',
         );
         expect(result.roi).toBe(0);
@@ -532,8 +486,9 @@ describe('calculateProfit - ROI and margin', () => {
 
     it('should return 0 margin when totalRevenue is 0', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 0 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 0 },
             1, 'MYR',
         );
         expect(result.margin).toBe(0);
@@ -541,26 +496,17 @@ describe('calculateProfit - ROI and margin', () => {
 });
 
 describe('calculateProfit - final revenue formula', () => {
-    it('should equal totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - purchaseCost', () => {
+    it('should equal totalRevenue - actualSellerCoupon - platformCouponCNY - platformFee - shippingFee - totalTax - purchaseCost', () => {
         const result = calculateProfit(
-            {
-                ...defaultData,
-                totalRevenue: 200,
-                sellerCoupon: 10,
-                sellerCouponType: 'fixed',
-                platformCommissionRate: 8,
-                transactionFeeRate: 2,
-                adROI: 10,
-                damageReturnRate: 1,
-                baseShippingFee: 10,
-                crossBorderFee: 2,
-            },
+            { ...defaultData, platformCommissionRate: 8, transactionFeeRate: 2, damageReturnRate: 1, baseShippingFee: 10, crossBorderFee: 2 },
             { ...defaultGlobal, purchaseCost: 80, vatRate: 6, corporateIncomeTaxRate: 10 },
+            { ...defaultSiteInputs, totalRevenue: 200, sellerCoupon: 10, sellerCouponType: 'fixed', adROI: 10 },
             1, 'MYR',
         );
         const expected =
             result.totalRevenue
             - result.actualSellerCoupon
+            - result.platformCouponCNY
             - result.platformFee
             - result.shippingFee
             - result.totalTax
@@ -572,8 +518,9 @@ describe('calculateProfit - final revenue formula', () => {
 describe('calculateProfit - edge cases', () => {
     it('should handle all string/NaN inputs gracefully', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 'abc' as any, baseShippingFee: 'xyz' as any },
+            { ...defaultData, baseShippingFee: 'xyz' as any },
             { ...defaultGlobal, purchaseCost: 'bad' as any },
+            { ...defaultSiteInputs, totalRevenue: 'abc' as any },
             1, 'MYR',
         );
         expect(result.totalRevenue).toBe(0);
@@ -583,8 +530,9 @@ describe('calculateProfit - edge cases', () => {
 
     it('should handle very large numbers', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 1000000 },
+            { ...defaultData },
             { ...defaultGlobal, purchaseCost: 500000 },
+            { ...defaultSiteInputs, totalRevenue: 1000000 },
             1, 'MYR',
         );
         expect(isFinite(result.finalRevenueCNY)).toBe(true);
@@ -593,8 +541,9 @@ describe('calculateProfit - edge cases', () => {
 
     it('should handle extremely small rate', () => {
         const result = calculateProfit(
-            { ...defaultData, totalRevenue: 100, baseShippingFee: 10 },
+            { ...defaultData, baseShippingFee: 10 },
             { ...defaultGlobal, purchaseCost: 50 },
+            { ...defaultSiteInputs, totalRevenue: 100 },
             0.001, 'IDR',
         );
         expect(isFinite(result.finalRevenueCNY)).toBe(true);
@@ -642,11 +591,6 @@ describe('calculateProfit - full integration test', () => {
     it('should match hand-calculated result for Shopee MYR', () => {
         const rate = 0.65;
         const data: ProfitInput = {
-            totalRevenue: 100,
-            sellerCoupon: 5,
-            sellerCouponPlatformRatio: 0,
-            adROI: 10,
-            platformInfrastructureFee: 0,
             baseShippingFee: 6.5,
             extraShippingFee: 1.3,
             crossBorderFee: 0.65,
@@ -661,7 +605,6 @@ describe('calculateProfit - full integration test', () => {
             ccbServiceFeeRate: 0,
             warehouseOperationFee: 0,
             lastMileFee: 0,
-            sellerCouponType: 'fixed',
         };
         const global: GlobalInput = {
             purchaseCost: 30,
@@ -671,11 +614,19 @@ describe('calculateProfit - full integration test', () => {
             vatRate: 6,
             corporateIncomeTaxRate: 10,
         };
+        const siteInputs: SiteLevelInputs = {
+            totalRevenue: 100,
+            sellerCoupon: 5,
+            sellerCouponPlatformRatio: 0,
+            adROI: 10,
+            platformInfrastructureFee: 0,
+            sellerCouponType: 'fixed',
+        };
 
-        const result = calculateProfit(data, global, rate, 'MYR');
+        const result = calculateProfit(data, global, siteInputs, rate, 'MYR');
 
-        const totalRevenueCNY = 100 / rate;
-        const actualSellerCouponCNY = 5 / rate;
+        const totalRevenueCNY = 100;
+        const actualSellerCouponCNY = 5;
         const platformCouponCNY = 1.3 / rate;
 
         expect(result.actualSellerCoupon).toBeCloseTo(actualSellerCouponCNY, 4);
@@ -712,11 +663,6 @@ describe('calculateProfit - full integration test', () => {
     it('should produce consistent results for Shopee PH with service fees', () => {
         const rate = 8.05;
         const data: ProfitInput = {
-            totalRevenue: 100,
-            sellerCoupon: 0,
-            sellerCouponPlatformRatio: 0,
-            adROI: 15,
-            platformInfrastructureFee: 0,
             baseShippingFee: 8.05,
             extraShippingFee: 0,
             crossBorderFee: 0,
@@ -731,7 +677,6 @@ describe('calculateProfit - full integration test', () => {
             ccbServiceFeeRate: 1,
             warehouseOperationFee: 0,
             lastMileFee: 0,
-            sellerCouponType: 'fixed',
         };
         const global: GlobalInput = {
             purchaseCost: 30,
@@ -741,10 +686,18 @@ describe('calculateProfit - full integration test', () => {
             vatRate: 0,
             corporateIncomeTaxRate: 0,
         };
+        const siteInputs: SiteLevelInputs = {
+            totalRevenue: 100,
+            sellerCoupon: 0,
+            sellerCouponPlatformRatio: 0,
+            adROI: 15,
+            platformInfrastructureFee: 0,
+            sellerCouponType: 'fixed',
+        };
 
-        const result = calculateProfit(data, global, rate, 'PHP');
+        const result = calculateProfit(data, global, siteInputs, rate, 'PHP');
 
-        const totalRevenueCNY = 100 / rate;
+        const totalRevenueCNY = 100;
         const revenueAfterCouponCNY = totalRevenueCNY;
 
         const mdvCapCNY = 25;

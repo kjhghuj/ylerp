@@ -84,9 +84,7 @@ const {
       MYR: [{
         id: 'node-1', platform: 'shopee', country: 'MYR', name: 'Test Node',
         data: {
-          totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-          adROI: 10,
-          platformInfrastructureFee: 0, firstWeight: 50,
+          firstWeight: 50,
           baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
           platformCommissionRate: 8, transactionFeeRate: 2,
           platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 1,
@@ -229,9 +227,9 @@ describe('ProfitCalculator - Save Product', () => {
     expect(callArg).not.toHaveProperty('lastMileFee');
     expect(callArg).not.toHaveProperty('baseShippingFee');
     expect(callArg).not.toHaveProperty('platformCommissionRate');
-    expect(callArg).not.toHaveProperty('totalRevenue');
     expect(callArg).toHaveProperty('cost');
     expect(callArg).toHaveProperty('productWeight');
+    expect(callArg).toHaveProperty('totalRevenue');
   });
 
   it('should reset editingProductId after successful save', async () => {

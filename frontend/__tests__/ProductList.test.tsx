@@ -183,7 +183,7 @@ describe('ProductList', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · Shopee模版')).toBeInTheDocument();
     });
   });
 
@@ -207,10 +207,10 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · Shopee模版')).toBeInTheDocument();
     });
 
-    const templateTab = screen.getByText('马来西亚 · shopee');
+    const templateTab = screen.getByText('马来西亚 · Shopee模版');
     fireEvent.click(templateTab);
 
     await waitFor(() => {
@@ -277,13 +277,13 @@ describe('ProductList', () => {
     fireEvent.click(screen.getAllByTitle('View')[0]);
 
     await waitFor(() => {
-      expect(screen.getByText('马来西亚 · shopee')).toBeInTheDocument();
+      expect(screen.getByText('马来西亚 · Shopee 模版')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('马来西亚 · lazada'));
+    fireEvent.click(screen.getByText('马来西亚 · Lazada 模版'));
 
     await waitFor(() => {
-      expect(screen.getByText('马来西亚 · shopee').classList).not.toContain('border-indigo-600');
+      expect(screen.getByText('马来西亚 · Shopee 模版').classList).not.toContain('border-indigo-600');
     });
   });
 

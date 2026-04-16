@@ -54,9 +54,7 @@ describe('PlatformCard - Profit Calculation', () => {
     const mockOnSaveTemplate = vi.fn();
 
     const baseData = {
-        totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-        adROI: 15, vatRate: 6, corporateIncomeTaxRate: 10,
-        platformInfrastructureFee: 0, firstWeight: 50,
+        firstWeight: 50,
         baseShippingFee: 10, extraShippingFee: 2, crossBorderFee: 1,
         platformCommissionRate: 8, transactionFeeRate: 2,
         platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 1,
@@ -69,6 +67,11 @@ describe('PlatformCard - Profit Calculation', () => {
         supplierTaxPoint: 0, supplierInvoice: 'no',
     };
 
+    const baseSiteInputs = {
+        totalRevenue: 100, sellerCoupon: 0, sellerCouponType: 'fixed' as const,
+        sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15,
+    };
+
     const createProps = (overrides: any = {}) => ({
         nodeId: 'node-1',
         platform: 'shopee' as const,
@@ -76,6 +79,7 @@ describe('PlatformCard - Profit Calculation', () => {
         nodeName: 'Test',
         data: { ...baseData },
         globalInputs: { ...baseGlobalInputs },
+        siteInputs: { ...baseSiteInputs },
         rateToCNY: 1,
         strings: mockStrings,
         onUpdate: mockOnUpdate,
@@ -108,7 +112,8 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should show green profit color when revenue is positive', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 500, platformCommissionRate: 5, transactionFeeRate: 1, damageReturnRate: 0 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 500 },
+            data: { ...baseData, platformCommissionRate: 5, transactionFeeRate: 1, damageReturnRate: 0 },
             globalInputs: { ...baseGlobalInputs, productWeight: 50 },
         });
         render(<PlatformCard {...props} />);
@@ -120,7 +125,8 @@ describe('PlatformCard - Profit Calculation', () => {
     it('should show red profit color when revenue is negative', () => {
         const props = createProps({
             globalInputs: { ...baseGlobalInputs, purchaseCost: 200 },
-            data: { ...baseData, totalRevenue: 10, platformCommissionRate: 50, transactionFeeRate: 20 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 10 },
+            data: { ...baseData, platformCommissionRate: 50, transactionFeeRate: 20 },
         });
         render(<PlatformCard {...props} />);
         const profitLabel = screen.getByText('预估净利润 (CNY)');
@@ -150,7 +156,7 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should handle percentage seller coupon correctly', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'percent' },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100, sellerCoupon: 10, sellerCouponType: 'percent' as const },
         });
         render(<PlatformCard {...props} />);
         expect(screen.getByText('预估净利润 (CNY)')).toBeInTheDocument();
@@ -158,7 +164,7 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should handle fixed seller coupon correctly', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, sellerCoupon: 5, sellerCouponPlatformRatio: 50, sellerCouponType: 'fixed' },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100, sellerCoupon: 5, sellerCouponPlatformRatio: 50 },
         });
         render(<PlatformCard {...props} />);
         expect(screen.getByText('预估净利润 (CNY)')).toBeInTheDocument();
@@ -184,7 +190,7 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should calculate ad fee based on adROI', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, adROI: 10 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100, adROI: 10 },
         });
         render(<PlatformCard {...props} />);
         expect(screen.getByText('预估净利润 (CNY)')).toBeInTheDocument();
@@ -200,7 +206,8 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should calculate damage return correctly', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, damageReturnRate: 5 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100 },
+            data: { ...baseData, damageReturnRate: 5 },
         });
         render(<PlatformCard {...props} />);
         expect(screen.getByText('预估净利润 (CNY)')).toBeInTheDocument();
@@ -208,7 +215,7 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should include platform infrastructure fee in service fee', () => {
         const props = createProps({
-            data: { ...baseData, platformInfrastructureFee: 5 },
+            siteInputs: { ...baseSiteInputs, platformInfrastructureFee: 5 },
         });
         render(<PlatformCard {...props} />);
         expect(screen.getByText('预估净利润 (CNY)')).toBeInTheDocument();
@@ -216,10 +223,10 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should handle all zero values gracefully', () => {
         const props = createProps({
+            siteInputs: { totalRevenue: 0, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+                adROI: 0, platformInfrastructureFee: 0, sellerCouponType: 'fixed' as const },
             data: {
-                totalRevenue: 0, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
-                platformInfrastructureFee: 0, firstWeight: 0,
+                firstWeight: 0,
                 baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
                 platformCommissionRate: 0, transactionFeeRate: 0,
                 platformCoupon: 0, platformCouponRate: 0, damageReturnRate: 0,
@@ -233,7 +240,8 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should apply MDV service fee cap (25 CNY)', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, mdvServiceFeeRate: 100 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100 },
+            data: { ...baseData, mdvServiceFeeRate: 100 },
             rateToCNY: 1,
         });
         render(<PlatformCard {...props} />);
@@ -242,7 +250,8 @@ describe('PlatformCard - Profit Calculation', () => {
 
     it('should apply FSS/CCB service fee cap (12.5 CNY)', () => {
         const props = createProps({
-            data: { ...baseData, totalRevenue: 100, fssServiceFeeRate: 100, ccbServiceFeeRate: 100 },
+            siteInputs: { ...baseSiteInputs, totalRevenue: 100 },
+            data: { ...baseData, fssServiceFeeRate: 100, ccbServiceFeeRate: 100 },
             rateToCNY: 1,
         });
         render(<PlatformCard {...props} />);
@@ -322,7 +331,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             const myrTexts = screen.getAllByText(/MYR/);
@@ -334,7 +343,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 1,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             const profitDivs = screen.queryAllByText(/≈/).filter(el =>
@@ -347,7 +356,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             const profitDivs = screen.queryAllByText(/≈/).filter(el =>
@@ -360,7 +369,8 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 500, platformCommissionRate: 5, transactionFeeRate: 1, damageReturnRate: 0 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 500 },
+                data: { ...baseData, platformCommissionRate: 5, transactionFeeRate: 1, damageReturnRate: 0 },
                 globalInputs: { ...baseGlobalInputs, productWeight: 50 },
             });
             render(<PlatformCard {...props} />);
@@ -376,7 +386,8 @@ describe('PlatformCard - Profit Calculation', () => {
                 rateToCNY: 0.65,
                 country: 'MYR',
                 globalInputs: { ...baseGlobalInputs, purchaseCost: 200 },
-                data: { ...baseData, totalRevenue: 10, platformCommissionRate: 50, transactionFeeRate: 20 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 10 },
+                data: { ...baseData, platformCommissionRate: 50, transactionFeeRate: 20 },
             });
             render(<PlatformCard {...props} />);
             const profitDivs = screen.getAllByText(/≈/).filter(el =>
@@ -392,7 +403,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             expect(screen.getByText('佣金')).toBeInTheDocument();
@@ -408,7 +419,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             const tooltip = screen.getByText('佣金').closest('[class*="bg-slate-800"]');
@@ -424,7 +435,7 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 1,
                 country: 'MYR',
-                data: { ...baseData, totalRevenue: 200 },
+                siteInputs: { ...baseSiteInputs, totalRevenue: 200 },
             });
             render(<PlatformCard {...props} />);
             const tooltip = screen.getByText('佣金').closest('[class*="bg-slate-800"]');
@@ -451,11 +462,13 @@ describe('PlatformCard - Profit Calculation', () => {
                 rateToCNY: 0.65,
                 country: 'MYR',
                 globalInputs: { ...baseGlobalInputs, vatRate: 6, corporateIncomeTaxRate: 10 },
+                siteInputs: {
+                    ...baseSiteInputs,
+                    totalRevenue: 100,
+                },
                 data: {
                     ...baseData,
-                    totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                    adROI: 15,
-                    platformInfrastructureFee: 0, firstWeight: 50,
+                    firstWeight: 50,
                     baseShippingFee: 6.5, crossBorderFee: 0.65, extraShippingFee: 0,
                     platformCoupon: 0, warehouseOperationFee: 0,
                     platformCommissionRate: 8, transactionFeeRate: 2, damageReturnRate: 1,
@@ -465,7 +478,7 @@ describe('PlatformCard - Profit Calculation', () => {
             render(<PlatformCard {...props} />);
 
             const rate = 0.65;
-            const totalRevenueCNY = 100 / rate;
+            const totalRevenueCNY = 100;
             const baseShippingFeeCNY = 6.5 / rate;
             const crossBorderFeeCNY = 0.65 / rate;
             const shippingFeeCNY = baseShippingFeeCNY + crossBorderFeeCNY;
@@ -489,11 +502,14 @@ describe('PlatformCard - Profit Calculation', () => {
                 rateToCNY: 0.65,
                 country: 'MYR',
                 globalInputs: { ...baseGlobalInputs, vatRate: 6, corporateIncomeTaxRate: 10 },
+                siteInputs: {
+                    ...baseSiteInputs,
+                    totalRevenue: 100,
+                    adROI: 0,
+                },
                 data: {
                     ...baseData,
-                    totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                    adROI: 0,
-                    platformInfrastructureFee: 0, firstWeight: 50,
+                    firstWeight: 50,
                     baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
                     platformCoupon: 3.25, warehouseOperationFee: 0,
                     platformCommissionRate: 8, transactionFeeRate: 2, damageReturnRate: 1,
@@ -503,7 +519,7 @@ describe('PlatformCard - Profit Calculation', () => {
             render(<PlatformCard {...props} />);
 
             const rate = 0.65;
-            const totalRevenueCNY = 100 / rate;
+            const totalRevenueCNY = 100;
             const platformCouponCNY = 3.25 / rate;
             const taxableRevenue = totalRevenueCNY - 0 - platformCouponCNY;
             const revenueAfterCoupon = totalRevenueCNY - 0;
@@ -522,11 +538,14 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
+                siteInputs: {
+                    ...baseSiteInputs,
+                    totalRevenue: 100,
+                    adROI: 0,
+                },
                 data: {
                     ...baseData,
-                    totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
-                    platformInfrastructureFee: 0, firstWeight: 50,
+                    firstWeight: 50,
                     baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
                     platformCoupon: 0, warehouseOperationFee: 1.3,
                     platformCommissionRate: 0, transactionFeeRate: 0, damageReturnRate: 0,
@@ -536,7 +555,7 @@ describe('PlatformCard - Profit Calculation', () => {
             render(<PlatformCard {...props} />);
 
             const rate = 0.65;
-            const totalRevenueCNY = 100 / rate;
+            const totalRevenueCNY = 100;
             const warehouseCNY = 1.3 / rate;
             const expectedProfit = totalRevenueCNY - 0 - warehouseCNY - 0 - 0 - 50;
             expect(getProfitValue()).toBeCloseTo(expectedProfit, 1);
@@ -546,11 +565,14 @@ describe('PlatformCard - Profit Calculation', () => {
             const props = createProps({
                 rateToCNY: 0.65,
                 country: 'MYR',
+                siteInputs: {
+                    ...baseSiteInputs,
+                    totalRevenue: 200,
+                    adROI: 0,
+                },
                 data: {
                     ...baseData,
-                    totalRevenue: 200, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
-                    platformInfrastructureFee: 0, firstWeight: 50,
+                    firstWeight: 50,
                     baseShippingFee: 0, crossBorderFee: 0, extraShippingFee: 0,
                     platformCoupon: 0, warehouseOperationFee: 0,
                     platformCommissionRate: 0, transactionFeeRate: 0, damageReturnRate: 0,
@@ -559,7 +581,7 @@ describe('PlatformCard - Profit Calculation', () => {
             });
             render(<PlatformCard {...props} />);
             const rate = 0.65;
-            const totalRevenueCNY = 200 / rate;
+            const totalRevenueCNY = 200;
             const expectedProfitCNY = totalRevenueCNY - 50;
             render(<PlatformCard {...props} />);
             expect(getProfitValue()).toBeCloseTo(expectedProfitCNY, 1);
@@ -579,11 +601,14 @@ describe('PlatformCard - Profit Calculation', () => {
                 rateToCNY: 0.65,
                 country: 'MYR',
                 globalInputs: { ...baseGlobalInputs, productWeight: 600 },
+                siteInputs: {
+                    ...baseSiteInputs,
+                    totalRevenue: 100,
+                    adROI: 0,
+                },
                 data: {
                     ...baseData,
-                    totalRevenue: 100, sellerCoupon: 0, sellerCouponPlatformRatio: 0,
-                    adROI: 0, vatRate: 0, corporateIncomeTaxRate: 0,
-                    platformInfrastructureFee: 0, firstWeight: 50,
+                    firstWeight: 50,
                     baseShippingFee: 6.5, crossBorderFee: 0,
                     extraShippingFee: 0.65,
                     platformCoupon: 0, warehouseOperationFee: 0,
@@ -594,7 +619,7 @@ describe('PlatformCard - Profit Calculation', () => {
             render(<PlatformCard {...props} />);
 
             const rate = 0.65;
-            const totalRevenueCNY = 100 / rate;
+            const totalRevenueCNY = 100;
             const baseShippingCNY = 6.5 / rate;
             const extraShippingCNY = 0.65 / rate;
             const extraWeight = (600 - 50) / 10;

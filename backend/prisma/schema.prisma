@@ -20,6 +20,8 @@ model Product {
   sellerCoupon      Float   @default(0)
   sellerCouponPlatformRatio Float @default(0)
   adROI             Float   @default(15)
+  totalRevenue      Float   @default(0)
+  platformInfrastructureFee Float @default(0)
   sites             String[] @default([])
   userId            String
   user              User    @relation(fields: [userId], references: [id])

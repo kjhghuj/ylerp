@@ -3,6 +3,7 @@ import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
 import { calculateProfit, calculateLastMileFee } from './profit/calculateProfit';
+import { SiteLevelInputs } from './profit/types';
 
 interface PlatformCardProps {
     nodeId: string;
@@ -11,6 +12,7 @@ interface PlatformCardProps {
     nodeName?: string;
     data: any;
     globalInputs: any;
+    siteInputs: SiteLevelInputs;
     rateToCNY: number;
     strings: any;
     onUpdate: (id: string, partialData: any) => void;
@@ -20,7 +22,7 @@ interface PlatformCardProps {
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
+    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -66,11 +68,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     const results = useMemo(() => {
-        return calculateProfit(data, globalInputs, rateToCNY, country);
-    }, [data, globalInputs, rateToCNY, country]);
+        return calculateProfit(data, globalInputs, siteInputs, rateToCNY, country);
+    }, [data, globalInputs, siteInputs, rateToCNY, country]);
 
     const isMoneyField = (key: string) => [
-        'totalRevenue', 'sellerCoupon', 'platformInfrastructureFee',
         'platformCoupon', 'baseShippingFee',
         'extraShippingFee', 'crossBorderFee', 'warehouseOperationFee', 'lastMileFee'
     ].includes(key);
@@ -179,25 +180,6 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             {/* Configurable Inputs Block */}
             <div className="flex-1 overflow-y-auto outline-none" style={{ maxHeight: '400px' }}>
                 <div className="p-4 space-y-4">
-                    {config.fields.pricing && config.fields.pricing.length > 0 && (
-                        <div>
-                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.matrix.pricingSection || '定价与税率'}</div>
-                            <div className="grid grid-cols-2 gap-3">
-                                {config.fields.pricing.includes('totalRevenue') && renderInput('totalRevenue')}
-                                {config.fields.pricing.includes('sellerCoupon') && renderInput('sellerCoupon')}
-                                {config.fields.pricing.includes('sellerCouponPlatformRatio') && renderInput('sellerCouponPlatformRatio')}
-                                <div className="col-span-2">
-                                    <label className="block text-sm font-bold text-slate-500 mb-1 truncate">{t.inputs.sellerCouponType || '优惠券类型'}</label>
-                                    <div className="flex gap-1 h-9">
-                                        <button type="button" onClick={() => onUpdate(nodeId, { sellerCouponType: 'fixed' })} className={`flex-1 px-2.5 rounded-l-lg text-xs font-bold border transition-all ${(data.sellerCouponType || 'fixed') === 'fixed' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>{t.inputs.couponFixed}</button>
-                                        <button type="button" onClick={() => onUpdate(nodeId, { sellerCouponType: 'percent' })} className={`flex-1 px-2.5 text-xs font-bold border transition-all rounded-r-lg ${(data.sellerCouponType || 'fixed') === 'percent' ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'}`}>{t.inputs.couponPercent}</button>
-                                    </div>
-                                </div>
-                                {config.fields.pricing.includes('adROI') && renderInput('adROI')}
-                                {config.fields.pricing.includes('platformInfrastructureFee') && renderInput('platformInfrastructureFee')}
-                            </div>
-                        </div>
-                    )}
                     <div className="grid grid-cols-2 gap-3">
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}

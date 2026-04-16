@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, RefreshCw, RotateCcw } from 'lucide-react';
+import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
 
 interface GlobalInputsPanelProps {
@@ -17,12 +17,22 @@ interface GlobalInputsPanelProps {
     lastUpdated: string | null;
     onRefreshRates: () => void;
     onReset: () => void;
+    siteInputs: {
+        totalRevenue: number;
+        sellerCoupon: number;
+        sellerCouponType: 'fixed' | 'percent';
+        sellerCouponPlatformRatio: number;
+        platformInfrastructureFee: number;
+        adROI: number;
+    };
+    onSiteInputChange: (field: string, value: any) => void;
 }
 
 export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
     globalInputs, siteCountry, useLocalCurrency, rates,
     onGlobalChange, onSetGlobalInputs, onSetUseLocalCurrency, onSetSiteCountry, t,
     currentRate, isLoadingRate, lastUpdated, onRefreshRates, onReset,
+    siteInputs, onSiteInputChange,
 }) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-4 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
@@ -97,6 +107,69 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
             <NumberInput label={t.inputs.supplierTax} name="supplierTaxPoint" value={globalInputs.supplierTaxPoint} onChange={onGlobalChange} suffix="%" />
             <NumberInput label={t.inputs.vat} name="vatRate" value={globalInputs.vatRate} onChange={onGlobalChange} suffix="%" />
             <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={onGlobalChange} suffix="%" />
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-3">
+                <div className="p-1.5 bg-indigo-100 rounded text-indigo-600"><Globe size={14} /></div>
+                <div>
+                    <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                        {t.matrix.siteParams || '站点参数'} ({siteCountry})
+                    </h3>
+                    <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.siteParamsDesc || '每个站点独立维护'}</div>
+                </div>
+            </div>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                <NumberInput
+                    label={`${t.inputs.totalRevenue || '总收入'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
+                    name="totalRevenue"
+                    value={siteInputs.totalRevenue}
+                    onChange={(e) => onSiteInputChange('totalRevenue', Number(e.target.value) || 0)}
+                    highlight
+                    invertCurrency={useLocalCurrency}
+                    exchangeRate={rates[siteCountry] || 0}
+                    currencyCode={siteCountry}
+                />
+                <NumberInput
+                    label={t.inputs.sellerCoupon || '卖家优惠券'}
+                    name="sellerCoupon"
+                    value={siteInputs.sellerCoupon}
+                    onChange={(e) => onSiteInputChange('sellerCoupon', Number(e.target.value) || 0)}
+                    suffix={siteInputs.sellerCouponType === 'percent' ? '%' : (useLocalCurrency ? siteCountry : 'CNY')}
+                />
+                <SelectInput
+                    label={t.inputs.sellerCouponType || '优惠券类型'}
+                    name="sellerCouponType"
+                    value={siteInputs.sellerCouponType}
+                    onChange={(e) => onSiteInputChange('sellerCouponType', e.target.value)}
+                    options={[
+                        { value: 'fixed', label: t.inputs.fixedType || '固定金额' },
+                        { value: 'percent', label: t.inputs.percentType || '百分比' },
+                    ]}
+                />
+                <NumberInput
+                    label={t.inputs.couponPlatformRatio || '平台出资比例'}
+                    name="sellerCouponPlatformRatio"
+                    value={siteInputs.sellerCouponPlatformRatio}
+                    onChange={(e) => onSiteInputChange('sellerCouponPlatformRatio', Number(e.target.value) || 0)}
+                    suffix="%"
+                />
+                <NumberInput
+                    label={`${t.inputs.infraFee || '基础设施费'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
+                    name="platformInfrastructureFee"
+                    value={siteInputs.platformInfrastructureFee}
+                    onChange={(e) => onSiteInputChange('platformInfrastructureFee', Number(e.target.value) || 0)}
+                    invertCurrency={useLocalCurrency}
+                    exchangeRate={rates[siteCountry] || 0}
+                    currencyCode={siteCountry}
+                />
+                <NumberInput
+                    label={t.inputs.adROI || '广告ROI'}
+                    name="adROI"
+                    value={siteInputs.adROI}
+                    onChange={(e) => onSiteInputChange('adROI', Number(e.target.value) || 0)}
+                />
+            </div>
         </div>
     </div>
 );

@@ -1,10 +1,4 @@
 export interface ProfitInput {
-    totalRevenue: number;
-    sellerCoupon: number;
-    sellerCouponPlatformRatio: number;
-    sellerCouponType: 'fixed' | 'percent';
-    adROI: number;
-    platformInfrastructureFee: number;
     baseShippingFee: number;
     extraShippingFee: number;
     crossBorderFee: number;
@@ -21,6 +15,9 @@ export interface ProfitInput {
     lastMileFee: number;
 }
 
+import { DEFAULT_NODE_DATA, type SiteLevelInputs } from './types';
+
+export type { SiteLevelInputs };
 export interface GlobalInput {
     purchaseCost: number;
     productWeight: number;
@@ -54,11 +51,10 @@ export interface ProfitResult {
     revenueAfterSellerCoupon: number;
 }
 
-import { DEFAULT_NODE_DATA } from './types';
-
 export const calculateProfit = (
     data: ProfitInput,
     globalInputs: GlobalInput,
+    siteInputs: SiteLevelInputs,
     rateToCNY: number,
     country: string,
 ): ProfitResult => {
@@ -66,10 +62,7 @@ export const calculateProfit = (
     const safeData = {
         ...DEFAULT_NODE_DATA,
         ...(data ? Object.fromEntries(
-            Object.entries(data).map(([k, v]) => {
-                if (k === 'sellerCouponType') return [k, v];
-                return [k, Number(v) || 0];
-            })
+            Object.entries(data).map(([k, v]) => [k, Number(v) || 0])
         ) : {}),
     } as ProfitInput;
     const g = globalInputs ? {
@@ -87,29 +80,42 @@ export const calculateProfit = (
         vatRate: 0,
         corporateIncomeTaxRate: 0,
     };
+    const site = siteInputs ? {
+        totalRevenue: Number(siteInputs.totalRevenue) || 0,
+        sellerCoupon: Number(siteInputs.sellerCoupon) || 0,
+        sellerCouponType: siteInputs.sellerCouponType || 'fixed',
+        sellerCouponPlatformRatio: Number(siteInputs.sellerCouponPlatformRatio) || 0,
+        platformInfrastructureFee: Number(siteInputs.platformInfrastructureFee) || 0,
+        adROI: siteInputs.adROI !== undefined && siteInputs.adROI !== null ? Number(siteInputs.adROI) : 15,
+    } : {
+        totalRevenue: 0,
+        sellerCoupon: 0,
+        sellerCouponType: 'fixed' as const,
+        sellerCouponPlatformRatio: 0,
+        platformInfrastructureFee: 0,
+        adROI: 15,
+    };
 
-    const totalRevenueLocal = safeData.totalRevenue;
-    const sellerCouponLocal = safeData.sellerCoupon;
-    const sellerCouponPlatformRatio = safeData.sellerCouponPlatformRatio;
-    const adROI = safeData.adROI;
+    const totalRevenue = site.totalRevenue;
+    const sellerCouponValue = site.sellerCoupon;
+    const sellerCouponPlatformRatio = site.sellerCouponPlatformRatio;
+    const adROI = site.adROI;
     const vatRate = g.vatRate;
     const corporateIncomeTaxRate = g.corporateIncomeTaxRate;
 
-    const totalRevenue = totalRevenueLocal / safeRate;
     const platformCouponCNY = safeData.platformCoupon / safeRate;
     const baseShippingFeeCNY = safeData.baseShippingFee / safeRate;
     const crossBorderFeeCNY = safeData.crossBorderFee / safeRate;
     const extraShippingFeeCNY = safeData.extraShippingFee / safeRate;
     const warehouseOperationFeeCNY = safeData.warehouseOperationFee / safeRate;
-    const platformInfrastructureFeeCNY = safeData.platformInfrastructureFee / safeRate;
+    const platformInfrastructureFeeCNY = site.platformInfrastructureFee;
 
     const costTaxAmount = g.purchaseCost * (g.supplierTaxPoint / 100);
-    const sellerCouponType = safeData.sellerCouponType || 'fixed';
+    const sellerCouponType = site.sellerCouponType || 'fixed';
     const grossSellerCoupon = sellerCouponType === 'percent'
-        ? totalRevenueLocal * (sellerCouponLocal / 100)
-        : sellerCouponLocal;
-    const actualSellerCouponLocal = grossSellerCoupon * (1 - sellerCouponPlatformRatio / 100);
-    const actualSellerCoupon = actualSellerCouponLocal / safeRate;
+        ? totalRevenue * (sellerCouponValue / 100)
+        : sellerCouponValue;
+    const actualSellerCoupon = grossSellerCoupon * (1 - sellerCouponPlatformRatio / 100);
 
     const taxableRevenue = totalRevenue - actualSellerCoupon - platformCouponCNY;
 

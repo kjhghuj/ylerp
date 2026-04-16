@@ -1,8 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from '../../StoreContext';
-import { genId, DEFAULT_NODE_DATA, PlatformNode } from './types';
+import { genId, DEFAULT_NODE_DATA, PlatformNode, SiteLevelInputs } from './types';
 
-export const useProfitImport = () => {
+export const useProfitImport = (
+    siteInputsMap?: Record<string, SiteLevelInputs>,
+    setSiteInputsMap?: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
+) => {
     const {
         calculatorImport, setCalculatorImport,
         calculatorImportNodes, setCalculatorImportNodes,
@@ -55,13 +58,6 @@ export const useProfitImport = () => {
                 name: '导入数据',
                 data: {
                     ...DEFAULT_NODE_DATA,
-                    totalRevenue: (calculatorImport as any).totalRevenue || 0,
-                    sellerCoupon: (calculatorImport as any).sellerCoupon || 0,
-                    sellerCouponPlatformRatio: (calculatorImport as any).sellerCouponPlatformRatio || 0,
-                    adROI: (calculatorImport as any).adROI || 0,
-                    vatRate: (calculatorImport as any).vatRate || 0,
-                    corporateIncomeTaxRate: (calculatorImport as any).corporateIncomeTaxRate || 0,
-                    platformInfrastructureFee: (calculatorImport as any).platformInfrastructureFee || 0,
                     baseShippingFee: (calculatorImport as any).baseShippingFee || 0,
                     extraShippingFee: (calculatorImport as any).extraShippingFee || 0,
                     crossBorderFee: (calculatorImport as any).crossBorderFee || 0,
@@ -80,6 +76,21 @@ export const useProfitImport = () => {
 
         if (calculatorImportNodes.length > 0) {
             setCalculatorImportNodes([]);
+        }
+
+        if (setSiteInputsMap && siteInputsMap) {
+            const siteInputs: SiteLevelInputs = {
+                totalRevenue: (calculatorImport as any).totalRevenue || 0,
+                sellerCoupon: (calculatorImport as any).sellerCoupon || 0,
+                sellerCouponType: (calculatorImport as any).sellerCouponType || 'fixed',
+                sellerCouponPlatformRatio: (calculatorImport as any).sellerCouponPlatformRatio || 0,
+                platformInfrastructureFee: (calculatorImport as any).platformInfrastructureFee || 0,
+                adROI: (calculatorImport as any).adROI !== undefined && (calculatorImport as any).adROI !== null ? (calculatorImport as any).adROI : 15,
+            };
+            setSiteInputsMap(prev => ({
+                ...prev,
+                [currency]: siteInputs,
+            }));
         }
 
         const groupedNodes: Record<string, PlatformNode[]> = {};

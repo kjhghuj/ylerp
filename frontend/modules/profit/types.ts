@@ -9,6 +9,24 @@ export interface ProfitTemplate {
     productId?: string;
 }
 
+export interface SiteLevelInputs {
+    totalRevenue: number;
+    sellerCoupon: number;
+    sellerCouponType: 'fixed' | 'percent';
+    sellerCouponPlatformRatio: number;
+    platformInfrastructureFee: number;
+    adROI: number;
+}
+
+export const DEFAULT_SITE_INPUTS: SiteLevelInputs = {
+    totalRevenue: 0,
+    sellerCoupon: 0,
+    sellerCouponType: 'fixed',
+    sellerCouponPlatformRatio: 0,
+    platformInfrastructureFee: 0,
+    adROI: 15,
+};
+
 export interface PlatformNode {
     id: string;
     templateId?: string;
@@ -19,12 +37,6 @@ export interface PlatformNode {
 }
 
 export const DEFAULT_NODE_DATA = {
-    totalRevenue: 0,
-    sellerCoupon: 0,
-    sellerCouponPlatformRatio: 0,
-    sellerCouponType: 'fixed',
-    adROI: 15,
-    platformInfrastructureFee: 0,
     baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
     firstWeight: 50,
     platformCommissionRate: 0, transactionFeeRate: 0,

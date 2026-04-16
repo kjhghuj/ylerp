@@ -9,12 +9,13 @@ const mockT = {
         weight: '重量', supplierInvoice: '发票', invoiceYes: '是', invoiceNo: '否',
         supplierTax: '供应商税点', sellerCoupon: '卖家优惠券',
         couponFixed: '固定', couponPercent: '比例',
-        couponPlatformRatio: '平台出资比例', adRoi: '广告ROI',
+        couponPlatformRatio: '平台出资比例', adRoi: '广告ROI', adROI: '广告ROI',
         vat: '增值税', corpTax: '企业所得税', infraFee: '基础设施费',
-        sellerCouponType: '优惠券类型',
+        sellerCouponType: '优惠券类型', fixedType: '固定金额', percentType: '百分比',
     },
     matrix: {
         globalBase: '全局参数', globalBaseDesc: 'PARAMS',
+        siteParams: '站点参数', siteParamsDesc: '每个站点独立维护',
         sites: { MYR: '马来西亚', SGD: '新加坡', PHP: '菲律宾', THB: '泰国', IDR: '印尼' },
         switchToLocal: '切换本土货币计算',
         switchToCNY: '切换人民币计算',
@@ -24,6 +25,16 @@ const mockT = {
 const defaultGlobalInputs = {
     name: '测试商品', sku: 'SKU-001', purchaseCost: 50,
     productWeight: 500, supplierInvoice: 'no', supplierTaxPoint: 0,
+    vatRate: 0, corporateIncomeTaxRate: 0,
+};
+
+const defaultSiteInputs = {
+    totalRevenue: 100,
+    sellerCoupon: 5,
+    sellerCouponType: 'fixed' as const,
+    sellerCouponPlatformRatio: 0,
+    platformInfrastructureFee: 0,
+    adROI: 15,
 };
 
 describe('GlobalInputsPanel', () => {
@@ -33,6 +44,7 @@ describe('GlobalInputsPanel', () => {
     const mockOnRefreshRates = vi.fn();
     const mockOnSetUseLocalCurrency = vi.fn();
     const mockOnReset = vi.fn();
+    const mockOnSiteInputChange = vi.fn();
 
     const defaultProps = {
         globalInputs: defaultGlobalInputs,
@@ -49,6 +61,8 @@ describe('GlobalInputsPanel', () => {
         lastUpdated: null as string | null,
         onRefreshRates: mockOnRefreshRates,
         onReset: mockOnReset,
+        siteInputs: defaultSiteInputs,
+        onSiteInputChange: mockOnSiteInputChange,
     };
 
     beforeEach(() => {

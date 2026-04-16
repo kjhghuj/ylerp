@@ -197,14 +197,22 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const handleImportAllTemplates = () => {
         if (!selectedProduct) return;
         setCalculatorImport(selectedProduct);
-        const importNodes = allLinkedTemplates.map(tpl => ({
-            name: tpl.name,
-            country: tpl.country,
-            platform: tpl.platform || 'other',
-            data: Object.fromEntries(
-                Object.entries(tpl.data).map(([key, value]) => [key, Number(value) || 0])
-            ),
-        }));
+        const currentCountry = activeTab;
+        const importNodes = allLinkedTemplates
+            .filter(tpl => {
+                const countryMap: Record<string, string> = { 'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR' };
+                const tplCurrency = countryMap[tpl.country] || tpl.country;
+                const tplCountry = currencyToCountry(tplCurrency);
+                return tplCountry === currentCountry;
+            })
+            .map(tpl => ({
+                name: tpl.name,
+                country: tpl.country,
+                platform: tpl.platform || 'other',
+                data: Object.fromEntries(
+                    Object.entries(tpl.data).map(([key, value]) => [key, Number(value) || 0])
+                ),
+            }));
         setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
@@ -238,7 +246,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const siteTabs = allLinkedTemplates.map((tpl, i) => ({
-        label: `${countryNameMap[tpl.country] || tpl.country} · ${tpl.platform || ''}`,
+        label: `${countryNameMap[tpl.country] || tpl.country} · ${tpl.name || tpl.platform || ''}`,
         tpl,
         index: i,
     }));
@@ -258,12 +266,6 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         const rate = exchangeRates[currency] || 1;
 
         const profitData = {
-            totalRevenue: Number(d.totalRevenue) || 0,
-            sellerCoupon: Number(d.sellerCoupon) || 0,
-            sellerCouponPlatformRatio: Number(d.sellerCouponPlatformRatio) || 0,
-            sellerCouponType: (d.sellerCouponType as 'fixed' | 'percent') || (selectedProduct as any)?.sellerCouponType || 'fixed',
-            adROI: Number(d.adROI) || 0,
-            platformInfrastructureFee: Number(d.platformInfrastructureFee) || 0,
             baseShippingFee: Number(d.baseShippingFee) || 0,
             extraShippingFee: Number(d.extraShippingFee) || 0,
             crossBorderFee: Number(d.crossBorderFee) || 0,
@@ -289,7 +291,16 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             corporateIncomeTaxRate: Number(d.corporateIncomeTaxRate) || 0,
         };
 
-        return calculateProfit(profitData, globalData, rate, currency);
+        const siteInputs = {
+            totalRevenue: Number(d.totalRevenue) || 0,
+            sellerCoupon: Number(d.sellerCoupon) || 0,
+            sellerCouponType: (d.sellerCouponType as 'fixed' | 'percent') || (selectedProduct as any)?.sellerCouponType || 'fixed',
+            sellerCouponPlatformRatio: Number(d.sellerCouponPlatformRatio) || 0,
+            platformInfrastructureFee: Number(d.platformInfrastructureFee) || 0,
+            adROI: d.adROI !== undefined && d.adROI !== null ? Number(d.adROI) : 15,
+        };
+
+        return calculateProfit(profitData, globalData, siteInputs, rate, currency);
     };
 
     const renderTemplateDetail = (tpl: LinkedTemplate) => {
@@ -415,7 +426,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             <div className="flex gap-2">
                                 {allLinkedTemplates.length > 0 && (
                                     <button onClick={handleImportAllTemplates} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
-                                        <ArrowUpRight size={13} /> {t.modals.importAll || '导入所有站点'}
+                                        <ArrowUpRight size={13} /> {t.modals.importCalculator || '导入利润计算器'}
                                     </button>
                                 )}
                                 <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"><X size={20} /></button>
@@ -490,19 +501,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const { sections, profit } = renderTemplateDetail(tpl);
                                 return (
                                     <>
-                                        <div className="flex items-center justify-between mb-3">
-                                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                                {tpl.platform && (
-                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{tpl.platform}</span>
-                                                )}
-                                                <span>{tpl.country}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => handleImportSingleTemplate(tpl)}
-                                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                                            >
-                                                <ArrowUpRight size={13} /> {t.modals.importCalculator || '导入计算器'}
-                                            </button>
+                                        <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
+                                            {tpl.platform && (
+                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{tpl.platform}</span>
+                                            )}
+                                            <span>{tpl.country}</span>
                                         </div>
 
                                         {renderProfitSummary(profit)}
@@ -603,10 +606,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const productSites = p.sites || (p.country ? [p.country] : []);
                                 const currency = countryCurrencyMap[activeTab] || activeTab;
                                 const rate = exchangeRates[currency] || 1;
-                                const totalRevenueLocal = (p as any).totalRevenue || 0;
+                                const totalRevenueLocal = p.totalRevenue || 0;
                                 const priceCNY = totalRevenueLocal / rate;
                                 const priceLocal = totalRevenueLocal;
-                                const adROI = (p as any).adROI || p.adROI || 0;
+                                const adROI = p.adROI || 0;
                                 return (
                                     <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
                                         <td className="p-3 pl-4 font-bold text-slate-800 truncate max-w-[180px]">{p.name}</td>
