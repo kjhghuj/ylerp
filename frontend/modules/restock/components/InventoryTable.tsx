@@ -29,6 +29,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [saving, setSaving] = useState(false);
+    const [recordName, setRecordName] = useState('');
 
     const toggleGroup = (groupKey: string) => {
         setExpandedGroups(prev => {
@@ -69,7 +70,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
     const handleUpdate = (id: string, field: keyof InventoryItem, value: any) => {
         const item = inventory.find(i => i.id === id);
         if (item) {
-            const val = field === 'name' ? value : (parseFloat(value) || 0);
+            const val = field === 'name' ? value : (value === '' || value === '.' || value === '-' ? 0 : (parseFloat(value) || 0));
             updateInventoryItem({ id: item.id, [field]: val });
         }
     };
@@ -98,6 +99,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
         try {
             const now = new Date();
             const dateStr = now.toLocaleDateString('zh-CN');
+            const name = recordName.trim() || `补货记录 ${dateStr}`;
             const items = groupedInventory.map(group => {
                 const syntheticItem: InventoryItem = {
                     id: 'group-' + group.groupKey,
@@ -122,7 +124,8 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
                     estimatedDays: Number(calc.daysCovered) || 0,
                 };
             });
-            await addRestockRecord(`补货记录 ${dateStr}`, items);
+            await addRestockRecord(name, items);
+            setRecordName('');
             for (const item of inventory) {
                 await deleteInventoryItem(item.id);
             }
@@ -139,6 +142,13 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
             <div className="p-4 border-b border-white/20 flex justify-between items-center">
                 <h3 className="font-bold text-slate-700">{t.detailsTitle}</h3>
                 <div className="flex items-center gap-3">
+                    <input
+                        type="text"
+                        value={recordName}
+                        onChange={(e) => setRecordName(e.target.value)}
+                        placeholder="输入记录名称（可选）"
+                        className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-200 outline-none w-40 transition"
+                    />
                     <button
                         onClick={handleSaveRecord}
                         disabled={saving || groupedInventory.length === 0}

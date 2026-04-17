@@ -21,7 +21,7 @@ export const MappingManager: React.FC<MappingManagerProps> = ({ mappings, onOpen
     const handleAddMapping = () => {
         if(newMapping.externalId && newMapping.sku) {
             const mapping: WarehouseMapping = {
-                id: Date.now().toString(),
+                id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 sku: newMapping.sku,
                 type: activeTab as 'official' | 'third'
             };
@@ -43,7 +43,7 @@ export const MappingManager: React.FC<MappingManagerProps> = ({ mappings, onOpen
             const skuList = newGroup.skus.split(/[,，\n]+/).map(s => s.trim()).filter(s => s.length > 0);
             if (skuList.length > 0) {
                 addSkuGroup({
-                    id: Date.now().toString(),
+                    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     groupName: newGroup.groupName,
                     skus: skuList
                 });

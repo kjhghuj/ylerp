@@ -30,7 +30,8 @@ export const RestockRecords: React.FC = () => {
     };
 
     const totalItems = (record: RestockRecord) => {
-        return (record.items as any[]).reduce((sum: number, item: any) => sum + (item.suggestedQty || 0), 0);
+        const items = Array.isArray(record.items) ? record.items : [];
+        return items.reduce((sum: number, item: any) => sum + (item.suggestedQty || 0), 0);
     };
 
     if (restockRecords.length === 0) {

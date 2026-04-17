@@ -6,10 +6,10 @@ export const calculateRestock = (
     leadTime: number
 ) => {
     const salesPerDay = item.dailySales; 
-    if (salesPerDay === 0) return { daysCovered: 999, status: 'Stagnant', restockQty: 0, restockCost: 0 };
+    if (salesPerDay === 0) return { daysCovered: '999.0', status: 'Stagnant', restockQty: 0, restockCost: 0 };
 
     // Total Stock = Official + Third Party + In Transit
-    const totalStock = item.currentStock + item.inTransit;
+    const totalStock = (item.currentStock || 0) + (item.inTransit || 0);
     const daysCovered = totalStock / salesPerDay;
     
     let status = 'Healthy';
@@ -39,6 +39,6 @@ export const calculateRestock = (
         daysCovered: daysCovered.toFixed(1),
         status,
         restockQty,
-        restockCost: restockQty * item.costPerUnit
+        restockCost: restockQty * (item.costPerUnit || 0)
     };
 };

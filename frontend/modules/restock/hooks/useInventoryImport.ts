@@ -96,7 +96,10 @@ export const useInventoryImport = (leadTimeSetting: number) => {
                         }
                         if (!isNaN(val)) dailySales = val / divisor;
                     }
-                    if (sku && dailySales >= 0) { salesMap.set(sku, dailySales); }
+                    if (sku && dailySales >= 0) {
+                        const existing = salesMap.get(sku) || 0;
+                        salesMap.set(sku, existing + dailySales);
+                    }
                 }
 
                 for (const item of inventory) {
