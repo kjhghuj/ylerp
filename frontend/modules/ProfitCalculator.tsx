@@ -83,16 +83,7 @@ export const ProfitCalculator: React.FC = () => {
         setProfitNodes(prev => {
             const updated = { ...prev };
             for (const country of Object.keys(updated)) {
-                updated[country] = (updated[country] || []).map((n: any) => ({
-                    ...n,
-                    data: {
-                        ...n.data,
-                        baseShippingFee: 0,
-                        extraShippingFee: 0,
-                        crossBorderFee: 0,
-                        warehouseOperationFee: 0,
-                    }
-                }));
+                updated[country] = [];
             }
             return updated;
         });

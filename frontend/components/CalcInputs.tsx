@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Info, ChevronRight } from 'lucide-react';
 
 export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildren<{ title: string, icon: any }>) => (
@@ -15,50 +15,81 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
     </div>
 );
 
+function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode }: any) {
+    const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
+    const safeRate = exchangeRate > 0 ? exchangeRate : 0;
+    const [localDisplay, setLocalDisplay] = useState((safeValue * safeRate).toFixed(2));
+    const [isFocused, setIsFocused] = useState(false);
+
+    useEffect(() => {
+        if (!isFocused) {
+            setLocalDisplay((safeValue * safeRate).toFixed(2));
+        }
+    }, [safeValue, safeRate, isFocused]);
+
+    const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+        setIsFocused(false);
+        const localValue = parseFloat(e.target.value) || 0;
+        const cnyValue = safeRate > 0 ? localValue / safeRate : localValue;
+        setLocalDisplay(localValue.toFixed(2));
+        onChange({ target: { name, value: String(cnyValue) } });
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setLocalDisplay(e.target.value);
+        const localValue = parseFloat(e.target.value) || 0;
+        const cnyValue = safeRate > 0 ? localValue / safeRate : localValue;
+        onChange({ target: { name, value: String(cnyValue) } });
+    };
+
+    return (
+        <div className={colSpan}>
+            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
+            <div className="relative">
+                <input
+                    key={`${name}-inverted`}
+                    type="text"
+                    inputMode="decimal"
+                    name={name}
+                    value={localDisplay}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    onFocus={(e) => { setIsFocused(true); e.target.select(); }}
+                    className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
+                        ${highlight
+                            ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
+                            : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                />
+                {suffix && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
+                        {suffix}
+                    </div>
+                )}
+            </div>
+            <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
+                <span>≈ {safeValue.toFixed(2)} CNY</span>
+            </div>
+        </div>
+    );
+}
+
 export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false }: any) => {
     const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
     const safeRate = exchangeRate > 0 ? exchangeRate : 0;
 
     if (invertCurrency && safeRate > 0 && currencyCode) {
-        const displayValue = (safeValue * safeRate).toFixed(2);
-        const originalValue = safeValue.toFixed(2);
         return (
-            <div className={colSpan}>
-                <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
-                <div className="relative">
-                    <input
-                        key={`${name}-inverted`}
-                        type="text"
-                        inputMode="decimal"
-                        name={name}
-                        defaultValue={displayValue}
-                        onChange={(e) => {
-                            const localValue = parseFloat(e.target.value) || 0;
-                            const cnyValue = localValue / safeRate;
-                            onChange({ target: { name, value: String(cnyValue) } });
-                        }}
-                        onBlur={(e) => {
-                            const localValue = parseFloat(e.target.value) || 0;
-                            e.target.value = localValue.toFixed(2);
-                            const cnyValue = localValue / safeRate;
-                            onChange({ target: { name, value: String(cnyValue) } });
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
-                            ${highlight
-                                ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
-                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
-                    />
-                    {suffix && (
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">
-                            {suffix}
-                        </div>
-                    )}
-                </div>
-                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                    <span>≈ {originalValue} CNY</span>
-                </div>
-            </div>
+            <InvertedCurrencyInput
+                label={label}
+                name={name}
+                value={value}
+                onChange={onChange}
+                highlight={highlight}
+                suffix={suffix}
+                colSpan={colSpan}
+                exchangeRate={exchangeRate}
+                currencyCode={currencyCode}
+            />
         );
     }
 
