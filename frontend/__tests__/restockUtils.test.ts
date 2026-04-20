@@ -40,7 +40,7 @@ describe('calculateRestock', () => {
             const targetDays = 30;
             const targetStock = targetDays * 10;
             const totalStock = 100 + 50;
-            const expectedRestock = Math.max(0, Math.ceil(targetStock - totalStock));
+            const expectedRestock = Math.max(0, Math.ceil(targetStock - totalStock - (25 * 10)));
             expect(result.restockQty).toBe(expectedRestock);
         });
 
@@ -48,7 +48,7 @@ describe('calculateRestock', () => {
             const item = createItem({ currentStock: 0, inTransit: 0, dailySales: 10, costPerUnit: 50 });
             const result = calculateRestock(item, '2026-05-17', 25);
             const targetDays = 30;
-            const expectedRestock = targetDays * 10;
+            const expectedRestock = Math.max(0, targetDays * 10 - 0 - (25 * 10));
             expect(result.restockCost).toBe(expectedRestock * 50);
         });
 
@@ -171,10 +171,12 @@ describe('calculateRestock', () => {
             const result = calculateRestock(item, '2026-05-17', 25);
             const totalStock = 200 + 100;
             const daysCovered = totalStock / 15;
+            const targetStock = 30 * 15;
+            const expectedRestock = Math.max(0, Math.ceil(targetStock - totalStock - (25 * 15)));
             expect(result.daysCovered).toBe(daysCovered.toFixed(1));
             expect(result.status).toBe('Critical');
-            expect(result.restockQty).toBe(150);
-            expect(result.restockCost).toBe(150 * 30);
+            expect(result.restockQty).toBe(expectedRestock);
+            expect(result.restockCost).toBe(expectedRestock * 30);
         });
 
         it('should calculate correctly for a low-stock item', () => {

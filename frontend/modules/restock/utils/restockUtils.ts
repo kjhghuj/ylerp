@@ -33,7 +33,7 @@ export const calculateRestock = (
     const targetStock = targetTurnoverDays * salesPerDay;
     
     // Calculate Restock Qty: Target Needed - (On Hand + In Transit)
-    const restockQty = Math.max(0, Math.ceil(targetStock - totalStock));
+    const restockQty = Math.max(0, Math.ceil(targetStock - totalStock - (leadTime * salesPerDay)));
 
     return {
         daysCovered: daysCovered.toFixed(1),
