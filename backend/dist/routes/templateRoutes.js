@@ -4,12 +4,16 @@ const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
-// Get templates by country
-router.get('/:country', async (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const { country } = req.params;
+        const userId = req.user.id;
+        const { type, productId } = req.query;
         const templates = await prisma.profitTemplate.findMany({
-            where: { country },
+            where: {
+                userId,
+                ...(type ? { type: String(type) } : {}),
+                ...(productId ? { productId: String(productId) } : {}),
+            },
             orderBy: { createdAt: 'desc' }
         });
         res.json(templates);
@@ -19,10 +23,26 @@ router.get('/:country', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch templates' });
     }
 });
-// Create a new template
+router.get('/:country', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { country } = req.params;
+        const { type } = req.query;
+        const templates = await prisma.profitTemplate.findMany({
+            where: { userId, country, ...(type ? { type: String(type) } : {}) },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(templates);
+    }
+    catch (error) {
+        console.error('Error fetching templates:', error);
+        res.status(500).json({ error: 'Failed to fetch templates' });
+    }
+});
 router.post('/', async (req, res) => {
     try {
-        const { name, country, data } = req.body;
+        const userId = req.user.id;
+        const { name, country, data, type, platform, productId } = req.body;
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -30,7 +50,11 @@ router.post('/', async (req, res) => {
             data: {
                 name,
                 country,
-                data
+                data,
+                type: type || 'profit',
+                platform,
+                userId,
+                ...(productId ? { productId } : {}),
             }
         });
         res.status(201).json(template);
@@ -40,10 +64,13 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create template' });
     }
 });
-// Delete a template
 router.delete('/:id', async (req, res) => {
     try {
+        const userId = req.user.id;
         const { id } = req.params;
+        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        if (!existing)
+            return res.status(404).json({ error: 'Template not found' });
         await prisma.profitTemplate.delete({
             where: { id }
         });
@@ -52,6 +79,32 @@ router.delete('/:id', async (req, res) => {
     catch (error) {
         console.error('Error deleting template:', error);
         res.status(500).json({ error: 'Failed to delete template' });
+    }
+});
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { id } = req.params;
+        const { name, country, data, type, platform, productId } = req.body;
+        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        if (!existing)
+            return res.status(404).json({ error: 'Template not found' });
+        const template = await prisma.profitTemplate.update({
+            where: { id },
+            data: {
+                ...(name ? { name } : {}),
+                ...(country ? { country } : {}),
+                ...(data ? { data } : {}),
+                ...(type ? { type } : {}),
+                ...(platform !== undefined ? { platform } : {}),
+                ...(productId !== undefined ? { productId } : {}),
+            }
+        });
+        res.json(template);
+    }
+    catch (error) {
+        console.error('Error updating template:', error);
+        res.status(500).json({ error: 'Failed to update template' });
     }
 });
 exports.default = router;

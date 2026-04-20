@@ -116,10 +116,12 @@ router.post('/edit', async (req: Request, res: Response) => {
     const { image, prompt, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
+    const { width, height } = getImageDimensionsFromBase64(image);
+    const size = calculateSizeForAspectRatio(width, height);
     const generated = await generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
-      undefined,
+      size,
       [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
     );
     const imageUrl = generated?.data?.[0]?.url || '';

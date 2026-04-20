@@ -73,5 +73,5 @@ export interface RestockRecord {
 
 export interface AppState {
   currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'restock-records'
-    | 'product-list' | 'user-management' | 'chroma-adapt' | 'personal-center';
+    | 'product-list' | 'user-management' | 'chroma-adapt' | 'personal-center' | 'schedule';
 }

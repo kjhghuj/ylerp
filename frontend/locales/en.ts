@@ -15,6 +15,7 @@ export const en = {
     chromaAdapt: 'Image Studio',
     productList: 'Product List',
     personalCenter: 'Profile',
+    schedule: 'Schedule',
     version: 'v1.0.2 Stable',
   },
   dashboard: {

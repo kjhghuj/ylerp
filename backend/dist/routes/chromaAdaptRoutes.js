@@ -1,0 +1,171 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const config_1 = require("../services/chroma/config");
+const arkClient_1 = require("../services/chroma/arkClient");
+const imageUtils_1 = require("../services/chroma/imageUtils");
+const prompts_1 = require("../services/chroma/prompts");
+const router = (0, express_1.Router)();
+function errorResponse(error, res) {
+    if (error instanceof config_1.ApiError) {
+        res.status(error.status_code).json({ detail: error.detail });
+    }
+    else {
+        res.status(500).json({ detail: String(error) });
+    }
+}
+function analyzeSingleImage(image, prompt, model) {
+    const base64Data = (0, imageUtils_1.cleanBase64Image)(image);
+    const content = [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
+    ];
+    return (0, arkClient_1.chatWithImages)(model, content);
+}
+router.post('/analyze', async (req, res) => {
+    try {
+        const { image, prompt, model } = req.body;
+        if (!image)
+            return res.status(400).json({ detail: 'Missing required field: image' });
+        const result = await analyzeSingleImage(image, prompt || '分析这张图片的色彩、构图和主要内容，并以JSON格式返回色盘（包含一个名为 \'palette\' 的数组，内含5个十六进制颜色）。', model || 'doubao-seed-2-0-lite');
+        res.json(result);
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/analyze-edit', async (req, res) => {
+    try {
+        const { image, user_instruction, model } = req.body;
+        if (!image)
+            return res.status(400).json({ detail: 'Missing required field: image' });
+        if (!user_instruction)
+            return res.status(400).json({ detail: 'Missing required field: user_instruction' });
+        const prompt = (0, prompts_1.buildEditAnalysisPrompt)(user_instruction);
+        const result = await analyzeSingleImage(image, prompt, model || 'doubao-seed-2-0-lite');
+        res.json(result);
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/secondary-plan', async (req, res) => {
+    try {
+        const { image, model } = req.body;
+        if (!image)
+            return res.status(400).json({ detail: 'Missing required field: image' });
+        const result = await analyzeSingleImage(image, prompts_1.SECONDARY_PLAN_PROMPT, model || 'doubao-seed-2-0-lite');
+        res.json(result);
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/color-mapping', async (req, res) => {
+    try {
+        const { poster_image, reference_image, model } = req.body;
+        if (!poster_image)
+            return res.status(400).json({ detail: 'Missing required field: poster_image' });
+        if (!reference_image)
+            return res.status(400).json({ detail: 'Missing required field: reference_image' });
+        const posterClean = (0, imageUtils_1.cleanBase64Image)(poster_image);
+        const refClean = (0, imageUtils_1.cleanBase64Image)(reference_image);
+        const content = [
+            { type: 'text', text: `${prompts_1.COLOR_MAPPING_PROMPT}\n\n下面是原始海报图片：` },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${posterClean}` } },
+            { type: 'text', text: '\n\n下面是参考图片：' },
+            { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${refClean}` } },
+        ];
+        const result = await (0, arkClient_1.chatWithImages)(model || 'doubao-seed-2-0-lite', content);
+        res.json(result);
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/generate', async (req, res) => {
+    try {
+        const { prompt, image_urls, size, model } = req.body;
+        if (!prompt)
+            return res.status(400).json({ detail: 'Missing required field: prompt' });
+        const result = await (0, arkClient_1.generateImage)(model || 'doubao-seedream-4.5', prompt, size || '2048x2048', image_urls || undefined);
+        const imageUrl = result?.data?.[0]?.url || '';
+        const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, '');
+        res.json({ ...result, data: [{ url: imageDataUrl }] });
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/edit', async (req, res) => {
+    try {
+        const { image, prompt, model } = req.body;
+        if (!image)
+            return res.status(400).json({ detail: 'Missing required field: image' });
+        if (!prompt)
+            return res.status(400).json({ detail: 'Missing required field: prompt' });
+        const { width, height } = (0, imageUtils_1.getImageDimensionsFromBase64)(image);
+        const size = (0, imageUtils_1.calculateSizeForAspectRatio)(width, height);
+        const generated = await (0, arkClient_1.generateImage)(model || 'doubao-seedream-4.5', prompt, size, [`data:image/jpeg;base64,${(0, imageUtils_1.cleanBase64Image)(image)}`]);
+        const imageUrl = generated?.data?.[0]?.url || '';
+        const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, image);
+        res.json({ ...generated, data: [{ url: imageDataUrl }] });
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/color-adaptation', async (req, res) => {
+    try {
+        const { poster_image, reference_image, palette, style_config, color_mapping_plan, model } = req.body;
+        if (!poster_image)
+            return res.status(400).json({ detail: 'Missing required field: poster_image' });
+        if (!reference_image)
+            return res.status(400).json({ detail: 'Missing required field: reference_image' });
+        const { width, height } = (0, imageUtils_1.getImageDimensionsFromBase64)(poster_image);
+        const size = (0, imageUtils_1.calculateSizeForAspectRatio)(width, height);
+        const prompt = (0, prompts_1.buildColorAdaptationPrompt)(palette || [], style_config || null, color_mapping_plan || null);
+        const generated = await (0, arkClient_1.generateImage)(model || 'doubao-seedream-4.5', prompt, size, [
+            `data:image/jpeg;base64,${(0, imageUtils_1.cleanBase64Image)(poster_image)}`,
+            `data:image/jpeg;base64,${(0, imageUtils_1.cleanBase64Image)(reference_image)}`,
+        ]);
+        const imageUrl = generated?.data?.[0]?.url || '';
+        const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, poster_image);
+        res.json({ data: [{ url: imageDataUrl }] });
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.post('/translate', async (req, res) => {
+    try {
+        const { image, target_lang, target_font, model } = req.body;
+        if (!image)
+            return res.status(400).json({ detail: 'Missing required field: image' });
+        if (!target_lang)
+            return res.status(400).json({ detail: 'Missing required field: target_lang' });
+        const { width, height } = (0, imageUtils_1.getImageDimensionsFromBase64)(image);
+        const size = (0, imageUtils_1.calculateSizeForAspectRatio)(width, height);
+        const prompt = (0, prompts_1.buildTranslationPrompt)(target_lang, target_font || 'original');
+        const generated = await (0, arkClient_1.generateImage)(model || 'doubao-seedream-4.5', prompt, size, [`data:image/jpeg;base64,${(0, imageUtils_1.cleanBase64Image)(image)}`]);
+        const imageUrl = generated?.data?.[0]?.url || '';
+        const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, image);
+        res.json({
+            translation_instructions: {
+                translations: [],
+                visual_context: '直接翻译模式',
+                gen_prompt: prompt,
+                size,
+                original_dimensions: { width, height },
+            },
+            result: { data: [{ url: imageDataUrl }] },
+        });
+    }
+    catch (error) {
+        errorResponse(error, res);
+    }
+});
+router.get('/', (_req, res) => {
+    res.json({ status: 'ok', message: 'ChromaAdapt AI Backend Running' });
+});
+exports.default = router;

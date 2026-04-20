@@ -38,6 +38,7 @@ import skuGroupRoutes from './routes/skuGroupRoutes';
 import templateRoutes from './routes/templateRoutes';
 import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
 import restockRecordRoutes from './routes/restockRecordRoutes';
+import scheduleRoutes from './routes/scheduleRoutes';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
@@ -51,6 +52,7 @@ app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
 app.use('/api/sku-groups', authenticate, skuGroupRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
 app.use('/api/restock-records', authenticate, restockRecordRoutes);
+app.use('/api/schedule', authenticate, scheduleRoutes);
 app.use('/api/chroma-adapt', chromaAdaptRoutes);
 
 app.get('/health', (req, res) => {

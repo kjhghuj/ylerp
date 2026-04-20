@@ -14,7 +14,7 @@ const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
 // Middlewares
 app.use((0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '100mb' }));
 exports.prisma = new client_1.PrismaClient();
 exports.redis = new ioredis_1.default(process.env.REDIS_URL || 'redis://localhost:6379');
 exports.redis.on('connect', () => {
@@ -23,19 +23,31 @@ exports.redis.on('connect', () => {
 exports.redis.on('error', (err) => {
     console.error('Redis connection error:', err);
 });
-// Basic structure for routes (we'll implement them next)
+// Import middleware
+const authMiddleware_1 = require("./middleware/authMiddleware");
+// Import routes
+const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const productRoutes_1 = __importDefault(require("./routes/productRoutes"));
 const financeRoutes_1 = __importDefault(require("./routes/financeRoutes"));
 const inventoryRoutes_1 = __importDefault(require("./routes/inventoryRoutes"));
 const mappingRoutes_1 = __importDefault(require("./routes/mappingRoutes"));
 const skuGroupRoutes_1 = __importDefault(require("./routes/skuGroupRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
-app.use('/api/products', productRoutes_1.default);
-app.use('/api/finance', financeRoutes_1.default);
-app.use('/api/inventory', inventoryRoutes_1.default);
-app.use('/api/warehouse-mappings', mappingRoutes_1.default);
-app.use('/api/sku-groups', skuGroupRoutes_1.default);
-app.use('/api/templates', templateRoutes_1.default);
+const chromaAdaptRoutes_1 = __importDefault(require("./routes/chromaAdaptRoutes"));
+const restockRecordRoutes_1 = __importDefault(require("./routes/restockRecordRoutes"));
+// Public routes (no auth required)
+app.use('/api/auth', authRoutes_1.default);
+// Protected routes (auth required)
+app.use('/api/users', userRoutes_1.default);
+app.use('/api/products', authMiddleware_1.authenticate, productRoutes_1.default);
+app.use('/api/finance', authMiddleware_1.authenticate, financeRoutes_1.default);
+app.use('/api/inventory', authMiddleware_1.authenticate, inventoryRoutes_1.default);
+app.use('/api/warehouse-mappings', authMiddleware_1.authenticate, mappingRoutes_1.default);
+app.use('/api/sku-groups', authMiddleware_1.authenticate, skuGroupRoutes_1.default);
+app.use('/api/templates', authMiddleware_1.authenticate, templateRoutes_1.default);
+app.use('/api/restock-records', authMiddleware_1.authenticate, restockRecordRoutes_1.default);
+app.use('/api/chroma-adapt', chromaAdaptRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });

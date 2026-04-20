@@ -15,6 +15,7 @@ export const zh = {
     chromaAdapt: '图片制作',
     productList: '商品明细表',
     personalCenter: '个人中心',
+    schedule: '日程管理',
     version: 'v1.0.2 正式版',
   },
   dashboard: {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -71,6 +71,13 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
             { key: 'chroma-adapt.translate', label: '图片翻译', labelEn: 'Translate', icon: Edit3 },
             { key: 'chroma-adapt.edit', label: '图片编辑', labelEn: 'Edit', icon: Settings },
             { key: 'chroma-adapt.generate', label: 'AI生成', labelEn: 'Generate', icon: Image },
+        ]
+    },
+    {
+        key: 'schedule', label: '日程管理', labelEn: 'Schedule', icon: Calendar,
+        children: [
+            { key: 'schedule.view', label: '查看日程', labelEn: 'View', icon: Eye },
+            { key: 'schedule.edit', label: '编辑日程', labelEn: 'Edit', icon: Edit3 },
         ]
     },
 ];
