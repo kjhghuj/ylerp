@@ -56,7 +56,27 @@ router.delete('/:id', async (req, res) => {
         const existing = await prisma.product.findFirst({ where: { id: req.params.id, userId } });
         if (!existing) return res.status(404).json({ error: 'Product not found' });
 
-        await prisma.product.delete({ where: { id: req.params.id } });
+        const site = req.query.site as string | undefined;
+
+        if (site) {
+            const remainingSites = (existing.sites || []).filter(s => s !== site);
+            if (remainingSites.length === 0) {
+                await prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
+                await prisma.product.delete({ where: { id: req.params.id } });
+            } else {
+                await prisma.profitTemplate.deleteMany({
+                    where: { productId: req.params.id, country: site },
+                });
+                await prisma.product.update({
+                    where: { id: req.params.id },
+                    data: { sites: remainingSites },
+                });
+            }
+        } else {
+            await prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
+            await prisma.product.delete({ where: { id: req.params.id } });
+        }
+
         await redis.del(`products:${userId}`);
         res.status(204).send();
     } catch (error) {

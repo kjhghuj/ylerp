@@ -19,7 +19,7 @@ interface StoreContextType {
   products: ProductCalcData[];
   addProduct: (p: Omit<ProductCalcData, 'id'>) => Promise<ProductCalcData | null>;
   updateProduct: (p: ProductCalcData) => Promise<void>;
-  deleteProduct: (id: string) => Promise<void>;
+  deleteProduct: (id: string, site?: string) => Promise<void>;
 
   calculatorImport: ProductCalcData | null;
   setCalculatorImport: (p: ProductCalcData | null) => void;
@@ -233,10 +233,23 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setProducts(prev => prev.map(prod => prod.id === p.id ? res.data : prod));
     } catch (e) { console.error('Error updating product', e); }
   };
-  const deleteProduct = async (id: string) => {
+  const deleteProduct = async (id: string, site?: string) => {
     try {
-      await api.delete(`/products/${id}`);
-      setProducts(prev => prev.filter(p => p.id !== id));
+      if (site) {
+        await api.delete(`/products/${id}?site=${encodeURIComponent(site)}`);
+      } else {
+        await api.delete(`/products/${id}`);
+      }
+      if (site) {
+        setProducts(prev => prev.map(p => {
+          if (p.id !== id) return p;
+          const remainingSites = (p.sites || []).filter(s => s !== site);
+          if (remainingSites.length === 0) return null;
+          return { ...p, sites: remainingSites };
+        }).filter(Boolean) as ProductCalcData[]);
+      } else {
+        setProducts(prev => prev.filter(p => p.id !== id));
+      }
     } catch (e) { console.error('Error deleting product', e); }
   };
 

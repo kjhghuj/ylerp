@@ -239,9 +239,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         onNavigate('profit');
     };
 
-    const handleDelete = (id: string) => {
+    const handleDelete = (product: ProductCalcData) => {
         if (window.confirm('Are you sure you want to delete this product?')) {
-            deleteProduct(id);
+            deleteProduct(product.id, activeTab);
         }
     };
 
@@ -619,9 +619,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const productSites = p.sites || (p.country ? [p.country] : []);
                                 const currency = countryCurrencyMap[activeTab] || activeTab;
                                 const rate = exchangeRates[currency] || 1;
-                                const totalRevenueLocal = p.totalRevenue || 0;
-                                const priceCNY = totalRevenueLocal / rate;
-                                const priceLocal = totalRevenueLocal;
+                                const priceCNY = p.totalRevenue || 0;
+                                const priceLocal = priceCNY * rate;
                                 const adROI = p.adROI || 0;
                                 return (
                                     <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
@@ -636,7 +635,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                             <div className="flex items-center justify-center gap-1">
                                                 <button onClick={() => handleView(p)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="View"><Eye size={15} /></button>
                                                 <button onClick={() => handleQuickImport(p)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
-                                                <button onClick={() => handleDelete(p.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
+                                                <button onClick={() => handleDelete(p)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
                                             </div>
                                         </td>
                                     </tr>
