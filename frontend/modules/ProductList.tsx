@@ -29,6 +29,7 @@ const currencyToCountry = (currency: string): string => {
 };
 
 const countryNameMap: Record<string, string> = {
+    'SG': '新加坡', 'MY': '马来西亚', 'PH': '菲律宾', 'TH': '泰国', 'ID': '印度尼西亚',
     'SGD': '新加坡', 'MYR': '马来西亚', 'PHP': '菲律宾', 'THB': '泰国', 'IDR': '印度尼西亚',
 };
 
@@ -186,7 +187,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         setAllLinkedTemplates([]);
         try {
             const res = await api.get(`/templates?type=profit&productId=${product.id}`);
-            setAllLinkedTemplates(res.data || []);
+            const allTemplates: LinkedTemplate[] = res.data || [];
+            const currency = countryCurrencyMap[activeTab] || activeTab;
+            const filtered = allTemplates.filter(tpl => {
+                return tpl.country === activeTab || tpl.country === currency;
+            });
+            setAllLinkedTemplates(filtered);
         } catch (error) {
             console.error('Failed to fetch linked templates:', error);
             setAllLinkedTemplates([]);
@@ -196,14 +202,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const handleImportAllTemplates = () => {
         if (!selectedProduct) return;
-        setCalculatorImport(selectedProduct);
+        setCalculatorImport({ ...selectedProduct, country: activeTab });
         const currentCountry = activeTab;
+        const currency = countryCurrencyMap[currentCountry] || currentCountry;
         const importNodes = allLinkedTemplates
             .filter(tpl => {
-                const countryMap: Record<string, string> = { 'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR' };
-                const tplCurrency = countryMap[tpl.country] || tpl.country;
-                const tplCountry = currencyToCountry(tplCurrency);
-                return tplCountry === currentCountry;
+                return tpl.country === currentCountry || tpl.country === currency;
             })
             .map(tpl => ({
                 name: tpl.name,
@@ -220,7 +224,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const handleImportSingleTemplate = (tpl: LinkedTemplate) => {
         if (!selectedProduct) return;
-        setCalculatorImport(selectedProduct);
+        setCalculatorImport({ ...selectedProduct, country: activeTab });
         const importNodes = [tpl].map(t => ({
             name: t.name,
             country: t.country,
@@ -235,7 +239,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const handleQuickImport = (product: ProductCalcData) => {
-        setCalculatorImport(product);
+        setCalculatorImport({ ...product, country: activeTab });
         onNavigate('profit');
     };
 
@@ -291,14 +295,21 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             corporateIncomeTaxRate: Number(d.corporateIncomeTaxRate) || 0,
         };
 
-        const siteInputs = {
-            totalRevenue: Number(selectedProduct?.totalRevenue) || 0,
-            sellerCoupon: Number(selectedProduct?.sellerCoupon) || 0,
-            sellerCouponType: (selectedProduct?.sellerCouponType as 'fixed' | 'percent') || 'fixed',
-            sellerCouponPlatformRatio: Number(selectedProduct?.sellerCouponPlatformRatio) || 0,
-            platformInfrastructureFee: Number(selectedProduct?.platformInfrastructureFee) || 0,
-            adROI: selectedProduct?.adROI !== undefined && selectedProduct?.adROI !== null ? Number(selectedProduct.adROI) : 15,
-        };
+        const siteInputs = (() => {
+            const countryKey = countryCurrencyMap[country] ? country : currencyToCountry(country);
+            const sd = ((selectedProduct?.siteData as Record<string, any>) || {})[countryKey];
+            return {
+                totalRevenue: Number(sd?.totalRevenue ?? selectedProduct?.totalRevenue) || 0,
+                sellerCoupon: Number(sd?.sellerCoupon ?? selectedProduct?.sellerCoupon) || 0,
+                sellerCouponType: ((sd?.sellerCouponType ?? selectedProduct?.sellerCouponType) as 'fixed' | 'percent') || 'fixed',
+                sellerCouponPlatformRatio: Number(sd?.sellerCouponPlatformRatio ?? selectedProduct?.sellerCouponPlatformRatio) || 0,
+                platformInfrastructureFee: Number(sd?.platformInfrastructureFee ?? selectedProduct?.platformInfrastructureFee) || 0,
+                adROI: (() => {
+                    const v = sd?.adROI ?? selectedProduct?.adROI;
+                    return v !== undefined && v !== null ? Number(v) : 15;
+                })(),
+            };
+        })();
 
         return calculateProfit(profitData, globalData, siteInputs, rate, currency);
     };
@@ -487,24 +498,35 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                     </div>
                                     <div className="md:col-span-2">
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{'站点参数'}</h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                            {[
-                                                { label: t.table.priceCNY || '总收入', value: `${selectedProduct.totalRevenue?.toFixed(2)} CNY` },
-                                                { label: t.table.sellerCoupon || '卖家优惠券', value: `${selectedProduct.sellerCoupon || 0}`, suffix: selectedProduct.sellerCouponType === 'percent' ? '%' : 'CNY' },
-                                                { label: t.detail.couponPlatformRatio || '平台出资比例', value: `${selectedProduct.sellerCouponPlatformRatio || 0}%` },
-                                                { label: t.table.adROI || '广告ROI', value: `${selectedProduct.adROI !== undefined && selectedProduct.adROI !== null ? selectedProduct.adROI : 15}` },
-                                                { label: t.detail.infraFee || '基础设施费', value: `${selectedProduct.platformInfrastructureFee?.toFixed(2) || '0.00'} CNY` },
-                                                { label: t.detail.couponType || '优惠券类型', value: selectedProduct.sellerCouponType === 'percent' ? (t.detail.percentType || '百分比') : (t.detail.fixedType || '固定') },
-                                            ].map(item => (
-                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                    <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                    <span className="text-sm font-bold text-slate-700">
-                                                        {item.value || '-'}
-                                                        {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
+                                        {(() => {
+                                            const sd = ((selectedProduct.siteData as Record<string, any>) || {})[activeTab];
+                                            const siteTotalRevenue = sd?.totalRevenue ?? selectedProduct.totalRevenue ?? 0;
+                                            const siteSellerCoupon = sd?.sellerCoupon ?? selectedProduct.sellerCoupon ?? 0;
+                                            const siteSellerCouponType = (sd?.sellerCouponType ?? selectedProduct.sellerCouponType) as 'fixed' | 'percent' || 'fixed';
+                                            const siteSellerCouponPlatformRatio = sd?.sellerCouponPlatformRatio ?? selectedProduct.sellerCouponPlatformRatio ?? 0;
+                                            const siteAdROI = sd?.adROI ?? selectedProduct.adROI ?? 15;
+                                            const sitePlatformInfrastructureFee = sd?.platformInfrastructureFee ?? selectedProduct.platformInfrastructureFee ?? 0;
+                                            return (
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                                {[
+                                                    { label: t.table.priceCNY || '总收入', value: `${siteTotalRevenue.toFixed(2)} CNY` },
+                                                    { label: t.table.sellerCoupon || '卖家优惠券', value: `${siteSellerCoupon}`, suffix: siteSellerCouponType === 'percent' ? '%' : 'CNY' },
+                                                    { label: t.detail.couponPlatformRatio || '平台出资比例', value: `${siteSellerCouponPlatformRatio}%` },
+                                                    { label: t.table.adROI || '广告ROI', value: `${siteAdROI}` },
+                                                    { label: t.detail.infraFee || '基础设施费', value: `${sitePlatformInfrastructureFee.toFixed(2)} CNY` },
+                                                    { label: t.detail.couponType || '优惠券类型', value: siteSellerCouponType === 'percent' ? (t.detail.percentType || '百分比') : (t.detail.fixedType || '固定') },
+                                                ].map(item => (
+                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
+                                                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
+                                                        <span className="text-sm font-bold text-slate-700">
+                                                            {item.value || '-'}
+                                                            {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             )}
@@ -619,9 +641,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const productSites = p.sites || (p.country ? [p.country] : []);
                                 const currency = countryCurrencyMap[activeTab] || activeTab;
                                 const rate = exchangeRates[currency] || 1;
-                                const priceCNY = p.totalRevenue || 0;
+                                const sd = (p.siteData as Record<string, any> || {})[activeTab];
+                                const priceCNY = sd?.totalRevenue ?? p.totalRevenue ?? 0;
                                 const priceLocal = priceCNY * rate;
-                                const adROI = p.adROI || 0;
+                                const adROI = sd?.adROI ?? p.adROI ?? 0;
                                 return (
                                     <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
                                         <td className="p-3 pl-4 font-bold text-slate-800 truncate max-w-[180px]">{p.name}</td>

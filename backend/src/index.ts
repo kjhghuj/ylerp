@@ -7,7 +7,7 @@ import Redis from 'ioredis';
 dotenv.config();
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 4002;
 
 // Middlewares
 app.use(cors());

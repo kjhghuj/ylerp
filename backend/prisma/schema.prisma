@@ -23,6 +23,7 @@ model Product {
   totalRevenue      Float   @default(0)
   platformInfrastructureFee Float @default(0)
   sites             String[] @default([])
+  siteData          Json?
   userId            String
   user              User    @relation(fields: [userId], references: [id])
   templates         ProfitTemplate[]

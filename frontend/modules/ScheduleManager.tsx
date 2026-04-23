@@ -277,45 +277,38 @@ export const ScheduleManager: React.FC = () => {
             setEditFeedback(item.feedback || '');
             return;
         }
-        try {
-            setFlyingItemId(item.id);
-            setTimeout(async () => {
-                try {
-                    const res = await api.put(`/schedule/${item.id}`, { completed: true });
-                    setItems(prev => prev.map(i => i.id === item.id ? res.data : i));
-                } catch (e) {
-                    console.error('Failed to complete item', e);
-                }
-                setFlyingItemId(null);
-            }, 600);
-        } catch (e) {
-            console.error('Failed to toggle item', e);
-        }
+        setFlyingItemId(item.id);
+        setTimeout(async () => {
+            try {
+                const res = await api.put(`/schedule/${item.id}`, { completed: true });
+                setItems(prev => prev.map(i => i.id === item.id ? res.data : i));
+            } catch (e) {
+                console.error('Failed to complete item', e);
+            }
+            setFlyingItemId(null);
+        }, 600);
     };
 
     const handleArchiveWithNotes = async () => {
         if (!editingItem) return;
-        try {
-            setFlyingItemId(editingItem.id);
-            setTimeout(async () => {
-                try {
-                    const res = await api.put(`/schedule/${editingItem.id}`, {
-                        completed: true,
-                        notes: editNotes,
-                        feedback: editFeedback,
-                    });
-                    setItems(prev => prev.map(i => i.id === editingItem.id ? res.data : i));
-                } catch (e) {
-                    console.error('Failed to archive idea', e);
-                }
-                setFlyingItemId(null);
-                setEditingItem(null);
-                setEditNotes('');
-                setEditFeedback('');
-            }, 600);
-        } catch (e) {
-            console.error('Failed to archive idea', e);
-        }
+        const itemRef = editingItem;
+        setFlyingItemId(itemRef.id);
+        setTimeout(async () => {
+            try {
+                const res = await api.put(`/schedule/${itemRef.id}`, {
+                    completed: true,
+                    notes: editNotes,
+                    feedback: editFeedback,
+                });
+                setItems(prev => prev.map(i => i.id === itemRef.id ? res.data : i));
+            } catch (e) {
+                console.error('Failed to archive idea', e);
+            }
+            setFlyingItemId(null);
+            setEditingItem(null);
+            setEditNotes('');
+            setEditFeedback('');
+        }, 600);
     };
 
     const handleDelete = async (id: string) => {

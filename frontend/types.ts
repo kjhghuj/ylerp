@@ -1,4 +1,13 @@
 
+export interface SiteData {
+  totalRevenue?: number;
+  sellerCoupon?: number;
+  sellerCouponType?: 'fixed' | 'percent';
+  sellerCouponPlatformRatio?: number;
+  adROI?: number;
+  platformInfrastructureFee?: number;
+}
+
 export interface ProductCalcData {
   id: string;
   name: string;
@@ -15,6 +24,7 @@ export interface ProductCalcData {
   adROI?: number;
   totalRevenue?: number;
   platformInfrastructureFee?: number;
+  siteData?: Record<string, SiteData>;
 }
 
 export interface FinanceRecord {

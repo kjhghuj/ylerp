@@ -79,13 +79,19 @@ export const useProfitImport = (
         }
 
         if (setSiteInputsMap && siteInputsMap) {
+            const countryCode = calculatorImport.country || 'MY';
+            const sd = (calculatorImport as any).siteData || {};
+            const siteSpecific = sd[countryCode] || {};
             const siteInputs: SiteLevelInputs = {
-                totalRevenue: (calculatorImport as any).totalRevenue || 0,
-                sellerCoupon: (calculatorImport as any).sellerCoupon || 0,
-                sellerCouponType: (calculatorImport as any).sellerCouponType || 'fixed',
-                sellerCouponPlatformRatio: (calculatorImport as any).sellerCouponPlatformRatio || 0,
-                platformInfrastructureFee: (calculatorImport as any).platformInfrastructureFee || 0,
-                adROI: (calculatorImport as any).adROI !== undefined && (calculatorImport as any).adROI !== null ? (calculatorImport as any).adROI : 15,
+                totalRevenue: siteSpecific.totalRevenue ?? (calculatorImport as any).totalRevenue ?? 0,
+                sellerCoupon: siteSpecific.sellerCoupon ?? (calculatorImport as any).sellerCoupon ?? 0,
+                sellerCouponType: siteSpecific.sellerCouponType ?? (calculatorImport as any).sellerCouponType ?? 'fixed',
+                sellerCouponPlatformRatio: siteSpecific.sellerCouponPlatformRatio ?? (calculatorImport as any).sellerCouponPlatformRatio ?? 0,
+                platformInfrastructureFee: siteSpecific.platformInfrastructureFee ?? (calculatorImport as any).platformInfrastructureFee ?? 0,
+                adROI: (() => {
+                    const v = siteSpecific.adROI ?? (calculatorImport as any).adROI;
+                    return v !== undefined && v !== null ? v : 15;
+                })(),
             };
             setSiteInputsMap(prev => ({
                 ...prev,

@@ -11,7 +11,7 @@ const client_1 = require("@prisma/client");
 const ioredis_1 = __importDefault(require("ioredis"));
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 4002;
 // Middlewares
 app.use((0, cors_1.default)());
 app.use(express_1.default.json({ limit: '100mb' }));
@@ -36,6 +36,7 @@ const skuGroupRoutes_1 = __importDefault(require("./routes/skuGroupRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
 const chromaAdaptRoutes_1 = __importDefault(require("./routes/chromaAdaptRoutes"));
 const restockRecordRoutes_1 = __importDefault(require("./routes/restockRecordRoutes"));
+const scheduleRoutes_1 = __importDefault(require("./routes/scheduleRoutes"));
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes_1.default);
 // Protected routes (auth required)
@@ -47,6 +48,7 @@ app.use('/api/warehouse-mappings', authMiddleware_1.authenticate, mappingRoutes_
 app.use('/api/sku-groups', authMiddleware_1.authenticate, skuGroupRoutes_1.default);
 app.use('/api/templates', authMiddleware_1.authenticate, templateRoutes_1.default);
 app.use('/api/restock-records', authMiddleware_1.authenticate, restockRecordRoutes_1.default);
+app.use('/api/schedule', authMiddleware_1.authenticate, scheduleRoutes_1.default);
 app.use('/api/chroma-adapt', chromaAdaptRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

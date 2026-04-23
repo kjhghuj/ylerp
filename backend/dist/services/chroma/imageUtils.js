@@ -7,7 +7,7 @@ exports.downloadImageAsDataUrl = downloadImageAsDataUrl;
 function cleanBase64Image(base64Str) {
     const clean = (base64Str || '').trim().replace(/\n/g, '').replace(/\r/g, '');
     if (clean.startsWith('data:')) {
-        return clean.split(',', 1)[1];
+        return clean.split(',')[1] || clean;
     }
     return clean;
 }

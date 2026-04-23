@@ -116,6 +116,15 @@ export const useProductActions = (
 
         const currentSiteInputs: SiteLevelInputs = siteInputsMap[siteCountry] || { totalRevenue: 0, sellerCoupon: 0, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15 };
 
+        const siteSpecificData = {
+            totalRevenue: Number(currentSiteInputs.totalRevenue) || 0,
+            sellerCoupon: Number(currentSiteInputs.sellerCoupon) || 0,
+            sellerCouponType: currentSiteInputs.sellerCouponType || 'fixed',
+            sellerCouponPlatformRatio: Number(currentSiteInputs.sellerCouponPlatformRatio) || 0,
+            adROI: currentSiteInputs.adROI !== undefined && currentSiteInputs.adROI !== null ? Number(currentSiteInputs.adROI) : 15,
+            platformInfrastructureFee: Number(currentSiteInputs.platformInfrastructureFee) || 0,
+        };
+
         const productData: Omit<ProductCalcData, 'id'> = {
             name: globalInputs.name,
             sku: globalInputs.sku,
@@ -125,12 +134,13 @@ export const useProductActions = (
             productWeight: Number(globalInputs.productWeight) || 0,
             supplierTaxPoint: Number(globalInputs.supplierTaxPoint) || 0,
             supplierInvoice: globalInputs.supplierInvoice,
-            sellerCoupon: Number(currentSiteInputs.sellerCoupon) || 0,
-            sellerCouponPlatformRatio: Number(currentSiteInputs.sellerCouponPlatformRatio) || 0,
-            sellerCouponType: currentSiteInputs.sellerCouponType || 'fixed',
-            adROI: currentSiteInputs.adROI !== undefined && currentSiteInputs.adROI !== null ? Number(currentSiteInputs.adROI) : 15,
-            totalRevenue: Number(currentSiteInputs.totalRevenue) || 0,
-            platformInfrastructureFee: Number(currentSiteInputs.platformInfrastructureFee) || 0,
+            sellerCouponType: siteSpecificData.sellerCouponType,
+            sellerCoupon: siteSpecificData.sellerCoupon,
+            sellerCouponPlatformRatio: siteSpecificData.sellerCouponPlatformRatio,
+            totalRevenue: siteSpecificData.totalRevenue,
+            platformInfrastructureFee: siteSpecificData.platformInfrastructureFee,
+            adROI: siteSpecificData.adROI,
+            siteData: { [countryCode]: siteSpecificData },
         };
 
         const existingProduct = products.find(
@@ -146,7 +156,11 @@ export const useProductActions = (
                 const newSites = existingSites.includes(countryCode)
                     ? existingSites
                     : [...existingSites, countryCode];
-                await updateProduct({ ...productData, id: existingProduct.id, sites: newSites });
+                const mergedSiteData = {
+                    ...((existingProduct.siteData as Record<string, any>) || {}),
+                    [countryCode]: siteSpecificData,
+                };
+                await updateProduct({ ...productData, id: existingProduct.id, sites: newSites, siteData: mergedSiteData });
                 savedProductId = existingProduct.id;
             } else {
                 const saved = await addProduct(productData);
