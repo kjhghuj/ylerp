@@ -124,15 +124,12 @@ router.post('/reorder', async (req: Request, res: Response) => {
 router.post('/reset-daily', async (req: Request, res: Response) => {
     try {
         const userId = req.user!.id;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
 
         const result = await prisma.scheduleItem.updateMany({
             where: {
                 userId,
                 type: 'routine',
                 completed: true,
-                completedAt: { gte: today },
             },
             data: {
                 completed: false,

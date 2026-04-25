@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
@@ -24,11 +24,11 @@ interface ScheduleItemData {
     updatedAt: string;
 }
 
-const TYPE_CONFIG: Record<ItemType, { icon: any; color: string; label: string; labelEn: string }> = {
-    routine: { icon: Check, color: 'from-emerald-400 to-teal-500', label: '每日任务', labelEn: 'Routine' },
-    schedule: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '日程安排', labelEn: 'Schedule' },
-    idea: { icon: Lightbulb, color: 'from-amber-400 to-orange-500', label: '想法测试', labelEn: 'Idea' },
-    'shop-event': { icon: Store, color: 'from-purple-400 to-violet-500', label: '店铺活动', labelEn: 'Shop Event' },
+const TYPE_CONFIG: Record<ItemType, { icon: any; color: string; label: string; labelEn: string; progressRgb: string }> = {
+    routine: { icon: Check, color: 'from-emerald-400 to-teal-500', label: '每日任务', labelEn: 'Routine', progressRgb: '129,199,132' },
+    schedule: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '日程安排', labelEn: 'Schedule', progressRgb: '100,181,246' },
+    idea: { icon: Lightbulb, color: 'from-amber-400 to-orange-500', label: '想法测试', labelEn: 'Idea', progressRgb: '255,183,77' },
+    'shop-event': { icon: Store, color: 'from-purple-400 to-violet-500', label: '店铺活动', labelEn: 'Shop Event', progressRgb: '179,136,255' },
 };
 
 const getDeadlineStatus = (deadline?: string): 'safe' | 'warning' | 'urgent' | 'none' => {
@@ -68,6 +68,7 @@ interface ItemCardProps {
     dragId: string | null;
     dragOverId: string | null;
     flyingItemId: string | null;
+    progress: number;
     onToggle: (item: ScheduleItemData) => void;
     onDelete: (id: string) => void;
     onDoubleClick: (item: ScheduleItemData) => void;
@@ -75,12 +76,17 @@ interface ItemCardProps {
     onDragOver: (e: React.DragEvent, id: string) => void;
     onDrop: (e: React.DragEvent, id: string) => void;
     onDragEnd: () => void;
+    onPointerDown: (e: React.PointerEvent, item: ScheduleItemData) => void;
+    onPointerUp: () => void;
 }
 
+const DRAG_HANDLE = 'drag-handle';
+
 const ItemCard: React.FC<ItemCardProps> = React.memo(({
-    item, dragId, dragOverId, flyingItemId,
+    item, dragId, dragOverId, flyingItemId, progress,
     onToggle, onDelete, onDoubleClick,
     onDragStart, onDragOver, onDrop, onDragEnd,
+    onPointerDown, onPointerUp,
 }) => {
     const config = TYPE_CONFIG[item.type];
     const dlStatus = getDeadlineStatus(item.deadline);
@@ -91,6 +97,8 @@ const ItemCard: React.FC<ItemCardProps> = React.memo(({
     const isDragOver = dragOverId === item.id;
     const isFlying = flyingItemId === item.id;
     const isDone = item.completed;
+    const rgb = config.progressRgb;
+    const showProgress = progress > 0 && !isDone;
 
     const urgentBorderStyle = isUrgent ? {
         borderColor: 'rgba(229,115,115,0.5)',
@@ -99,14 +107,14 @@ const ItemCard: React.FC<ItemCardProps> = React.memo(({
 
     return (
         <div
-            draggable={!isDone}
-            onDragStart={!isDone ? (e) => onDragStart(e, item.id) : undefined}
             onDragOver={!isDone ? (e) => onDragOver(e, item.id) : undefined}
             onDrop={!isDone ? (e) => onDrop(e, item.id) : undefined}
-            onDragEnd={!isDone ? onDragEnd : undefined}
             onDoubleClick={() => onDoubleClick(item)}
+            onPointerDown={!isDone ? (e) => onPointerDown(e, item) : undefined}
+            onPointerUp={!isDone ? onPointerUp : undefined}
+            onLostPointerCapture={() => { onPointerUp(); }}
             className={`group relative rounded-xl p-3 border transition-all duration-300 select-none ${
-                !isDone ? 'cursor-grab active:cursor-grabbing' : ''
+                !isDone ? 'cursor-pointer' : ''
             } ${
                 isDragging ? 'opacity-40 scale-95' : ''
             } ${
@@ -120,17 +128,26 @@ const ItemCard: React.FC<ItemCardProps> = React.memo(({
                 backgroundColor: 'var(--bg-card)',
                 borderColor: isUrgent ? undefined : isWarning ? 'rgba(255,183,77,0.3)' : 'var(--border-default)',
                 boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                touchAction: 'none',
                 ...urgentBorderStyle,
             }}
         >
             <div className="flex items-start gap-2.5">
                 {!isDone && (
-                    <div className="mt-0.5 opacity-0 group-hover:opacity-40 transition-opacity shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                    <div
+                        draggable
+                        onDragStart={(e) => onDragStart(e, item.id)}
+                        onDragEnd={onDragEnd}
+                        className={`mt-0.5 shrink-0 cursor-grab active:cursor-grabbing rounded p-0.5 ${DRAG_HANDLE}`}
+                        style={{ color: 'var(--text-tertiary)', opacity: 0.4 }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                    >
                         <GripVertical size={14} />
                     </div>
                 )}
                 <button
                     onClick={() => onToggle(item)}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all duration-300"
                     style={{
                         borderColor: isDone ? '#F2C94C' : 'var(--border-default)',
@@ -169,12 +186,51 @@ const ItemCard: React.FC<ItemCardProps> = React.memo(({
                 </div>
                 <button
                     onClick={() => onDelete(item.id)}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                     style={{ color: 'var(--text-tertiary)' }}
                 >
                     <Trash2 size={14} />
                 </button>
             </div>
+            {showProgress && (
+                <div className="absolute bottom-0 left-0 right-0 rounded-b-xl overflow-hidden" style={{ height: '4px' }}>
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            height: '100%',
+                            width: `${progress}%`,
+                            borderRadius: '0 4px 0 12px',
+                            background: `linear-gradient(90deg, rgba(${rgb},0.2), rgba(${rgb},0.95))`,
+                            boxShadow: `0 0 12px rgba(${rgb},0.6), 0 0 24px rgba(${rgb},0.25)`,
+                        }}
+                    />
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            height: '100%',
+                            width: `${progress}%`,
+                        }}
+                    >
+                        <div
+                            style={{
+                                position: 'absolute',
+                                right: -5,
+                                top: -5,
+                                width: 14,
+                                height: 14,
+                                borderRadius: '50%',
+                                background: `radial-gradient(circle, rgba(${rgb},1), rgba(${rgb},0.4))`,
+                                boxShadow: `0 0 10px rgba(${rgb},0.8), 0 0 20px rgba(${rgb},0.4)`,
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 });
@@ -203,6 +259,101 @@ export const ScheduleManager: React.FC = () => {
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [flyingItemId, setFlyingItemId] = useState<string | null>(null);
+    const [pressingId, setPressingId] = useState<string | null>(null);
+    const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+    const progressMapRef = useRef<Record<string, number>>({});
+    const pressStartRef = useRef<Record<string, number>>({});
+    const freezeMapRef = useRef<Record<string, number>>({});
+    const rafRef = useRef<number>(0);
+    const pressingIdRef = useRef<string | null>(null);
+    const itemsRef = useRef<ScheduleItemData[]>([]);
+    const onLongPressCompleteRef = useRef<(item: ScheduleItemData) => void>(() => {});
+
+    const handlePointerDown = useCallback((e: React.PointerEvent, item: ScheduleItemData) => {
+        const target = e.target as HTMLElement;
+        if (target.closest('.drag-handle')) return;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        pressingIdRef.current = item.id;
+        setPressingId(item.id);
+        const freeze = freezeMapRef.current[item.id] ?? 0;
+        pressStartRef.current[item.id] = performance.now() - (freeze / 100) * 3000;
+        if (progressMapRef.current[item.id] === undefined) {
+            progressMapRef.current = { ...progressMapRef.current, [item.id]: freeze };
+            setProgressMap(progressMapRef.current);
+        }
+    }, []);
+
+    const handlePointerUp = useCallback(() => {
+        const id = pressingIdRef.current;
+        if (id) {
+            freezeMapRef.current[id] = progressMapRef.current[id] ?? 0;
+        }
+        pressingIdRef.current = null;
+        setPressingId(null);
+    }, []);
+
+    useEffect(() => {
+        let alive = true;
+        const tick = (now: number) => {
+            if (!alive) return;
+
+            const next = { ...progressMapRef.current };
+            let changed = false;
+            const pressing = pressingIdRef.current;
+
+            if (pressing) {
+                const start = pressStartRef.current[pressing] ?? now;
+                const nv = Math.min(100, ((now - start) / 3000) * 100);
+                if (nv >= 100) {
+                    next[pressing] = 100;
+                    progressMapRef.current = next;
+                    setProgressMap(next);
+                    pressingIdRef.current = null;
+                    setPressingId(null);
+                    freezeMapRef.current[pressing] = 0;
+                    delete pressStartRef.current[pressing];
+                    const item = itemsRef.current.find(i => i.id === pressing);
+                    if (item) {
+                        setTimeout(() => {
+                            next[pressing] = 0;
+                            progressMapRef.current = { ...progressMapRef.current, [pressing]: 0 };
+                            setProgressMap({ ...progressMapRef.current });
+                            onLongPressCompleteRef.current(item);
+                        }, 0);
+                    }
+                } else {
+                    next[pressing] = nv;
+                    progressMapRef.current = next;
+                    setProgressMap(next);
+                }
+                changed = true;
+            }
+
+            for (const id of Object.keys(next)) {
+                if (id === pressing) continue;
+                const val = next[id];
+                if (val > 0) {
+                    next[id] = Math.max(0, val - 0.5);
+                    if (next[id] === 0) {
+                        delete freezeMapRef.current[id];
+                        delete pressStartRef.current[id];
+                    }
+                    changed = true;
+                }
+            }
+            if (changed && !pressing) {
+                progressMapRef.current = next;
+                setProgressMap(next);
+            }
+
+            rafRef.current = requestAnimationFrame(tick);
+        };
+        rafRef.current = requestAnimationFrame(tick);
+        return () => {
+            alive = false;
+            cancelAnimationFrame(rafRef.current);
+        };
+    }, []);
 
     const today = new Date();
     const todayStr = `${today.getFullYear()}年${today.getMonth() + 1}月${today.getDate()}日`;
@@ -288,6 +439,9 @@ export const ScheduleManager: React.FC = () => {
             setFlyingItemId(null);
         }, 600);
     };
+
+    itemsRef.current = items;
+    onLongPressCompleteRef.current = handleToggle;
 
     const handleArchiveWithNotes = async () => {
         if (!editingItem) return;
@@ -587,6 +741,8 @@ export const ScheduleManager: React.FC = () => {
         onDragOver: handleDragOver,
         onDrop: handleDrop,
         onDragEnd: handleDragEnd,
+        onPointerDown: handlePointerDown,
+        onPointerUp: handlePointerUp,
     };
 
     return (
@@ -630,80 +786,80 @@ export const ScheduleManager: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-auto">
+            <div className="flex-1 min-h-0">
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
-                    <div className="lg:col-span-2 space-y-4">
-                        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3">
+                    <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
+                        <div className="flex-1 min-h-0 rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+                            <div className="flex items-center gap-2 mb-3 shrink-0">
                                 <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white">
                                     <Check size={12} />
                                 </div>
                                 <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '每日任务' : 'Daily Routines'}</h3>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{routinesActive.length}</span>
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                                 {routines.length === 0 && (
                                     <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无任务，点击上方 + 添加' : 'No routines yet'}</p>
                                 )}
-                                {routines.map(item => <ItemCard key={item.id} item={item} {...itemCardProps} />)}
+                                {routines.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
                             </div>
                         </div>
 
-                        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3">
+                        <div className="flex-1 min-h-0 rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+                            <div className="flex items-center gap-2 mb-3 shrink-0">
                                 <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white">
                                     <Clock size={12} />
                                 </div>
                                 <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '日程安排' : 'Schedule'}</h3>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{schedules.length}</span>
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                                 {schedules.length === 0 && (
                                     <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无日程' : 'No schedules yet'}</p>
                                 )}
-                                {schedules.map(item => <ItemCard key={item.id} item={item} {...itemCardProps} />)}
+                                {schedules.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
                             </div>
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="rounded-xl border p-4" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3">
+                    <div className="min-h-0">
+                        <div className="h-full rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
+                            <div className="flex items-center gap-2 mb-3 shrink-0">
                                 <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center text-white">
                                     <Store size={12} />
                                 </div>
                                 <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '店铺活动' : 'Shop Events'}</h3>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{shopEvents.length}</span>
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                                 {shopEvents.length === 0 && (
                                     <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无活动' : 'No events'}</p>
                                 )}
-                                {shopEvents.map(item => <ItemCard key={item.id} item={item} {...itemCardProps} />)}
+                                {shopEvents.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
                             </div>
                         </div>
                     </div>
 
-                    <div className="space-y-4">
-                        <div className="rounded-xl border p-4" style={{
+                    <div className="min-h-0">
+                        <div className="h-full rounded-xl border p-4 flex flex-col" style={{
                             backgroundColor: 'var(--bg-card)',
                             borderColor: 'var(--border-default)',
                             backgroundImage: 'radial-gradient(circle, var(--border-default) 1px, transparent 1px)',
                             backgroundSize: '20px 20px',
                             boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
                         }}>
-                            <div className="flex items-center gap-2 mb-3">
+                            <div className="flex items-center gap-2 mb-3 shrink-0">
                                 <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white">
                                     <Lightbulb size={12} />
                                 </div>
                                 <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '想法测试' : 'Ideas'}</h3>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{ideas.length}</span>
                             </div>
-                            <div className="space-y-2">
+                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
                                 {ideas.length === 0 && (
                                     <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '灵光一闪？记录下来' : 'Got an idea?'}</p>
                                 )}
-                                {ideas.map(item => <ItemCard key={item.id} item={item} {...itemCardProps} />)}
+                                {ideas.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
                             </div>
                         </div>
                     </div>
