@@ -105,6 +105,8 @@ export const FinanceManager: React.FC = () => {
                         addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
                         addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
                         addRecord(day.salary, 'expense', 'HR', 'Salary');
+                        addRecord(day.otherIncome, 'income', 'General', 'Other Income');
+                        addRecord(day.otherExpense, 'expense', 'General', 'Other Expense');
                     });
                 });
 
