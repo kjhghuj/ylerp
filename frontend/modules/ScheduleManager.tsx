@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
@@ -276,7 +276,7 @@ export const ScheduleManager: React.FC = () => {
         pressingIdRef.current = item.id;
         setPressingId(item.id);
         const freeze = freezeMapRef.current[item.id] ?? 0;
-        pressStartRef.current[item.id] = performance.now() - (freeze / 100) * 3000;
+        pressStartRef.current[item.id] = performance.now() - (freeze / 100) * 1000;
         if (progressMapRef.current[item.id] === undefined) {
             progressMapRef.current = { ...progressMapRef.current, [item.id]: freeze };
             setProgressMap(progressMapRef.current);
@@ -294,6 +294,8 @@ export const ScheduleManager: React.FC = () => {
 
     useEffect(() => {
         let alive = true;
+        let frameCount = 0;
+        let debugStart = 0;
         const tick = (now: number) => {
             if (!alive) return;
 
@@ -301,10 +303,32 @@ export const ScheduleManager: React.FC = () => {
             let changed = false;
             const pressing = pressingIdRef.current;
 
+            if (!pressing && frameCount > 0) {
+                const totalElapsed = now - debugStart;
+                const avgFps = (frameCount / totalElapsed) * 1000;
+                const lastProgress = Object.values(next).find(v => v > 0) ?? 0;
+                console.log(`[ScheduleDebug] CANCEL frames=${frameCount} totalElapsed=${totalElapsed.toFixed(0)}ms avgFps=${avgFps.toFixed(1)} lastProgress=${lastProgress.toFixed(1)}%`);
+                frameCount = 0;
+                debugStart = 0;
+            }
+
             if (pressing) {
                 const start = pressStartRef.current[pressing] ?? now;
-                const nv = Math.min(100, ((now - start) / 3000) * 100);
+                const nv = Math.min(100, ((now - start) / 1000) * 100);
+
+                if (debugStart === 0) debugStart = now;
+                frameCount++;
+                if (frameCount % 30 === 0) {
+                    const elapsed = now - debugStart;
+                    const fps = (frameCount / elapsed) * 1000;
+                    console.log(`[ScheduleDebug] frames=${frameCount} elapsed=${elapsed.toFixed(0)}ms fps=${fps.toFixed(1)} progress=${nv.toFixed(1)}%`);
+                }
                 if (nv >= 100) {
+                    const totalElapsed = now - debugStart;
+                    const avgFps = (frameCount / totalElapsed) * 1000;
+                    console.log(`[ScheduleDebug] DONE frames=${frameCount} totalElapsed=${totalElapsed.toFixed(0)}ms avgFps=${avgFps.toFixed(1)}`);
+                    frameCount = 0;
+                    debugStart = 0;
                     next[pressing] = 100;
                     progressMapRef.current = next;
                     setProgressMap(next);
@@ -412,7 +436,7 @@ export const ScheduleManager: React.FC = () => {
         }
     };
 
-    const handleToggle = async (item: ScheduleItemData) => {
+    const handleToggle = useCallback(async (item: ScheduleItemData) => {
         if (item.completed) {
             try {
                 const res = await api.put(`/schedule/${item.id}`, { completed: false });
@@ -438,7 +462,7 @@ export const ScheduleManager: React.FC = () => {
             }
             setFlyingItemId(null);
         }, 600);
-    };
+    }, []);
 
     itemsRef.current = items;
     onLongPressCompleteRef.current = handleToggle;
@@ -465,23 +489,23 @@ export const ScheduleManager: React.FC = () => {
         }, 600);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = useCallback(async (id: string) => {
         try {
             await api.delete(`/schedule/${id}`);
             setItems(prev => prev.filter(i => i.id !== id));
         } catch (e) {
             console.error('Failed to delete item', e);
         }
-    };
+    }, []);
 
-    const handleDoubleClick = (item: ScheduleItemData) => {
+    const handleDoubleClick = useCallback((item: ScheduleItemData) => {
         if (item.completed) return;
         setEditTitle(item.title);
         setEditDesc(item.description || '');
         setEditDeadline(item.deadline ? item.deadline.slice(0, 16) : '');
         setEditingItem(item);
         setShowEditModal(true);
-    };
+    }, []);
 
     const handleSaveEdit = async () => {
         if (!editingItem) return;
@@ -499,21 +523,21 @@ export const ScheduleManager: React.FC = () => {
         }
     };
 
-    const handleDragStart = (e: React.DragEvent, id: string) => {
+    const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', id);
         requestAnimationFrame(() => setDragId(id));
-    };
+    }, []);
 
-    const handleDragOver = (e: React.DragEvent, id: string) => {
+    const handleDragOver = useCallback((e: React.DragEvent, id: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         if (dragId && id !== dragId) {
             setDragOverId(id);
         }
-    };
+    }, [dragId]);
 
-    const handleDrop = async (e: React.DragEvent, targetId: string) => {
+    const handleDrop = useCallback(async (e: React.DragEvent, targetId: string) => {
         e.preventDefault();
         if (!dragId || dragId === targetId) {
             setDragId(null);
@@ -549,12 +573,12 @@ export const ScheduleManager: React.FC = () => {
         }
         setDragId(null);
         setDragOverId(null);
-    };
+    }, [dragId, items, fetchItems]);
 
-    const handleDragEnd = () => {
+    const handleDragEnd = useCallback(() => {
         setDragId(null);
         setDragOverId(null);
-    };
+    }, []);
 
     const activeItems = items.filter(i => !i.completed);
     const archivedItems = items.filter(i => i.completed && i.completedAt && i.type !== 'routine');
@@ -721,15 +745,7 @@ export const ScheduleManager: React.FC = () => {
         </div>
     ) : null;
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent" />
-            </div>
-        );
-    }
-
-    const itemCardProps = {
+    const itemCardProps = useMemo(() => ({
         isZh,
         dragId,
         dragOverId,
@@ -743,7 +759,15 @@ export const ScheduleManager: React.FC = () => {
         onDragEnd: handleDragEnd,
         onPointerDown: handlePointerDown,
         onPointerUp: handlePointerUp,
-    };
+    }), [isZh, dragId, dragOverId, flyingItemId, handleToggle, handleDelete, handleDoubleClick, handleDragStart, handleDragOver, handleDrop, handleDragEnd, handlePointerDown, handlePointerUp]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent" />
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
