@@ -115,6 +115,33 @@ model ScheduleItem {
   user        User     @relation(fields: [userId], references: [id])
 }
 
+model ChromaGenerationRecord {
+  id           String   @id @default(uuid())
+  mode         String
+  model        String
+  cost         Float
+  prompt       String?
+  parameters   Json?
+  status       String
+  errorMessage String?
+  imageId      String?
+  createdAt    DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model ChromaImage {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String?
+  size         Int
+  mode         String
+  model        String
+  createdAt    DateTime @default(now())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+}
+
 model User {
   id          String   @id @default(uuid())
   username    String   @unique
@@ -139,4 +166,6 @@ model User {
   restockRecords  RestockRecord[]
   profitTemplates ProfitTemplate[]
   scheduleItems   ScheduleItem[]
+  chromaRecords   ChromaGenerationRecord[]
+  chromaImages    ChromaImage[]
 }

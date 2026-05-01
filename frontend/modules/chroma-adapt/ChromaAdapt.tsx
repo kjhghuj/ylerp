@@ -1,11 +1,13 @@
 
 import React, { useState } from 'react';
-import { Languages, Palette, ImagePlus, Copy, Globe, ChevronDown, RotateCcw, Cpu } from 'lucide-react';
+import { Languages, Palette, ImagePlus, Copy, Globe, ChevronDown, RotateCcw, Cpu, History, Coins } from 'lucide-react';
 import { AppMode, AnalysisModel, GenerationModel } from './chromaTypes';
 import { getTranslation } from './utils/translations';
 import { useChromaApp } from './hooks/useChromaApp';
+import { MODEL_COSTS } from './services/apiService';
 import ControlPanel from './components/ControlPanel';
 import PreviewPanel from './components/PreviewPanel';
+import GenerationHistory from './components/GenerationHistory';
 
 export const ChromaAdapt: React.FC = () => {
   const {
@@ -38,11 +40,20 @@ export const ChromaAdapt: React.FC = () => {
     setGenerationModel,
     setAnalysisModel,
     setSecondaryWorkflowMode,
-    setColorWorkflowMode
+    setColorWorkflowMode,
+    costSummary,
+    savedImages,
+    imagesTotal,
+    records,
+    recordsTotal,
+    loadRecords,
+    loadSavedImages,
+    handleDeleteSavedImage
   } = useChromaApp();
 
   const t = getTranslation(state.language);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const navItems = [
     { id: 'TRANSLATION' as AppMode, icon: Languages, label: t.modeTranslate },
@@ -149,6 +160,21 @@ export const ChromaAdapt: React.FC = () => {
             >
               <RotateCcw size={16} />
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setHistoryOpen(!historyOpen)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-slate-100/80 text-sm font-medium text-slate-500 transition-colors"
+                title={state.language === 'zh' ? '生成记录' : 'History'}
+              >
+                <History size={14} />
+                <span className="hidden sm:inline">{state.language === 'zh' ? '记录' : 'History'}</span>
+                {costSummary.total > 0 && (
+                  <span className="text-[10px] bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-full font-bold">
+                    ¥{costSummary.total.toFixed(2)}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -188,6 +214,20 @@ export const ChromaAdapt: React.FC = () => {
           />
         </div>
       </div>
+
+      <GenerationHistory
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        language={state.language}
+        costSummary={costSummary}
+        savedImages={savedImages}
+        imagesTotal={imagesTotal}
+        onLoadImages={loadSavedImages}
+        onDeleteImage={handleDeleteSavedImage}
+        records={records}
+        recordsTotal={recordsTotal}
+        onLoadRecords={loadRecords}
+      />
     </div>
   );
 };

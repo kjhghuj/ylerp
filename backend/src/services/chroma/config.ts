@@ -16,3 +16,11 @@ export class ApiError extends Error {
     this.detail = detail;
   }
 }
+
+export const MODEL_COSTS: Record<string, number> = {
+  'doubao-seed-2-0-lite': 0.01,
+  'doubao-seed-2-0-mini': 0.02,
+  'doubao-seed-2-0-pro': 0.05,
+  'doubao-seedream-4.5': 0.08,
+  'doubao-seedream-5.0-lite': 0.05,
+};

@@ -97,3 +97,33 @@ export interface StyleConfig {
   keepLighting: boolean;
   recolorTextOnly: boolean;
 }
+
+export interface ChromaRecord {
+  id: string;
+  mode: string;
+  model: string;
+  cost: number;
+  prompt?: string;
+  parameters?: any;
+  status: string;
+  errorMessage?: string;
+  imageId?: string;
+  createdAt: string;
+}
+
+export interface ChromaImageInfo {
+  id: string;
+  filename: string;
+  originalName?: string;
+  size: number;
+  mode: string;
+  model: string;
+  createdAt: string;
+}
+
+export interface CostSummary {
+  today: number;
+  month: number;
+  total: number;
+  totalRecords: number;
+}

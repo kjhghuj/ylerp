@@ -1,8 +1,18 @@
-import { StyleConfig, TargetFont } from '../chromaTypes';
+import { StyleConfig, TargetFont, ChromaRecord, ChromaImageInfo, CostSummary } from '../chromaTypes';
 import { resizeImage } from '../utils/imageHelpers';
+import api from '../../../src/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const BACKEND_URL = `${API_BASE}/chroma-adapt`;
+const DATA_URL = `${API_BASE}/chroma-data`;
+
+export const MODEL_COSTS: Record<string, number> = {
+  'doubao-seed-2-0-lite': 0.01,
+  'doubao-seed-2-0-mini': 0.02,
+  'doubao-seed-2-0-pro': 0.05,
+  'doubao-seedream-4.5': 0.08,
+  'doubao-seedream-5.0-lite': 0.05,
+};
 
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/[a-z]+;base64,/, '');
 
@@ -228,3 +238,41 @@ export const generatePreciseAdaptation = async (
   colorMappingPlan || COLOR_ADAPT_SINGLE_MODEL_PROMPT,
   model
 );
+
+// ── Record & Image Management API ──
+
+export const saveChromaRecord = async (record: {
+  mode: string; model: string; cost: number; prompt?: string;
+  parameters?: any; status: string; errorMessage?: string; imageId?: string;
+}): Promise<ChromaRecord> => {
+  const { data } = await api.post(`${DATA_URL}/records`, record);
+  return data;
+};
+
+export const getChromaRecords = async (page = 1, limit = 20): Promise<{ records: ChromaRecord[]; total: number }> => {
+  const { data } = await api.get(`${DATA_URL}/records`, { params: { page, limit } });
+  return data;
+};
+
+export const getCostSummary = async (): Promise<CostSummary> => {
+  const { data } = await api.get(`${DATA_URL}/records/cost-summary`);
+  return data;
+};
+
+export const uploadChromaImage = async (image: string, mode: string, model: string): Promise<ChromaImageInfo> => {
+  const { data } = await api.post(`${DATA_URL}/images`, { image, mode, model });
+  return data;
+};
+
+export const getChromaImages = async (page = 1, limit = 20): Promise<{ images: ChromaImageInfo[]; total: number }> => {
+  const { data } = await api.get(`${DATA_URL}/images`, { params: { page, limit } });
+  return data;
+};
+
+export const getChromaImageUrl = (imageId: string): string => {
+  return `${DATA_URL}/images/file/${imageId}`;
+};
+
+export const deleteChromaImage = async (id: string): Promise<void> => {
+  await api.delete(`${DATA_URL}/images/${id}`);
+};

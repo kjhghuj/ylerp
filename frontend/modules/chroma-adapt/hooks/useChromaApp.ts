@@ -1,7 +1,8 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { ChromaAppState, ProcessingState, StyleConfig, AppMode, TranslationTarget, TargetFont, GenerationProgress, SecondaryBatchItem, SecondaryWorkflowMode, ColorWorkflowMode } from '../chromaTypes';
-import { analyzeImageColors, generateImageTranslation, generateImageEdit, generateSecondaryImage, analyzeAndCreateSecondaryPrompt, SECONDARY_SINGLE_MODEL_PROMPT, analyzeAndCreateEditPrompt, COLOR_ADAPT_SINGLE_MODEL_PROMPT, analyzeAndCreateColorAdaptPrompt, generateColorAdaptation } from '../services/apiService';
+import { analyzeImageColors, generateImageTranslation, generateImageEdit, generateSecondaryImage, analyzeAndCreateSecondaryPrompt, SECONDARY_SINGLE_MODEL_PROMPT, analyzeAndCreateEditPrompt, COLOR_ADAPT_SINGLE_MODEL_PROMPT, analyzeAndCreateColorAdaptPrompt, generateColorAdaptation, saveChromaRecord, uploadChromaImage, getCostSummary, getChromaImages, getChromaRecords, deleteChromaImage, getChromaImageUrl, MODEL_COSTS } from '../services/apiService';
+import type { CostSummary, ChromaImageInfo, ChromaRecord } from '../chromaTypes';
 import { getCSSFilterFromPalette, exportImage } from '../utils/imageHelpers';
 import { getTranslation } from '../utils/translations';
 import { useFileHandlers } from './useFileHandlers';
@@ -48,9 +49,64 @@ export const useChromaApp = () => {
   });
 
   const [isExporting, setIsExporting] = useState(false);
+  const [costSummary, setCostSummary] = useState<CostSummary>({ today: 0, month: 0, total: 0, totalRecords: 0 });
+  const [savedImages, setSavedImages] = useState<ChromaImageInfo[]>([]);
+  const [imagesTotal, setImagesTotal] = useState(0);
+  const [records, setRecords] = useState<ChromaRecord[]>([]);
+  const [recordsTotal, setRecordsTotal] = useState(0);
   const progressInterval = useRef<number | null>(null);
 
+  const loadCostSummary = useCallback(async () => {
+    try {
+      const summary = await getCostSummary();
+      setCostSummary(summary);
+    } catch {}
+  }, []);
+
+  const loadSavedImages = useCallback(async (page = 1) => {
+    try {
+      const result = await getChromaImages(page, 20);
+      setSavedImages(result.images);
+      setImagesTotal(result.total);
+    } catch {}
+  }, []);
+
+  const loadRecords = useCallback(async (page = 1) => {
+    try {
+      const result = await getChromaRecords(page, 20);
+      setRecords(result.records);
+      setRecordsTotal(result.total);
+    } catch {}
+  }, []);
+
+  const saveGenerationRecord = useCallback(async (
+    mode: string, model: string, cost: number,
+    status: 'success' | 'error', prompt?: string, errorMessage?: string, imageId?: string
+  ) => {
+    try {
+      await saveChromaRecord({ mode, model, cost, status, prompt, errorMessage, imageId });
+      loadCostSummary();
+    } catch {}
+  }, [loadCostSummary]);
+
+  const saveGeneratedImage = useCallback(async (imageData: string, mode: string, model: string): Promise<string | null> => {
+    try {
+      const result = await uploadChromaImage(imageData, mode, model);
+      loadSavedImages();
+      return result.id;
+    } catch { return null; }
+  }, [loadSavedImages]);
+
+  const handleDeleteSavedImage = useCallback(async (id: string) => {
+    try {
+      await deleteChromaImage(id);
+      setSavedImages(prev => prev.filter(img => img.id !== id));
+      setImagesTotal(prev => prev - 1);
+    } catch {}
+  }, []);
+
   useEffect(() => {
+    loadCostSummary();
     return () => {
       if (progressInterval.current) window.clearInterval(progressInterval.current);
     };
@@ -423,6 +479,16 @@ export const useChromaApp = () => {
     const errorCount = results.filter(r => r.status === 'rejected').length;
     const successCount = results.filter(r => r.status === 'fulfilled').length;
 
+    // Save records and images for successful batch items
+    const batchCost = MODEL_COSTS[state.generationModel] || 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        const imageUrl = r.value as string;
+        const imageId = await saveGeneratedImage(imageUrl, 'SECONDARY_GENERATION', state.generationModel);
+        await saveGenerationRecord('SECONDARY_GENERATION', state.generationModel, batchCost, 'success', undefined, undefined, imageId || undefined);
+      }
+    }
+
     setState(prev => ({
       ...prev,
       status: ProcessingState.COMPLETE,
@@ -518,6 +584,16 @@ export const useChromaApp = () => {
           throw new Error(firstError?.reason?.message || 'All generations failed');
         }
 
+        // Save records and images for successful generations
+        const concurrentCost = MODEL_COSTS[state.generationModel] || 0;
+        for (const r of results) {
+          if (r.status === 'fulfilled') {
+            const imageUrl = r.value as string;
+            const imageId = await saveGeneratedImage(imageUrl, state.mode, state.generationModel);
+            await saveGenerationRecord(state.mode, state.generationModel, concurrentCost, 'success', colorPrompt, undefined, imageId || undefined);
+          }
+        }
+
         setState(prev => ({
           ...prev,
           status: ProcessingState.COMPLETE,
@@ -593,6 +669,12 @@ export const useChromaApp = () => {
           progressText: prev.language === 'zh' ? '完成！' : 'Completed!'
         }));
 
+        // Save record and image
+        const singleCost = MODEL_COSTS[state.generationModel] || 0;
+        const singlePrompt = state.mode === 'COLOR_ADAPT' ? colorPrompt : state.mode === 'TRANSLATION' ? state.translationTarget : state.editPrompt;
+        const imageId = await saveGeneratedImage(generatedImage, state.mode, state.generationModel);
+        await saveGenerationRecord(state.mode, state.generationModel, singleCost, 'success', singlePrompt, undefined, imageId || undefined);
+
         if (progressInterval.current) clearInterval(progressInterval.current);
       }
 
@@ -608,6 +690,7 @@ export const useChromaApp = () => {
         errorMsg = "API Key Error. Please re-select key.";
       }
       setState(prev => ({ ...prev, status: ProcessingState.ERROR, errorMessage: errorMsg, progress: 0 }));
+      saveGenerationRecord(state.mode, state.generationModel, MODEL_COSTS[state.generationModel] || 0, 'error', undefined, errorMsg);
     }
   }, [state.mode, state.posterImage, state.referenceImage, state.extractedPalette, state.styleConfig, state.language, state.translationTarget, state.targetFont, state.editPrompt, state.analysisModel, state.generationModel, state.concurrentCount, state.secondaryWorkflowMode, state.colorWorkflowMode, state.colorAdaptPrompt]);
 
@@ -697,6 +780,15 @@ export const useChromaApp = () => {
     handleSecondaryBatchUpload,
     handleRemoveSecondaryBatchItem,
     handleClearSecondaryBatch,
-    handleSecondaryBatchGenerate
+    handleSecondaryBatchGenerate,
+    costSummary,
+    savedImages,
+    imagesTotal,
+    records,
+    recordsTotal,
+    loadCostSummary,
+    loadSavedImages,
+    loadRecords,
+    handleDeleteSavedImage
   };
 };
