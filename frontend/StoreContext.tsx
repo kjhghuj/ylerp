@@ -5,6 +5,8 @@ import { translations } from './translations';
 type Language = 'zh' | 'en';
 
 export interface ImportedNode {
+    id?: string;
+    productId?: string;
     name: string;
     country: string;
     platform: string;

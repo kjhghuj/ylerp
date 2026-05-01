@@ -14,6 +14,7 @@ import { useExchangeRates } from './profit/useExchangeRates';
 
 interface LinkedTemplate {
     id: string;
+    productId?: string;
     name: string;
     country: string;
     platform?: string;
@@ -210,6 +211,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 return tpl.country === currentCountry || tpl.country === currency;
             })
             .map(tpl => ({
+                id: tpl.id,
+                productId: tpl.productId,
                 name: tpl.name,
                 country: tpl.country,
                 platform: tpl.platform || 'other',
@@ -226,6 +229,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         if (!selectedProduct) return;
         setCalculatorImport({ ...selectedProduct, country: activeTab });
         const importNodes = [tpl].map(t => ({
+            id: t.id,
+            productId: t.productId,
             name: t.name,
             country: t.country,
             platform: t.platform || 'other',

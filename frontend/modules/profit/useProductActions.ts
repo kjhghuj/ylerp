@@ -181,7 +181,8 @@ export const useProductActions = (
                 const tplName = n.name || n.platform;
                 const { totalRevenue, sellerCoupon, sellerCouponType, sellerCouponPlatformRatio, platformInfrastructureFee, adROI, ...nodeOnlyData } = n.data;
                 const existingTpl = allTemplates.find(
-                    t => t.productId === savedProductId && t.name === tplName && t.platform === n.platform
+                    t => (n.templateId && t.id === n.templateId) ||
+                         (t.productId === savedProductId && t.name === tplName && t.platform === n.platform)
                 );
                 if (existingTpl) {
                     await api.put(`/templates/${existingTpl.id}`, {

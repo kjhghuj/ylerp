@@ -46,6 +46,7 @@ export const useProfitImport = (
         const importNodeList = calculatorImportNodes.length > 0
             ? calculatorImportNodes.map(n => ({
                 id: genId(),
+                templateId: n.id,
                 platform: n.platform || 'other',
                 country: n.country,
                 name: n.name,
@@ -99,9 +100,14 @@ export const useProfitImport = (
             }));
         }
 
+        const countryToCurrency: Record<string, string> = {
+            'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
+        };
+
         const groupedNodes: Record<string, PlatformNode[]> = {};
         for (const n of importNodeList) {
-            const nodeCountry = n.country || currency;
+            const rawCountry = n.country || currency;
+            const nodeCountry = countryToCurrency[rawCountry] || rawCountry;
             if (!groupedNodes[nodeCountry]) groupedNodes[nodeCountry] = [];
             groupedNodes[nodeCountry].push(n as PlatformNode);
         }

@@ -30,6 +30,7 @@ export const DEFAULT_SITE_INPUTS: SiteLevelInputs = {
 export interface PlatformNode {
     id: string;
     templateId?: string;
+    productId?: string;
     platform: PlatformType;
     country: string;
     name?: string;
