@@ -294,8 +294,6 @@ export const ScheduleManager: React.FC = () => {
 
     useEffect(() => {
         let alive = true;
-        let frameCount = 0;
-        let debugStart = 0;
         const tick = (now: number) => {
             if (!alive) return;
 
@@ -303,32 +301,10 @@ export const ScheduleManager: React.FC = () => {
             let changed = false;
             const pressing = pressingIdRef.current;
 
-            if (!pressing && frameCount > 0) {
-                const totalElapsed = now - debugStart;
-                const avgFps = (frameCount / totalElapsed) * 1000;
-                const lastProgress = Object.values(next).find(v => v > 0) ?? 0;
-                console.log(`[ScheduleDebug] CANCEL frames=${frameCount} totalElapsed=${totalElapsed.toFixed(0)}ms avgFps=${avgFps.toFixed(1)} lastProgress=${lastProgress.toFixed(1)}%`);
-                frameCount = 0;
-                debugStart = 0;
-            }
-
             if (pressing) {
                 const start = pressStartRef.current[pressing] ?? now;
                 const nv = Math.min(100, ((now - start) / 1000) * 100);
-
-                if (debugStart === 0) debugStart = now;
-                frameCount++;
-                if (frameCount % 30 === 0) {
-                    const elapsed = now - debugStart;
-                    const fps = (frameCount / elapsed) * 1000;
-                    console.log(`[ScheduleDebug] frames=${frameCount} elapsed=${elapsed.toFixed(0)}ms fps=${fps.toFixed(1)} progress=${nv.toFixed(1)}%`);
-                }
                 if (nv >= 100) {
-                    const totalElapsed = now - debugStart;
-                    const avgFps = (frameCount / totalElapsed) * 1000;
-                    console.log(`[ScheduleDebug] DONE frames=${frameCount} totalElapsed=${totalElapsed.toFixed(0)}ms avgFps=${avgFps.toFixed(1)}`);
-                    frameCount = 0;
-                    debugStart = 0;
                     next[pressing] = 100;
                     progressMapRef.current = next;
                     setProgressMap(next);
