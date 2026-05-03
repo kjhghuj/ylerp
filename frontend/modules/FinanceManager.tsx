@@ -75,38 +75,55 @@ export const FinanceManager: React.FC = () => {
                         const dayMatch = day.date?.match(/(\d{1,2})日/);
                         if (!dayMatch) return;
                         const dayNum = parseInt(dayMatch[1]);
-                        
+
                         const dateStr = `${year}-${month.toString().padStart(2, '0')}-${dayNum.toString().padStart(2, '0')}`;
                         const notes = day.notes || '';
-                        
+
                         const parseAmount = (val: any) => {
                             if (!val) return 0;
                             const num = parseFloat(val.toString().replace(/,/g, ''));
                             return isNaN(num) ? 0 : num;
                         };
 
-                        const addRecord = (val: any, type: FinanceRecord['type'], category: string, descPrefix: string) => {
-                            const amount = parseAmount(val);
-                            if (amount > 0) {
-                                newRecords.push({
-                                    date: dateStr,
-                                    type,
-                                    amount,
-                                    category,
-                                    description: notes ? `${descPrefix} - ${notes}` : descPrefix,
-                                    accountId: 'main'
-                                });
-                            }
-                        };
+                        // Use detailed records if available (from newer exports), otherwise fall back to aggregated fields
+                        if (Array.isArray(day.records) && day.records.length > 0) {
+                            day.records.forEach((r: any) => {
+                                const amount = parseAmount(r.amount);
+                                if (amount > 0) {
+                                    newRecords.push({
+                                        date: dateStr,
+                                        type: r.type,
+                                        amount,
+                                        category: r.category,
+                                        description: r.description || notes || '',
+                                        accountId: 'main'
+                                    });
+                                }
+                            });
+                        } else {
+                            const addRecord = (val: any, type: FinanceRecord['type'], category: string, descPrefix: string) => {
+                                const amount = parseAmount(val);
+                                if (amount > 0) {
+                                    newRecords.push({
+                                        date: dateStr,
+                                        type,
+                                        amount,
+                                        category,
+                                        description: notes ? `${descPrefix} - ${notes}` : descPrefix,
+                                        accountId: 'main'
+                                    });
+                                }
+                            };
 
-                        addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
-                        addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
-                        addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
-                        addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
-                        addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
-                        addRecord(day.salary, 'expense', 'HR', 'Salary');
-                        addRecord(day.otherIncome, 'income', 'General', 'Other Income');
-                        addRecord(day.otherExpense, 'expense', 'General', 'Other Expense');
+                            addRecord(day.expectedIncome, 'income', 'Revenue', 'Income');
+                            addRecord(day.newDebt, 'new_debt', 'Loans', 'New Loan');
+                            addRecord(day.repayment, 'debt_repayment', 'Debt Service', 'Repayment');
+                            addRecord(day.rentUtilities, 'expense', 'Operations', 'Rent/Utilities');
+                            addRecord(day.freightCost, 'expense', 'Logistics', 'Freight');
+                            addRecord(day.salary, 'expense', 'HR', 'Salary');
+                            addRecord(day.otherIncome, 'income', 'General', 'Other Income');
+                            addRecord(day.otherExpense, 'expense', 'General', 'Other Expense');
+                        }
                     });
                 });
 
@@ -178,6 +195,7 @@ export const FinanceManager: React.FC = () => {
                     otherIncome: records.filter(r => r.type === 'income' && r.category !== 'Revenue').reduce((s, r) => s + r.amount, 0),
                     otherExpense: records.filter(r => r.type === 'expense' && !['Operations', 'Logistics', 'HR'].includes(r.category)).reduce((s, r) => s + r.amount, 0),
                     notes,
+                    records: records.map(r => ({ type: r.type, amount: r.amount, category: r.category, description: r.description })),
                 };
             });
 
@@ -350,7 +368,7 @@ export const FinanceManager: React.FC = () => {
             }
         });
 
-        const allDays: { date: string; expectedIncome: number; newDebt: number; repayment: number; rentUtilities: number; freightCost: number; salary: number }[] = [];
+        const allDays: { date: string; expectedIncome: number; newDebt: number; repayment: number; rentUtilities: number; freightCost: number; salary: number; otherIncome: number; otherExpense: number }[] = [];
         Object.values(groups).forEach(g => {
             Object.entries(g.days).forEach(([dateStr, day]) => {
                 allDays.push({
@@ -361,6 +379,8 @@ export const FinanceManager: React.FC = () => {
                     rentUtilities: day.rentUtilities,
                     freightCost: day.freightCost,
                     salary: day.salary,
+                    otherIncome: day.otherIncome,
+                    otherExpense: day.otherExpense,
                 });
             });
         });
@@ -369,7 +389,7 @@ export const FinanceManager: React.FC = () => {
         let runningBalance = 0;
         let runningDebtBalance = 0;
         allDays.forEach(day => {
-            const dailyNet = day.expectedIncome - day.repayment - day.rentUtilities - day.freightCost - day.salary;
+            const dailyNet = day.expectedIncome + day.otherIncome - day.repayment - day.rentUtilities - day.freightCost - day.salary - day.otherExpense;
             runningBalance += dailyNet;
             runningDebtBalance += day.newDebt - day.repayment;
             const monthKey = day.date.substring(0, 7);

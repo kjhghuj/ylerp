@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import path from 'path';
 import fs from 'fs/promises';
+import { prisma } from '../index';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'chroma');
 const MAX_IMAGES_PER_USER = 500;
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 async function ensureUserDir(userId: string): Promise<string> {
   const userDir = path.join(UPLOAD_DIR, userId);
@@ -202,13 +202,20 @@ router.post('/images', async (req: Request, res: Response) => {
 
     if (!image) return res.status(400).json({ error: 'Missing required field: image' });
 
+    // Validate image data
+    const isBase64 = image.startsWith('data:');
+    const rawBase64 = isBase64 ? image.split(',')[1] || '' : image;
+    const estimatedSize = Math.floor(rawBase64.length * 3 / 4);
+    if (estimatedSize > MAX_IMAGE_SIZE) {
+      return res.status(400).json({ error: `Image too large, max ${MAX_IMAGE_SIZE / 1024 / 1024}MB` });
+    }
+    if (isBase64 && !image.startsWith('data:image/')) {
+      return res.status(400).json({ error: 'Invalid image format, only image uploads are allowed' });
+    }
+
     const userDir = await ensureUserDir(userId);
 
-    let base64Data = image;
-    if (base64Data.startsWith('data:')) {
-      base64Data = base64Data.split(',')[1] || base64Data;
-    }
-    base64Data = base64Data.replace(/\n/g, '').replace(/\r/g, '');
+    let base64Data = rawBase64.replace(/\n/g, '').replace(/\r/g, '');
 
     const buffer = Buffer.from(base64Data, 'base64');
     const filename = `${Date.now()}-${mode || 'unknown'}-${Math.random().toString(36).substr(2, 6)}.png`;

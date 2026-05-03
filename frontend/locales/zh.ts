@@ -16,7 +16,7 @@ export const zh = {
     productList: '商品明细表',
     personalCenter: '个人中心',
     schedule: '日程管理',
-    version: 'v1.0.2 正式版',
+    version: 'v1.5.1 正式版',
   },
   dashboard: {
     title: '全局概览',

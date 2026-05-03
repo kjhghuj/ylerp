@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { redis } from '../index';
+import { authorize } from '../middleware/authMiddleware';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -78,7 +79,7 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-router.delete('/all', async (req, res) => {
+router.delete('/all', authorize('owner'), async (req, res) => {
     try {
         await prisma.financeRecord.deleteMany();
         await redis.del('finance:shared');
@@ -88,9 +89,10 @@ router.delete('/all', async (req, res) => {
     }
 });
 
-router.delete('/month/:month', async (req, res) => {
+router.delete('/month/:month', authorize('owner'), async (req, res) => {
     try {
-        const [yearStr, monthStr] = req.params.month.split('-');
+        const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+        const [yearStr, monthStr] = monthParam.split('-');
         const year = parseInt(yearStr);
         const month = parseInt(monthStr);
 

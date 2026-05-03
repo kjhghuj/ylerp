@@ -16,7 +16,7 @@ export const en = {
     productList: 'Product List',
     personalCenter: 'Profile',
     schedule: 'Schedule',
-    version: 'v1.0.2 Stable',
+    version: 'v1.5.1 Stable',
   },
   dashboard: {
     title: 'Dashboard Overview',
