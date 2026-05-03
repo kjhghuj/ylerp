@@ -40,6 +40,7 @@ import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
 import restockRecordRoutes from './routes/restockRecordRoutes';
 import scheduleRoutes from './routes/scheduleRoutes';
 import chromaRecordRoutes from './routes/chromaRecordRoutes';
+import usageRoutes from './routes/usageRoutes';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
@@ -56,6 +57,7 @@ app.use('/api/restock-records', authenticate, restockRecordRoutes);
 app.use('/api/schedule', authenticate, scheduleRoutes);
 app.use('/api/chroma-adapt', authenticate, chromaAdaptRoutes);
 app.use('/api/chroma-data', authenticate, chromaRecordRoutes);
+app.use('/api/usage', usageRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

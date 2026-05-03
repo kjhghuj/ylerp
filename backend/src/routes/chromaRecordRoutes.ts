@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { prisma } from '../index';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 
@@ -122,6 +123,7 @@ router.post('/records', async (req: Request, res: Response) => {
       },
     });
 
+    logActivity(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(() => {});
     res.status(201).json(record);
   } catch (error) {
     console.error('Error creating chroma record:', error);

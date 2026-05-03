@@ -1,9 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { redis } from '../index';
+import { prisma, redis } from '../index';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get('/', async (req, res) => {
     try {
@@ -34,6 +33,7 @@ router.post('/', async (req, res) => {
                 platformInfrastructureFee, sites, siteData, userId }
         });
         await redis.del(`products:${userId}`);
+        logActivity(userId, 'product_create', 'product', { name, sku, country }).catch(() => {});
         res.status(201).json(product);
     } catch (error) {
         res.status(500).json({ error: 'Failed to create product' });

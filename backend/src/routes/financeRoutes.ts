@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { redis } from '../index';
+import { prisma, redis } from '../index';
 import { authorize } from '../middleware/authMiddleware';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get('/', async (req, res) => {
     try {
@@ -41,6 +40,7 @@ router.post('/batch', async (req, res) => {
         });
 
         await redis.del('finance:shared');
+        logActivity(userId, 'finance_import', 'finance', { count: result.count }).catch(() => {});
         res.status(201).json({ count: result.count });
     } catch (error) {
         console.error('Batch import failed:', error);

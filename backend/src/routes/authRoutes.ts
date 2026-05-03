@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/authMiddleware';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -38,6 +39,9 @@ router.post('/login', async (req, res) => {
             JWT_SECRET,
             { expiresIn: '7d' }
         );
+
+        const ip = req.ip || req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
+        logActivity(user.id, 'login', 'auth', { username: user.username }, ip).catch(() => {});
 
         res.json({
             token,

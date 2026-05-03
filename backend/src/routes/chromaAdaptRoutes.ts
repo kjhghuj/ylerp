@@ -14,6 +14,7 @@ import {
   buildColorAdaptationPrompt,
   buildTranslationPrompt,
 } from '../services/chroma/prompts';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 
@@ -110,6 +111,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const imageUrl = result?.data?.[0]?.url || '';
     const imageDataUrl = await downloadImageAsDataUrl(imageUrl, '');
     const usedModel = model || 'doubao-seedream-4.5';
+    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'generate', model: usedModel }).catch(() => {});
     res.json({ ...result, data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
   } catch (error) {
     errorResponse(error, res);
@@ -132,6 +134,7 @@ router.post('/edit', async (req: Request, res: Response) => {
     const imageUrl = generated?.data?.[0]?.url || '';
     const imageDataUrl = await downloadImageAsDataUrl(imageUrl, image);
     const usedModel = model || 'doubao-seedream-4.5';
+    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'edit', model: usedModel }).catch(() => {});
     res.json({ ...generated, data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
   } catch (error) {
     errorResponse(error, res);
@@ -158,6 +161,7 @@ router.post('/color-adaptation', async (req: Request, res: Response) => {
     const imageUrl = generated?.data?.[0]?.url || '';
     const imageDataUrl = await downloadImageAsDataUrl(imageUrl, poster_image);
     const usedModel = model || 'doubao-seedream-4.5';
+    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'color-adaptation', model: usedModel }).catch(() => {});
     res.json({ data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
   } catch (error) {
     errorResponse(error, res);
@@ -181,6 +185,7 @@ router.post('/translate', async (req: Request, res: Response) => {
     const imageUrl = generated?.data?.[0]?.url || '';
     const imageDataUrl = await downloadImageAsDataUrl(imageUrl, image);
     const usedModel = model || 'doubao-seedream-4.5';
+    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'translate', model: usedModel, target_lang }).catch(() => {});
     res.json({
       translation_instructions: {
         translations: [],

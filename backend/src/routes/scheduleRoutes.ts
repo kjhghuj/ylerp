@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 
@@ -46,6 +47,7 @@ router.post('/', async (req: Request, res: Response) => {
                 userId,
             },
         });
+        logActivity(userId, 'schedule_create', 'schedule', { type, title }).catch(() => {});
         res.status(201).json(item);
     } catch (error) {
         console.error('Error creating schedule item:', error);

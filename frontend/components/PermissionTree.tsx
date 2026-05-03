@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye, Activity } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -78,6 +78,13 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         children: [
             { key: 'schedule.view', label: '查看日程', labelEn: 'View', icon: Eye },
             { key: 'schedule.edit', label: '编辑日程', labelEn: 'Edit', icon: Edit3 },
+        ]
+    },
+    {
+        key: 'usage-stats', label: '使用统计', labelEn: 'Usage Stats', icon: Activity,
+        children: [
+            { key: 'usage-stats.view', label: '查看统计', labelEn: 'View Stats', icon: BarChart3 },
+            { key: 'usage-stats.export', label: '导出报告', labelEn: 'Export Report', icon: Download },
         ]
     },
 ];

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../index';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
 
@@ -28,6 +29,7 @@ router.post('/', async (req: Request, res: Response) => {
         const record = await prisma.restockRecord.create({
             data: { name, items, userId }
         });
+        logActivity(userId, 'restock_create', 'restock', { name }).catch(() => {});
         res.json(record);
     } catch (error) {
         console.error('Failed to create restock record:', error);

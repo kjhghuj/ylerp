@@ -142,6 +142,21 @@ model ChromaImage {
   user         User     @relation(fields: [userId], references: [id])
 }
 
+model UserActivity {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  module    String
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
 model User {
   id          String   @id @default(uuid())
   username    String   @unique
@@ -168,4 +183,5 @@ model User {
   scheduleItems   ScheduleItem[]
   chromaRecords   ChromaGenerationRecord[]
   chromaImages    ChromaImage[]
+  userActivities  UserActivity[]
 }

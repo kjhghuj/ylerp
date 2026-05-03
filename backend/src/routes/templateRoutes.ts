@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../index';
+import { logActivity } from '../services/activityLogger';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get('/', async (req, res) => {
     try {
@@ -59,6 +59,7 @@ router.post('/', async (req, res) => {
                 ...(productId ? { productId } : {}),
             }
         });
+        logActivity(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(() => {});
         res.status(201).json(template);
     } catch (error) {
         console.error('Error creating template:', error);
@@ -103,6 +104,7 @@ router.put('/:id', async (req, res) => {
                 ...(productId !== undefined ? { productId } : {}),
             }
         });
+        logActivity(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(() => {});
         res.json(template);
     } catch (error) {
         console.error('Error updating template:', error);

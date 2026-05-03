@@ -13,6 +13,7 @@ import { UserManagement } from './modules/UserManagement';
 import { PersonalCenter } from './modules/PersonalCenter';
 import { ChromaAdapt } from './modules/chroma-adapt/ChromaAdapt';
 import { ScheduleManager } from './modules/ScheduleManager';
+import { UsageStats } from './modules/UsageStats';
 import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
@@ -49,7 +50,7 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
-    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-records', 'product-list', 'schedule'];
+    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-records', 'product-list', 'schedule', 'usage-stats'];
     if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !hasPermission(user.permissions || [], currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: 'var(--text-tertiary)' }}>
@@ -72,6 +73,7 @@ const MainContent: React.FC = () => {
       case 'personal-center': return <PersonalCenter />;
       case 'chroma-adapt': return <ChromaAdapt />;
       case 'schedule': return <ScheduleManager />;
+      case 'usage-stats': return <UsageStats />;
       default: return <Dashboard />;
     }
   };
@@ -88,6 +90,7 @@ const MainContent: React.FC = () => {
       case 'personal-center': return '个人中心';
       case 'chroma-adapt': return strings.sidebar.chromaAdapt || '图片制作';
       case 'schedule': return strings.sidebar.schedule || '日程管理';
+      case 'usage-stats': return strings.sidebar.usageStats || '使用统计';
       default: return view;
     }
   };
