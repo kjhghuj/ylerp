@@ -113,6 +113,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             sellerCoupon: p.sellerCoupon,
             sellerCouponPlatformRatio: p.sellerCouponPlatformRatio,
             adROI: p.adROI,
+            totalRevenue: p.totalRevenue,
+            platformInfrastructureFee: p.platformInfrastructureFee,
+            siteData: p.siteData,
         }));
 
         const jsonStr = JSON.stringify(exportData, null, 2);
@@ -159,6 +162,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         sellerCoupon: Number(item.sellerCoupon) || 0,
                         sellerCouponPlatformRatio: Number(item.sellerCouponPlatformRatio) || 0,
                         adROI: Number(item.adROI) || 15,
+                        totalRevenue: Number(item.totalRevenue) || 0,
+                        platformInfrastructureFee: Number(item.platformInfrastructureFee) || 0,
+                        siteData: item.siteData || {},
                     };
 
                     await addProduct(productData);

@@ -70,14 +70,19 @@ router.delete('/:id', async (req, res) => {
 
         const site = req.query.site as string | undefined;
 
+        const countryToCurrency: Record<string, string> = {
+            'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
+        };
+
         if (site) {
             const remainingSites = (existing.sites || []).filter(s => s !== site);
+            const siteCurrency = countryToCurrency[site] || site;
             if (remainingSites.length === 0) {
                 await prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
                 await prisma.product.delete({ where: { id: req.params.id } });
             } else {
                 await prisma.profitTemplate.deleteMany({
-                    where: { productId: req.params.id, country: site },
+                    where: { productId: req.params.id, country: { in: [site, siteCurrency] } },
                 });
                 await prisma.product.update({
                     where: { id: req.params.id },

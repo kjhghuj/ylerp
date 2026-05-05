@@ -37,6 +37,11 @@ async function cleanupOldImages(userId: string): Promise<void> {
   await prisma.chromaImage.deleteMany({
     where: { id: { in: oldImages.map(i => i.id) } },
   });
+
+  await prisma.chromaGenerationRecord.updateMany({
+    where: { imageId: { in: oldImages.map(i => i.id) } },
+    data: { imageId: null },
+  });
 }
 
 // ── Generation Records ──
@@ -169,6 +174,11 @@ router.get('/images/file/:id', async (req: Request, res: Response) => {
     if (!image) return res.status(404).json({ error: 'Image not found' });
 
     const filePath = path.join(UPLOAD_DIR, userId, image.filename);
+    try {
+      await fs.access(filePath);
+    } catch {
+      return res.status(404).json({ error: 'Image file no longer exists' });
+    }
     res.sendFile(filePath);
   } catch (error) {
     console.error('Error serving image:', error);

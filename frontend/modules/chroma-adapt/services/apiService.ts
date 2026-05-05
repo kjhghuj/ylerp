@@ -2,9 +2,8 @@ import { StyleConfig, TargetFont, ChromaRecord, ChromaImageInfo, CostSummary } f
 import { resizeImage } from '../utils/imageHelpers';
 import api from '../../../src/api';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
-const BACKEND_URL = `${API_BASE}/chroma-adapt`;
-const DATA_URL = `${API_BASE}/chroma-data`;
+const CHROMA_ADAPT = '/chroma-adapt';
+const DATA_URL = '/chroma-data';
 
 export const MODEL_COSTS: Record<string, number> = {
   'doubao-seed-2-0-lite': 0.01,
@@ -19,16 +18,11 @@ const cleanBase64 = (base64: string) => base64.replace(/^data:image\/[a-z]+;base
 export const analyzeImageColors = async (imageData: string, language: string, model: string) => {
   const resizedImage = await resizeImage(imageData, 800, 800);
 
-  const response = await fetch(`${BACKEND_URL}/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: cleanBase64(resizedImage),
-      prompt: `分析这张图片的色彩、构图和主要内容。请以JSON格式返回色盘，包含一个名为 "palette" 的数组，数组中包含5个十六进制颜色代码。`,
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/analyze`, {
+    image: cleanBase64(resizedImage),
+    prompt: `分析这张图片的色彩、构图和主要内容。请以JSON格式返回色盘，包含一个名为 "palette" 的数组，数组中包含5个十六进制颜色代码。`,
+    model: model
   });
-  const data = await response.json();
   // Expecting { palette: ["#...", "#...", ...] }
   const content = data.choices[0].message.content;
   
@@ -57,17 +51,12 @@ export const COLOR_ADAPT_SINGLE_MODEL_PROMPT = `你是一名顶级商业视觉�
 export const generateImageTranslation = async (imageData: string, targetLang: string, targetFont: TargetFont, model: string): Promise<{ url: string; instructions?: any }> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const response = await fetch(`${BACKEND_URL}/translate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: cleanBase64(resizedImage),
-      target_lang: targetLang,
-      target_font: targetFont,
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/translate`, {
+    image: cleanBase64(resizedImage),
+    target_lang: targetLang,
+    target_font: targetFont,
+    model: model
   });
-  const data = await response.json();
 
   const imageUrl = data.result?.data?.[0]?.url || imageData;
   return {
@@ -77,32 +66,22 @@ export const generateImageTranslation = async (imageData: string, targetLang: st
 };
 
 export const generateImageEdit = async (imageData: string, editPrompt: string, model: string) => {
-  const response = await fetch(`${BACKEND_URL}/edit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: cleanBase64(imageData),
-      prompt: editPrompt,
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/edit`, {
+    image: cleanBase64(imageData),
+    prompt: editPrompt,
+    model: model
   });
-  const data = await response.json();
   return data.data[0]?.url || imageData;
 };
 
 export const analyzeAndCreateEditPrompt = async (imageData: string, userInstruction: string, model: string): Promise<string> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const response = await fetch(`${BACKEND_URL}/analyze-edit`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: cleanBase64(resizedImage),
-      user_instruction: userInstruction,
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/analyze-edit`, {
+    image: cleanBase64(resizedImage),
+    user_instruction: userInstruction,
+    model: model
   });
-  const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
@@ -119,52 +98,37 @@ export const SECONDARY_SINGLE_MODEL_PROMPT = `你是一名顶级商业视觉设�
 export const analyzeAndCreateSecondaryPrompt = async (imageData: string, model: string): Promise<string> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const response = await fetch(`${BACKEND_URL}/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image: cleanBase64(resizedImage),
-      prompt: `你是一名资深电商视觉总监。请分析输入图片，并输出一段可直接用于图像生成模型的专业提示词，用于把该图改造为1:1方图。目标是：不丢失任何关键信息，100%保留产品，保持原始风格与品牌调性。
+  const { data } = await api.post(`${CHROMA_ADAPT}/analyze`, {
+    image: cleanBase64(resizedImage),
+    prompt: `你是一名资深电商视觉总监。请分析输入图片，并输出一段可直接用于图像生成模型的专业提示词，用于把该图改造为1:1方图。目标是：不丢失任何关键信息，100%保留产品，保持原始风格与品牌调性。
 要求：
-- 只输出“最终提示词”本体，不要解释，不要JSON，不要markdown代码块。
+- 只输出”最终提示词”本体，不要解释，不要JSON，不要markdown代码块。
 - 提示词中必须明确：完整保留全部信息、禁止裁切主体、产品100%保真、构图改为1:1、风格一致、高清无伪影。
 - 提示词要可执行、具体、专业，长度控制在200-450字。`,
-      model: model
-    }),
+    model: model
   });
-  const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
 
 export const generateSecondaryImage = async (imageData: string, prompt: string, model: string): Promise<string> => {
-  const response = await fetch(`${BACKEND_URL}/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt,
-      image_urls: [`data:image/jpeg;base64,${cleanBase64(imageData)}`],
-      size: '2048x2048',
-      model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/generate`, {
+    prompt,
+    image_urls: [`data:image/jpeg;base64,${cleanBase64(imageData)}`],
+    size: '2048x2048',
+    model
   });
-  const data = await response.json();
   return data.data?.[0]?.url || imageData;
 };
 
 export const analyzeAndCreateTranslationPrompt = async (imageData: string, targetLang: string, model: string) => "Translation prompt";
 
 export const createColorMappingPlan = async (posterData: string, referenceData: string, model: string): Promise<string> => {
-  const response = await fetch(`${BACKEND_URL}/color-mapping`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      poster_image: cleanBase64(posterData),
-      reference_image: cleanBase64(referenceData),
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/color-mapping`, {
+    poster_image: cleanBase64(posterData),
+    reference_image: cleanBase64(referenceData),
+    model: model
   });
-  const data = await response.json();
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
@@ -198,19 +162,14 @@ export const generateColorAdaptation = async (
   prompt: string,
   model: string
 ): Promise<string> => {
-  const response = await fetch(`${BACKEND_URL}/color-adaptation`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      poster_image: cleanBase64(posterData),
-      reference_image: cleanBase64(referenceData),
-      palette: palette || [],
-      style_config: styleConfig,
-      color_mapping_plan: prompt,
-      model: model
-    }),
+  const { data } = await api.post(`${CHROMA_ADAPT}/color-adaptation`, {
+    poster_image: cleanBase64(posterData),
+    reference_image: cleanBase64(referenceData),
+    palette: palette || [],
+    style_config: styleConfig,
+    color_mapping_plan: prompt,
+    model: model
   });
-  const data = await response.json();
   return data.data?.[0]?.url || posterData;
 };
 
@@ -270,7 +229,7 @@ export const getChromaImages = async (page = 1, limit = 20): Promise<{ images: C
 };
 
 export const getChromaImageUrl = (imageId: string): string => {
-  return `${DATA_URL}/images/file/${imageId}`;
+  return `${import.meta.env.VITE_API_URL || '/api'}${DATA_URL}/images/file/${imageId}`;
 };
 
 export const deleteChromaImage = async (id: string): Promise<void> => {

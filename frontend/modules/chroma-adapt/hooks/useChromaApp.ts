@@ -352,10 +352,10 @@ export const useChromaApp = () => {
         const newProgress = Math.min(prev.progress + increment, 90);
 
         let text = 'Processing...';
-        if (state.mode === 'SECONDARY_GENERATION') {
+        if (prev.mode === 'SECONDARY_GENERATION') {
           if (newProgress < 50) text = 'Adapting to 1:1 composition...';
           else text = 'Preserving details and style...';
-        } else if (state.mode === 'TRANSLATION') {
+        } else if (prev.mode === 'TRANSLATION') {
           if (newProgress < 50) text = 'Translating content...';
           else text = 'Reconstructing layout...';
         } else {
