@@ -1,19 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
-import { TrendingUp, AlertTriangle, DollarSign, Package } from 'lucide-react';
+import { TrendingUp, AlertTriangle, DollarSign, Package, Bell, Clock, ChevronRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { hasPermission } from '../components/PermissionTree';
+import api from '../src/api';
+
+interface UpcomingItem {
+  id: string;
+  type: string;
+  title: string;
+  deadline?: string;
+  remindAt?: string;
+  completed: boolean;
+}
+
+const TYPE_LABEL: Record<string, { zh: string; color: string }> = {
+  routine: { zh: '每日任务', color: '#81C784' },
+  approval: { zh: '审批', color: '#64B5F6' },
+  idea: { zh: '想法', color: '#FFB74D' },
+  'shop-event': { zh: '活动', color: '#CE93D8' },
+  notification: { zh: '提醒', color: '#E57373' },
+};
 
 export const Dashboard: React.FC = () => {
   const { accountBalance, totalDebt, products, inventory, strings } = useStore();
   const { user } = useAuth();
   const t = strings.dashboard;
+  const isZh = strings.sidebar?.dashboard === '总览仪表盘';
 
   const perms = user?.permissions || [];
   const isOwner = user?.role === 'owner';
-
   const can = (key: string) => isOwner || hasPermission(perms, key);
+
+  const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
+
+  useEffect(() => {
+    api.get('/schedule/upcoming').then(res => {
+      setUpcoming(Array.isArray(res.data) ? res.data.slice(0, 5) : []);
+    }).catch(() => {});
+  }, []);
 
   const avgCost = products.length
     ? (products.reduce((acc, p) => acc + p.cost, 0) / products.length).toFixed(2)
@@ -46,6 +72,14 @@ export const Dashboard: React.FC = () => {
   const showProfitTable = can('dashboard.profitTable');
   const showInventoryTable = can('dashboard.inventoryTable');
 
+  const formatUpcomingDate = (s?: string) => {
+    if (!s) return '';
+    const d = new Date(s);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const isOverdue = (s?: string) => s ? new Date(s).getTime() < Date.now() : false;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
@@ -74,6 +108,53 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div className="bg-white dark:bg-slate-800/70 p-5 rounded-2xl border border-slate-200/50 dark:border-slate-700/50"
+          style={{ boxShadow: 'var(--shadow-card)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Bell size={16} className="text-red-400" />
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">
+              {isZh ? '即将到期提醒' : 'Upcoming Reminders'}
+            </h3>
+            <span className="text-xs text-slate-400 ml-auto">{upcoming.length} {isZh ? '项' : 'items'}</span>
+          </div>
+          <div className="space-y-2">
+            {upcoming.map(item => {
+              const overdue = isOverdue(item.remindAt) || isOverdue(item.deadline);
+              const tl = TYPE_LABEL[item.type] || { zh: item.type, color: '#94a3b8' };
+              return (
+                <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30"
+                  style={{ borderLeft: `3px solid ${tl.color}` }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-slate-700 dark:text-slate-200">{item.title}</p>
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium"
+                        style={{ backgroundColor: `${tl.color}20`, color: tl.color }}>
+                        {isZh ? tl.zh : item.type}
+                      </span>
+                      {item.remindAt && (
+                        <span className={overdue ? 'text-red-500 font-semibold' : ''}>
+                          <Clock size={10} className="inline mr-0.5" />
+                          {formatUpcomingDate(item.remindAt)}
+                        </span>
+                      )}
+                      {item.deadline && (
+                        <span className={overdue ? 'text-red-500 font-semibold' : ''}>
+                          <Clock size={10} className="inline mr-0.5" />
+                          {formatUpcomingDate(item.deadline)}
+                        </span>
+                      )}
+                      {overdue && <span className="text-red-500 font-bold">{isZh ? '已过期' : 'Overdue'}</span>}
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-slate-300 shrink-0" />
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

@@ -3,11 +3,11 @@ import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 import {
-    Plus, Check, Trash2, Clock, Lightbulb, Store,
+    Plus, Check, Trash2, Clock, Lightbulb, Store, Bell,
     Archive, X, Sparkles, FileText, Edit3, GripVertical, Save, Search, CalendarDays
 } from 'lucide-react';
 
-type ItemType = 'routine' | 'schedule' | 'idea' | 'shop-event';
+type ItemType = 'routine' | 'approval' | 'idea' | 'shop-event' | 'notification';
 
 interface ScheduleItemData {
     id: string;
@@ -15,6 +15,7 @@ interface ScheduleItemData {
     title: string;
     description?: string;
     deadline?: string;
+    remindAt?: string;
     completed: boolean;
     completedAt?: string;
     notes?: string;
@@ -26,9 +27,10 @@ interface ScheduleItemData {
 
 const TYPE_CONFIG: Record<ItemType, { icon: any; color: string; label: string; labelEn: string; progressRgb: string }> = {
     routine: { icon: Check, color: 'from-emerald-400 to-teal-500', label: '每日任务', labelEn: 'Routine', progressRgb: '129,199,132' },
-    schedule: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '日程安排', labelEn: 'Schedule', progressRgb: '100,181,246' },
+    approval: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '审批', labelEn: 'Approval', progressRgb: '100,181,246' },
     idea: { icon: Lightbulb, color: 'from-amber-400 to-orange-500', label: '想法测试', labelEn: 'Idea', progressRgb: '255,183,77' },
     'shop-event': { icon: Store, color: 'from-purple-400 to-violet-500', label: '店铺活动', labelEn: 'Shop Event', progressRgb: '179,136,255' },
+    notification: { icon: Bell, color: 'from-red-400 to-rose-500', label: '提醒', labelEn: 'Notification', progressRgb: '244,114,182' },
 };
 
 const getDeadlineStatus = (deadline?: string): 'safe' | 'warning' | 'urgent' | 'none' => {
@@ -183,6 +185,12 @@ const ItemCard: React.FC<ItemCardProps> = React.memo(({
                             <span>{formatDate(item.deadline)}</span>
                         </div>
                     )}
+                    {item.remindAt && !isDone && (
+                        <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                            <Bell size={10} />
+                            <span>{formatDate(item.remindAt)}</span>
+                        </div>
+                    )}
                 </div>
                 <button
                     onClick={() => onDelete(item.id)}
@@ -247,12 +255,14 @@ export const ScheduleManager: React.FC = () => {
     const [newTitle, setNewTitle] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [newDeadline, setNewDeadline] = useState('');
+    const [newRemindAt, setNewRemindAt] = useState('');
     const [editingItem, setEditingItem] = useState<ScheduleItemData | null>(null);
     const [editNotes, setEditNotes] = useState('');
     const [editFeedback, setEditFeedback] = useState('');
     const [editTitle, setEditTitle] = useState('');
     const [editDesc, setEditDesc] = useState('');
     const [editDeadline, setEditDeadline] = useState('');
+    const [editRemindAt, setEditRemindAt] = useState('');
     const [showEditModal, setShowEditModal] = useState(false);
     const [archiveSearch, setArchiveSearch] = useState('');
     const [archiveDateFilter, setArchiveDateFilter] = useState('');
@@ -373,6 +383,29 @@ export const ScheduleManager: React.FC = () => {
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
 
+    // Browser notification for due items
+    useEffect(() => {
+        if (!('Notification' in window) || Notification.permission === 'denied') return;
+        if (Notification.permission === 'default') Notification.requestPermission();
+        const now = Date.now();
+        const dueItems = items.filter(i => {
+            if (i.completed) return false;
+            if (i.remindAt && new Date(i.remindAt).getTime() <= now) return true;
+            if (i.deadline && new Date(i.deadline).getTime() - now < 3600000) return true;
+            return false;
+        });
+        if (dueItems.length > 0 && Notification.permission === 'granted') {
+            dueItems.forEach(i => {
+                const config = TYPE_CONFIG[i.type];
+                new Notification(i.title, {
+                    body: i.deadline ? `${isZh ? '截止' : 'Due'}: ${formatDate(i.deadline)}` : (isZh ? '提醒时间已到' : 'Reminder time reached'),
+                    icon: '/favicon.png',
+                    tag: `schedule-${i.id}`,
+                });
+            });
+        }
+    }, [items]);
+
     useEffect(() => {
         const lastReset = localStorage.getItem('yl-schedule-last-reset');
         const todayKey = formatDateShort(new Date().toISOString());
@@ -400,12 +433,14 @@ export const ScheduleManager: React.FC = () => {
                 title: newTitle.trim(),
                 description: newDesc.trim() || null,
                 deadline: newDeadline || null,
+                remindAt: newRemindAt || null,
                 sortKey: maxSortKey + 1,
             });
             setItems(prev => [res.data, ...prev]);
             setNewTitle('');
             setNewDesc('');
             setNewDeadline('');
+            setNewRemindAt('');
             setShowCreate(null);
         } catch (e) {
             console.error('Failed to create item', e);
@@ -479,6 +514,7 @@ export const ScheduleManager: React.FC = () => {
         setEditTitle(item.title);
         setEditDesc(item.description || '');
         setEditDeadline(item.deadline ? item.deadline.slice(0, 16) : '');
+        setEditRemindAt(item.remindAt ? item.remindAt.slice(0, 16) : '');
         setEditingItem(item);
         setShowEditModal(true);
     }, []);
@@ -490,6 +526,7 @@ export const ScheduleManager: React.FC = () => {
                 title: editTitle.trim(),
                 description: editDesc.trim() || null,
                 deadline: editDeadline || null,
+                remindAt: editRemindAt || null,
             });
             setItems(prev => prev.map(i => i.id === editingItem.id ? res.data : i));
             setShowEditModal(false);
@@ -613,8 +650,14 @@ export const ScheduleManager: React.FC = () => {
                     <textarea placeholder={isZh ? '描述（可选）' : 'Description (optional)'} value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={2}
                         className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
                         style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    {(showCreate === 'schedule' || showCreate === 'shop-event') && (
+                    {(showCreate === 'approval' || showCreate === 'shop-event' || showCreate === 'notification') && (
                         <input type="datetime-local" value={newDeadline} onChange={e => setNewDeadline(e.target.value)}
+                            className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
+                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                    )}
+                    {showCreate === 'notification' && (
+                        <input type="datetime-local" value={newRemindAt} onChange={e => setNewRemindAt(e.target.value)}
+                            placeholder={isZh ? '提醒时间 (可选)' : 'Reminder time (optional)'}
                             className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
                             style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                     )}
@@ -655,10 +698,18 @@ export const ScheduleManager: React.FC = () => {
                             className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
                             style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                     </div>
-                    {(editingItem.type === 'schedule' || editingItem.type === 'shop-event') && (
+                    {(editingItem.type === 'approval' || editingItem.type === 'shop-event' || editingItem.type === 'notification') && (
                         <div>
                             <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '截止时间' : 'Deadline'}</label>
                             <input type="datetime-local" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
+                                className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
+                                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                        </div>
+                    )}
+                    {editingItem.type === 'notification' && (
+                        <div>
+                            <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '提醒时间' : 'Reminder'}</label>
+                            <input type="datetime-local" value={editRemindAt} onChange={e => setEditRemindAt(e.target.value)}
                                 className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
                                 style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                         </div>
