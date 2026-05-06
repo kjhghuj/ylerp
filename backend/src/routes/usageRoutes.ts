@@ -135,4 +135,15 @@ router.get('/timeline', async (req: Request, res: Response) => {
   }
 });
 
+// Clear all activity data (owner only)
+router.delete('/activity', authorize('owner'), async (_req: Request, res: Response) => {
+  try {
+    const r = await prisma.userActivity.deleteMany();
+    res.json({ message: 'Activity cleared', count: r.count });
+  } catch (error) {
+    console.error('Error clearing activity:', error);
+    res.status(500).json({ error: 'Failed to clear activity' });
+  }
+});
+
 export default router;
