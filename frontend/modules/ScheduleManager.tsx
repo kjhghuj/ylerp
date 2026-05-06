@@ -7,7 +7,13 @@ import {
     Archive, X, Sparkles, FileText, Edit3, GripVertical, Save, Search, CalendarDays
 } from 'lucide-react';
 
-type ItemType = 'routine' | 'approval' | 'idea' | 'shop-event' | 'notification';
+type ItemType = 'routine' | 'approval' | 'idea' | 'shop-event' | 'notification' | 'schedule';
+
+// Backward compat: old 'schedule' type is now 'approval'
+const normalizeType = (t: string): ItemType => {
+    if (t === 'schedule') return 'approval';
+    return t as ItemType;
+};
 
 interface ScheduleItemData {
     id: string;
@@ -28,6 +34,7 @@ interface ScheduleItemData {
 const TYPE_CONFIG: Record<ItemType, { icon: any; color: string; label: string; labelEn: string; progressRgb: string }> = {
     routine: { icon: Check, color: 'from-emerald-400 to-teal-500', label: '每日任务', labelEn: 'Routine', progressRgb: '129,199,132' },
     approval: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '审批', labelEn: 'Approval', progressRgb: '100,181,246' },
+    schedule: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '审批', labelEn: 'Approval', progressRgb: '100,181,246' },
     idea: { icon: Lightbulb, color: 'from-amber-400 to-orange-500', label: '想法测试', labelEn: 'Idea', progressRgb: '255,183,77' },
     'shop-event': { icon: Store, color: 'from-purple-400 to-violet-500', label: '店铺活动', labelEn: 'Shop Event', progressRgb: '179,136,255' },
     notification: { icon: Bell, color: 'from-red-400 to-rose-500', label: '提醒', labelEn: 'Notification', progressRgb: '244,114,182' },
