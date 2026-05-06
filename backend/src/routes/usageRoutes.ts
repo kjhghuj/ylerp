@@ -135,4 +135,15 @@ router.get('/timeline', async (req: Request, res: Response) => {
   }
 });
 
+// TEMP: reset activity data (owner only)
+router.delete('/reset', authorize('owner'), async (_req: Request, res: Response) => {
+  try {
+    const result = await prisma.userActivity.deleteMany();
+    res.json({ message: 'Activity data cleared', count: result.count });
+  } catch (error) {
+    console.error('Error resetting activity:', error);
+    res.status(500).json({ error: 'Failed to reset activity data' });
+  }
+});
+
 export default router;
