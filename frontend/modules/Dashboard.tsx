@@ -15,6 +15,8 @@ interface UpcomingItem {
   completed: boolean;
 }
 
+const normalizeType = (t: string): string => t === 'schedule' ? 'approval' : t;
+
 const TYPE_LABEL: Record<string, { zh: string; color: string }> = {
   routine: { zh: '每日任务', color: '#81C784' },
   approval: { zh: '审批', color: '#64B5F6' },
@@ -37,7 +39,8 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     api.get('/schedule/upcoming').then(res => {
-      setUpcoming(Array.isArray(res.data) ? res.data.slice(0, 5) : []);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setUpcoming(data.map((item: any) => ({ ...item, type: normalizeType(item.type) })).slice(0, 5));
     }).catch(() => {});
   }, []);
 

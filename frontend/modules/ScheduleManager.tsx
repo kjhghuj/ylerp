@@ -380,7 +380,8 @@ export const ScheduleManager: React.FC = () => {
     const fetchItems = useCallback(async () => {
         try {
             const res = await api.get('/schedule');
-            setItems(Array.isArray(res.data) ? res.data : []);
+            const data = Array.isArray(res.data) ? res.data : [];
+            setItems(data.map((item: any) => ({ ...item, type: normalizeType(item.type) })));
         } catch (e) {
             console.error('Failed to fetch schedule items', e);
         } finally {
@@ -443,7 +444,7 @@ export const ScheduleManager: React.FC = () => {
                 remindAt: newRemindAt || null,
                 sortKey: maxSortKey + 1,
             });
-            setItems(prev => [res.data, ...prev]);
+            setItems(prev => [{ ...res.data, type: normalizeType(res.data.type) }, ...prev]);
             setNewTitle('');
             setNewDesc('');
             setNewDeadline('');
@@ -458,7 +459,7 @@ export const ScheduleManager: React.FC = () => {
         if (item.completed) {
             try {
                 const res = await api.put(`/schedule/${item.id}`, { completed: false });
-                setItems(prev => prev.map(i => i.id === item.id ? res.data : i));
+                setItems(prev => prev.map(i => i.id === item.id ? { ...res.data, type: normalizeType(res.data.type) } : i));
             } catch (e) {
                 console.error('Failed to uncomplete item', e);
             }
@@ -474,7 +475,7 @@ export const ScheduleManager: React.FC = () => {
         setTimeout(async () => {
             try {
                 const res = await api.put(`/schedule/${item.id}`, { completed: true });
-                setItems(prev => prev.map(i => i.id === item.id ? res.data : i));
+                setItems(prev => prev.map(i => i.id === item.id ? { ...res.data, type: normalizeType(res.data.type) } : i));
             } catch (e) {
                 console.error('Failed to complete item', e);
             }
@@ -496,7 +497,7 @@ export const ScheduleManager: React.FC = () => {
                     notes: editNotes,
                     feedback: editFeedback,
                 });
-                setItems(prev => prev.map(i => i.id === itemRef.id ? res.data : i));
+                setItems(prev => prev.map(i => i.id === itemRef.id ? { ...res.data, type: normalizeType(res.data.type) } : i));
             } catch (e) {
                 console.error('Failed to archive idea', e);
             }
@@ -535,7 +536,7 @@ export const ScheduleManager: React.FC = () => {
                 deadline: editDeadline || null,
                 remindAt: editRemindAt || null,
             });
-            setItems(prev => prev.map(i => i.id === editingItem.id ? res.data : i));
+            setItems(prev => prev.map(i => i.id === editingItem.id ? { ...res.data, type: normalizeType(res.data.type) } : i));
             setShowEditModal(false);
             setEditingItem(null);
         } catch (e) {
@@ -629,7 +630,7 @@ export const ScheduleManager: React.FC = () => {
     });
     const routines = [...routinesActive, ...routinesDone];
 
-    const schedules = activeItems.filter(i => i.type === 'schedule').sort((a, b) => a.sortKey - b.sortKey);
+    const schedules = activeItems.filter(i => i.type === 'approval').sort((a, b) => a.sortKey - b.sortKey);
     const shopEvents = activeItems.filter(i => i.type === 'shop-event').sort((a, b) => a.sortKey - b.sortKey);
     const ideas = activeItems.filter(i => i.type === 'idea').sort((a, b) => a.sortKey - b.sortKey);
 
@@ -827,7 +828,7 @@ export const ScheduleManager: React.FC = () => {
                     <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{getGreeting()}</p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {(['routine', 'schedule', 'idea'] as ItemType[]).map(type => (
+                    {(['routine', 'approval', 'idea'] as ItemType[]).map(type => (
                         <button key={type} onClick={() => setShowCreate(type)}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all"
                             style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>

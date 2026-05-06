@@ -1,32 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Product {
-  id                String  @id @default(uuid())
-  name              String
-  sku               String
-  country           String?
-  cost              Float
-  productWeight     Float
-  supplierTaxPoint  Float
-  supplierInvoice   String
-  sellerCouponType  String  @default("fixed")
-  sellerCoupon      Float   @default(0)
-  sellerCouponPlatformRatio Float @default(0)
-  adROI             Float   @default(15)
-  totalRevenue      Float   @default(0)
-  platformInfrastructureFee Float @default(0)
-  sites             String[] @default([])
-  siteData          Json?
-  userId            String
-  user              User    @relation(fields: [userId], references: [id])
-  templates         ProfitTemplate[]
+  id                        String           @id @default(uuid())
+  name                      String
+  sku                       String
+  country                   String?
+  cost                      Float
+  productWeight             Float
+  sellerCoupon              Float            @default(0)
+  adROI                     Float            @default(15)
+  supplierTaxPoint          Float
+  supplierInvoice           String
+  sellerCouponPlatformRatio Float            @default(0)
+  sellerCouponType          String           @default("fixed")
+  userId                    String
+  sites                     String[]         @default([])
+  totalRevenue              Float            @default(0)
+  platformInfrastructureFee Float            @default(0)
+  siteData                  Json?
+  user                      User             @relation(fields: [userId], references: [id])
+  templates                 ProfitTemplate[]
 }
 
 model FinanceRecord {
@@ -42,7 +42,7 @@ model FinanceRecord {
 }
 
 model InventoryItem {
-  id              String  @id @default(uuid())
+  id              String @id @default(uuid())
   name            String
   sku             String
   currentStock    Int
@@ -54,7 +54,7 @@ model InventoryItem {
   replenishCycle  Int
   costPerUnit     Float
   userId          String
-  user            User    @relation(fields: [userId], references: [id])
+  user            User   @relation(fields: [userId], references: [id])
 }
 
 model WarehouseMapping {
@@ -86,34 +86,34 @@ model RestockRecord {
 
 model ProfitTemplate {
   id        String   @id @default(uuid())
-  type      String   @default("profit")
   name      String
   country   String
-  platform  String?
   data      Json
   createdAt DateTime @default(now())
+  platform  String?
+  type      String   @default("profit")
   userId    String
-  user      User     @relation(fields: [userId], references: [id])
   productId String?
   product   Product? @relation(fields: [productId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model ScheduleItem {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   type        String
   title       String
   description String?
   deadline    DateTime?
-  remindAt    DateTime?
-  completed   Boolean  @default(false)
+  completed   Boolean   @default(false)
   completedAt DateTime?
   notes       String?
   feedback    String?
-  sortKey     Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  sortKey     Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  remindAt    DateTime?
+  user        User      @relation(fields: [userId], references: [id])
 }
 
 model ChromaGenerationRecord {
@@ -159,30 +159,30 @@ model UserActivity {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  username    String   @unique
-  password    String
-  displayName String
-  phone       String?
-  email       String?
-  avatar      String?
-  role        String   @default("viewer")
-  permissions String[] @default([])
-  parentId    String?
-  parent      User?    @relation("SubAccounts", fields: [parentId], references: [id])
-  children    User[]   @relation("SubAccounts")
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  products       Product[]
-  financeRecords  FinanceRecord[]
-  inventoryItems  InventoryItem[]
+  id                String                   @id @default(uuid())
+  username          String                   @unique
+  password          String
+  displayName       String
+  role              String                   @default("viewer")
+  parentId          String?
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  permissions       String[]                 @default([])
+  avatar            String?
+  email             String?
+  phone             String?
+  chromaRecords     ChromaGenerationRecord[]
+  chromaImages      ChromaImage[]
+  financeRecords    FinanceRecord[]
+  inventoryItems    InventoryItem[]
+  products          Product[]
+  profitTemplates   ProfitTemplate[]
+  restockRecords    RestockRecord[]
+  scheduleItems     ScheduleItem[]
+  skuGroups         SkuGroup[]
+  parent            User?                    @relation("SubAccounts", fields: [parentId], references: [id])
+  children          User[]                   @relation("SubAccounts")
+  userActivities    UserActivity[]
   warehouseMappings WarehouseMapping[]
-  skuGroups       SkuGroup[]
-  restockRecords  RestockRecord[]
-  profitTemplates ProfitTemplate[]
-  scheduleItems   ScheduleItem[]
-  chromaRecords   ChromaGenerationRecord[]
-  chromaImages    ChromaImage[]
-  userActivities  UserActivity[]
 }
