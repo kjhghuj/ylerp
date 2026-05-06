@@ -136,6 +136,12 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     value={siteInputs.sellerCoupon}
                     onChange={(e) => onSiteInputChange('sellerCoupon', e.target.value)}
                     suffix={siteInputs.sellerCouponType === 'percent' ? '%' : (useLocalCurrency ? siteCountry : 'CNY')}
+                    invertCurrency={siteInputs.sellerCouponType === 'fixed' && useLocalCurrency}
+                    exchangeRate={siteInputs.sellerCouponType === 'fixed' ? (rates[siteCountry] || 0) : 0}
+                    currencyCode={siteInputs.sellerCouponType === 'fixed' ? siteCountry : ''}
+                    customDisplay={siteInputs.sellerCouponType === 'percent' ? (
+                        <span>≈ {(siteInputs.totalRevenue * (siteInputs.sellerCoupon / 100)).toFixed(2)} {useLocalCurrency ? siteCountry : 'CNY'}</span>
+                    ) : null}
                 />
                 <SelectInput
                     label={t.inputs.sellerCouponType || '优惠券类型'}

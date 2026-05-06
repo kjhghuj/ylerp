@@ -73,7 +73,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
     );
 }
 
-export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false }: any) => {
+export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null }: any) => {
     const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
     const safeRate = exchangeRate > 0 ? exchangeRate : 0;
 
@@ -118,11 +118,15 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                     </div>
                 )}
             </div>
-            {convertedValue && (
+            {customDisplay ? (
+                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
+                    {customDisplay}
+                </div>
+            ) : convertedValue ? (
                 <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                     <span>≈ {convertedValue} {currencyCode}</span>
                 </div>
-            )}
+            ) : null}
         </div>
     );
 };
