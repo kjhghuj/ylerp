@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../StoreContext';
 import api from '../src/api';
-import { LogIn, Image, Activity, DollarSign, RefreshCw, Download, ChevronDown, ChevronUp } from 'lucide-react';
+import { LogIn, Image, Activity, DollarSign, RefreshCw, Download, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface UserStats {
   userId: string;
@@ -22,6 +23,11 @@ interface UsageData {
   users: UserStats[];
 }
 
+interface TimelineItem {
+  date: string;
+  [action: string]: number | string;
+}
+
 const ACTION_LABELS: Record<string, { zh: string; en: string }> = {
   login: { zh: '登录', en: 'Login' },
   image_generate: { zh: '图片生成', en: 'Image Generate' },
@@ -35,6 +41,7 @@ const ACTION_LABELS: Record<string, { zh: string; en: string }> = {
 export const UsageStats: React.FC = () => {
   const { language } = useStore();
   const [data, setData] = useState<UsageData | null>(null);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [days, setDays] = useState(30);
@@ -42,8 +49,12 @@ export const UsageStats: React.FC = () => {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/usage/stats?days=${days}`);
-      setData(res.data);
+      const [statsRes, timelineRes] = await Promise.all([
+        api.get(`/usage/stats?days=${days}`),
+        api.get(`/usage/timeline?days=${days}`),
+      ]);
+      setData(statsRes.data);
+      setTimeline(timelineRes.data.timeline || []);
     } catch (error) {
       console.error('Failed to fetch usage stats:', error);
     } finally {
@@ -54,6 +65,24 @@ export const UsageStats: React.FC = () => {
   useEffect(() => {
     fetchStats();
   }, [days]);
+
+  const chartActions = useMemo(() => {
+    const set = new Set<string>();
+    timeline.forEach(item => {
+      Object.keys(item).forEach(k => { if (k !== 'date') set.add(k); });
+    });
+    return Array.from(set);
+  }, [timeline]);
+
+  const chartColors: Record<string, string> = {
+    login: '#6366f1',
+    image_generate: '#a855f7',
+    finance_import: '#06b6d4',
+    product_create: '#10b981',
+    template_save: '#f59e0b',
+    restock_create: '#ef4444',
+    schedule_create: '#ec4899',
+  };
 
   const totalStats = useMemo(() => {
     if (!data) return null;
@@ -141,6 +170,51 @@ export const UsageStats: React.FC = () => {
           <SummaryCard icon={Image} label={language === 'zh' ? '总图片数' : 'Total Images'} value={totalStats.totalImages} color="purple" />
           <SummaryCard icon={Activity} label={language === 'zh' ? '总生成次数' : 'Total Generations'} value={totalStats.totalGenerations} color="green" />
           <SummaryCard icon={DollarSign} label={language === 'zh' ? '总花费' : 'Total Cost'} value={`$${totalStats.totalCost.toFixed(2)}`} color="amber" />
+        </div>
+      )}
+
+      {/* Activity Timeline Chart */}
+      {timeline.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 size={18} className="text-indigo-500" />
+            <h3 className="text-sm font-semibold text-slate-700">
+              {language === 'zh' ? '每日活动趋势' : 'Daily Activity Trend'}
+            </h3>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={timeline} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                tickFormatter={(v: string) => {
+                  const d = new Date(v);
+                  return `${d.getMonth() + 1}/${d.getDate()}`;
+                }}
+              />
+              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
+              <Tooltip
+                labelFormatter={(label: string) => {
+                  const d = new Date(label);
+                  return d.toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+                    year: 'numeric', month: 'long', day: 'numeric', weekday: 'short',
+                  });
+                }}
+                formatter={(value: number, name: string) => [value, getActionLabel(name)]}
+              />
+              <Legend formatter={(value: string) => getActionLabel(value)} />
+              {chartActions.map((action, idx) => (
+                <Bar
+                  key={action}
+                  dataKey={action}
+                  stackId="a"
+                  fill={chartColors[action] || `hsl(${idx * 60}, 70%, 55%)`}
+                  radius={idx === chartActions.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
 
