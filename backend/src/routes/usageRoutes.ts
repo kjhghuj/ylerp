@@ -51,14 +51,18 @@ router.get('/stats', async (req: Request, res: Response) => {
       }),
     ]);
 
-    // Get last login per user
-    const lastLogins = await prisma.userActivity.findMany({
+    // Get last login per user (avoid DISTINCT ON which is error-prone across Prisma/PG versions)
+    const allLogins = await prisma.userActivity.findMany({
       where: { action: 'login', ...activityDateFilter },
       orderBy: { createdAt: 'desc' },
-      distinct: ['userId'],
       select: { userId: true, createdAt: true, ip: true },
     });
-    const lastLoginMap = new Map(lastLogins.map(l => [l.userId, l]));
+    const lastLoginMap = new Map<string, typeof allLogins[0]>();
+    for (const login of allLogins) {
+      if (!lastLoginMap.has(login.userId)) {
+        lastLoginMap.set(login.userId, login);
+      }
+    }
 
     // Build lookup maps
     const imageMap = new Map(imageCounts.map(i => [i.userId, i._count.id]));
