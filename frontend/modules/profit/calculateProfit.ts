@@ -170,7 +170,7 @@ export const calculateProfit = (
         commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
         finalRevenueLocal, finalRevenueCNY,
         roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
-        margin: totalRevenue > 0 ? (finalRevenueCNY / totalRevenue) * 100 : 0,
+        margin: revenueAfterSellerCoupon > 0 ? (finalRevenueCNY / revenueAfterSellerCoupon) * 100 : 0,
         vat, corporateIncomeTax, costTaxAmount,
         actualSellerCoupon, platformCouponCNY, taxableRevenue, revenueAfterSellerCoupon,
     };

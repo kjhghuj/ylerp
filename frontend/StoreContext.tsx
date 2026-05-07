@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
 import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping, RestockRecord } from './types';
 import { translations } from './translations';
+import { SiteLevelInputs, DEFAULT_SITE_INPUTS } from './modules/profit/types';
 
 type Language = 'zh' | 'en';
 
@@ -36,6 +37,8 @@ interface StoreContextType {
   setProfitNodes: (nodes: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void;
   profitEditingProductId: string | null;
   setProfitEditingProductId: (id: string | null) => void;
+  profitSiteInputsMap: Record<string, SiteLevelInputs>;
+  setProfitSiteInputsMap: (inputs: Record<string, SiteLevelInputs> | ((prev: Record<string, SiteLevelInputs>) => Record<string, SiteLevelInputs>)) => void;
 
   productListActiveTab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH';
   setProductListActiveTab: (tab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH') => void;
@@ -144,6 +147,20 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return localStorage.getItem('yl-profit-editing-product-id');
   });
 
+  const [profitSiteInputsMap, setProfitSiteInputsMap] = useState<Record<string, SiteLevelInputs>>(() => {
+    const saved = localStorage.getItem('yl-profit-site-inputs');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* fall through */ }
+    }
+    return {
+      'MYR': { ...DEFAULT_SITE_INPUTS },
+      'SGD': { ...DEFAULT_SITE_INPUTS },
+      'PHP': { ...DEFAULT_SITE_INPUTS },
+      'THB': { ...DEFAULT_SITE_INPUTS },
+      'IDR': { ...DEFAULT_SITE_INPUTS },
+    };
+  });
+
   // Product List persistent state
   const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>(() => {
     return localStorage.getItem('yl-product-list-active-tab') as any || 'MY';
@@ -162,6 +179,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   React.useEffect(() => {
     localStorage.setItem('yl-profit-site-country', profitSiteCountry);
   }, [profitSiteCountry]);
+
+  React.useEffect(() => {
+    localStorage.setItem('yl-profit-site-inputs', JSON.stringify(profitSiteInputsMap));
+  }, [profitSiteInputsMap]);
 
   React.useEffect(() => {
     localStorage.setItem('yl-profit-nodes', JSON.stringify(profitNodes));
@@ -396,6 +417,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       profitSiteCountry, setProfitSiteCountry,
       profitNodes, setProfitNodes,
       profitEditingProductId, setProfitEditingProductId,
+      profitSiteInputsMap, setProfitSiteInputsMap,
       productListActiveTab, setProductListActiveTab,
       productListCurrentPage, setProductListCurrentPage,
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,

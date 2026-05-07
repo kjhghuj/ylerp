@@ -23,6 +23,8 @@ export const ProfitCalculator: React.FC = () => {
         setProfitNodes,
         profitEditingProductId: editingProductId,
         profitGlobalInputs,
+        profitSiteInputsMap,
+        setProfitSiteInputsMap,
     } = store;
     const t = strings.profit;
 
@@ -32,15 +34,7 @@ export const ProfitCalculator: React.FC = () => {
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [useLocalCurrency, setUseLocalCurrency] = useState(false);
 
-    const [siteInputsMap, setSiteInputsMap] = useState<Record<string, SiteLevelInputs>>({
-        'MYR': { ...DEFAULT_SITE_INPUTS },
-        'SGD': { ...DEFAULT_SITE_INPUTS },
-        'PHP': { ...DEFAULT_SITE_INPUTS },
-        'THB': { ...DEFAULT_SITE_INPUTS },
-        'IDR': { ...DEFAULT_SITE_INPUTS },
-    });
-
-    useProfitImport(siteInputsMap, setSiteInputsMap);
+    useProfitImport(profitSiteInputsMap, setProfitSiteInputsMap);
 
     const { rates, isLoading, lastUpdated, fetchRates: refreshRates } = useExchangeRates();
 
@@ -63,7 +57,7 @@ export const ProfitCalculator: React.FC = () => {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
         handleAddNodeFromTemplate, handleAddBlankNode, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
-    } = useProductActions(allTemplates, setAllTemplates, rates, siteInputsMap, setSiteInputsMap);
+    } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
     const handleReset = () => {
         setGlobalInputs(prev => ({
@@ -73,7 +67,7 @@ export const ProfitCalculator: React.FC = () => {
             purchaseCost: 0,
             productWeight: 0,
         }));
-        setSiteInputsMap({
+        setProfitSiteInputsMap({
             'MYR': { ...DEFAULT_SITE_INPUTS },
             'SGD': { ...DEFAULT_SITE_INPUTS },
             'PHP': { ...DEFAULT_SITE_INPUTS },
@@ -137,9 +131,9 @@ export const ProfitCalculator: React.FC = () => {
                 lastUpdated={lastUpdated}
                 onRefreshRates={refreshRates}
                 onReset={handleReset}
-                siteInputs={siteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
+                siteInputs={profitSiteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
                 onSiteInputChange={(field, value) => {
-                    setSiteInputsMap(prev => ({
+                    setProfitSiteInputsMap(prev => ({
                         ...prev,
                         [siteCountry]: {
                             ...prev[siteCountry],
@@ -167,7 +161,7 @@ export const ProfitCalculator: React.FC = () => {
                             nodeName={node.name}
                             data={node.data}
                             globalInputs={profitGlobalInputs}
-                            siteInputs={siteInputsMap[node.country] || DEFAULT_SITE_INPUTS}
+                            siteInputs={profitSiteInputsMap[node.country] || DEFAULT_SITE_INPUTS}
                             rateToCNY={rates[node.country] || 1}
                             strings={t}
                             onUpdate={handleUpdateNode}
