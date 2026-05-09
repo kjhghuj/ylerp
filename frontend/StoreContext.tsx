@@ -256,7 +256,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       const res = await api.put(`/products/${p.id}`, p);
       setProducts(prev => prev.map(prod => prod.id === p.id ? res.data : prod));
-    } catch (e) { console.error('Error updating product', e); }
+    } catch (e) { console.error('Error updating product', e); throw e; }
   };
   const deleteProduct = async (id: string, site?: string) => {
     try {

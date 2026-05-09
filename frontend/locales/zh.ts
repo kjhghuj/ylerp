@@ -17,7 +17,7 @@ export const zh = {
     personalCenter: '个人中心',
     schedule: '日程管理',
     usageStats: '使用统计',
-    version: 'v1.5.2 正式版',
+    version: 'v1.5.4 正式版',
   },
   dashboard: {
     title: '全局概览',

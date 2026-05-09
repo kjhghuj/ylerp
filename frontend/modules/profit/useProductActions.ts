@@ -83,7 +83,11 @@ export const useProductActions = (
                 country: node.country,
                 platform: node.platform,
                 type: 'profit',
-                data: nodeOnlyData
+                data: {
+                    ...nodeOnlyData,
+                    vatRate: Number(globalInputs.vatRate) || 0,
+                    corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
+                },
             });
             setAllTemplates(prev => [...prev, response.data]);
             showToast(t.templates.saved);
@@ -176,39 +180,91 @@ export const useProductActions = (
             return;
         }
 
+        let localTemplates = [...allTemplates];
         for (const n of nodes) {
             try {
                 const tplName = n.name || n.platform;
                 const { totalRevenue, sellerCoupon, sellerCouponType, sellerCouponPlatformRatio, platformInfrastructureFee, adROI, ...nodeOnlyData } = n.data;
-                const existingTpl = allTemplates.find(
-                    t => (n.templateId && t.id === n.templateId) ||
+                const templateData = {
+                    ...nodeOnlyData,
+                    vatRate: Number(globalInputs.vatRate) || 0,
+                    corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
+                };
+                const existingTpl = localTemplates.find(
+                    t => (n.templateId && t.id === n.templateId && (!t.productId || t.productId === savedProductId)) ||
                          (t.productId === savedProductId && t.name === tplName && t.platform === n.platform)
                 );
                 if (existingTpl) {
-                    await api.put(`/templates/${existingTpl.id}`, {
-                        name: tplName,
-                        country: n.country,
-                        platform: n.platform,
-                        type: 'profit',
-                        data: nodeOnlyData,
-                        productId: savedProductId,
-                    });
-                    setAllTemplates(prev => prev.map(t =>
-                        t.id === existingTpl.id ? { ...t, data: nodeOnlyData } : t
-                    ));
+                    try {
+                        await api.put(`/templates/${existingTpl.id}`, {
+                            name: tplName,
+                            country: n.country,
+                            platform: n.platform,
+                            type: 'profit',
+                            data: templateData,
+                            productId: savedProductId,
+                        });
+                        const updated = { ...existingTpl, data: templateData };
+                        localTemplates = localTemplates.map(t => t.id === existingTpl.id ? updated : t);
+                        setAllTemplates(prev => prev.map(t => t.id === existingTpl.id ? updated : t));
+                    } catch (putError: any) {
+                        if (putError?.response?.status === 404) {
+                            const response = await api.post('/templates', {
+                                name: tplName,
+                                country: n.country,
+                                platform: n.platform,
+                                type: 'profit',
+                                data: templateData,
+                                productId: savedProductId,
+                            });
+                            localTemplates = localTemplates.filter(t => t.id !== existingTpl.id).concat(response.data);
+                            setAllTemplates(prev => prev.filter(t => t.id !== existingTpl.id).concat(response.data));
+                        } else {
+                            throw putError;
+                        }
+                    }
                 } else {
                     const response = await api.post('/templates', {
                         name: tplName,
                         country: n.country,
                         platform: n.platform,
                         type: 'profit',
-                        data: nodeOnlyData,
+                        data: templateData,
+                        productId: savedProductId,
+                    });
+                    localTemplates = [...localTemplates, response.data];
+                    setAllTemplates(prev => [...prev, response.data]);
+                }
+            } catch (error) {
+                console.error('Failed to save linked template:', error);
+                showToast(`模板保存失败: ${n.name || n.platform}`, 'error');
+            }
+        }
+
+        if (nodes.length === 0 && savedProductId) {
+            try {
+                const defaultName = globalInputs.name || '默认模版';
+                const existingDefault = localTemplates.find(
+                    t => t.productId === savedProductId && t.name === defaultName && t.platform === 'other'
+                );
+                if (!existingDefault) {
+                    const response = await api.post('/templates', {
+                        name: defaultName,
+                        country: siteCountry,
+                        platform: 'other',
+                        type: 'profit',
+                        data: {
+                            ...DEFAULT_NODE_DATA,
+                            vatRate: Number(globalInputs.vatRate) || 0,
+                            corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
+                        },
                         productId: savedProductId,
                     });
                     setAllTemplates(prev => [...prev, response.data]);
                 }
             } catch (error) {
-                console.error('Failed to save linked template:', error);
+                console.error('Failed to save default template:', error);
+                showToast('默认模板保存失败，请重试', 'error');
             }
         }
 

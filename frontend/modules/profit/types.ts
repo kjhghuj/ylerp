@@ -45,6 +45,7 @@ export const DEFAULT_NODE_DATA = {
     damageReturnRate: 0,
     mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0, warehouseOperationFee: 0,
     lastMileFee: 0,
+    vatRate: 0, corporateIncomeTaxRate: 0,
 };
 
 export const genId = () => {

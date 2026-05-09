@@ -17,7 +17,7 @@ export const en = {
     personalCenter: 'Profile',
     schedule: 'Schedule',
     usageStats: 'Usage Stats',
-    version: 'v1.5.2 Stable',
+    version: 'v1.5.4 Stable',
   },
   dashboard: {
     title: 'Dashboard Overview',
