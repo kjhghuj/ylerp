@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
 import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping, RestockRecord } from './types';
 import { translations } from './translations';
-import { SiteLevelInputs, DEFAULT_SITE_INPUTS } from './modules/profit/types';
+import { SiteLevelInputs, DEFAULT_SITE_INPUTS, ProfitGlobalInputs, PlatformNode } from './modules/profit/types';
 
 type Language = 'zh' | 'en';
 
@@ -29,12 +29,12 @@ interface StoreContextType {
   calculatorImportNodes: ImportedNode[];
   setCalculatorImportNodes: (nodes: ImportedNode[]) => void;
 
-  profitGlobalInputs: Record<string, any>;
-  setProfitGlobalInputs: (inputs: Record<string, any> | ((prev: Record<string, any>) => Record<string, any>)) => void;
-  profitSiteCountry: string;
-  setProfitSiteCountry: (country: string) => void;
-  profitNodes: Record<string, any[]>;
-  setProfitNodes: (nodes: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void;
+  profitGlobalInputs: ProfitGlobalInputs;
+  setProfitGlobalInputs: (inputs: ProfitGlobalInputs | ((prev: ProfitGlobalInputs) => ProfitGlobalInputs)) => void;
+  profitSiteCurrency: string;
+  setProfitSiteCurrency: (currency: string) => void;
+  profitNodes: Record<string, PlatformNode[]>;
+  setProfitNodes: (nodes: Record<string, PlatformNode[]> | ((prev: Record<string, PlatformNode[]>) => Record<string, PlatformNode[]>)) => void;
   profitEditingProductId: string | null;
   setProfitEditingProductId: (id: string | null) => void;
   profitSiteInputsMap: Record<string, SiteLevelInputs>;
@@ -92,7 +92,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [calculatorImportNodes, setCalculatorImportNodes] = useState<ImportedNode[]>([]);
 
   // Profit Calculator persistent state
-  const [profitGlobalInputs, setProfitGlobalInputs] = useState<Record<string, any>>(() => {
+  const [profitGlobalInputs, setProfitGlobalInputs] = useState<ProfitGlobalInputs>(() => {
         const saved = localStorage.getItem('yl-profit-global-inputs');
         const defaults = {
             name: '', sku: '', purchaseCost: 0, productWeight: 0,
@@ -103,11 +103,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         try { return JSON.parse(saved); } catch { return defaults; }
     });
 
-  const [profitSiteCountry, setProfitSiteCountry] = useState<string>(() => {
+  const [profitSiteCurrency, setProfitSiteCurrency] = useState<string>(() => {
     return localStorage.getItem('yl-profit-site-country') || 'MYR';
   });
 
-  const [profitNodes, setProfitNodes] = useState<Record<string, any[]>>(() => {
+  const [profitNodes, setProfitNodes] = useState<Record<string, PlatformNode[]>>(() => {
     const saved = localStorage.getItem('yl-profit-nodes');
     if (saved) {
       try {
@@ -177,8 +177,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [profitGlobalInputs]);
 
   React.useEffect(() => {
-    localStorage.setItem('yl-profit-site-country', profitSiteCountry);
-  }, [profitSiteCountry]);
+    localStorage.setItem('yl-profit-site-country', profitSiteCurrency);
+  }, [profitSiteCurrency]);
 
   React.useEffect(() => {
     localStorage.setItem('yl-profit-site-inputs', JSON.stringify(profitSiteInputsMap));
@@ -414,7 +414,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       calculatorImport, setCalculatorImport,
       calculatorImportNodes, setCalculatorImportNodes,
       profitGlobalInputs, setProfitGlobalInputs,
-      profitSiteCountry, setProfitSiteCountry,
+      profitSiteCurrency, setProfitSiteCurrency,
       profitNodes, setProfitNodes,
       profitEditingProductId, setProfitEditingProductId,
       profitSiteInputsMap, setProfitSiteInputsMap,

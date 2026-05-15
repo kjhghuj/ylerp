@@ -1,9 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useStore } from '../../StoreContext';
 import api from '../../src/api';
 import { ProductCalcData } from '../../types';
-import { genId, DEFAULT_NODE_DATA, ProfitTemplate, PlatformNode, SiteLevelInputs } from './types';
+import { PlatformType } from '../../platformConfig';
+import { genId, DEFAULT_NODE_DATA, ProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
 import { useToast } from '../../components/Toast';
+
+import { safeNumber } from './utils';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -16,8 +19,8 @@ export const useProductActions = (
         addProduct, updateProduct, products,
         profitGlobalInputs: globalInputs,
         setProfitGlobalInputs: setGlobalInputs,
-        profitSiteCountry: siteCountry,
-        setProfitSiteCountry: setSiteCountry,
+        profitSiteCurrency: siteCountry,
+        setProfitSiteCurrency: setSiteCountry,
         profitNodes,
         setProfitNodes,
         profitEditingProductId: editingProductId,
@@ -43,7 +46,7 @@ export const useProductActions = (
         setGlobalInputs(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleUpdateNode = (id: string, partialData: any) => {
+    const handleUpdateNode = (id: string, partialData: Partial<NodeData>) => {
         setNodes(prev => prev.map(n => n.id === id ? { ...n, data: { ...n.data, ...partialData } } : n));
     };
 
@@ -52,23 +55,22 @@ export const useProductActions = (
     };
 
     const handleAddNodeFromTemplate = (tpl: ProfitTemplate) => {
-        const { totalRevenue, sellerCoupon, sellerCouponType, sellerCouponPlatformRatio, platformInfrastructureFee, adROI, ...filteredData } = tpl.data;
         setNodes(prev => [...prev, {
             id: genId(),
             templateId: tpl.id,
             platform: tpl.platform || 'other',
-            country: tpl.country,
+            currency: tpl.country,
             name: tpl.name,
-            data: { ...DEFAULT_NODE_DATA, ...filteredData }
+            data: { ...DEFAULT_NODE_DATA, ...tpl.data }
         }]);
     };
 
     const handleAddBlankNode = (selectedPlatform: string) => {
         setNodes(prev => [...prev, {
             id: genId(),
-            platform: selectedPlatform as any,
-            country: siteCountry,
-            name: '未命名节点',
+            platform: selectedPlatform as PlatformType,
+            currency: siteCountry,
+            name: t.templates.unnamedNode,
             data: { ...DEFAULT_NODE_DATA }
         }]);
     };
@@ -77,23 +79,21 @@ export const useProductActions = (
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return;
         try {
-            const { totalRevenue, sellerCoupon, sellerCouponType, sellerCouponPlatformRatio, platformInfrastructureFee, adROI, ...nodeOnlyData } = node.data;
             const response = await api.post('/templates', {
                 name: templateName,
-                country: node.country,
+                country: node.currency,
                 platform: node.platform,
                 type: 'profit',
                 data: {
-                    ...nodeOnlyData,
-                    vatRate: Number(globalInputs.vatRate) || 0,
-                    corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
+                    ...node.data,
+                    vatRate: safeNumber(globalInputs.vatRate),
+                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
                 },
             });
             setAllTemplates(prev => [...prev, response.data]);
             showToast(t.templates.saved);
-        } catch (error) {
-            console.error('Failed to save template:', error);
-            showToast('Failed to save template to database.', 'error');
+        } catch {
+            showToast(t.errors.templateDbFailed, 'error');
         }
     };
 
@@ -102,41 +102,142 @@ export const useProductActions = (
         try {
             await api.delete(`/templates/${id}`);
             setAllTemplates(prev => prev.filter(t => t.id !== id));
-        } catch (error) {
-            console.error('Failed to delete template:', error);
+        } catch {
+            showToast(t.errors.templateDeleteFailed, 'error');
+        }
+    };
+
+    const buildSiteSpecificData = (currency: string): SiteLevelInputs => {
+        const current = siteInputsMap[currency] || { totalRevenue: 0, sellerCoupon: 0, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15 };
+        return {
+            totalRevenue: safeNumber(current.totalRevenue),
+            sellerCoupon: safeNumber(current.sellerCoupon),
+            sellerCouponType: current.sellerCouponType || 'fixed',
+            sellerCouponPlatformRatio: safeNumber(current.sellerCouponPlatformRatio),
+            adROI: current.adROI !== undefined && current.adROI !== null ? safeNumber(current.adROI) : 15,
+            platformInfrastructureFee: safeNumber(current.platformInfrastructureFee),
+        };
+    };
+
+    const findExistingProduct = () => {
+        if (editingProductId) {
+            return products.find(p => p.id === editingProductId) || null;
+        }
+        return products.find(p => p.name === globalInputs.name && p.sku === globalInputs.sku) || null;
+    };
+
+    const saveOrUpdateProduct = async (
+        productData: Omit<ProductCalcData, 'id'>,
+        countryCode: string,
+        existingProduct: ProductCalcData | null,
+    ): Promise<string | null> => {
+        if (existingProduct) {
+            const existingSites = existingProduct.sites || [];
+            const newSites = existingSites.includes(countryCode as ProductCalcData['sites'] extends (infer U)[] ? U : never)
+                ? existingSites
+                : [...existingSites, countryCode] as NonNullable<ProductCalcData['sites']>;
+            const mergedSiteData = {
+                ...((existingProduct.siteData as Record<string, unknown>) || {}),
+                [countryCode]: productData.siteData?.[countryCode],
+            };
+            await updateProduct({ ...productData, id: existingProduct.id, sites: newSites, siteData: mergedSiteData });
+            return existingProduct.id;
+        }
+        const saved = await addProduct(productData);
+        return saved?.id || null;
+    };
+
+    const upsertTemplate = async (
+        existingTpl: ProfitTemplate | undefined,
+        payload: Record<string, unknown>,
+        localTemplates: ProfitTemplate[],
+    ): Promise<ProfitTemplate[]> => {
+        if (existingTpl) {
+            try {
+                await api.put(`/templates/${existingTpl.id}`, payload);
+                const updated = { ...existingTpl, data: payload.data as ProfitTemplate['data'] };
+                setAllTemplates(prev => prev.map(t => t.id === existingTpl.id ? updated : t));
+                return localTemplates.map(t => t.id === existingTpl.id ? updated : t);
+            } catch (putError: unknown) {
+                const axiosError = putError as { response?: { status?: number } };
+                if (axiosError?.response?.status !== 404) throw putError;
+                const response = await api.post('/templates', payload);
+                setAllTemplates(prev => prev.filter(t => t.id !== existingTpl.id).concat(response.data));
+                return localTemplates.filter(t => t.id !== existingTpl.id).concat(response.data);
+            }
+        }
+        const response = await api.post('/templates', payload);
+        setAllTemplates(prev => [...prev, response.data]);
+        return [...localTemplates, response.data];
+    };
+
+    const syncTemplatesForNodes = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
+        let localTemplates = [...allTemplates];
+        for (const n of nodeList) {
+            try {
+                const tplName = n.name || n.platform;
+                const templateData = {
+                    ...n.data,
+                    vatRate: safeNumber(globalInputs.vatRate),
+                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+                };
+                const existingTpl = localTemplates.find(
+                    t => (n.templateId && t.id === n.templateId && (!t.productId || t.productId === productId)) ||
+                         (t.productId === productId && t.name === tplName && t.platform === n.platform)
+                );
+                localTemplates = await upsertTemplate(existingTpl, {
+                    name: tplName, country: n.currency, platform: n.platform,
+                    type: 'profit', data: templateData, productId,
+                }, localTemplates);
+            } catch {
+                showToast(t.errors.templateSaveFailed, 'error');
+            }
+        }
+    };
+
+    const ensureDefaultTemplate = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
+        if (nodeList.length > 0 || !productId) return;
+        const defaultName = globalInputs.name || t.templates.defaultTemplate;
+        const existingDefault = allTemplates.find(
+            t => t.productId === productId && t.name === defaultName && t.platform === 'other'
+        );
+        if (existingDefault) return;
+        try {
+            const response = await api.post('/templates', {
+                name: defaultName,
+                country: siteCountry,
+                platform: 'other',
+                type: 'profit',
+                data: {
+                    ...DEFAULT_NODE_DATA,
+                    vatRate: safeNumber(globalInputs.vatRate),
+                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+                },
+                productId,
+            });
+            setAllTemplates(prev => [...prev, response.data]);
+        } catch {
+            showToast(t.errors.defaultTemplateSaveFailed, 'error');
         }
     };
 
     const handleSaveProduct = async () => {
         if (!globalInputs.name || !globalInputs.sku) {
-            showToast('Please enter Name and SKU', 'error');
+            showToast(t.errors.nameAndSkuRequired, 'error');
             return;
         }
 
-        const countryMap: Record<string, 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN'> = {
-            'SGD': 'SG', 'MYR': 'MY', 'PHP': 'PH', 'THB': 'TH', 'IDR': 'ID',
-        };
-        const countryCode = countryMap[siteCountry] || 'MY';
-
-        const currentSiteInputs: SiteLevelInputs = siteInputsMap[siteCountry] || { totalRevenue: 0, sellerCoupon: 0, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15 };
-
-        const siteSpecificData = {
-            totalRevenue: Number(currentSiteInputs.totalRevenue) || 0,
-            sellerCoupon: Number(currentSiteInputs.sellerCoupon) || 0,
-            sellerCouponType: currentSiteInputs.sellerCouponType || 'fixed',
-            sellerCouponPlatformRatio: Number(currentSiteInputs.sellerCouponPlatformRatio) || 0,
-            adROI: currentSiteInputs.adROI !== undefined && currentSiteInputs.adROI !== null ? Number(currentSiteInputs.adROI) : 15,
-            platformInfrastructureFee: Number(currentSiteInputs.platformInfrastructureFee) || 0,
-        };
+        const countryCode = CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
+        const siteSpecificData = buildSiteSpecificData(siteCountry);
 
         const productData: Omit<ProductCalcData, 'id'> = {
             name: globalInputs.name,
             sku: globalInputs.sku,
-            country: countryCode,
-            sites: [countryCode],
-            cost: Number(globalInputs.purchaseCost) || 0,
-            productWeight: Number(globalInputs.productWeight) || 0,
-            supplierTaxPoint: Number(globalInputs.supplierTaxPoint) || 0,
+            country: countryCode as ProductCalcData['country'],
+            sites: [countryCode] as NonNullable<ProductCalcData['sites']>,
+            cost: safeNumber(globalInputs.purchaseCost),
+            productWeight: safeNumber(globalInputs.productWeight),
+            supplierTaxPoint: safeNumber(globalInputs.supplierTaxPoint),
             supplierInvoice: globalInputs.supplierInvoice,
             sellerCouponType: siteSpecificData.sellerCouponType,
             sellerCoupon: siteSpecificData.sellerCoupon,
@@ -147,126 +248,23 @@ export const useProductActions = (
             siteData: { [countryCode]: siteSpecificData },
         };
 
-        const existingProduct = products.find(
-            p => p.name === globalInputs.name && p.sku === globalInputs.sku
-        );
-
+        const existingProduct = findExistingProduct();
         const isUpdate = !!existingProduct;
-        let savedProductId: string | null = existingProduct?.id || null;
 
+        let savedProductId: string | null = null;
         try {
-            if (isUpdate && existingProduct) {
-                const existingSites = existingProduct.sites || [];
-                const newSites = existingSites.includes(countryCode)
-                    ? existingSites
-                    : [...existingSites, countryCode];
-                const mergedSiteData = {
-                    ...((existingProduct.siteData as Record<string, any>) || {}),
-                    [countryCode]: siteSpecificData,
-                };
-                await updateProduct({ ...productData, id: existingProduct.id, sites: newSites, siteData: mergedSiteData });
-                savedProductId = existingProduct.id;
-            } else {
-                const saved = await addProduct(productData);
-                savedProductId = saved?.id || null;
-                if (!savedProductId) {
-                    showToast('Failed to save product: no ID returned', 'error');
-                    return;
-                }
+            savedProductId = await saveOrUpdateProduct(productData, countryCode, existingProduct);
+            if (!savedProductId) {
+                showToast(t.errors.noIdReturned, 'error');
+                return;
             }
-        } catch (error) {
-            console.error('Failed to save product:', error);
-            showToast('Failed to save product', 'error');
+        } catch {
+            showToast(t.errors.saveFailed, 'error');
             return;
         }
 
-        let localTemplates = [...allTemplates];
-        for (const n of nodes) {
-            try {
-                const tplName = n.name || n.platform;
-                const { totalRevenue, sellerCoupon, sellerCouponType, sellerCouponPlatformRatio, platformInfrastructureFee, adROI, ...nodeOnlyData } = n.data;
-                const templateData = {
-                    ...nodeOnlyData,
-                    vatRate: Number(globalInputs.vatRate) || 0,
-                    corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
-                };
-                const existingTpl = localTemplates.find(
-                    t => (n.templateId && t.id === n.templateId && (!t.productId || t.productId === savedProductId)) ||
-                         (t.productId === savedProductId && t.name === tplName && t.platform === n.platform)
-                );
-                if (existingTpl) {
-                    try {
-                        await api.put(`/templates/${existingTpl.id}`, {
-                            name: tplName,
-                            country: n.country,
-                            platform: n.platform,
-                            type: 'profit',
-                            data: templateData,
-                            productId: savedProductId,
-                        });
-                        const updated = { ...existingTpl, data: templateData };
-                        localTemplates = localTemplates.map(t => t.id === existingTpl.id ? updated : t);
-                        setAllTemplates(prev => prev.map(t => t.id === existingTpl.id ? updated : t));
-                    } catch (putError: any) {
-                        if (putError?.response?.status === 404) {
-                            const response = await api.post('/templates', {
-                                name: tplName,
-                                country: n.country,
-                                platform: n.platform,
-                                type: 'profit',
-                                data: templateData,
-                                productId: savedProductId,
-                            });
-                            localTemplates = localTemplates.filter(t => t.id !== existingTpl.id).concat(response.data);
-                            setAllTemplates(prev => prev.filter(t => t.id !== existingTpl.id).concat(response.data));
-                        } else {
-                            throw putError;
-                        }
-                    }
-                } else {
-                    const response = await api.post('/templates', {
-                        name: tplName,
-                        country: n.country,
-                        platform: n.platform,
-                        type: 'profit',
-                        data: templateData,
-                        productId: savedProductId,
-                    });
-                    localTemplates = [...localTemplates, response.data];
-                    setAllTemplates(prev => [...prev, response.data]);
-                }
-            } catch (error) {
-                console.error('Failed to save linked template:', error);
-                showToast(`模板保存失败: ${n.name || n.platform}`, 'error');
-            }
-        }
-
-        if (nodes.length === 0 && savedProductId) {
-            try {
-                const defaultName = globalInputs.name || '默认模版';
-                const existingDefault = localTemplates.find(
-                    t => t.productId === savedProductId && t.name === defaultName && t.platform === 'other'
-                );
-                if (!existingDefault) {
-                    const response = await api.post('/templates', {
-                        name: defaultName,
-                        country: siteCountry,
-                        platform: 'other',
-                        type: 'profit',
-                        data: {
-                            ...DEFAULT_NODE_DATA,
-                            vatRate: Number(globalInputs.vatRate) || 0,
-                            corporateIncomeTaxRate: Number(globalInputs.corporateIncomeTaxRate) || 0,
-                        },
-                        productId: savedProductId,
-                    });
-                    setAllTemplates(prev => [...prev, response.data]);
-                }
-            } catch (error) {
-                console.error('Failed to save default template:', error);
-                showToast('默认模板保存失败，请重试', 'error');
-            }
-        }
+        await syncTemplatesForNodes(nodes, savedProductId);
+        await ensureDefaultTemplate(nodes, savedProductId);
 
         setEditingProductId(null);
         showToast(isUpdate ? t.actions.updated : t.actions.saved);

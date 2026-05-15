@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from '../../StoreContext';
-import { genId, DEFAULT_NODE_DATA, PlatformNode, SiteLevelInputs } from './types';
+import { genId, DEFAULT_NODE_DATA, PlatformNode, SiteLevelInputs, COUNTRY_TO_CURRENCY } from './types';
 
 export const useProfitImport = (
     siteInputsMap?: Record<string, SiteLevelInputs>,
@@ -10,116 +10,99 @@ export const useProfitImport = (
         calculatorImport, setCalculatorImport,
         calculatorImportNodes, setCalculatorImportNodes,
         setProfitGlobalInputs: setGlobalInputs,
-        setProfitSiteCountry: setSiteCountry,
+        setProfitSiteCurrency: setSiteCurrency,
         setProfitNodes,
         setProfitEditingProductId: setEditingProductId,
+        strings,
     } = useStore();
 
     const processingRef = useRef(false);
+    const siteInputsMapRef = useRef(siteInputsMap);
+    siteInputsMapRef.current = siteInputsMap;
 
     useEffect(() => {
         if (!calculatorImport || processingRef.current) return;
 
         processingRef.current = true;
 
-        const globalData = {
-            name: calculatorImport.name,
-            sku: calculatorImport.sku,
-            purchaseCost: calculatorImport.cost || 0,
-            productWeight: calculatorImport.productWeight || 0,
-            supplierTaxPoint: calculatorImport.supplierTaxPoint || 0,
-            supplierInvoice: calculatorImport.supplierInvoice || 'no',
-        };
-        setGlobalInputs(prev => ({ ...prev, ...globalData }));
-        if (calculatorImport.id) setEditingProductId(calculatorImport.id);
-
-        let currency = 'MYR';
-        if (calculatorImport.country) {
-            if (calculatorImport.country === 'SG') currency = 'SGD';
-            else if (calculatorImport.country === 'MY') currency = 'MYR';
-            else if (calculatorImport.country === 'PH') currency = 'PHP';
-            else if (calculatorImport.country === 'TH') currency = 'THB';
-            else if (calculatorImport.country === 'ID') currency = 'IDR';
-        }
-        setSiteCountry(currency);
-
-        const importNodeList = calculatorImportNodes.length > 0
-            ? calculatorImportNodes.map(n => ({
-                id: genId(),
-                templateId: n.id,
-                platform: n.platform || 'other',
-                country: n.country,
-                name: n.name,
-                data: { ...DEFAULT_NODE_DATA, ...n.data }
-            }))
-            : [{
-                id: genId(),
-                platform: 'other' as const,
-                country: currency,
-                name: '导入数据',
-                data: {
-                    ...DEFAULT_NODE_DATA,
-                    baseShippingFee: (calculatorImport as any).baseShippingFee || 0,
-                    extraShippingFee: (calculatorImport as any).extraShippingFee || 0,
-                    crossBorderFee: (calculatorImport as any).crossBorderFee || 0,
-                    platformCommissionRate: (calculatorImport as any).platformCommissionRate || 0,
-                    transactionFeeRate: (calculatorImport as any).transactionFeeRate || 0,
-                    platformCoupon: (calculatorImport as any).platformCoupon || 0,
-                    platformCouponRate: (calculatorImport as any).platformCouponRate || 0,
-                    damageReturnRate: (calculatorImport as any).damageReturnRate || 0,
-                    mdvServiceFeeRate: (calculatorImport as any).mdvServiceFeeRate || 0,
-                    fssServiceFeeRate: (calculatorImport as any).fssServiceFeeRate || 0,
-                    ccbServiceFeeRate: (calculatorImport as any).ccbServiceFeeRate || 0,
-                    warehouseOperationFee: (calculatorImport as any).warehouseOperationFee || 0,
-                    lastMileFee: (calculatorImport as any).lastMileFee || 0,
-                },
-            }];
-
-        if (calculatorImportNodes.length > 0) {
-            setCalculatorImportNodes([]);
-        }
-
-        if (setSiteInputsMap && siteInputsMap) {
-            const countryCode = calculatorImport.country || 'MY';
-            const sd = (calculatorImport as any).siteData || {};
-            const siteSpecific = sd[countryCode] || {};
-            const siteInputs: SiteLevelInputs = {
-                totalRevenue: siteSpecific.totalRevenue ?? (calculatorImport as any).totalRevenue ?? 0,
-                sellerCoupon: siteSpecific.sellerCoupon ?? (calculatorImport as any).sellerCoupon ?? 0,
-                sellerCouponType: siteSpecific.sellerCouponType ?? (calculatorImport as any).sellerCouponType ?? 'fixed',
-                sellerCouponPlatformRatio: siteSpecific.sellerCouponPlatformRatio ?? (calculatorImport as any).sellerCouponPlatformRatio ?? 0,
-                platformInfrastructureFee: siteSpecific.platformInfrastructureFee ?? (calculatorImport as any).platformInfrastructureFee ?? 0,
-                adROI: (() => {
-                    const v = siteSpecific.adROI ?? (calculatorImport as any).adROI;
-                    return v !== undefined && v !== null ? v : 15;
-                })(),
+        try {
+            const globalData = {
+                name: calculatorImport.name,
+                sku: calculatorImport.sku,
+                purchaseCost: calculatorImport.cost || 0,
+                productWeight: calculatorImport.productWeight || 0,
+                supplierTaxPoint: calculatorImport.supplierTaxPoint || 0,
+                supplierInvoice: calculatorImport.supplierInvoice || 'no',
             };
-            setSiteInputsMap(prev => ({
-                ...prev,
-                [currency]: siteInputs,
-            }));
-        }
+            setGlobalInputs(prev => ({ ...prev, ...globalData }));
+            if (calculatorImport.id) setEditingProductId(calculatorImport.id);
 
-        const countryToCurrency: Record<string, string> = {
-            'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
-        };
-
-        const groupedNodes: Record<string, PlatformNode[]> = {};
-        for (const n of importNodeList) {
-            const rawCountry = n.country || currency;
-            const nodeCountry = countryToCurrency[rawCountry] || rawCountry;
-            if (!groupedNodes[nodeCountry]) groupedNodes[nodeCountry] = [];
-            groupedNodes[nodeCountry].push(n as PlatformNode);
-        }
-        setProfitNodes(prev => {
-            const updated = { ...prev };
-            for (const [countryKey, nodesArr] of Object.entries(groupedNodes)) {
-                updated[countryKey] = nodesArr;
+            let currency: string = 'MYR';
+            if (calculatorImport.country) {
+                currency = COUNTRY_TO_CURRENCY[calculatorImport.country as keyof typeof COUNTRY_TO_CURRENCY] || 'MYR';
             }
-            return updated;
-        });
+            setSiteCurrency(currency);
 
-        setCalculatorImport(null);
-        processingRef.current = false;
-    }, [calculatorImport]);
+            const importNodeList = calculatorImportNodes.length > 0
+                ? calculatorImportNodes.map(n => ({
+                    id: genId(),
+                    templateId: n.id,
+                    platform: n.platform || 'other',
+                    currency: n.country,
+                    name: n.name,
+                    data: { ...DEFAULT_NODE_DATA, ...n.data }
+                }))
+                : [{
+                    id: genId(),
+                    platform: 'other' as const,
+                    currency: currency,
+                    name: strings.profit.templates.importedData,
+                    data: { ...DEFAULT_NODE_DATA },
+                }];
+
+            if (calculatorImportNodes.length > 0) {
+                setCalculatorImportNodes([]);
+            }
+
+            if (setSiteInputsMap && siteInputsMapRef.current) {
+                const countryCode = calculatorImport.country || 'MY';
+                const sd = calculatorImport.siteData || {};
+                const siteSpecific = sd[countryCode] || {};
+                const siteInputs: SiteLevelInputs = {
+                    totalRevenue: siteSpecific.totalRevenue ?? calculatorImport.totalRevenue ?? 0,
+                    sellerCoupon: siteSpecific.sellerCoupon ?? calculatorImport.sellerCoupon ?? 0,
+                    sellerCouponType: siteSpecific.sellerCouponType ?? calculatorImport.sellerCouponType ?? 'fixed',
+                    sellerCouponPlatformRatio: siteSpecific.sellerCouponPlatformRatio ?? calculatorImport.sellerCouponPlatformRatio ?? 0,
+                    platformInfrastructureFee: siteSpecific.platformInfrastructureFee ?? calculatorImport.platformInfrastructureFee ?? 0,
+                    adROI: (() => {
+                        const v = siteSpecific.adROI ?? calculatorImport.adROI;
+                        return v !== undefined && v !== null ? v : 15;
+                    })(),
+                };
+                setSiteInputsMap(prev => ({
+                    ...prev,
+                    [currency]: siteInputs,
+                }));
+            }
+
+            const groupedNodes: Record<string, PlatformNode[]> = {};
+            for (const n of importNodeList) {
+                const rawCurrency = n.currency || currency;
+                const nodeCurrency = COUNTRY_TO_CURRENCY[rawCurrency as keyof typeof COUNTRY_TO_CURRENCY] || rawCurrency;
+                if (!groupedNodes[nodeCurrency]) groupedNodes[nodeCurrency] = [];
+                groupedNodes[nodeCurrency].push(n as PlatformNode);
+            }
+            setProfitNodes(prev => {
+                const updated = { ...prev };
+                for (const [countryKey, nodesArr] of Object.entries(groupedNodes)) {
+                    updated[countryKey] = nodesArr;
+                }
+                return updated;
+            });
+
+            setCalculatorImport(null);
+        } finally {
+            processingRef.current = false;
+        }
+    }, [calculatorImport, setGlobalInputs, setEditingProductId, setSiteCurrency, setProfitNodes, setCalculatorImport, setCalculatorImportNodes, setSiteInputsMap]);
 };

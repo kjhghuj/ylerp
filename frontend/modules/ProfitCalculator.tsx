@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../StoreContext';
 import { Save, Calculator, Building } from 'lucide-react';
 import api from '../src/api';
+import { useToast } from '../components/Toast';
 
 import { PlatformCard } from './PlatformCard';
 import { ProfitTemplate, SiteLevelInputs, DEFAULT_SITE_INPUTS } from './profit/types';
@@ -17,8 +18,8 @@ export const ProfitCalculator: React.FC = () => {
     const {
         strings,
         setProfitGlobalInputs: setGlobalInputs,
-        profitSiteCountry: siteCountry,
-        setProfitSiteCountry: setSiteCountry,
+        profitSiteCurrency: siteCountry,
+        setProfitSiteCurrency: setSiteCountry,
         profitNodes,
         setProfitNodes,
         profitEditingProductId: editingProductId,
@@ -27,6 +28,7 @@ export const ProfitCalculator: React.FC = () => {
         setProfitSiteInputsMap,
     } = store;
     const t = strings.profit;
+    const { showToast } = useToast();
 
     const [allTemplates, setAllTemplates] = useState<ProfitTemplate[]>([]);
     const [showAddMenu, setShowAddMenu] = useState(false);
@@ -36,7 +38,13 @@ export const ProfitCalculator: React.FC = () => {
 
     useProfitImport(profitSiteInputsMap, setProfitSiteInputsMap);
 
-    const { rates, isLoading, lastUpdated, fetchRates: refreshRates } = useExchangeRates();
+    const { rates, isLoading, lastUpdated, fetchRates: refreshRates, isStale } = useExchangeRates();
+
+    useEffect(() => {
+        if (isStale) {
+            showToast(t.errors.rateFetchFailed, 'error');
+        }
+    }, [isStale, showToast, t.errors.rateFetchFailed]);
 
     useEffect(() => {
         const fetchTemplates = async () => {
@@ -44,8 +52,7 @@ export const ProfitCalculator: React.FC = () => {
                 const response = await api.get(`/templates?type=profit`);
                 setAllTemplates(response.data);
                 setTemplatesLoaded(true);
-            } catch (error) {
-                console.error('Failed to fetch templates:', error);
+            } catch {
                 setAllTemplates([]);
                 setTemplatesLoaded(true);
             }
@@ -157,12 +164,12 @@ export const ProfitCalculator: React.FC = () => {
                             key={node.id}
                             nodeId={node.id}
                             platform={node.platform}
-                            country={node.country}
+                            country={node.currency}
                             nodeName={node.name}
                             data={node.data}
                             globalInputs={profitGlobalInputs}
-                            siteInputs={profitSiteInputsMap[node.country] || DEFAULT_SITE_INPUTS}
-                            rateToCNY={rates[node.country] || 1}
+                            siteInputs={profitSiteInputsMap[node.currency] || DEFAULT_SITE_INPUTS}
+                            rateToCNY={rates[node.currency] || 1}
                             strings={t}
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}

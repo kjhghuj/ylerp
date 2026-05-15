@@ -9,7 +9,8 @@ import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
 import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
-import { DEFAULT_NODE_DATA } from './profit/types';
+import { useToast } from '../components/Toast';
+import { DEFAULT_NODE_DATA, type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
 import { useExchangeRates } from './profit/useExchangeRates';
 
 interface LinkedTemplate {
@@ -23,20 +24,15 @@ interface LinkedTemplate {
 }
 
 const currencyToCountry = (currency: string): string => {
-    const map: Record<string, string> = {
-        'SGD': 'SG', 'MYR': 'MY', 'PHP': 'PH', 'THB': 'TH', 'IDR': 'ID',
-    };
-    return map[currency] || 'MY';
+    return CURRENCY_TO_COUNTRY[currency as CurrencyCode] || 'MY';
 };
 
 const countryNameMap: Record<string, string> = {
-    'SG': '新加坡', 'MY': '马来西亚', 'PH': '菲律宾', 'TH': '泰国', 'ID': '印度尼西亚',
-    'SGD': '新加坡', 'MYR': '马来西亚', 'PHP': '菲律宾', 'THB': '泰国', 'IDR': '印度尼西亚',
+    'SG': 'SG', 'MY': 'MY', 'PH': 'PH', 'TH': 'TH', 'ID': 'ID',
+    'SGD': 'SGD', 'MYR': 'MYR', 'PHP': 'PHP', 'THB': 'THB', 'IDR': 'IDR',
 };
 
-const countryCurrencyMap: Record<string, string> = {
-    'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
-};
+const countryCurrencyMap = COUNTRY_TO_CURRENCY;
 
 interface ProductListProps {
     onNavigate: (view: AppState['currentView']) => void;
@@ -49,6 +45,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         productListCurrentPage, setProductListCurrentPage,
     } = useStore();
     const t = strings.productList;
+    const te = t.errors;
+    const siteNames = strings.profit.matrix.sites;
+    const { showToast } = useToast();
     const { rates: exchangeRates } = useExchangeRates();
     const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,7 +82,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const handleExport = () => {
-        if (filteredProducts.length === 0) return alert('No data to export for this country');
+        if (filteredProducts.length === 0) return showToast(te.noExportData, 'error');
         const ws = utils.json_to_sheet(filteredProducts.map(p => ({
             [t.table.name]: p.name,
             [t.table.sku]: p.sku,
@@ -97,7 +96,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const handleExportJSON = () => {
-        if (filteredProducts.length === 0) return alert('没有可导出的商品数据');
+        if (filteredProducts.length === 0) return showToast(te.noExportJsonData, 'error');
 
         const exportData = filteredProducts.map(p => ({
             id: p.id,
@@ -141,7 +140,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 const rawData = JSON.parse(text);
 
                 if (!Array.isArray(rawData)) {
-                    alert('导入失败：JSON 格式错误，应为商品数组');
+                    showToast(te.importInvalidJson, 'error');
                     return;
                 }
 
@@ -172,13 +171,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 }
 
                 if (importedCount > 0) {
-                    alert(`导入成功！共导入了 ${importedCount} 条商品数据。`);
+                    showToast(`${te.importSuccess}${t.importSuccessCount.replace('{count}', String(importedCount))}`, 'success');
                 } else {
-                    alert('未找到有效的可导入数据，请检查 JSON 格式。');
+                    showToast(te.importNoData, 'error');
                 }
-            } catch (error) {
-                console.error('Failed to parse JSON', error);
-                alert('文件解析失败，请确保格式是正确的 JSON');
+            } catch {
+                showToast(te.importParseFailed, 'error');
             } finally {
                 if (jsonFileInputRef.current) jsonFileInputRef.current.value = '';
             }
@@ -200,8 +198,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 return tpl.country === activeTab || tpl.country === currency;
             });
             setAllLinkedTemplates(filtered);
-        } catch (error) {
-            console.error('Failed to fetch linked templates:', error);
+        } catch {
+            showToast(te.templateFetchFailed, 'error');
             setAllLinkedTemplates([]);
         }
         setLoadingTemplates(false);
@@ -255,19 +253,19 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const handleDelete = (product: ProductCalcData) => {
-        if (window.confirm('Are you sure you want to delete this product?')) {
+        if (window.confirm(t.confirmDelete)) {
             deleteProduct(product.id, activeTab);
         }
     };
 
     const siteTabs = allLinkedTemplates.map((tpl, i) => ({
-        label: `${countryNameMap[tpl.country] || tpl.country} · ${tpl.name || tpl.platform || ''}`,
+        label: `${siteNames[tpl.country as keyof typeof siteNames] || countryNameMap[tpl.country] || tpl.country} · ${tpl.name || tpl.platform || ''}`,
         tpl,
         index: i,
     }));
 
     const modalTabs = [
-        { label: t.modals.tabProduct || '基本信息', icon: Package },
+        { label: t.modals.tabProduct, icon: Package },
         ...siteTabs.map(st => ({
             label: st.label,
             icon: Layers,
@@ -322,7 +320,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             };
         })();
 
-        return calculateProfit(profitData, globalData, siteInputs, rate, currency);
+        return calculateProfit(profitData, globalData, siteInputs, rate, currency as CurrencyCode);
     };
 
     const renderTemplateDetail = (tpl: LinkedTemplate) => {
@@ -331,42 +329,42 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
         const sections = [
             {
-                title: t.detail.platformRates || '平台费率',
+                title: t.detail.platformRates,
                 items: [
-                    { label: t.table.commission || '佣金率', value: d.platformCommissionRate, suffix: '%' },
-                    { label: t.detail.transactionFee || '交易手续费', value: d.transactionFeeRate, suffix: '%' },
-                    { label: t.detail.damageReturn || '破损退货率', value: d.damageReturnRate, suffix: '%' },
+                    { label: t.table.commission, value: d.platformCommissionRate, suffix: '%' },
+                    { label: t.detail.transactionFee, value: d.transactionFeeRate, suffix: '%' },
+                    { label: t.detail.damageReturn, value: d.damageReturnRate, suffix: '%' },
                 ]
             },
             {
-                title: t.detail.fees || '运费与费用',
+                title: t.detail.fees,
                 items: [
-                    { label: t.detail.baseShipping || '基础运费', value: d.baseShippingFee, suffix: tpl.country },
-                    { label: t.detail.extraShipping || '续重费', value: d.extraShippingFee, suffix: `${tpl.country}/10g` },
-                    { label: t.detail.crossBorder || '跨境费', value: d.crossBorderFee, suffix: tpl.country },
-                    { label: t.detail.warehouseFee || '仓储费', value: d.warehouseOperationFee, suffix: tpl.country },
+                    { label: t.detail.baseShipping, value: d.baseShippingFee, suffix: tpl.country },
+                    { label: t.detail.extraShipping, value: d.extraShippingFee, suffix: `${tpl.country}/10g` },
+                    { label: t.detail.crossBorder, value: d.crossBorderFee, suffix: tpl.country },
+                    { label: t.detail.warehouseFee, value: d.warehouseOperationFee, suffix: tpl.country },
                 ]
             },
             {
-                title: t.detail.serviceRates || '服务费率',
+                title: t.detail.serviceRates,
                 items: [
-                    { label: t.detail.mdvFee || 'MDV', value: d.mdvServiceFeeRate, suffix: '%' },
-                    { label: t.detail.fssFee || 'FSS', value: d.fssServiceFeeRate, suffix: '%' },
-                    { label: t.detail.ccbFee || 'CCB', value: d.ccbServiceFeeRate, suffix: '%' },
+                    { label: t.detail.mdvFee, value: d.mdvServiceFeeRate, suffix: '%' },
+                    { label: t.detail.fssFee, value: d.fssServiceFeeRate, suffix: '%' },
+                    { label: t.detail.ccbFee, value: d.ccbServiceFeeRate, suffix: '%' },
                 ]
             },
             {
-                title: t.detail.platformCoupon || '平台优惠券',
+                title: t.detail.platformCoupon,
                 items: [
-                    { label: t.detail.platformCoupon || '平台优惠券', value: d.platformCoupon, suffix: tpl.country },
-                    { label: t.detail.platformCouponRate || '优惠券比例', value: d.platformCouponRate, suffix: '%' },
+                    { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: tpl.country },
+                    { label: t.detail.platformCouponRate, value: d.platformCouponRate, suffix: '%' },
                 ]
             },
             {
-                title: t.detail.taxAd || '税费',
+                title: t.detail.taxAd,
                 items: [
-                    { label: t.detail.vatRate || '增值税率', value: d.vatRate, suffix: '%' },
-                    { label: t.detail.corpTaxRate || '企业所得税率', value: d.corporateIncomeTaxRate, suffix: '%' },
+                    { label: t.detail.vatRate, value: d.vatRate, suffix: '%' },
+                    { label: t.detail.corpTaxRate, value: d.corporateIncomeTaxRate, suffix: '%' },
                 ]
             },
         ];
@@ -394,10 +392,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const renderProfitSummary = (profit: ReturnType<typeof calculateProfit>) => (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-                { label: '净利润 (CNY)', value: `¥${profit.finalRevenueCNY.toFixed(2)}`, color: profit.finalRevenueCNY >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: '净利润 (本地)', value: `${profit.finalRevenueLocal.toFixed(2)}`, color: profit.finalRevenueLocal >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: 'ROI', value: `${profit.roi.toFixed(1)}%`, color: profit.roi >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: '利润率', value: `${profit.margin.toFixed(1)}%`, color: profit.margin >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.netProfitCNY, value: `¥${profit.finalRevenueCNY.toFixed(2)}`, color: profit.finalRevenueCNY >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.netProfitLocal, value: `${profit.finalRevenueLocal.toFixed(2)}`, color: profit.finalRevenueLocal >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.roiLabel, value: `${profit.roi.toFixed(1)}%`, color: profit.roi >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.marginLabel, value: `${profit.margin.toFixed(1)}%`, color: profit.margin >= 0 ? 'text-emerald-600' : 'text-red-600' },
             ].map(item => (
                 <div key={item.label} className="p-3 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-100">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</div>
@@ -410,15 +408,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const renderCostBreakdown = (profit: ReturnType<typeof calculateProfit>) => (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
             {[
-                { label: '收入', value: profit.totalRevenue.toFixed(2) },
-                { label: '成本', value: profit.purchaseCost.toFixed(2) },
-                { label: '佣金', value: profit.commission.toFixed(2) },
-                { label: '交易费', value: profit.transactionFee.toFixed(2) },
-                { label: '服务费', value: profit.serviceFee.toFixed(2) },
-                { label: '运费', value: profit.shippingFee.toFixed(2) },
-                { label: '广告费', value: profit.adFee.toFixed(2) },
-                { label: '税费', value: profit.totalTax.toFixed(2) },
-                { label: '货损', value: profit.damage.toFixed(2) },
+                { label: t.revenue, value: profit.totalRevenue.toFixed(2) },
+                { label: t.cost, value: profit.purchaseCost.toFixed(2) },
+                { label: t.commission, value: profit.commission.toFixed(2) },
+                { label: t.transactionFee, value: profit.transactionFee.toFixed(2) },
+                { label: t.serviceFee, value: profit.serviceFee.toFixed(2) },
+                { label: t.shippingFee, value: profit.shippingFee.toFixed(2) },
+                { label: t.adFee, value: profit.adFee.toFixed(2) },
+                { label: t.totalTax, value: profit.totalTax.toFixed(2) },
+                { label: t.damage, value: profit.damage.toFixed(2) },
             ].map(item => (
                 <div key={item.label} className="flex items-center justify-between p-2 bg-slate-50/60 rounded-lg">
                     <span className="text-xs text-slate-500">{item.label}</span>
@@ -444,7 +442,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             <div className="flex gap-2">
                                 {allLinkedTemplates.length > 0 && (
                                     <button onClick={handleImportAllTemplates} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
-                                        <ArrowUpRight size={13} /> {t.modals.importCalculator || '导入利润计算器'}
+                                        <ArrowUpRight size={13} /> {t.modals.importCalculator}
                                     </button>
                                 )}
                                 <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"><X size={20} /></button>
@@ -468,7 +466,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                     </button>
                                 ))}
                                 {loadingTemplates && (
-                                    <div className="px-4 py-2.5 text-xs text-slate-400 animate-pulse">加载中...</div>
+                                    <div className="px-4 py-2.5 text-xs text-slate-400 animate-pulse">{t.loading}</div>
                                 )}
                             </div>
                         </div>
@@ -477,12 +475,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             {modalActiveTab === 0 && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.baseInfo || '基本信息'}</h4>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.baseInfo}</h4>
                                         <div className="grid grid-cols-1 gap-2">
                                             {[
-                                                { label: t.detail.name || '名称', value: selectedProduct.name },
-                                                { label: t.detail.sku || 'SKU', value: selectedProduct.sku },
-                                                { label: t.detail.country || '国家', value: (selectedProduct.sites || []).join(', ') || selectedProduct.country },
+                                                { label: t.detail.name, value: selectedProduct.name },
+                                                { label: t.detail.sku, value: selectedProduct.sku },
+                                                { label: t.detail.country, value: (selectedProduct.sites || []).join(', ') || selectedProduct.country },
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                     <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -492,13 +490,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         </div>
                                     </div>
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.priceCost || '价格成本'}</h4>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.priceCost}</h4>
                                         <div className="grid grid-cols-1 gap-2">
                                             {[
-                                                { label: t.table.cost || '成本', value: `${selectedProduct.cost?.toFixed(2)} CNY` },
-                                                { label: t.table.weight || '重量', value: `${selectedProduct.productWeight}g` },
-                                                { label: t.detail.invoice || '发票', value: selectedProduct.supplierInvoice === 'yes' ? (t.detail.invoiceYes || '有') : (t.detail.invoiceNo || '无') },
-                                                { label: t.detail.taxPoint || '税点', value: `${selectedProduct.supplierTaxPoint}%` },
+                                                { label: t.table.cost, value: `${selectedProduct.cost?.toFixed(2)} CNY` },
+                                                { label: t.table.weight, value: `${selectedProduct.productWeight}g` },
+                                                { label: t.detail.invoice, value: selectedProduct.supplierInvoice === 'yes' ? t.detail.invoiceYes : t.detail.invoiceNo },
+                                                { label: t.detail.taxPoint, value: `${selectedProduct.supplierTaxPoint}%` },
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                     <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -508,7 +506,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         </div>
                                     </div>
                                     <div className="md:col-span-2">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{'站点参数'}</h4>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.siteParams}</h4>
                                         {(() => {
                                             const sd = ((selectedProduct.siteData as Record<string, any>) || {})[activeTab];
                                             const siteTotalRevenue = sd?.totalRevenue ?? selectedProduct.totalRevenue ?? 0;
@@ -520,12 +518,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                             return (
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                                 {[
-                                                    { label: t.table.priceCNY || '总收入', value: `${siteTotalRevenue.toFixed(2)} CNY` },
-                                                    { label: t.table.sellerCoupon || '卖家优惠券', value: `${siteSellerCoupon}`, suffix: siteSellerCouponType === 'percent' ? '%' : 'CNY' },
-                                                    { label: t.detail.couponPlatformRatio || '平台出资比例', value: `${siteSellerCouponPlatformRatio}%` },
-                                                    { label: t.table.adROI || '广告ROI', value: `${siteAdROI}` },
-                                                    { label: t.detail.infraFee || '基础设施费', value: `${sitePlatformInfrastructureFee.toFixed(2)} CNY` },
-                                                    { label: t.detail.couponType || '优惠券类型', value: siteSellerCouponType === 'percent' ? (t.detail.percentType || '百分比') : (t.detail.fixedType || '固定') },
+                                                    { label: t.table.priceCNY, value: `${siteTotalRevenue.toFixed(2)} CNY` },
+                                                    { label: t.table.sellerCoupon, value: `${siteSellerCoupon}`, suffix: siteSellerCouponType === 'percent' ? '%' : 'CNY' },
+                                                    { label: t.detail.couponPlatformRatio, value: `${siteSellerCouponPlatformRatio}%` },
+                                                    { label: t.table.adROI, value: `${siteAdROI}` },
+                                                    { label: t.detail.infraFee, value: `${sitePlatformInfrastructureFee.toFixed(2)} CNY` },
+                                                    { label: t.detail.couponType, value: siteSellerCouponType === 'percent' ? t.detail.percentType : t.detail.fixedType },
                                                 ].map(item => (
                                                     <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                         <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -565,8 +563,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             {modalActiveTab > 0 && !loadingTemplates && siteTabs.length === 0 && (
                                 <div className="text-center py-12 text-slate-400">
                                     <Layers size={40} className="mx-auto mb-3 opacity-30" />
-                                    <p className="text-sm font-medium">{t.modals.noTemplates || '暂无关联模版'}</p>
-                                    <p className="text-xs mt-1">{t.modals.noTemplatesHint || '在利润计算器中保存商品时，会自动创建关联模版'}</p>
+                                    <p className="text-sm font-medium">{t.modals.noTemplates}</p>
+                                    <p className="text-xs mt-1">{t.modals.noTemplatesHint}</p>
                                 </div>
                             )}
                         </div>
@@ -601,10 +599,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             onChange={handleImportJSON}
                         />
                         <button onClick={() => jsonFileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm">
-                            <Upload size={16} className="text-indigo-500" /> 导入 JSON
+                            <Upload size={16} className="text-indigo-500" /> {t.importJson}
                         </button>
                         <button onClick={handleExportJSON} disabled={filteredProducts.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm ${filteredProducts.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600'}`}>
-                            <Download size={16} className={filteredProducts.length === 0 ? "text-slate-300" : "text-emerald-500"} /> 导出 JSON
+                            <Download size={16} className={filteredProducts.length === 0 ? "text-slate-300" : "text-emerald-500"} /> {t.exportJson}
                         </button>
                     </div>
                 </div>
@@ -641,9 +639,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 <th className="p-3">{t.table.sku}</th>
                                 <th className="p-3 text-right">{t.table.cost}</th>
                                 <th className="p-3 text-right">{t.table.weight}</th>
-                                <th className="p-3 text-right">{t.table.priceCNY || '价格(CNY)'}</th>
-                                <th className="p-3 text-right">{t.table.priceLocal || '价格(本土)'}</th>
-                                <th className="p-3 text-right">{t.table.adROI || '广告ROI'}</th>
+                                <th className="p-3 text-right">{t.table.priceCNY}</th>
+                                <th className="p-3 text-right">{t.table.priceLocal}</th>
+                                <th className="p-3 text-right">{t.table.adROI}</th>
                                 <th className="p-3 text-center w-28">{t.table.action}</th>
                             </tr>
                         </thead>
@@ -677,7 +675,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             })}
                             {currentProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="p-12 text-center text-slate-400 italic text-sm">No products found.</td>
+                                    <td colSpan={8} className="p-12 text-center text-slate-400 italic text-sm">{t.noProducts}</td>
                                 </tr>
                             )}
                         </tbody>

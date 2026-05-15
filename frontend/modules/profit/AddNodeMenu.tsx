@@ -2,6 +2,9 @@ import React from 'react';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
+import { translations } from '../../translations';
+
+type ProfitStrings = typeof translations['zh']['profit'];
 
 interface AddNodeMenuProps {
     showAddMenu: boolean;
@@ -13,7 +16,7 @@ interface AddNodeMenuProps {
     onAddFromTemplate: (tpl: ProfitTemplate) => void;
     onAddBlank: () => void;
     onDeleteTemplate: (id: string, e: React.MouseEvent) => void;
-    t: any;
+    t: ProfitStrings;
 }
 
 export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
@@ -40,7 +43,7 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
                             </button>
                         </div>
                     ))}
-                    {allTemplates.filter(tpl => tpl.country === siteCountry).length === 0 && <p className="text-xs text-slate-400 text-center py-2">{t.templates.empty || '暂无模版'}</p>}
+                    {allTemplates.filter(tpl => tpl.country === siteCountry).length === 0 && <p className="text-xs text-slate-400 text-center py-2">{t.templates.empty}</p>}
                 </div>
                 <div className="pt-3 border-t border-slate-100">
                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-tighter">{t.matrix.createBlank}</h4>

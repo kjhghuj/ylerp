@@ -3,19 +3,23 @@ import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
 import { calculateProfit, calculateLastMileFee } from './profit/calculateProfit';
-import { SiteLevelInputs } from './profit/types';
+import { SiteLevelInputs, SERVICE_FEE_EXEMPT_CURRENCIES, type CurrencyCode, type NodeData, CURRENCY_TO_COUNTRY } from './profit/types';
+import { GlobalInput } from './profit/calculateProfit';
+import { translations } from '../translations';
+
+type ProfitStrings = typeof translations['zh']['profit'];
 
 interface PlatformCardProps {
     nodeId: string;
     platform: PlatformType;
     country: string;
     nodeName?: string;
-    data: any;
-    globalInputs: any;
+    data: NodeData;
+    globalInputs: GlobalInput;
     siteInputs: SiteLevelInputs;
     rateToCNY: number;
-    strings: any;
-    onUpdate: (id: string, partialData: any) => void;
+    strings: ProfitStrings;
+    onUpdate: (id: string, partialData: Partial<NodeData>) => void;
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
     useLocalCurrency?: boolean;
@@ -26,16 +30,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
+    const onUpdateRef = useRef(onUpdate);
+    onUpdateRef.current = onUpdate;
 
-    const countryMap: Record<string, string> = {
-        'MYR': '马来西亚',
-        'PHP': '菲律宾',
-        'SGD': '新加坡',
-        'THB': '泰国',
-        'IDR': '印度尼西亚',
-        'CNY': '中国'
-    };
-    const siteName = countryMap[country] || country;
+    const siteName = CURRENCY_TO_COUNTRY[country as CurrencyCode] || country;
 
     const [templateName, setTemplateName] = useState('');
     const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
@@ -68,7 +66,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     const results = useMemo(() => {
-        return calculateProfit(data, globalInputs, siteInputs, rateToCNY, country);
+        return calculateProfit(data, globalInputs, siteInputs, rateToCNY, country as CurrencyCode);
     }, [data, globalInputs, siteInputs, rateToCNY, country]);
 
     const isMoneyField = (key: string) => [
@@ -190,9 +188,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.shipping.includes('extraShippingFee') && renderInput('extraShippingFee')}
                         {config.fields.shipping.includes('crossBorderFee') && renderInput('crossBorderFee')}
 
-                        {config.fields.services.includes('mdvServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('mdvServiceFeeRate')}
-                        {config.fields.services.includes('fssServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('fssServiceFeeRate')}
-                        {config.fields.services.includes('ccbServiceFeeRate') && country !== 'MYR' && country !== 'SGD' && renderInput('ccbServiceFeeRate')}
+                        {config.fields.services.includes('mdvServiceFeeRate') && !SERVICE_FEE_EXEMPT_CURRENCIES.includes(country as CurrencyCode) && renderInput('mdvServiceFeeRate')}
+                        {config.fields.services.includes('fssServiceFeeRate') && !SERVICE_FEE_EXEMPT_CURRENCIES.includes(country as CurrencyCode) && renderInput('fssServiceFeeRate')}
+                        {config.fields.services.includes('ccbServiceFeeRate') && !SERVICE_FEE_EXEMPT_CURRENCIES.includes(country as CurrencyCode) && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
                         {country === 'SGD' && (Number(data.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
                     </div>

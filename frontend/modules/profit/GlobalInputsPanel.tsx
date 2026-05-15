@@ -1,17 +1,21 @@
 import React from 'react';
 import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
+import { ProfitGlobalInputs } from './types';
+import { translations } from '../../translations';
+
+type ProfitStrings = typeof translations['zh']['profit'];
 
 interface GlobalInputsPanelProps {
-    globalInputs: any;
+    globalInputs: ProfitGlobalInputs;
     siteCountry: string;
     useLocalCurrency: boolean;
     rates: Record<string, number>;
     onGlobalChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
-    onSetGlobalInputs: (fn: (prev: any) => any) => void;
+    onSetGlobalInputs: (fn: (prev: ProfitGlobalInputs) => ProfitGlobalInputs) => void;
     onSetUseLocalCurrency: React.Dispatch<React.SetStateAction<boolean>>;
     onSetSiteCountry: (country: string) => void;
-    t: any;
+    t: ProfitStrings;
     currentRate: number;
     isLoadingRate: boolean;
     lastUpdated: string | null;
@@ -25,7 +29,7 @@ interface GlobalInputsPanelProps {
         platformInfrastructureFee: number;
         adROI: number;
     };
-    onSiteInputChange: (field: string, value: any) => void;
+    onSiteInputChange: (field: string, value: string | number) => void;
 }
 
 export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
@@ -47,7 +51,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 <button
                     onClick={onReset}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                    title="重置"
+                    title={t.matrix.reset}
                 >
                     <RotateCcw size={14} />
                 </button>
@@ -83,7 +87,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     onChange={e => onSetSiteCountry(e.target.value)}
                     className="text-xs font-bold px-3 py-2 pr-8 bg-blue-50 border border-blue-200 rounded-lg outline-none appearance-none cursor-pointer hover:bg-blue-100/50 text-blue-700 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
                 >
-                    {Object.entries(t.matrix.sites || {}).map(([code, name]: [any, any]) => (
+                    {Object.entries(t.matrix.sites).map(([code, name]) => (
                         <option key={code} value={code}>{name} ({code})</option>
                     ))}
                 </select>
@@ -114,14 +118,14 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 <div className="p-1.5 bg-indigo-100 rounded text-indigo-600"><Globe size={14} /></div>
                 <div>
                     <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
-                        {t.matrix.siteParams || '站点参数'} ({siteCountry})
+                        {t.matrix.siteParams} ({siteCountry})
                     </h3>
-                    <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.siteParamsDesc || '每个站点独立维护'}</div>
+                    <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.siteParamsDesc}</div>
                 </div>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 <NumberInput
-                    label={`${t.inputs.totalRevenue || '总收入'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
+                    label={`${t.inputs.totalRevenue} (${useLocalCurrency ? siteCountry : 'CNY'})`}
                     name="totalRevenue"
                     value={siteInputs.totalRevenue}
                     onChange={(e) => onSiteInputChange('totalRevenue', e.target.value)}
@@ -131,7 +135,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     currencyCode={siteCountry}
                 />
                 <NumberInput
-                    label={t.inputs.sellerCoupon || '卖家优惠券'}
+                    label={t.inputs.sellerCoupon}
                     name="sellerCoupon"
                     value={siteInputs.sellerCoupon}
                     onChange={(e) => onSiteInputChange('sellerCoupon', e.target.value)}
@@ -144,24 +148,24 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     ) : null}
                 />
                 <SelectInput
-                    label={t.inputs.sellerCouponType || '优惠券类型'}
+                    label={t.inputs.sellerCouponType}
                     name="sellerCouponType"
                     value={siteInputs.sellerCouponType}
                     onChange={(e) => onSiteInputChange('sellerCouponType', e.target.value)}
                     options={[
-                        { value: 'fixed', label: t.inputs.fixedType || '固定金额' },
-                        { value: 'percent', label: t.inputs.percentType || '百分比' },
+                        { value: 'fixed', label: t.inputs.fixedType },
+                        { value: 'percent', label: t.inputs.percentType },
                     ]}
                 />
                 <NumberInput
-                    label={t.inputs.couponPlatformRatio || '平台出资比例'}
+                    label={t.inputs.couponPlatformRatio}
                     name="sellerCouponPlatformRatio"
                     value={siteInputs.sellerCouponPlatformRatio}
                     onChange={(e) => onSiteInputChange('sellerCouponPlatformRatio', e.target.value)}
                     suffix="%"
                 />
                 <NumberInput
-                    label={`${t.inputs.infraFee || '基础设施费'} (${useLocalCurrency ? siteCountry : 'CNY'})`}
+                    label={`${t.inputs.infraFee} (${useLocalCurrency ? siteCountry : 'CNY'})`}
                     name="platformInfrastructureFee"
                     value={siteInputs.platformInfrastructureFee}
                     onChange={(e) => onSiteInputChange('platformInfrastructureFee', e.target.value)}
@@ -170,7 +174,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     currencyCode={siteCountry}
                 />
                 <NumberInput
-                    label={t.inputs.adROI || '广告ROI'}
+                    label={t.inputs.adROI}
                     name="adROI"
                     value={siteInputs.adROI}
                     onChange={(e) => onSiteInputChange('adROI', e.target.value)}

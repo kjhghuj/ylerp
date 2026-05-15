@@ -5,7 +5,7 @@ export interface ProfitTemplate {
     name: string;
     country: string;
     platform?: PlatformType;
-    data: any;
+    data: NodeData;
     productId?: string;
 }
 
@@ -32,9 +32,9 @@ export interface PlatformNode {
     templateId?: string;
     productId?: string;
     platform: PlatformType;
-    country: string;
+    currency: string;
     name?: string;
-    data: any;
+    data: NodeData;
 }
 
 export const DEFAULT_NODE_DATA = {
@@ -47,6 +47,32 @@ export const DEFAULT_NODE_DATA = {
     lastMileFee: 0,
     vatRate: 0, corporateIncomeTaxRate: 0,
 };
+
+export type NodeData = typeof DEFAULT_NODE_DATA;
+
+export type CountryCode = 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN';
+export type CurrencyCode = 'SGD' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'CNY';
+
+export const COUNTRY_TO_CURRENCY: Record<CountryCode, CurrencyCode> = {
+    SG: 'SGD', MY: 'MYR', PH: 'PHP', TH: 'THB', ID: 'IDR', CN: 'CNY',
+};
+
+export const CURRENCY_TO_COUNTRY: Record<CurrencyCode, CountryCode> = {
+    SGD: 'SG', MYR: 'MY', PHP: 'PH', THB: 'TH', IDR: 'ID', CNY: 'CN',
+};
+
+export const SERVICE_FEE_EXEMPT_CURRENCIES: readonly CurrencyCode[] = ['MYR', 'SGD'];
+
+export interface ProfitGlobalInputs {
+    name: string;
+    sku: string;
+    purchaseCost: number;
+    productWeight: number;
+    supplierTaxPoint: number;
+    supplierInvoice: 'yes' | 'no';
+    vatRate: number;
+    corporateIncomeTaxRate: number;
+}
 
 export const genId = () => {
     try { return crypto.randomUUID(); } catch { return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
