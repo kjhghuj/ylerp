@@ -158,6 +158,18 @@ model UserActivity {
   @@index([createdAt])
 }
 
+model NodeGraphTemplate {
+  id        String   @id @default(uuid())
+  name      String
+  nodes     Json
+  edges     Json
+  productId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
 model User {
   id                String                   @id @default(uuid())
   username          String                   @unique
@@ -176,6 +188,7 @@ model User {
   chromaImages      ChromaImage[]
   financeRecords    FinanceRecord[]
   inventoryItems    InventoryItem[]
+  nodeGraphTemplates NodeGraphTemplate[]
   products          Product[]
   profitTemplates   ProfitTemplate[]
   restockRecords    RestockRecord[]

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma, redis } from '../index';
+import { prisma, safeRedis } from '../index';
 import { logActivity } from '../services/activityLogger';
 
 const router = Router();
@@ -8,13 +8,13 @@ router.get('/', async (req, res) => {
     try {
         const userId = req.user!.id;
         const cacheKey = `products:${userId}`;
-        const cachedProducts = await redis.get(cacheKey);
+        const cachedProducts = await safeRedis.get(cacheKey);
         if (cachedProducts) {
             return res.json(JSON.parse(cachedProducts));
         }
 
         const products = await prisma.product.findMany({ where: { userId } });
-        await redis.set(cacheKey, JSON.stringify(products), 'EX', 3600);
+        await safeRedis.set(cacheKey, JSON.stringify(products), 'EX', 3600);
         res.json(products);
     } catch (error) {
         res.status(500).json({ error: 'Failed to fetch products' });
@@ -32,7 +32,7 @@ router.post('/', async (req, res) => {
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
                 platformInfrastructureFee, sites, siteData, userId }
         });
-        await redis.del(`products:${userId}`);
+        await safeRedis.del(`products:${userId}`);
         logActivity(userId, 'product_create', 'product', { name, sku, country }).catch(() => {});
         res.status(201).json(product);
     } catch (error) {
@@ -55,7 +55,7 @@ router.put('/:id', async (req, res) => {
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
                 platformInfrastructureFee, sites, siteData },
         });
-        await redis.del(`products:${userId}`);
+        await safeRedis.del(`products:${userId}`);
         res.json(product);
     } catch (error) {
         res.status(500).json({ error: 'Failed to update product' });
@@ -94,7 +94,7 @@ router.delete('/:id', async (req, res) => {
             await prisma.product.delete({ where: { id: req.params.id } });
         }
 
-        await redis.del(`products:${userId}`);
+        await safeRedis.del(`products:${userId}`);
         res.status(204).send();
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete product' });

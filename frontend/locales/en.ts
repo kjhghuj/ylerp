@@ -16,6 +16,7 @@ export const en = {
     productList: 'Product List',
     personalCenter: 'Profile',
     schedule: 'Schedule',
+    nodeDesigner: 'Node Designer',
     usageStats: 'Usage Stats',
     version: 'v1.5.4 Stable',
   },

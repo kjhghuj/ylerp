@@ -14,15 +14,37 @@ app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
 export const prisma = new PrismaClient();
-export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
+    maxRetriesPerRequest: null,
+    retryStrategy: () => null,
+});
 
 redis.on('connect', () => {
-    console.log('Connected to Redis');
+    console.log('Redis TCP connected');
 });
 
+let redisReady = false;
+redis.on('ready', () => { redisReady = true; console.log('Redis ready'); });
+redis.on('close', () => { redisReady = false; });
+redis.on('end', () => { redisReady = false; });
 redis.on('error', (err) => {
-    console.error('Redis connection error:', err);
+    console.warn('Redis error (continuing without cache):', err.message);
 });
+
+export const safeRedis = {
+    async get(key: string): Promise<string | null> {
+        if (!redisReady) return null;
+        try { return await redis.get(key); } catch { return null; }
+    },
+    async set(key: string, value: string, ...args: (string | number)[]): Promise<void> {
+        if (!redisReady) return;
+        try { await redis.set(key, value, ...args); } catch {}
+    },
+    async del(key: string): Promise<void> {
+        if (!redisReady) return;
+        try { await redis.del(key); } catch {}
+    },
+};
 
 // Import middleware
 import { authenticate } from './middleware/authMiddleware';
@@ -35,6 +57,7 @@ import financeRoutes from './routes/financeRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import mappingRoutes from './routes/mappingRoutes';
 import skuGroupRoutes from './routes/skuGroupRoutes';
+import nodeGraphRoutes from './routes/nodeGraphRoutes';
 import templateRoutes from './routes/templateRoutes';
 import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
 import restockRecordRoutes from './routes/restockRecordRoutes';
@@ -55,6 +78,7 @@ app.use('/api/sku-groups', authenticate, skuGroupRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
 app.use('/api/restock-records', authenticate, restockRecordRoutes);
 app.use('/api/schedule', authenticate, scheduleRoutes);
+app.use('/api/node-graphs', authenticate, nodeGraphRoutes);
 app.use('/api/chroma-adapt', authenticate, chromaAdaptRoutes);
 app.use('/api/chroma-data', authenticate, chromaRecordRoutes);
 app.use('/api/usage', usageRoutes);
