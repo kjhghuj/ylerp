@@ -14,6 +14,7 @@ const NodeDesignerInner: React.FC = () => {
     saveTemplate,
     loadTemplate,
     loadTemplates,
+    deleteTemplate,
   } = graph;
 
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
@@ -32,13 +33,21 @@ const NodeDesignerInner: React.FC = () => {
     await loadTemplate(id);
   };
 
+  const handleDelete = async (id: string) => {
+    await deleteTemplate(id);
+    const list = await loadTemplates();
+    setTemplates(list);
+  };
+
   return (
     <div className="h-full flex flex-col">
       <Toolbar
         onAddParameterNode={graph.addParameterNode}
         onAddFormulaNode={graph.addFormulaNode}
+        onAddOutputNode={graph.addOutputNode}
         onSave={handleSave}
         onLoad={handleLoad}
+        onDeleteTemplate={handleDelete}
         onClear={graph.clear}
         templates={templates}
       />
@@ -49,6 +58,7 @@ const NodeDesignerInner: React.FC = () => {
           onNodesChange={graph.onNodesChange}
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
+          onNodesDelete={graph.onNodesDelete}
           onNodeClick={graph.onNodeClick}
           onPaneClick={graph.onPaneClick}
         />

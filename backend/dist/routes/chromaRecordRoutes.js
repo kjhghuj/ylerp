@@ -1,0 +1,235 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const path_1 = __importDefault(require("path"));
+const promises_1 = __importDefault(require("fs/promises"));
+const index_1 = require("../index");
+const activityLogger_1 = require("../services/activityLogger");
+const router = (0, express_1.Router)();
+const UPLOAD_DIR = path_1.default.join(process.cwd(), 'uploads', 'chroma');
+const MAX_IMAGES_PER_USER = 500;
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+async function ensureUserDir(userId) {
+    const userDir = path_1.default.join(UPLOAD_DIR, userId);
+    await promises_1.default.mkdir(userDir, { recursive: true });
+    return userDir;
+}
+async function cleanupOldImages(userId) {
+    const count = await index_1.prisma.chromaImage.count({ where: { userId } });
+    if (count <= MAX_IMAGES_PER_USER)
+        return;
+    const toDelete = count - MAX_IMAGES_PER_USER;
+    const oldImages = await index_1.prisma.chromaImage.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        take: toDelete,
+    });
+    for (const img of oldImages) {
+        try {
+            const filePath = path_1.default.join(UPLOAD_DIR, userId, img.filename);
+            await promises_1.default.unlink(filePath).catch(() => { });
+        }
+        catch { }
+    }
+    await index_1.prisma.chromaImage.deleteMany({
+        where: { id: { in: oldImages.map(i => i.id) } },
+    });
+    await index_1.prisma.chromaGenerationRecord.updateMany({
+        where: { imageId: { in: oldImages.map(i => i.id) } },
+        data: { imageId: null },
+    });
+}
+// ── Generation Records ──
+router.get('/records', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const [records, total] = await Promise.all([
+            index_1.prisma.chromaGenerationRecord.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+            }),
+            index_1.prisma.chromaGenerationRecord.count({ where: { userId } }),
+        ]);
+        res.json({ records, total, page, limit });
+    }
+    catch (error) {
+        console.error('Error fetching chroma records:', error);
+        res.status(500).json({ error: 'Failed to fetch records' });
+    }
+});
+router.get('/records/cost-summary', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const [todayCost, monthCost, totalCost, totalRecords] = await Promise.all([
+            index_1.prisma.chromaGenerationRecord.aggregate({
+                where: { userId, createdAt: { gte: startOfDay }, status: 'success' },
+                _sum: { cost: true },
+            }),
+            index_1.prisma.chromaGenerationRecord.aggregate({
+                where: { userId, createdAt: { gte: startOfMonth }, status: 'success' },
+                _sum: { cost: true },
+            }),
+            index_1.prisma.chromaGenerationRecord.aggregate({
+                where: { userId, status: 'success' },
+                _sum: { cost: true },
+            }),
+            index_1.prisma.chromaGenerationRecord.count({ where: { userId } }),
+        ]);
+        res.json({
+            today: todayCost._sum.cost || 0,
+            month: monthCost._sum.cost || 0,
+            total: totalCost._sum.cost || 0,
+            totalRecords,
+        });
+    }
+    catch (error) {
+        console.error('Error fetching cost summary:', error);
+        res.status(500).json({ error: 'Failed to fetch cost summary' });
+    }
+});
+router.post('/records', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { mode, model, cost, prompt, parameters, status, errorMessage, imageId } = req.body;
+        if (!mode || !model || cost === undefined || !status) {
+            return res.status(400).json({ error: 'Missing required fields: mode, model, cost, status' });
+        }
+        const record = await index_1.prisma.chromaGenerationRecord.create({
+            data: {
+                mode,
+                model,
+                cost: Number(cost) || 0,
+                prompt: prompt || null,
+                parameters: parameters || null,
+                status,
+                errorMessage: errorMessage || null,
+                imageId: imageId || null,
+                userId,
+            },
+        });
+        (0, activityLogger_1.logActivity)(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(() => { });
+        res.status(201).json(record);
+    }
+    catch (error) {
+        console.error('Error creating chroma record:', error);
+        res.status(500).json({ error: 'Failed to create record' });
+    }
+});
+// ── Images ──
+router.get('/images', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+        const skip = (page - 1) * limit;
+        const [images, total] = await Promise.all([
+            index_1.prisma.chromaImage.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: limit,
+                select: { id: true, filename: true, originalName: true, size: true, mode: true, model: true, createdAt: true },
+            }),
+            index_1.prisma.chromaImage.count({ where: { userId } }),
+        ]);
+        res.json({ images, total, page, limit });
+    }
+    catch (error) {
+        console.error('Error fetching chroma images:', error);
+        res.status(500).json({ error: 'Failed to fetch images' });
+    }
+});
+router.get('/images/file/:id', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const imageId = String(req.params.id);
+        const image = await index_1.prisma.chromaImage.findFirst({
+            where: { id: imageId, userId },
+        });
+        if (!image)
+            return res.status(404).json({ error: 'Image not found' });
+        const filePath = path_1.default.join(UPLOAD_DIR, userId, image.filename);
+        try {
+            await promises_1.default.access(filePath);
+        }
+        catch {
+            return res.status(404).json({ error: 'Image file no longer exists' });
+        }
+        res.sendFile(filePath);
+    }
+    catch (error) {
+        console.error('Error serving image:', error);
+        res.status(500).json({ error: 'Failed to serve image' });
+    }
+});
+router.delete('/images/:id', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const imageId = String(req.params.id);
+        const image = await index_1.prisma.chromaImage.findFirst({
+            where: { id: imageId, userId },
+        });
+        if (!image)
+            return res.status(404).json({ error: 'Image not found' });
+        const filePath = path_1.default.join(UPLOAD_DIR, userId, image.filename);
+        await promises_1.default.unlink(filePath).catch(() => { });
+        await index_1.prisma.chromaImage.delete({ where: { id: image.id } });
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('Error deleting image:', error);
+        res.status(500).json({ error: 'Failed to delete image' });
+    }
+});
+router.post('/images', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { image, mode, model, originalName } = req.body;
+        if (!image)
+            return res.status(400).json({ error: 'Missing required field: image' });
+        // Validate image data
+        const isBase64 = image.startsWith('data:');
+        const rawBase64 = isBase64 ? image.split(',')[1] || '' : image;
+        const estimatedSize = Math.floor(rawBase64.length * 3 / 4);
+        if (estimatedSize > MAX_IMAGE_SIZE) {
+            return res.status(400).json({ error: `Image too large, max ${MAX_IMAGE_SIZE / 1024 / 1024}MB` });
+        }
+        if (isBase64 && !image.startsWith('data:image/')) {
+            return res.status(400).json({ error: 'Invalid image format, only image uploads are allowed' });
+        }
+        const userDir = await ensureUserDir(userId);
+        let base64Data = rawBase64.replace(/\n/g, '').replace(/\r/g, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        const filename = `${Date.now()}-${mode || 'unknown'}-${Math.random().toString(36).substr(2, 6)}.png`;
+        const filePath = path_1.default.join(userDir, filename);
+        await promises_1.default.writeFile(filePath, buffer);
+        const chromaImage = await index_1.prisma.chromaImage.create({
+            data: {
+                filename,
+                originalName: originalName || null,
+                size: buffer.length,
+                mode: mode || 'unknown',
+                model: model || 'unknown',
+                userId,
+            },
+        });
+        await cleanupOldImages(userId);
+        res.status(201).json(chromaImage);
+    }
+    catch (error) {
+        console.error('Error uploading image:', error);
+        res.status(500).json({ error: 'Failed to upload image' });
+    }
+});
+exports.default = router;

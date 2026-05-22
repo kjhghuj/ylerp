@@ -10,13 +10,17 @@ export const useExchangeRates = () => {
     const [lastUpdated, setLastUpdated] = useState<string | null>(null);
     const [isStale, setIsStale] = useState(false);
     const retryCountRef = useRef(0);
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const cancelledRef = useRef(false);
 
     const fetchRates = useCallback(async () => {
+        if (cancelledRef.current) return;
         setIsLoading(true);
         try {
             const response = await fetch('https://api.exchangerate-api.com/v4/latest/CNY');
             if (response.ok) {
                 const data = await response.json();
+                if (cancelledRef.current) return;
                 setRates({
                     MYR: data.rates.MYR,
                     PHP: data.rates.PHP,
@@ -31,20 +35,29 @@ export const useExchangeRates = () => {
                 throw new Error('API error');
             }
         } catch {
+            if (cancelledRef.current) return;
             setRates(FALLBACK_RATES);
             setIsStale(true);
             if (retryCountRef.current < MAX_RETRIES) {
                 const delay = RETRY_BASE_MS * Math.pow(2, retryCountRef.current);
                 retryCountRef.current++;
-                setTimeout(fetchRates, delay);
+                retryTimerRef.current = setTimeout(fetchRates, delay);
             }
         } finally {
-            setIsLoading(false);
+            if (!cancelledRef.current) setIsLoading(false);
         }
     }, []);
 
     useEffect(() => {
+        cancelledRef.current = false;
         fetchRates();
+        return () => {
+            cancelledRef.current = true;
+            if (retryTimerRef.current !== null) {
+                clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = null;
+            }
+        };
     }, [fetchRates]);
 
     return { rates, isLoading, lastUpdated, fetchRates, isStale };

@@ -17,7 +17,11 @@ export interface FormulaNodeData extends Record<string, unknown> {
   error?: string;
 }
 
-export type DesignerNodeData = ParameterNodeData | FormulaNodeData;
+export interface OutputNodeData extends Record<string, unknown> {
+  name: string;
+}
+
+export type DesignerNodeData = ParameterNodeData | FormulaNodeData | OutputNodeData;
 export type DesignerNode = Node<DesignerNodeData>;
 export type DesignerEdge = Edge;
 

@@ -163,7 +163,8 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Product List persistent state
   const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>(() => {
-    return localStorage.getItem('yl-product-list-active-tab') as any || 'MY';
+    const saved = localStorage.getItem('yl-product-list-active-tab');
+    return (saved === 'PH' || saved === 'MY' || saved === 'SG' || saved === 'ID' || saved === 'TH') ? saved : 'MY';
   });
 
   const [productListCurrentPage, setProductListCurrentPage] = useState<number>(() => {

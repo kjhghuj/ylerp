@@ -4,8 +4,10 @@ import { Plus, Save, FolderOpen, Trash2 } from 'lucide-react';
 interface ToolbarProps {
   onAddParameterNode: () => void;
   onAddFormulaNode: () => void;
+  onAddOutputNode: () => void;
   onSave: (name: string) => void;
   onLoad: (id: string) => void;
+  onDeleteTemplate: (id: string) => Promise<void>;
   onClear: () => void;
   templates: { id: string; name: string }[];
 }
@@ -13,8 +15,10 @@ interface ToolbarProps {
 export const Toolbar: React.FC<ToolbarProps> = ({
   onAddParameterNode,
   onAddFormulaNode,
+  onAddOutputNode,
   onSave,
   onLoad,
+  onDeleteTemplate,
   onClear,
   templates,
 }) => {
@@ -52,6 +56,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         }}
       >
         <Plus size={14} /> 添加公式节点
+      </button>
+
+      <button
+        onClick={onAddOutputNode}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+        style={{
+          backgroundColor: 'var(--bg-primary)',
+          color: 'var(--text-secondary)',
+          border: '1px solid var(--border-default)',
+        }}
+      >
+        <Plus size={14} /> 添加输出节点
       </button>
 
       <div className="w-px h-6" style={{ backgroundColor: 'var(--border-default)' }} />
@@ -119,14 +135,27 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             }}
           >
             {templates.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { onLoad(t.id); setShowLoad(false); }}
-                className="block w-full text-left text-sm px-3 py-2 rounded hover:bg-black/5"
-                style={{ color: 'var(--text-primary)' }}
-              >
-                {t.name}
-              </button>
+              <div key={t.id} className="flex items-center gap-1 rounded hover:bg-black/5">
+                <button
+                  onClick={() => { onLoad(t.id); setShowLoad(false); }}
+                  className="flex-1 text-left text-sm px-3 py-2"
+                  style={{ color: 'var(--text-primary)' }}
+                >
+                  {t.name}
+                </button>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (!confirm(`删除模板「${t.name}」?`)) return;
+                    await onDeleteTemplate(t.id);
+                    setShowLoad(false);
+                  }}
+                  className="p-1.5 rounded text-red-400 hover:text-red-600 hover:bg-red-50 shrink-0"
+                  title="删除模板"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             ))}
           </div>
         )}

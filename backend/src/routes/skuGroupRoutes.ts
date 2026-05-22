@@ -1,9 +1,7 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
-import { safeRedis } from '../index';
+import { prisma, safeRedis } from '../index';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.get('/', async (req, res) => {
     try {

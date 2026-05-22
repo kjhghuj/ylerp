@@ -1,254 +1,15 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 import {
-    Plus, Check, Trash2, Clock, Lightbulb, Store, Bell,
-    Archive, X, Sparkles, FileText, Edit3, GripVertical, Save, Search, CalendarDays
+    Plus, Archive, X, Sparkles, Edit3, Save, Search, CalendarDays
 } from 'lucide-react';
-
-type ItemType = 'routine' | 'approval' | 'idea' | 'shop-event' | 'notification' | 'schedule';
-
-// Backward compat: old 'schedule' type is now 'approval'
-const normalizeType = (t: string): ItemType => {
-    if (t === 'schedule') return 'approval';
-    return t as ItemType;
-};
-
-interface ScheduleItemData {
-    id: string;
-    type: ItemType;
-    title: string;
-    description?: string;
-    deadline?: string;
-    remindAt?: string;
-    completed: boolean;
-    completedAt?: string;
-    notes?: string;
-    feedback?: string;
-    sortKey: number;
-    createdAt: string;
-    updatedAt: string;
-}
-
-const TYPE_CONFIG: Record<ItemType, { icon: any; color: string; label: string; labelEn: string; progressRgb: string }> = {
-    routine: { icon: Check, color: 'from-emerald-400 to-teal-500', label: '每日任务', labelEn: 'Routine', progressRgb: '129,199,132' },
-    approval: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '审批', labelEn: 'Approval', progressRgb: '100,181,246' },
-    schedule: { icon: Clock, color: 'from-blue-400 to-indigo-500', label: '审批', labelEn: 'Approval', progressRgb: '100,181,246' },
-    idea: { icon: Lightbulb, color: 'from-amber-400 to-orange-500', label: '想法测试', labelEn: 'Idea', progressRgb: '255,183,77' },
-    'shop-event': { icon: Store, color: 'from-purple-400 to-violet-500', label: '店铺活动', labelEn: 'Shop Event', progressRgb: '179,136,255' },
-    notification: { icon: Bell, color: 'from-red-400 to-rose-500', label: '提醒', labelEn: 'Notification', progressRgb: '244,114,182' },
-};
-
-const getDeadlineStatus = (deadline?: string): 'safe' | 'warning' | 'urgent' | 'none' => {
-    if (!deadline) return 'none';
-    const now = Date.now();
-    const dl = new Date(deadline).getTime();
-    const diff = dl - now;
-    if (diff < 0) return 'urgent';
-    if (diff < 24 * 60 * 60 * 1000) return 'urgent';
-    if (diff < 48 * 60 * 60 * 1000) return 'warning';
-    return 'safe';
-};
-
-const formatDate = (dateStr?: string) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
-
-const formatDateShort = (dateStr?: string) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const getGreeting = () => {
-    const h = new Date().getHours();
-    if (h < 6) return '夜深了，注意休息';
-    if (h < 12) return '早安，今日事今日毕';
-    if (h < 18) return '午后好，继续加油';
-    return '晚安，别忘了复盘';
-};
-
-interface ItemCardProps {
-    item: ScheduleItemData;
-    isZh: boolean;
-    dragId: string | null;
-    dragOverId: string | null;
-    flyingItemId: string | null;
-    progress: number;
-    onToggle: (item: ScheduleItemData) => void;
-    onDelete: (id: string) => void;
-    onDoubleClick: (item: ScheduleItemData) => void;
-    onDragStart: (e: React.DragEvent, id: string) => void;
-    onDragOver: (e: React.DragEvent, id: string) => void;
-    onDrop: (e: React.DragEvent, id: string) => void;
-    onDragEnd: () => void;
-    onPointerDown: (e: React.PointerEvent, item: ScheduleItemData) => void;
-    onPointerUp: () => void;
-}
-
-const DRAG_HANDLE = 'drag-handle';
-
-const ItemCard: React.FC<ItemCardProps> = React.memo(({
-    item, dragId, dragOverId, flyingItemId, progress,
-    onToggle, onDelete, onDoubleClick,
-    onDragStart, onDragOver, onDrop, onDragEnd,
-    onPointerDown, onPointerUp,
-}) => {
-    const config = TYPE_CONFIG[item.type];
-    const dlStatus = getDeadlineStatus(item.deadline);
-    const isUrgent = dlStatus === 'urgent';
-    const isWarning = dlStatus === 'warning';
-    const isSafe = dlStatus === 'safe';
-    const isDragging = dragId === item.id;
-    const isDragOver = dragOverId === item.id;
-    const isFlying = flyingItemId === item.id;
-    const isDone = item.completed;
-    const rgb = config.progressRgb;
-    const showProgress = progress > 0 && !isDone;
-
-    const urgentBorderStyle = isUrgent ? {
-        borderColor: 'rgba(229,115,115,0.5)',
-        animation: 'urgentGlow 2s ease-in-out infinite',
-    } : {};
-
-    return (
-        <div
-            onDragOver={!isDone ? (e) => onDragOver(e, item.id) : undefined}
-            onDrop={!isDone ? (e) => onDrop(e, item.id) : undefined}
-            onDoubleClick={() => onDoubleClick(item)}
-            onPointerDown={!isDone ? (e) => onPointerDown(e, item) : undefined}
-            onPointerUp={!isDone ? onPointerUp : undefined}
-            onLostPointerCapture={() => { onPointerUp(); }}
-            className={`group relative rounded-xl p-3 border transition-all duration-300 select-none ${
-                !isDone ? 'cursor-pointer' : ''
-            } ${
-                isDragging ? 'opacity-40 scale-95' : ''
-            } ${
-                isDragOver ? 'ring-2 ring-blue-400/50 scale-[1.02]' : ''
-            } ${
-                isFlying ? 'schedule-fly-out' : ''
-            } ${
-                isDone ? 'opacity-40' : ''
-            }`}
-            style={{
-                backgroundColor: 'var(--bg-card)',
-                borderColor: isUrgent ? undefined : isWarning ? 'rgba(255,183,77,0.3)' : 'var(--border-default)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
-                touchAction: 'none',
-                ...urgentBorderStyle,
-            }}
-        >
-            <div className="flex items-start gap-2.5">
-                {!isDone && (
-                    <div
-                        draggable
-                        onDragStart={(e) => onDragStart(e, item.id)}
-                        onDragEnd={onDragEnd}
-                        className={`mt-0.5 shrink-0 cursor-grab active:cursor-grabbing rounded p-0.5 ${DRAG_HANDLE}`}
-                        style={{ color: 'var(--text-tertiary)', opacity: 0.4 }}
-                        onPointerDown={(e) => e.stopPropagation()}
-                    >
-                        <GripVertical size={14} />
-                    </div>
-                )}
-                <button
-                    onClick={() => onToggle(item)}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all duration-300"
-                    style={{
-                        borderColor: isDone ? '#F2C94C' : 'var(--border-default)',
-                        backgroundColor: isDone ? '#F2C94C' : 'transparent',
-                    }}
-                >
-                    {isDone && <Check size={12} strokeWidth={3} style={{ color: '#2F3437' }} />}
-                </button>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                        {isUrgent && !isDone && (
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: '#E57373' }} />
-                                <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: '#E57373' }} />
-                            </span>
-                        )}
-                        {isWarning && !isUrgent && !isDone && (
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#FFB74D' }} />
-                        )}
-                        {isSafe && !isDone && (
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: '#81C784' }} />
-                        )}
-                        <p className={`text-sm font-bold truncate ${isDone ? 'line-through' : ''}`} style={{ color: isDone ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
-                            {item.title}
-                        </p>
-                    </div>
-                    {item.description && (
-                        <p className={`text-xs mb-1 line-clamp-2 ${isDone ? 'line-through' : ''}`} style={{ color: 'var(--text-tertiary)' }}>{item.description}</p>
-                    )}
-                    {item.deadline && !isDone && (
-                        <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: isUrgent ? '#E57373' : isWarning ? '#FFB74D' : 'var(--text-tertiary)' }}>
-                            <Clock size={10} />
-                            <span>{formatDate(item.deadline)}</span>
-                        </div>
-                    )}
-                    {item.remindAt && !isDone && (
-                        <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                            <Bell size={10} />
-                            <span>{formatDate(item.remindAt)}</span>
-                        </div>
-                    )}
-                </div>
-                <button
-                    onClick={() => onDelete(item.id)}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    className="p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ color: 'var(--text-tertiary)' }}
-                >
-                    <Trash2 size={14} />
-                </button>
-            </div>
-            {showProgress && (
-                <div className="absolute bottom-0 left-0 right-0 rounded-b-xl overflow-hidden" style={{ height: '4px' }}>
-                    <div
-                        style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            left: 0,
-                            height: '100%',
-                            width: `${progress}%`,
-                            borderRadius: '0 4px 0 12px',
-                            background: `linear-gradient(90deg, rgba(${rgb},0.2), rgba(${rgb},0.95))`,
-                            boxShadow: `0 0 12px rgba(${rgb},0.6), 0 0 24px rgba(${rgb},0.25)`,
-                        }}
-                    />
-                    <div
-                        style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            left: 0,
-                            height: '100%',
-                            width: `${progress}%`,
-                        }}
-                    >
-                        <div
-                            style={{
-                                position: 'absolute',
-                                right: -5,
-                                top: -5,
-                                width: 14,
-                                height: 14,
-                                borderRadius: '50%',
-                                background: `radial-gradient(circle, rgba(${rgb},1), rgba(${rgb},0.4))`,
-                                boxShadow: `0 0 10px rgba(${rgb},0.8), 0 0 20px rgba(${rgb},0.4)`,
-                            }}
-                        />
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-});
+import {
+    normalizeType, TYPE_CONFIG, getDeadlineStatus, formatDate, formatDateShort, getGreeting,
+    type ItemType, type ScheduleItemData,
+} from './schedule/constants';
+import { ItemCard } from './schedule/ItemCard';
 
 export const ScheduleManager: React.FC = () => {
     const { strings, language } = useStore();
@@ -391,7 +152,6 @@ export const ScheduleManager: React.FC = () => {
 
     useEffect(() => { fetchItems(); }, [fetchItems]);
 
-    // Browser notification for due items
     useEffect(() => {
         if (!('Notification' in window) || Notification.permission === 'denied') return;
         if (Notification.permission === 'default') Notification.requestPermission();
@@ -404,7 +164,6 @@ export const ScheduleManager: React.FC = () => {
         });
         if (dueItems.length > 0 && Notification.permission === 'granted') {
             dueItems.forEach(i => {
-                const config = TYPE_CONFIG[i.type];
                 new Notification(i.title, {
                     body: i.deadline ? `${isZh ? '截止' : 'Due'}: ${formatDate(i.deadline)}` : (isZh ? '提醒时间已到' : 'Reminder time reached'),
                     icon: '/favicon.png',
@@ -747,205 +506,166 @@ export const ScheduleManager: React.FC = () => {
                         <Sparkles size={18} style={{ color: '#F2C94C' }} />
                         <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '归档想法' : 'Archive Idea'}</span>
                     </div>
-                    <button onClick={() => setEditingItem(null)} className="p-1 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
+                    <button onClick={() => { setEditingItem(null); setEditNotes(''); setEditFeedback(''); }}
+                        className="p-1 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
                         <X size={18} />
                     </button>
                 </div>
-                <div className="mb-4 px-3 py-2 rounded-lg" style={{ backgroundColor: 'var(--bg-primary)' }}>
-                    <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{editingItem.title}</p>
-                    {editingItem.description && <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{editingItem.description}</p>}
+                <div className="p-3 rounded-xl border mb-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)' }}>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{editingItem.title}</span>
+                    {editingItem.description && (
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{editingItem.description}</p>
+                    )}
                 </div>
                 <div className="space-y-3">
                     <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '执行备注' : 'Notes'}</label>
-                        <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3}
+                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '笔记' : 'Notes'}</label>
+                        <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
+                            placeholder={isZh ? '测试结果、数据、发现...' : 'Test results, data, findings...'}
                             className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                            placeholder={isZh ? '记录执行过程...' : 'Execution notes...'} />
+                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                     </div>
                     <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '后期反馈' : 'Feedback'}</label>
-                        <textarea value={editFeedback} onChange={e => setEditFeedback(e.target.value)} rows={3}
+                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '反馈总结' : 'Feedback'}</label>
+                        <textarea value={editFeedback} onChange={e => setEditFeedback(e.target.value)} rows={2}
+                            placeholder={isZh ? '学到了什么、是否需要继续跟进...' : 'What was learned, whether to follow up...'}
                             className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                            placeholder={isZh ? '记录后期效果...' : 'Results & feedback...'} />
+                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
                     </div>
                     <button onClick={handleArchiveWithNotes}
-                        className="w-full h-10 rounded-lg text-sm font-bold transition-all"
-                        style={{ backgroundColor: '#F2C94C', color: '#2F3437' }}>
-                        {isZh ? '归档' : 'Archive'}
+                        className="w-full h-10 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all flex items-center justify-center gap-1.5">
+                        <Sparkles size={14} />
+                        {isZh ? '归档完成' : 'Archive Complete'}
                     </button>
                 </div>
             </div>
         </div>
     ) : null;
 
-    const itemCardProps = useMemo(() => ({
-        isZh,
-        dragId,
-        dragOverId,
-        flyingItemId,
-        onToggle: handleToggle,
-        onDelete: handleDelete,
-        onDoubleClick: handleDoubleClick,
-        onDragStart: handleDragStart,
-        onDragOver: handleDragOver,
-        onDrop: handleDrop,
-        onDragEnd: handleDragEnd,
-        onPointerDown: handlePointerDown,
-        onPointerUp: handlePointerUp,
-    }), [isZh, dragId, dragOverId, flyingItemId, handleToggle, handleDelete, handleDoubleClick, handleDragStart, handleDragOver, handleDrop, handleDragEnd, handlePointerDown, handlePointerUp]);
+    const renderItemCard = (item: ScheduleItemData) => (
+        <ItemCard
+            key={item.id}
+            item={item}
+            dragId={dragId}
+            dragOverId={dragOverId}
+            flyingItemId={flyingItemId}
+            progress={progressMap[item.id] ?? 0}
+            onToggle={handleToggle}
+            onDelete={handleDelete}
+            onDoubleClick={handleDoubleClick}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+        />
+    );
 
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent" />
+                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
 
     return (
-        <div className="h-full flex flex-col" style={{ backgroundColor: 'var(--bg-primary)' }}>
-            <style>{`
-                @keyframes urgentGlow {
-                    0%, 100% { box-shadow: 0 0 8px rgba(229,115,115,0.1), 0 4px 20px rgba(0,0,0,0.02); }
-                    50% { box-shadow: 0 0 16px rgba(229,115,115,0.25), 0 4px 20px rgba(0,0,0,0.02); }
-                }
-                .schedule-fly-out {
-                    animation: flyToArchive 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-                }
-                @keyframes flyToArchive {
-                    0% { transform: scale(1); opacity: 1; }
-                    30% { transform: scale(0.6); opacity: 0.8; }
-                    100% { transform: scale(0.1) translate(calc(100vw - 80px), calc(100vh - 80px)); opacity: 0; }
-                }
-            `}</style>
-            <div className="flex items-center justify-between px-1 mb-4 shrink-0">
+        <div className="h-full flex flex-col overflow-auto">
+            <div className="flex items-center justify-between px-4 py-2">
                 <div>
-                    <h2 className="text-lg font-black" style={{ color: 'var(--text-primary)' }}>
-                        {todayStr} {isZh ? `星期${todayWeekDay}` : ''}
-                    </h2>
-                    <p className="text-xs font-medium mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{getGreeting()}</p>
+                    <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                        {todayStr} 周{todayWeekDay} · {getGreeting()}
+                    </h3>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                        {isZh ? `${activeItems.length} 个待办` : `${activeItems.length} pending`} · {isZh ? `${archivedItems.length} 个已归档` : `${archivedItems.length} archived`}
+                    </p>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {(['routine', 'approval', 'idea'] as ItemType[]).map(type => (
-                        <button key={type} onClick={() => setShowCreate(type)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all"
-                            style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
-                            <Plus size={12} />
-                            {isZh ? TYPE_CONFIG[type].label : TYPE_CONFIG[type].labelEn}
-                        </button>
-                    ))}
-                    <button onClick={() => setShowCreate('shop-event')}
-                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all"
-                        style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-card)' }}>
-                        <Plus size={12} />
-                        {isZh ? '店铺活动' : 'Event'}
+                    <button onClick={() => setShowArchive(true)} className="p-2 rounded-lg border transition-colors" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                        <Archive size={16} />
+                    </button>
+                    <button onClick={() => setShowCreate('routine')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 transition-all">
+                        <Plus size={14} /> {isZh ? '日常' : 'Routine'}
+                    </button>
+                    <button onClick={() => setShowCreate('approval')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 transition-all">
+                        <Plus size={14} /> {isZh ? '审批' : 'Approval'}
+                    </button>
+                    <button onClick={() => setShowCreate('shop-event')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-purple-400 to-violet-500 hover:from-purple-500 hover:to-violet-600 transition-all">
+                        <Plus size={14} /> {isZh ? '活动' : 'Event'}
+                    </button>
+                    <button onClick={() => setShowCreate('notification')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-red-400 to-rose-500 hover:from-red-500 hover:to-rose-600 transition-all">
+                        <Plus size={14} /> {isZh ? '提醒' : 'Notify'}
+                    </button>
+                    <button onClick={() => setShowCreate('idea')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all">
+                        <Plus size={14} /> {isZh ? '想法' : 'Idea'}
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 h-full">
-                    <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
-                        <div className="flex-1 min-h-0 rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3 shrink-0">
-                                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white">
-                                    <Check size={12} />
-                                </div>
-                                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '每日任务' : 'Daily Routines'}</h3>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{routinesActive.length}</span>
-                            </div>
-                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
-                                {routines.length === 0 && (
-                                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无任务，点击上方 + 添加' : 'No routines yet'}</p>
-                                )}
-                                {routines.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
-                            </div>
+            <div className="flex-1 overflow-auto p-4 space-y-6">
+                {routines.length > 0 && (
+                    <section>
+                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {isZh ? '每日任务' : 'Daily Routines'}
+                        </h4>
+                        <div className="space-y-1">
+                            {routines.map(renderItemCard)}
                         </div>
+                    </section>
+                )}
 
-                        <div className="flex-1 min-h-0 rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3 shrink-0">
-                                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white">
-                                    <Clock size={12} />
-                                </div>
-                                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '日程安排' : 'Schedule'}</h3>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{schedules.length}</span>
-                            </div>
-                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
-                                {schedules.length === 0 && (
-                                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无日程' : 'No schedules yet'}</p>
-                                )}
-                                {schedules.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
-                            </div>
+                {schedules.length > 0 && (
+                    <section>
+                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {isZh ? '审批事项' : 'Approvals'}
+                        </h4>
+                        <div className="space-y-1">
+                            {schedules.map(renderItemCard)}
                         </div>
-                    </div>
+                    </section>
+                )}
 
-                    <div className="min-h-0">
-                        <div className="h-full rounded-xl border p-4 flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                            <div className="flex items-center gap-2 mb-3 shrink-0">
-                                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-purple-400 to-violet-500 flex items-center justify-center text-white">
-                                    <Store size={12} />
-                                </div>
-                                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '店铺活动' : 'Shop Events'}</h3>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{shopEvents.length}</span>
-                            </div>
-                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
-                                {shopEvents.length === 0 && (
-                                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '暂无活动' : 'No events'}</p>
-                                )}
-                                {shopEvents.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
-                            </div>
+                {shopEvents.length > 0 && (
+                    <section>
+                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {isZh ? '店铺活动' : 'Shop Events'}
+                        </h4>
+                        <div className="space-y-1">
+                            {shopEvents.map(renderItemCard)}
                         </div>
-                    </div>
+                    </section>
+                )}
 
-                    <div className="min-h-0">
-                        <div className="h-full rounded-xl border p-4 flex flex-col" style={{
-                            backgroundColor: 'var(--bg-card)',
-                            borderColor: 'var(--border-default)',
-                            backgroundImage: 'radial-gradient(circle, var(--border-default) 1px, transparent 1px)',
-                            backgroundSize: '20px 20px',
-                            boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
-                        }}>
-                            <div className="flex items-center gap-2 mb-3 shrink-0">
-                                <div className="w-6 h-6 rounded-md bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white">
-                                    <Lightbulb size={12} />
-                                </div>
-                                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '想法测试' : 'Ideas'}</h3>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{ideas.length}</span>
-                            </div>
-                            <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
-                                {ideas.length === 0 && (
-                                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-tertiary)' }}>{isZh ? '灵光一闪？记录下来' : 'Got an idea?'}</p>
-                                )}
-                                {ideas.map(item => <ItemCard key={item.id} item={item} progress={progressMap[item.id] || 0} {...itemCardProps} />)}
-                            </div>
+                {ideas.length > 0 && (
+                    <section>
+                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
+                            {isZh ? '想法测试' : 'Ideas'}
+                        </h4>
+                        <div className="space-y-1">
+                            {ideas.map(renderItemCard)}
                         </div>
+                    </section>
+                )}
+
+                {activeItems.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-16">
+                        <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                            {isZh ? '完成所有任务！' : 'All tasks complete!'}
+                        </p>
                     </div>
-                </div>
+                )}
             </div>
 
-            <button
-                onClick={() => setShowArchive(true)}
-                className="fixed bottom-6 right-6 z-30 w-12 h-12 rounded-full flex items-center justify-center shadow-lg border transition-all hover:scale-105"
-                style={{ backgroundColor: '#F2C94C', borderColor: 'rgba(242,201,76,0.3)' }}
-            >
-                <Archive size={20} style={{ color: '#2F3437' }} />
-                {archivedItems.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white" style={{ backgroundColor: '#2F3437' }}>
-                        {archivedItems.length}
-                    </span>
-                )}
-            </button>
-
             {showArchive && (
-                <div className="fixed inset-0 z-50 flex justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowArchive(false); setArchiveSearch(''); setArchiveDateFilter(''); }}>
-                    <div className="w-full max-w-lg h-full flex flex-col border-l" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)' }} onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowArchive(false); setArchiveSearch(''); setArchiveDateFilter(''); }}>
+                    <div className="w-full max-w-2xl h-[80vh] rounded-2xl border flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} onClick={e => e.stopPropagation()}>
+                        <div className="px-5 py-3 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-default)' }}>
                             <div className="flex items-center gap-2">
-                                <Archive size={18} style={{ color: '#F2C94C' }} />
-                                <h3 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '已完成档案' : 'Archive'}</h3>
-                                <span className="text-xs px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>{filteredArchived.length}/{archivedItems.length}</span>
+                                <Archive size={16} style={{ color: '#F2C94C' }} />
+                                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                                    {isZh ? '归档记录' : 'Archived Records'}
+                                </span>
                             </div>
                             <button onClick={() => { setShowArchive(false); setArchiveSearch(''); setArchiveDateFilter(''); }} className="p-1.5 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
                                 <X size={18} />
@@ -995,37 +715,34 @@ export const ScheduleManager: React.FC = () => {
                                                 <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
                                             </div>
                                             <div className="space-y-2 pl-1 border-l-2 ml-1" style={{ borderColor: 'rgba(242,201,76,0.2)' }}>
-                                                {dateItems.map(item => {
-                                                    const config = TYPE_CONFIG[item.type];
-                                                    return (
-                                                        <div key={item.id} className="relative rounded-xl p-3 border ml-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)' }}>
-                                                            <div className="absolute -left-[1.35rem] top-4 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgba(242,201,76,0.4)' }} />
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${config.color} flex items-center justify-center text-white`}>
-                                                                    {React.createElement(config.icon, { size: 10 })}
-                                                                </div>
-                                                                <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
-                                                                <span className="text-[10px] ml-auto shrink-0" style={{ color: 'var(--text-tertiary)' }}>{formatDate(item.completedAt)}</span>
+                                                {dateItems.map(item => (
+                                                    <div key={item.id} className="relative rounded-xl p-3 border ml-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)' }}>
+                                                        <div className="absolute -left-[1.35rem] top-4 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgba(242,201,76,0.4)' }} />
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${TYPE_CONFIG[item.type].color} flex items-center justify-center text-white`}>
+                                                                {React.createElement(TYPE_CONFIG[item.type].icon, { size: 10 })}
                                                             </div>
-                                                            {(item.notes || item.feedback) && (
-                                                                <div className="mt-2 space-y-1 pl-7">
-                                                                    {item.notes && (
-                                                                        <div className="flex items-start gap-1.5">
-                                                                            <FileText size={10} className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
-                                                                            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.notes}</p>
-                                                                        </div>
-                                                                    )}
-                                                                    {item.feedback && (
-                                                                        <div className="flex items-start gap-1.5">
-                                                                            <Edit3 size={10} className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
-                                                                            <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.feedback}</p>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
+                                                            <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
+                                                            <span className="text-[10px] ml-auto shrink-0" style={{ color: 'var(--text-tertiary)' }}>{formatDate(item.completedAt)}</span>
                                                         </div>
-                                                    );
-                                                })}
+                                                        {(item.notes || item.feedback) && (
+                                                            <div className="mt-2 space-y-1 pl-7">
+                                                                {item.notes && (
+                                                                    <div className="flex items-start gap-1.5">
+                                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                                                                        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.notes}</p>
+                                                                    </div>
+                                                                )}
+                                                                {item.feedback && (
+                                                                    <div className="flex items-start gap-1.5">
+                                                                        <Edit3 size={10} className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
+                                                                        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.feedback}</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </div>
                                     );

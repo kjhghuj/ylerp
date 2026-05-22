@@ -38,7 +38,7 @@ export const safeRedis = {
     },
     async set(key: string, value: string, ...args: (string | number)[]): Promise<void> {
         if (!redisReady) return;
-        try { await redis.set(key, value, ...args); } catch {}
+        try { await (redis.set as (...a: any[]) => any)(key, value, ...args); } catch {}
     },
     async del(key: string): Promise<void> {
         if (!redisReady) return;

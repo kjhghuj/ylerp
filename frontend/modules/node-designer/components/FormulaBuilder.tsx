@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { validateExpression } from '../formulaEngine';
 import { genId } from '../types';
@@ -24,9 +24,9 @@ export const FormulaBuilder: React.FC<FormulaBuilderProps> = ({
   onVariablesChange,
 }) => {
   const [mode, setMode] = useState<'visual' | 'free'>('free');
-  const validationError = validateExpression(
-    expression,
-    variables.map((v) => v.label)
+  const validationError = useMemo(
+    () => validateExpression(expression, variables.map((v) => v.label)),
+    [expression, variables]
   );
 
   const insertToken = (token: string) => {

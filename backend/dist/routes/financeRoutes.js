@@ -1,23 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const client_1 = require("@prisma/client");
 const index_1 = require("../index");
+const authMiddleware_1 = require("../middleware/authMiddleware");
+const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
-const prisma = new client_1.PrismaClient();
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const cacheKey = `finance:${userId}`;
-        const cachedFinance = await index_1.redis.get(cacheKey);
+        const cachedFinance = await index_1.safeRedis.get(cacheKey);
         if (cachedFinance) {
             return res.json(JSON.parse(cachedFinance));
         }
-        const finance = await prisma.financeRecord.findMany({ where: { userId } });
-        await index_1.redis.set(cacheKey, JSON.stringify(finance), 'EX', 3600);
+        const finance = await index_1.prisma.financeRecord.findMany({ where: { userId } });
+        await index_1.safeRedis.set(cacheKey, JSON.stringify(finance), 'EX', 3600);
         res.json(finance);
     }
     catch (error) {
+        console.error('Failed to fetch finance records:', error);
         res.status(500).json({ error: 'Failed to fetch finance records' });
     }
 });
@@ -33,10 +34,11 @@ router.post('/batch', async (req, res) => {
             userId,
             date: new Date(record.date)
         }));
-        const result = await prisma.financeRecord.createMany({
+        const result = await index_1.prisma.financeRecord.createMany({
             data: formattedRecords
         });
-        await index_1.redis.del(`finance:${userId}`);
+        await index_1.safeRedis.del(`finance:${userId}`);
+        (0, activityLogger_1.logActivity)(userId, 'finance_import', 'finance', { count: result.count }).catch(() => { });
         res.status(201).json({ count: result.count });
     }
     catch (error) {
@@ -48,49 +50,55 @@ router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const recordData = { ...req.body, userId, date: new Date(req.body.date) };
-        const record = await prisma.financeRecord.create({ data: recordData });
-        await index_1.redis.del(`finance:${userId}`);
+        const record = await index_1.prisma.financeRecord.create({ data: recordData });
+        await index_1.safeRedis.del(`finance:${userId}`);
         res.status(201).json(record);
     }
     catch (error) {
+        console.error('Failed to create finance record:', error);
         res.status(500).json({ error: 'Failed to create finance record' });
     }
 });
 router.put('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
-        const existing = await prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Record not found' });
         const recordData = { ...req.body };
         if (req.body.date)
             recordData.date = new Date(req.body.date);
-        const record = await prisma.financeRecord.update({
+        delete recordData.id;
+        delete recordData.userId;
+        const record = await index_1.prisma.financeRecord.update({
             where: { id: req.params.id },
             data: recordData,
         });
-        await index_1.redis.del(`finance:${userId}`);
+        await index_1.safeRedis.del(`finance:${userId}`);
         res.json(record);
     }
     catch (error) {
+        console.error('Failed to update finance record:', error);
         res.status(500).json({ error: 'Failed to update finance record' });
     }
 });
-router.delete('/all', async (req, res) => {
+router.delete('/all', (0, authMiddleware_1.authorize)('owner'), async (req, res) => {
     try {
         const userId = req.user.id;
-        await prisma.financeRecord.deleteMany({ where: { userId } });
-        await index_1.redis.del(`finance:${userId}`);
+        await index_1.prisma.financeRecord.deleteMany({ where: { userId } });
+        await index_1.safeRedis.del(`finance:${userId}`);
         res.status(204).send();
     }
     catch (error) {
+        console.error('Failed to delete all finance records:', error);
         res.status(500).json({ error: 'Failed to delete all finance records' });
     }
 });
-router.delete('/month/:month', async (req, res) => {
+router.delete('/month/:month', (0, authMiddleware_1.authorize)('owner'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const [yearStr, monthStr] = req.params.month.split('-');
+        const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
+        const [yearStr, monthStr] = monthParam.split('-');
         const year = parseInt(yearStr);
         const month = parseInt(monthStr);
         if (isNaN(year) || isNaN(month)) {
@@ -98,7 +106,7 @@ router.delete('/month/:month', async (req, res) => {
         }
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 1);
-        const result = await prisma.financeRecord.deleteMany({
+        const result = await index_1.prisma.financeRecord.deleteMany({
             where: {
                 userId,
                 date: {
@@ -107,7 +115,7 @@ router.delete('/month/:month', async (req, res) => {
                 }
             }
         });
-        await index_1.redis.del(`finance:${userId}`);
+        await index_1.safeRedis.del(`finance:${userId}`);
         res.json({ message: 'Deleted records', count: result.count });
     }
     catch (error) {
@@ -118,14 +126,15 @@ router.delete('/month/:month', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
-        const existing = await prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Record not found' });
-        await prisma.financeRecord.delete({ where: { id: req.params.id } });
-        await index_1.redis.del(`finance:${userId}`);
+        await index_1.prisma.financeRecord.delete({ where: { id: req.params.id } });
+        await index_1.safeRedis.del(`finance:${userId}`);
         res.status(204).send();
     }
     catch (error) {
+        console.error('Failed to delete finance record:', error);
         res.status(500).json({ error: 'Failed to delete finance record' });
     }
 });

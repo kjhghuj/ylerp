@@ -1,14 +1,14 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const client_1 = require("@prisma/client");
+const index_1 = require("../index");
+const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
-const prisma = new client_1.PrismaClient();
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const { type, productId } = req.query;
-        const templates = await prisma.profitTemplate.findMany({
+        const templates = await index_1.prisma.profitTemplate.findMany({
             where: {
                 userId,
                 ...(type ? { type: String(type) } : {}),
@@ -28,7 +28,7 @@ router.get('/:country', async (req, res) => {
         const userId = req.user.id;
         const { country } = req.params;
         const { type } = req.query;
-        const templates = await prisma.profitTemplate.findMany({
+        const templates = await index_1.prisma.profitTemplate.findMany({
             where: { userId, country, ...(type ? { type: String(type) } : {}) },
             orderBy: { createdAt: 'desc' }
         });
@@ -46,7 +46,7 @@ router.post('/', async (req, res) => {
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-        const template = await prisma.profitTemplate.create({
+        const template = await index_1.prisma.profitTemplate.create({
             data: {
                 name,
                 country,
@@ -57,6 +57,7 @@ router.post('/', async (req, res) => {
                 ...(productId ? { productId } : {}),
             }
         });
+        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(() => { });
         res.status(201).json(template);
     }
     catch (error) {
@@ -68,10 +69,10 @@ router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
-        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        const existing = await index_1.prisma.profitTemplate.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
-        await prisma.profitTemplate.delete({
+        await index_1.prisma.profitTemplate.delete({
             where: { id }
         });
         res.json({ success: true });
@@ -86,10 +87,10 @@ router.put('/:id', async (req, res) => {
         const userId = req.user.id;
         const { id } = req.params;
         const { name, country, data, type, platform, productId } = req.body;
-        const existing = await prisma.profitTemplate.findFirst({ where: { id, userId } });
+        const existing = await index_1.prisma.profitTemplate.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
-        const template = await prisma.profitTemplate.update({
+        const template = await index_1.prisma.profitTemplate.update({
             where: { id },
             data: {
                 ...(name ? { name } : {}),
@@ -100,6 +101,7 @@ router.put('/:id', async (req, res) => {
                 ...(productId !== undefined ? { productId } : {}),
             }
         });
+        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(() => { });
         res.json(template);
     }
     catch (error) {

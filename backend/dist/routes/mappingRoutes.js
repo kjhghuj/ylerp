@@ -1,20 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const client_1 = require("@prisma/client");
 const index_1 = require("../index");
 const router = (0, express_1.Router)();
-const prisma = new client_1.PrismaClient();
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const cacheKey = `warehouse-mappings:${userId}`;
-        const cachedMappings = await index_1.redis.get(cacheKey);
+        const cachedMappings = await index_1.safeRedis.get(cacheKey);
         if (cachedMappings) {
             return res.json(JSON.parse(cachedMappings));
         }
-        const mappings = await prisma.warehouseMapping.findMany({ where: { userId } });
-        await index_1.redis.set(cacheKey, JSON.stringify(mappings), 'EX', 3600);
+        const mappings = await index_1.prisma.warehouseMapping.findMany({ where: { userId } });
+        await index_1.safeRedis.set(cacheKey, JSON.stringify(mappings), 'EX', 3600);
         res.json(mappings);
     }
     catch (error) {
@@ -24,8 +22,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
-        const mapping = await prisma.warehouseMapping.create({ data: { ...req.body, userId } });
-        await index_1.redis.del(`warehouse-mappings:${userId}`);
+        const mapping = await index_1.prisma.warehouseMapping.create({ data: { ...req.body, userId } });
+        await index_1.safeRedis.del(`warehouse-mappings:${userId}`);
         res.status(201).json(mapping);
     }
     catch (error) {
@@ -35,11 +33,11 @@ router.post('/', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
-        const existing = await prisma.warehouseMapping.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.warehouseMapping.findFirst({ where: { id: req.params.id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Mapping not found' });
-        await prisma.warehouseMapping.delete({ where: { id: req.params.id } });
-        await index_1.redis.del(`warehouse-mappings:${userId}`);
+        await index_1.prisma.warehouseMapping.delete({ where: { id: req.params.id } });
+        await index_1.safeRedis.del(`warehouse-mappings:${userId}`);
         res.status(204).send();
     }
     catch (error) {

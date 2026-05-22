@@ -1,12 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   useNodesState,
   useEdgesState,
   addEdge,
   type Connection,
 } from '@xyflow/react';
-import type { DesignerNode, DesignerEdge, ParameterNodeData, FormulaNodeData } from './types';
-import { hasCycle } from './formulaEngine';
+import type { DesignerNode, DesignerEdge, ParameterNodeData, FormulaNodeData, OutputNodeData } from './types';
+import { evaluateGraph, hasCycle } from './formulaEngine';
 import { genId } from './types';
 import api from '../../src/api';
 
@@ -24,32 +24,69 @@ const DEFAULT_FORMULA_DATA: FormulaNodeData = {
   variables: [],
 };
 
+const DEFAULT_OUTPUT_DATA: OutputNodeData = {
+  name: '输出',
+};
+
 export function useNodeGraph() {
   const [nodes, setNodes, onNodesChange] = useNodesState<DesignerNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<DesignerEdge>([]);
   const [selectedNode, setSelectedNode] = useState<DesignerNode | null>(null);
+  const nodeCounter = useRef(0);
+
+  const graphResult = useMemo(
+    () => evaluateGraph(nodes, edges),
+    [nodes, edges]
+  );
+
+  const nodesWithValues = useMemo<DesignerNode[]>(
+    () =>
+      nodes.map((n) => {
+        const value = graphResult.values.get(n.id);
+        const error = graphResult.errors.get(n.id);
+        return {
+          ...n,
+          data: { ...n.data, computedValue: value, error: error || (n.data as Record<string, unknown>).error },
+        };
+      }),
+    [nodes, graphResult]
+  );
 
   const addParameterNode = useCallback(() => {
+    nodeCounter.current += 1;
     const id = genId();
     const newNode: DesignerNode = {
       id,
       type: 'parameter',
       position: { x: 100 + Math.random() * 300, y: 100 + Math.random() * 300 },
-      data: { ...DEFAULT_PARAM_DATA, name: `参数 ${nodes.length + 1}` },
+      data: { ...DEFAULT_PARAM_DATA, name: `参数 ${nodeCounter.current}` },
     };
     setNodes((nds) => [...nds, newNode]);
-  }, [nodes.length, setNodes]);
+  }, [setNodes]);
 
   const addFormulaNode = useCallback(() => {
+    nodeCounter.current += 1;
     const id = genId();
     const newNode: DesignerNode = {
       id,
       type: 'formula',
       position: { x: 100 + Math.random() * 300, y: 100 + Math.random() * 300 },
-      data: { ...DEFAULT_FORMULA_DATA, name: `公式 ${nodes.length + 1}` },
+      data: { ...DEFAULT_FORMULA_DATA, name: `公式 ${nodeCounter.current}` },
     };
     setNodes((nds) => [...nds, newNode]);
-  }, [nodes.length, setNodes]);
+  }, [setNodes]);
+
+  const addOutputNode = useCallback(() => {
+    nodeCounter.current += 1;
+    const id = genId();
+    const newNode: DesignerNode = {
+      id,
+      type: 'output',
+      position: { x: 100 + Math.random() * 300, y: 100 + Math.random() * 300 },
+      data: { ...DEFAULT_OUTPUT_DATA, name: `输出 ${nodeCounter.current}` },
+    };
+    setNodes((nds) => [...nds, newNode]);
+  }, [setNodes]);
 
   const onConnect = useCallback(
     (connection: Connection) => {
@@ -103,8 +140,8 @@ export function useNodeGraph() {
     async (id: string) => {
       const res = await api.get(`/node-graphs/${id}`);
       const template = res.data;
-      setNodes(template.nodes);
-      setEdges(template.edges);
+      setNodes(Array.isArray(template?.nodes) ? template.nodes : []);
+      setEdges(Array.isArray(template?.edges) ? template.edges : []);
       setSelectedNode(null);
     },
     [setNodes, setEdges]
@@ -115,6 +152,21 @@ export function useNodeGraph() {
     return res.data;
   }, []);
 
+  const deleteTemplate = useCallback(
+    async (id: string): Promise<void> => {
+      await api.delete(`/node-graphs/${id}`);
+    },
+    []
+  );
+
+  const onNodesDelete = useCallback(
+    (deleted: DesignerNode[]) => {
+      const deletedIds = new Set(deleted.map((n) => n.id));
+      setEdges((eds) => eds.filter((e) => !deletedIds.has(e.source) && !deletedIds.has(e.target)));
+    },
+    [setEdges]
+  );
+
   const clear = useCallback(() => {
     setNodes([]);
     setEdges([]);
@@ -122,7 +174,7 @@ export function useNodeGraph() {
   }, [setNodes, setEdges]);
 
   return {
-    nodes,
+    nodes: nodesWithValues,
     edges,
     selectedNode,
     onNodesChange,
@@ -132,11 +184,14 @@ export function useNodeGraph() {
     onPaneClick,
     addParameterNode,
     addFormulaNode,
+    addOutputNode,
     updateNodeData,
     setSelectedNode,
+    onNodesDelete,
     saveTemplate,
     loadTemplate,
     loadTemplates,
+    deleteTemplate,
     clear,
   };
 }

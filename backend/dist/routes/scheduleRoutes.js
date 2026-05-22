@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const index_1 = require("../index");
+const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
     try {
@@ -30,7 +31,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
-        const { type, title, description, deadline, sortKey } = req.body;
+        const { type, title, description, deadline, remindAt, sortKey } = req.body;
         if (!type || !title) {
             return res.status(400).json({ error: 'Missing required fields: type, title' });
         }
@@ -40,10 +41,12 @@ router.post('/', async (req, res) => {
                 title,
                 description: description || null,
                 deadline: deadline ? new Date(deadline) : null,
+                remindAt: remindAt ? new Date(remindAt) : null,
                 sortKey: sortKey || 0,
                 userId,
             },
         });
+        (0, activityLogger_1.logActivity)(userId, 'schedule_create', 'schedule', { type, title }).catch(() => { });
         res.status(201).json(item);
     }
     catch (error) {
@@ -55,7 +58,7 @@ router.put('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
         const id = String(req.params.id);
-        const { title, description, deadline, completed, notes, feedback, sortKey } = req.body;
+        const { title, description, deadline, remindAt, completed, notes, feedback, sortKey } = req.body;
         const existing = await index_1.prisma.scheduleItem.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Item not found' });
@@ -65,6 +68,7 @@ router.put('/:id', async (req, res) => {
                 ...(title !== undefined && { title }),
                 ...(description !== undefined && { description }),
                 ...(deadline !== undefined && { deadline: deadline ? new Date(deadline) : null }),
+                ...(remindAt !== undefined && { remindAt: remindAt ? new Date(remindAt) : null }),
                 ...(completed !== undefined && {
                     completed,
                     completedAt: completed ? new Date() : null,
@@ -116,14 +120,11 @@ router.post('/reorder', async (req, res) => {
 router.post('/reset-daily', async (req, res) => {
     try {
         const userId = req.user.id;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         const result = await index_1.prisma.scheduleItem.updateMany({
             where: {
                 userId,
                 type: 'routine',
                 completed: true,
-                completedAt: { gte: today },
             },
             data: {
                 completed: false,
@@ -135,6 +136,29 @@ router.post('/reset-daily', async (req, res) => {
     catch (error) {
         console.error('Error resetting daily routines:', error);
         res.status(500).json({ error: 'Failed to reset daily routines' });
+    }
+});
+router.get('/upcoming', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const now = new Date();
+        const items = await index_1.prisma.scheduleItem.findMany({
+            where: {
+                userId,
+                completed: false,
+                OR: [
+                    { remindAt: { not: null } },
+                    { deadline: { not: null } },
+                ],
+            },
+            orderBy: [{ remindAt: 'asc' }, { deadline: 'asc' }],
+            take: 10,
+        });
+        res.json(items);
+    }
+    catch (error) {
+        console.error('Error fetching upcoming items:', error);
+        res.status(500).json({ error: 'Failed to fetch upcoming items' });
     }
 });
 exports.default = router;

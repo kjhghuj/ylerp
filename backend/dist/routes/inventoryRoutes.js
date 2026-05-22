@@ -1,20 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const client_1 = require("@prisma/client");
 const index_1 = require("../index");
 const router = (0, express_1.Router)();
-const prisma = new client_1.PrismaClient();
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const cacheKey = `inventory:${userId}`;
-        const cachedInventory = await index_1.redis.get(cacheKey);
+        const cachedInventory = await index_1.safeRedis.get(cacheKey);
         if (cachedInventory) {
             return res.json(JSON.parse(cachedInventory));
         }
-        const inventory = await prisma.inventoryItem.findMany({ where: { userId } });
-        await index_1.redis.set(cacheKey, JSON.stringify(inventory), 'EX', 3600);
+        const inventory = await index_1.prisma.inventoryItem.findMany({ where: { userId } });
+        await index_1.safeRedis.set(cacheKey, JSON.stringify(inventory), 'EX', 3600);
         res.json(inventory);
     }
     catch (error) {
@@ -24,8 +22,8 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
-        const item = await prisma.inventoryItem.create({ data: { ...req.body, userId } });
-        await index_1.redis.del(`inventory:${userId}`);
+        const item = await index_1.prisma.inventoryItem.create({ data: { ...req.body, userId } });
+        await index_1.safeRedis.del(`inventory:${userId}`);
         res.status(201).json(item);
     }
     catch (error) {
@@ -35,15 +33,15 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
-        const existing = await prisma.inventoryItem.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.inventoryItem.findFirst({ where: { id: req.params.id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Item not found' });
         const { id, ...data } = req.body;
-        const item = await prisma.inventoryItem.update({
+        const item = await index_1.prisma.inventoryItem.update({
             where: { id: req.params.id },
             data,
         });
-        await index_1.redis.del(`inventory:${userId}`);
+        await index_1.safeRedis.del(`inventory:${userId}`);
         res.json(item);
     }
     catch (error) {
@@ -53,11 +51,11 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
-        const existing = await prisma.inventoryItem.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.inventoryItem.findFirst({ where: { id: req.params.id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Item not found' });
-        await prisma.inventoryItem.delete({ where: { id: req.params.id } });
-        await index_1.redis.del(`inventory:${userId}`);
+        await index_1.prisma.inventoryItem.delete({ where: { id: req.params.id } });
+        await index_1.safeRedis.del(`inventory:${userId}`);
         res.status(204).send();
     }
     catch (error) {

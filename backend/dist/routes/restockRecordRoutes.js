@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const index_1 = require("../index");
+const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
     try {
@@ -28,6 +29,7 @@ router.post('/', async (req, res) => {
         const record = await index_1.prisma.restockRecord.create({
             data: { name, items, userId }
         });
+        (0, activityLogger_1.logActivity)(userId, 'restock_create', 'restock', { name }).catch(() => { });
         res.json(record);
     }
     catch (error) {

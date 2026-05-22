@@ -13,11 +13,13 @@ import {
 import '@xyflow/react/dist/style.css';
 import ParameterNode from './ParameterNode';
 import FormulaNode from './FormulaNode';
+import OutputNode from './OutputNode';
 import type { DesignerNode, DesignerEdge } from '../types';
 
 const nodeTypes: NodeTypes = {
   parameter: ParameterNode,
   formula: FormulaNode,
+  output: OutputNode,
 };
 
 interface CanvasProps {
@@ -26,6 +28,7 @@ interface CanvasProps {
   onNodesChange: OnNodesChange<DesignerNode>;
   onEdgesChange: OnEdgesChange<DesignerEdge>;
   onConnect: OnConnect;
+  onNodesDelete: (deleted: DesignerNode[]) => void;
   onNodeClick: (event: React.MouseEvent, node: DesignerNode) => void;
   onPaneClick: () => void;
 }
@@ -36,6 +39,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onNodesChange,
   onEdgesChange,
   onConnect,
+  onNodesDelete,
   onNodeClick,
   onPaneClick,
 }) => (
@@ -46,6 +50,7 @@ export const Canvas: React.FC<CanvasProps> = ({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onNodesDelete={onNodesDelete}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}

@@ -8,6 +8,7 @@ const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
@@ -30,6 +31,8 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: '用户名或密码错误' });
         }
         const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
+        (0, activityLogger_1.logActivity)(user.id, 'login', 'auth', { username: user.username }, ip).catch(() => { });
         res.json({
             token,
             user: {
