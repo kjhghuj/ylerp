@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileSpreadsheet, Plus, Trash2, Layers } from 'lucide-react';
+import { Check, Edit2, FileSpreadsheet, Plus, Trash2, Layers, X } from 'lucide-react';
 import { WarehouseMapping } from '../../../types';
 import { useStore } from '../../../StoreContext';
 
@@ -10,13 +10,17 @@ interface MappingManagerProps {
 }
 
 export const MappingManager: React.FC<MappingManagerProps> = ({ mappings, onOpenImportModal, t }) => {
-    const { addMapping, deleteMapping, skuGroupMappings, addSkuGroup, deleteSkuGroup } = useStore();
+    const { addMapping, deleteMapping, skuGroupMappings, addSkuGroup, updateSkuGroup, deleteSkuGroup } = useStore();
     const [activeTab, setActiveTab] = useState<'official' | 'third' | 'grouping'>('official');
     
     // State for simple mappings
     const [newMapping, setNewMapping] = useState({ externalId: '', sku: '' });
     // State for group mappings
     const [newGroup, setNewGroup] = useState({ groupName: '', skus: '' });
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [editingGroup, setEditingGroup] = useState({ groupName: '', skus: '' });
+
+    const parseSkuList = (value: string) => value.split(/[,，\n]+/).map(s => s.trim()).filter(s => s.length > 0);
 
     const handleAddMapping = () => {
         if(newMapping.externalId && newMapping.sku) {
@@ -50,6 +54,25 @@ export const MappingManager: React.FC<MappingManagerProps> = ({ mappings, onOpen
                 setNewGroup({ groupName: '', skus: '' });
             }
         }
+    };
+
+    const handleStartEditGroup = (group: { id: string; groupName: string; skus: string[] }) => {
+        setEditingGroupId(group.id);
+        setEditingGroup({ groupName: group.groupName, skus: group.skus.join(', ') });
+    };
+
+    const handleCancelEditGroup = () => {
+        setEditingGroupId(null);
+        setEditingGroup({ groupName: '', skus: '' });
+    };
+
+    const handleSaveEditGroup = async (id: string) => {
+        const groupName = editingGroup.groupName.trim();
+        const skus = parseSkuList(editingGroup.skus);
+        if (!groupName || skus.length === 0) return;
+
+        await updateSkuGroup({ id, groupName, skus });
+        handleCancelEditGroup();
     };
 
     const currentMappings = mappings.filter(m => m.type === activeTab);
@@ -176,29 +199,88 @@ export const MappingManager: React.FC<MappingManagerProps> = ({ mappings, onOpen
                                </tr>
                            </thead>
                            <tbody>
-                               {skuGroupMappings.map(m => (
-                                   <tr key={m.id} className="border-t border-slate-100">
-                                       <td className="p-2 font-bold text-indigo-700">
-                                           <div className="flex items-center gap-1">
-                                               <Layers size={14} /> {m.groupName}
-                                           </div>
-                                       </td>
-                                       <td className="p-2">
-                                           <div className="flex flex-wrap gap-1">
-                                               {m.skus.map((sku, i) => (
-                                                   <span key={i} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs text-slate-600">
-                                                       {sku}
-                                                   </span>
-                                               ))}
-                                           </div>
-                                       </td>
-                                       <td className="p-2">
-                                           <button onClick={() => deleteSkuGroup(m.id)} className="text-slate-400 hover:text-red-500">
-                                               <Trash2 size={14} />
-                                           </button>
-                                       </td>
-                                   </tr>
-                               ))}
+                               {skuGroupMappings.map(m => {
+                                   const isEditing = editingGroupId === m.id;
+                                   return (
+                                       <tr key={m.id} className="border-t border-slate-100">
+                                           <td className="p-2 font-bold text-indigo-700">
+                                               {isEditing ? (
+                                                   <input
+                                                       type="text"
+                                                       value={editingGroup.groupName}
+                                                       onChange={e => setEditingGroup({ ...editingGroup, groupName: e.target.value })}
+                                                       className="w-full p-1.5 border border-indigo-200 rounded-lg text-sm text-slate-700 font-semibold focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                   />
+                                               ) : (
+                                                   <div className="flex items-center gap-1">
+                                                       <Layers size={14} /> {m.groupName}
+                                                   </div>
+                                               )}
+                                           </td>
+                                           <td className="p-2">
+                                               {isEditing ? (
+                                                   <input
+                                                       type="text"
+                                                       value={editingGroup.skus}
+                                                       onChange={e => setEditingGroup({ ...editingGroup, skus: e.target.value })}
+                                                       className="w-full p-1.5 border border-indigo-200 rounded-lg text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 outline-none"
+                                                   />
+                                               ) : (
+                                                   <div className="flex flex-wrap gap-1">
+                                                       {m.skus.map((sku, i) => (
+                                                           <span key={i} className="px-1.5 py-0.5 bg-slate-100 border border-slate-200 rounded text-xs text-slate-600">
+                                                               {sku}
+                                                           </span>
+                                                       ))}
+                                                   </div>
+                                               )}
+                                           </td>
+                                           <td className="p-2">
+                                               <div className="flex items-center gap-2">
+                                                   {isEditing ? (
+                                                       <>
+                                                           <button
+                                                               type="button"
+                                                               aria-label="保存聚合规则"
+                                                               onClick={() => handleSaveEditGroup(m.id)}
+                                                               className="text-emerald-500 hover:text-emerald-600"
+                                                           >
+                                                               <Check size={14} />
+                                                           </button>
+                                                           <button
+                                                               type="button"
+                                                               aria-label="取消编辑聚合规则"
+                                                               onClick={handleCancelEditGroup}
+                                                               className="text-slate-400 hover:text-slate-600"
+                                                           >
+                                                               <X size={14} />
+                                                           </button>
+                                                       </>
+                                                   ) : (
+                                                       <>
+                                                           <button
+                                                               type="button"
+                                                               aria-label="编辑聚合规则"
+                                                               onClick={() => handleStartEditGroup(m)}
+                                                               className="text-slate-400 hover:text-indigo-600"
+                                                           >
+                                                               <Edit2 size={14} />
+                                                           </button>
+                                                           <button
+                                                               type="button"
+                                                               aria-label="删除聚合规则"
+                                                               onClick={() => deleteSkuGroup(m.id)}
+                                                               className="text-slate-400 hover:text-red-500"
+                                                           >
+                                                               <Trash2 size={14} />
+                                                           </button>
+                                                       </>
+                                                   )}
+                                               </div>
+                                           </td>
+                                       </tr>
+                                   );
+                               })}
                                {skuGroupMappings.length === 0 && (
                                    <tr>
                                        <td colSpan={3} className="p-4 text-center text-slate-400 italic text-xs">{t.imports.noGroups}</td>

@@ -31,6 +31,28 @@ router.post('/', async (req, res) => {
     }
 });
 
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.user!.id;
+        const existing = await prisma.skuGroup.findFirst({ where: { id: req.params.id, userId } });
+        if (!existing) return res.status(404).json({ error: 'Group not found' });
+
+        const { groupName, skus } = req.body;
+        if (typeof groupName !== 'string' || !Array.isArray(skus)) {
+            return res.status(400).json({ error: 'Invalid SKU group payload' });
+        }
+
+        const group = await prisma.skuGroup.update({
+            where: { id: req.params.id },
+            data: { groupName, skus },
+        });
+        await safeRedis.del(`sku-groups:${userId}`);
+        res.json(group);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to update SKU group' });
+    }
+});
+
 router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user!.id;

@@ -29,7 +29,9 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [saving, setSaving] = useState(false);
+    const [clearingDetails, setClearingDetails] = useState(false);
     const [recordName, setRecordName] = useState('');
+    const [clearedInventorySignature, setClearedInventorySignature] = useState<string | null>(null);
 
     const toggleGroup = (groupKey: string) => {
         setExpandedGroups(prev => {
@@ -67,6 +69,14 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
         return Object.values(groups).sort((a, b) => b.totalDailySales - a.totalDailySales);
     }, [inventory]);
 
+    const inventorySignature = useMemo(
+        () => inventory.map(item => item.id).sort().join('|'),
+        [inventory]
+    );
+    const detailsCleared = clearedInventorySignature !== null && (inventory.length === 0 || clearedInventorySignature === inventorySignature);
+
+    const visibleGroups = detailsCleared ? [] : groupedInventory;
+
     const handleUpdate = (id: string, field: keyof InventoryItem, value: any) => {
         const item = inventory.find(i => i.id === id);
         if (item) {
@@ -91,7 +101,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
     };
 
     const handleSaveRecord = async () => {
-        if (groupedInventory.length === 0) {
+        if (visibleGroups.length === 0) {
             showToast('暂无补货数据', 'error');
             return;
         }
@@ -100,7 +110,7 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
             const now = new Date();
             const dateStr = now.toLocaleDateString('zh-CN');
             const name = recordName.trim() || `补货记录 ${dateStr}`;
-            const items = groupedInventory.map(group => {
+            const items = visibleGroups.map(group => {
                 const syntheticItem: InventoryItem = {
                     id: 'group-' + group.groupKey,
                     name: group.name,
@@ -137,6 +147,27 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
         }
     };
 
+    const handleClearDetails = async () => {
+        if (inventory.length === 0) {
+            showToast('暂无补货数据', 'error');
+            return;
+        }
+        setClearingDetails(true);
+        try {
+            const itemsToDelete = [...inventory];
+            for (const item of itemsToDelete) {
+                await deleteInventoryItem(item.id);
+            }
+            setClearedInventorySignature(itemsToDelete.map(item => item.id).sort().join('|'));
+            setExpandedGroups(new Set());
+            showToast('补货详情已清空', 'success');
+        } catch {
+            showToast('清空补货详情失败', 'error');
+        } finally {
+            setClearingDetails(false);
+        }
+    };
+
     return (
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/50 overflow-hidden flex flex-col min-h-[400px] hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] transition-all duration-300 relative z-10">
             <div className="p-4 border-b border-white/20 flex justify-between items-center">
@@ -151,10 +182,18 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
                     />
                     <button
                         onClick={handleSaveRecord}
-                        disabled={saving || groupedInventory.length === 0}
+                        disabled={saving || visibleGroups.length === 0}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold rounded-lg hover:shadow-lg hover:shadow-indigo-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         <Save size={14} />{saving ? '保存中...' : '保存到补货记录'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleClearDetails}
+                        disabled={inventory.length === 0 || detailsCleared || clearingDetails}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-200 bg-white text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-50 hover:border-rose-300 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <Trash2 size={14} />{clearingDetails ? '清空中...' : '清空补货详情'}
                     </button>
                     <div className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg flex items-center gap-1 font-medium">
                         <Layers size={14} />
@@ -164,22 +203,23 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
             </div>
 
             <div className="overflow-auto flex-1">
-                <table className="w-full text-sm text-left whitespace-nowrap md:whitespace-normal">
-                    <thead className="bg-white/50 backdrop-blur-md text-slate-500 sticky top-0 z-10 shadow-sm border-b border-white/60">
-                        <tr>
-                            <th className="p-4 w-8"></th>
-                            <th className="p-4 text-left">{t.table.product}</th>
-                            <th className="p-4 text-center">{t.table.stockOfficial}</th>
-                            <th className="p-4 text-center">{t.table.stockThirdParty}</th>
-                            <th className="p-4 text-center">{t.table.transit}</th>
-                            <th className="p-4 text-center">{t.table.sales}</th>
-                            <th className="p-4 text-center">{t.table.coverage}</th>
-                            <th className="p-4 text-center">{t.table.restockQty}</th>
-                            <th className="p-4 text-center w-16">{t.table.action}</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {groupedInventory.map(group => {
+                {!detailsCleared && (
+                    <table className="w-full text-sm text-left whitespace-nowrap md:whitespace-normal">
+                        <thead className="bg-white/50 backdrop-blur-md text-slate-500 sticky top-0 z-10 shadow-sm border-b border-white/60">
+                            <tr>
+                                <th className="p-4 w-8"></th>
+                                <th className="p-4 text-left">{t.table.product}</th>
+                                <th className="p-4 text-center">{t.table.stockOfficial}</th>
+                                <th className="p-4 text-center">{t.table.stockThirdParty}</th>
+                                <th className="p-4 text-center">{t.table.transit}</th>
+                                <th className="p-4 text-center">{t.table.sales}</th>
+                                <th className="p-4 text-center">{t.table.coverage}</th>
+                                <th className="p-4 text-center">{t.table.restockQty}</th>
+                                <th className="p-4 text-center w-16">{t.table.action}</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {visibleGroups.map(group => {
                             const hasMultiple = group.items.length > 1;
                             const isExpanded = expandedGroups.has(group.groupKey);
 
@@ -400,10 +440,17 @@ export const InventoryTable: React.FC<InventoryTableProps> = ({ targetDate, lead
                                     ))}
                                 </React.Fragment>
                             );
-                        })}
-                    </tbody>
-                </table>
-                {inventory.length === 0 && (
+                            })}
+                        </tbody>
+                    </table>
+                )}
+                {detailsCleared && (
+                    <div className="p-12 text-center text-slate-400">
+                        <Trash2 size={48} className="mx-auto mb-4 opacity-20" />
+                        <p>补货详情已清空</p>
+                    </div>
+                )}
+                {!detailsCleared && inventory.length === 0 && (
                     <div className="p-12 text-center text-slate-400">
                         <Package size={48} className="mx-auto mb-4 opacity-20" />
                         <p>{t.empty.text}</p>

@@ -30,6 +30,27 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create SKU group' });
     }
 });
+router.put('/:id', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const existing = await index_1.prisma.skuGroup.findFirst({ where: { id: req.params.id, userId } });
+        if (!existing)
+            return res.status(404).json({ error: 'Group not found' });
+        const { groupName, skus } = req.body;
+        if (typeof groupName !== 'string' || !Array.isArray(skus)) {
+            return res.status(400).json({ error: 'Invalid SKU group payload' });
+        }
+        const group = await index_1.prisma.skuGroup.update({
+            where: { id: req.params.id },
+            data: { groupName, skus },
+        });
+        await index_1.safeRedis.del(`sku-groups:${userId}`);
+        res.json(group);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Failed to update SKU group' });
+    }
+});
 router.delete('/:id', async (req, res) => {
     try {
         const userId = req.user.id;

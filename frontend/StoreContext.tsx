@@ -66,6 +66,7 @@ interface StoreContextType {
 
   skuGroupMappings: SkuGroupMapping[];
   addSkuGroup: (m: SkuGroupMapping) => Promise<void>;
+  updateSkuGroup: (m: SkuGroupMapping) => Promise<void>;
   deleteSkuGroup: (id: string) => Promise<void>;
 
   restockRecords: RestockRecord[];
@@ -368,6 +369,12 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setSkuGroupMappings(prev => [...prev, res.data]);
     } catch (e) { console.error('Error adding sku group', e); }
   };
+  const updateSkuGroup = async (m: SkuGroupMapping) => {
+    try {
+      const res = await api.put(`/sku-groups/${m.id}`, m);
+      setSkuGroupMappings(prev => prev.map(group => group.id === m.id ? res.data : group));
+    } catch (e) { console.error('Error updating sku group', e); }
+  };
   const deleteSkuGroup = async (id: string) => {
     try {
       await api.delete(`/sku-groups/${id}`);
@@ -424,7 +431,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
       inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
       warehouseMappings, addMapping, deleteMapping,
-      skuGroupMappings, addSkuGroup, deleteSkuGroup,
+      skuGroupMappings, addSkuGroup, updateSkuGroup, deleteSkuGroup,
       restockRecords, addRestockRecord, deleteRestockRecord
     }}>
       {children}
