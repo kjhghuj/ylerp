@@ -81,8 +81,9 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/all', authorize('owner'), async (req, res) => {
     try {
-        await prisma.financeRecord.deleteMany();
-        await safeRedis.del('finance:shared');
+        const userId = req.user!.id;
+        await prisma.financeRecord.deleteMany({ where: { userId } });
+        await safeRedis.del(`finance:${userId}`);
         res.status(204).send();
     } catch (error) {
         res.status(500).json({ error: 'Failed to delete all finance records' });
@@ -91,6 +92,7 @@ router.delete('/all', authorize('owner'), async (req, res) => {
 
 router.delete('/month/:month', authorize('owner'), async (req, res) => {
     try {
+        const userId = req.user!.id;
         const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
         const [yearStr, monthStr] = monthParam.split('-');
         const year = parseInt(yearStr);
@@ -105,6 +107,7 @@ router.delete('/month/:month', authorize('owner'), async (req, res) => {
 
         const result = await prisma.financeRecord.deleteMany({
             where: {
+                userId,
                 date: {
                     gte: startDate,
                     lt: endDate
@@ -112,7 +115,7 @@ router.delete('/month/:month', authorize('owner'), async (req, res) => {
             }
         });
 
-        await safeRedis.del('finance:shared');
+        await safeRedis.del(`finance:${userId}`);
         res.json({ message: 'Deleted records', count: result.count });
     } catch (error) {
         console.error('Delete month failed:', error);
