@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { read, utils } from 'xlsx';
 import { useStore } from '../../../StoreContext';
+import { buildThirdPartyInventoryImport } from '../utils/thirdPartyInventoryImport';
 
 export const useInventoryImport = (leadTimeSetting: number) => {
     const { inventory, updateInventoryItem, addInventoryItem, warehouseMappings, skuGroupMappings, strings } = useStore();
@@ -37,6 +38,7 @@ export const useInventoryImport = (leadTimeSetting: number) => {
 
             let updatedCount = 0;
             let createdCount = 0;
+            let importSummaryExtra = '';
 
             // Logic Branching based on Type
             if (type === 'sales' || type === 'sales7') {
@@ -140,63 +142,19 @@ export const useInventoryImport = (leadTimeSetting: number) => {
 
             } else if (type === 'third') {
                 const rawData = utils.sheet_to_json(ws, { header: 1 }) as any[][];
-                let headerRowIndex = -1, skuColIdx = -1, stockColIdx = -1, transitColIdx = -1;
+                const importResult = buildThirdPartyInventoryImport({
+                    rawData,
+                    inventory,
+                    warehouseMappings,
+                });
 
-                for (let i = 0; i < Math.min(rawData.length, 20); i++) {
-                    const row = rawData[i];
-                    if (!Array.isArray(row)) continue;
-                    row.forEach((cell, colIdx) => {
-                        const val = String(cell || '').trim();
-                        if (!val) return;
-
-                        if (['SKU', '商品SKU'].includes(val.toUpperCase())) skuColIdx = colIdx;
-                        if (['仓库库存', '库存', '可用库存'].includes(val)) stockColIdx = colIdx;
-                        if (['头程在途', '在途', '头程'].includes(val)) transitColIdx = colIdx;
-                    });
-                    if (skuColIdx !== -1 && (stockColIdx !== -1 || transitColIdx !== -1)) {
-                        headerRowIndex = i; break;
-                    }
-                }
-
-                if (headerRowIndex === -1) {
+                if (!importResult.header.found) {
                     alert("无法识别表头。请确保Excel包含 'SKU' 以及 '仓库库存' 或 '头程在途' 列。");
                     if (fileInputRef.current) fileInputRef.current.value = '';
                     return;
                 }
 
-                const dataMap = new Map<string, { stock: number, transit: number }>();
-                for (let i = headerRowIndex + 1; i < rawData.length; i++) {
-                    const row = rawData[i];
-                    if (!row) continue;
-                    const rawSku = row[skuColIdx];
-                    if (!rawSku) continue;
-                    const skuStr = String(rawSku).trim();
-
-                    // Check Mapping First
-                    let systemSku = skuStr;
-                    const mapping = warehouseMappings.find(m => m.type === 'third' && m.thirdPartyWarehouseId === skuStr);
-                    if (mapping) {
-                        systemSku = mapping.sku;
-                    }
-
-                    const currentData = dataMap.get(systemSku) || { stock: 0, transit: 0 };
-
-                    if (stockColIdx !== -1) {
-                        const rawQty = row[stockColIdx];
-                        let qty = 0;
-                        if (typeof rawQty === 'number') qty = rawQty;
-                        else if (typeof rawQty === 'string') qty = parseFloat(rawQty);
-                        if (!isNaN(qty)) currentData.stock += qty;
-                    }
-                    if (transitColIdx !== -1) {
-                        const rawTrans = row[transitColIdx];
-                        let trans = 0;
-                        if (typeof rawTrans === 'number') trans = rawTrans;
-                        else if (typeof rawTrans === 'string') trans = parseFloat(rawTrans);
-                        if (!isNaN(trans)) currentData.transit += trans;
-                    }
-                    dataMap.set(systemSku, currentData);
-                }
+                const dataMap = new Map(importResult.updates.map(update => [update.sku, update]));
 
                 for (const item of inventory) {
                     if (dataMap.has(item.sku)) {
@@ -204,12 +162,34 @@ export const useInventoryImport = (leadTimeSetting: number) => {
                         const newName = getProductNameFromSku(item.sku, item.name);
 
                         const updates: any = { id: item.id, name: newName };
-                        if (stockColIdx !== -1) updates.stockThirdParty = data.stock;
-                        if (transitColIdx !== -1) updates.inTransit = data.transit;
+                        if (importResult.header.stockColIdx !== -1) updates.stockThirdParty = data.stock;
+                        if (importResult.header.transitColIdx !== -1) updates.inTransit = data.transit;
                         await updateInventoryItem(updates);
                         updatedCount++;
                     }
                 }
+
+                const formatRows = (rows: typeof importResult.unmatched) =>
+                    rows.slice(0, 10).map(row => {
+                        const mapped = row.mappedSku ? ` -> ${row.mappedSku}` : '';
+                        return `- ${row.excelSku}${mapped}（库存: ${row.stock}, 在途: ${row.transit}）`;
+                    }).join('\n');
+
+                const summaryLines = [
+                    `映射目标不存在，已回退更新: ${importResult.fallbacks.length}`,
+                    `未匹配SKU: ${importResult.unmatched.length}`,
+                ];
+                if (importResult.fallbacks.length > 0) {
+                    summaryLines.push(`\n已回退明细（前10条）:\n${formatRows(importResult.fallbacks)}`);
+                }
+                if (importResult.unmatched.length > 0) {
+                    summaryLines.push(`\n未匹配明细（前10条）:\n${formatRows(importResult.unmatched)}`);
+                    console.warn('[Third Import] 未匹配的SKU:', importResult.unmatched);
+                }
+                if (importResult.fallbacks.length > 0) {
+                    console.warn('[Third Import] 映射目标不存在，已回退到Excel SKU:', importResult.fallbacks);
+                }
+                importSummaryExtra = `\n\n${summaryLines.join('\n')}`;
 
             } else if (type === 'official') {
                 const rawData = utils.sheet_to_json(ws, { header: 1 }) as any[][];
@@ -354,6 +334,7 @@ export const useInventoryImport = (leadTimeSetting: number) => {
             } else if (updatedCount === 0 && type !== 'sales') {
                 message = t.messages.noUpdates + "\n(请查看页面底部的Debug控制台获取详细原因)";
             }
+            message += importSummaryExtra;
             alert(message);
 
         } catch (err) {
