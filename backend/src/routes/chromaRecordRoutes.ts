@@ -128,7 +128,7 @@ router.post('/records', async (req: Request, res: Response) => {
       },
     });
 
-    logActivity(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(() => {});
+    logActivity(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(err => console.error("活动记录失败:", err));
     res.status(201).json(record);
   } catch (error) {
     console.error('Error creating chroma record:', error);

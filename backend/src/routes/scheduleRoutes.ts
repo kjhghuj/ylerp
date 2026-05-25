@@ -48,7 +48,7 @@ router.post('/', async (req: Request, res: Response) => {
                 userId,
             },
         });
-        logActivity(userId, 'schedule_create', 'schedule', { type, title }).catch(() => {});
+        logActivity(userId, 'schedule_create', 'schedule', { type, title }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(item);
     } catch (error) {
         console.error('Error creating schedule item:', error);

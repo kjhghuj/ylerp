@@ -59,7 +59,7 @@ router.post('/', async (req, res) => {
                 ...(productId ? { productId } : {}),
             }
         });
-        logActivity(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(() => {});
+        logActivity(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(template);
     } catch (error) {
         console.error('Error creating template:', error);
@@ -104,7 +104,7 @@ router.put('/:id', async (req, res) => {
                 ...(productId !== undefined ? { productId } : {}),
             }
         });
-        logActivity(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(() => {});
+        logActivity(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(err => console.error("活动记录失败:", err));
         res.json(template);
     } catch (error) {
         console.error('Error updating template:', error);

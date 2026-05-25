@@ -42,7 +42,7 @@ router.post('/batch', async (req, res) => {
         });
 
         await safeRedis.del(`finance:${userId}`);
-        logActivity(userId, 'finance_import', 'finance', { count: result.count }).catch(() => {});
+        logActivity(userId, 'finance_import', 'finance', { count: result.count }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json({ count: result.count });
     } catch (error) {
         console.error('Batch import failed:', error);

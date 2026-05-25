@@ -54,7 +54,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
             onPointerDown={!isDone ? (e) => onPointerDown(e, item) : undefined}
             onPointerUp={!isDone ? onPointerUp : undefined}
             onLostPointerCapture={() => { onPointerUp(); }}
-            className={`group relative rounded-xl p-3 border transition-all duration-300 select-none ${
+            className={`group relative schedule-card rounded-xl p-3 border transition-all duration-300 select-none ${
                 !isDone ? 'cursor-pointer' : ''
             } ${
                 isDragging ? 'opacity-40 scale-95' : ''
@@ -68,9 +68,10 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
             style={{
                 backgroundColor: 'var(--bg-card)',
                 borderColor: isUrgent ? undefined : isWarning ? 'rgba(255,183,77,0.3)' : 'var(--border-default)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.02)',
+                boxShadow: 'var(--shadow-sm)',
                 touchAction: 'none',
                 ...urgentBorderStyle,
+                ...(showProgress ? { animation: 'cardBreathe 0.8s ease-in-out infinite' } : {}),
             }}
         >
             <div className="flex items-start gap-2.5">
@@ -102,7 +103,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                         <div className={`w-4 h-4 rounded bg-gradient-to-br ${config.color} flex items-center justify-center text-white shrink-0`}>
                             {React.createElement(config.icon, { size: 10 })}
                         </div>
-                        <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : undefined }}>
+                        <span className="text-sm font-bold truncate" title={item.title} style={{ color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : undefined }}>
                             {item.title}
                         </span>
                     </div>
@@ -135,13 +136,21 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
             {showProgress && (
                 <div className="mt-2 h-1 rounded-full overflow-hidden relative" style={{ backgroundColor: 'rgba(var(--border-light-rgb, 0,0,0), 0.1)' }}>
                     <div
-                        className="h-full rounded-full transition-all"
+                        className="h-full rounded-full relative"
                         style={{
                             backgroundColor: `rgba(${rgb},0.6)`,
                             height: '100%',
                             width: `${progress}%`,
                         }}
                     >
+                        <div
+                            className="absolute inset-0 rounded-full"
+                            style={{
+                                background: `linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 40%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0.5) 60%, transparent 100%)`,
+                                backgroundSize: '200% 100%',
+                                animation: 'progressShimmer 0.8s linear infinite',
+                            }}
+                        />
                         <div
                             style={{
                                 position: 'absolute',
@@ -152,6 +161,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                                 borderRadius: '50%',
                                 background: `radial-gradient(circle, rgba(${rgb},1), rgba(${rgb},0.4))`,
                                 boxShadow: `0 0 10px rgba(${rgb},0.8), 0 0 20px rgba(${rgb},0.4)`,
+                                animation: 'dotPulse 0.6s ease-in-out infinite',
                             }}
                         />
                     </div>

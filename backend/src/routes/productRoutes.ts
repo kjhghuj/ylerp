@@ -33,7 +33,7 @@ router.post('/', async (req, res) => {
                 platformInfrastructureFee, sites, siteData, userId }
         });
         await safeRedis.del(`products:${userId}`);
-        logActivity(userId, 'product_create', 'product', { name, sku, country }).catch(() => {});
+        logActivity(userId, 'product_create', 'product', { name, sku, country }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(product);
     } catch (error) {
         res.status(500).json({ error: 'Failed to create product' });

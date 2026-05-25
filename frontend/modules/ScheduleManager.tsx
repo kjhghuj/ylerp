@@ -3,13 +3,13 @@ import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 import {
-    Plus, Archive, X, Sparkles, Edit3, Save, Search, CalendarDays
+    Archive, X, Sparkles, Edit3, Save, Search, CalendarDays
 } from 'lucide-react';
 import {
-    normalizeType, TYPE_CONFIG, getDeadlineStatus, formatDate, formatDateShort, getGreeting,
+    normalizeType, TYPE_CONFIG, formatDate, formatDateShort, getGreeting,
     type ItemType, type ScheduleItemData,
 } from './schedule/constants';
-import { ItemCard } from './schedule/ItemCard';
+import { KanbanColumn } from './schedule/KanbanColumn';
 
 export const ScheduleManager: React.FC = () => {
     const { strings, language } = useStore();
@@ -19,7 +19,6 @@ export const ScheduleManager: React.FC = () => {
     const [items, setItems] = useState<ScheduleItemData[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState<ItemType | null>(null);
-    const [showArchive, setShowArchive] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newDesc, setNewDesc] = useState('');
     const [newDeadline, setNewDeadline] = useState('');
@@ -37,6 +36,9 @@ export const ScheduleManager: React.FC = () => {
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [flyingItemId, setFlyingItemId] = useState<string | null>(null);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [expandedMobileColumn, setExpandedMobileColumn] = useState<ItemType | null>(null);
+    const [archiveOpen, setArchiveOpen] = useState(false);
     const [pressingId, setPressingId] = useState<string | null>(null);
     const [progressMap, setProgressMap] = useState<Record<string, number>>({});
     const progressMapRef = useRef<Record<string, number>>({});
@@ -172,6 +174,12 @@ export const ScheduleManager: React.FC = () => {
             });
         }
     }, [items]);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         const lastReset = localStorage.getItem('yl-schedule-last-reset');
@@ -392,6 +400,17 @@ export const ScheduleManager: React.FC = () => {
     const schedules = activeItems.filter(i => i.type === 'approval').sort((a, b) => a.sortKey - b.sortKey);
     const shopEvents = activeItems.filter(i => i.type === 'shop-event').sort((a, b) => a.sortKey - b.sortKey);
     const ideas = activeItems.filter(i => i.type === 'idea').sort((a, b) => a.sortKey - b.sortKey);
+    const notifications = activeItems.filter(i => i.type === 'notification').sort((a, b) => a.sortKey - b.sortKey);
+
+    const columnTypes: ItemType[] = ['routine', 'approval', 'shop-event', 'idea', 'notification'];
+    const itemsByType: Record<ItemType, ScheduleItemData[]> = {
+        routine: routines,
+        approval: schedules,
+        'shop-event': shopEvents,
+        idea: ideas,
+        notification: notifications,
+        schedule: [],
+    };
 
     const CreateModal = showCreate ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => setShowCreate(null)}>
@@ -542,14 +561,26 @@ export const ScheduleManager: React.FC = () => {
         </div>
     ) : null;
 
-    const renderItemCard = (item: ScheduleItemData) => (
-        <ItemCard
-            key={item.id}
-            item={item}
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center h-full">
+                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            </div>
+        );
+    }
+
+    const renderSectionColumn = (type: ItemType, className?: string) => (
+        <KanbanColumn
+            type={type}
+            items={itemsByType[type]}
+            isAccordion={isMobile}
+            isExpanded={expandedMobileColumn === type}
+            onAccordionToggle={() => setExpandedMobileColumn(prev => prev === type ? null : type)}
+            onCreate={setShowCreate}
             dragId={dragId}
             dragOverId={dragOverId}
             flyingItemId={flyingItemId}
-            progress={progressMap[item.id] ?? 0}
+            progressMap={progressMap}
             onToggle={handleToggle}
             onDelete={handleDelete}
             onDoubleClick={handleDoubleClick}
@@ -562,17 +593,10 @@ export const ScheduleManager: React.FC = () => {
         />
     );
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-        );
-    }
-
     return (
-        <div className="h-full flex flex-col overflow-auto">
-            <div className="flex items-center justify-between px-4 py-2">
+        <div className="h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-1 py-1.5 shrink-0">
                 <div>
                     <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                         {todayStr} 周{todayWeekDay} · {getGreeting()}
@@ -581,177 +605,124 @@ export const ScheduleManager: React.FC = () => {
                         {isZh ? `${activeItems.length} 个待办` : `${activeItems.length} pending`} · {isZh ? `${archivedItems.length} 个已归档` : `${archivedItems.length} archived`}
                     </p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                    <button onClick={() => setShowArchive(true)} className="p-2 rounded-lg border transition-colors" style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
-                        <Archive size={16} />
-                    </button>
-                    <button onClick={() => setShowCreate('routine')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 transition-all">
-                        <Plus size={14} /> {isZh ? '日常' : 'Routine'}
-                    </button>
-                    <button onClick={() => setShowCreate('approval')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-blue-400 to-indigo-500 hover:from-blue-500 hover:to-indigo-600 transition-all">
-                        <Plus size={14} /> {isZh ? '审批' : 'Approval'}
-                    </button>
-                    <button onClick={() => setShowCreate('shop-event')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-purple-400 to-violet-500 hover:from-purple-500 hover:to-violet-600 transition-all">
-                        <Plus size={14} /> {isZh ? '活动' : 'Event'}
-                    </button>
-                    <button onClick={() => setShowCreate('notification')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-red-400 to-rose-500 hover:from-red-500 hover:to-rose-600 transition-all">
-                        <Plus size={14} /> {isZh ? '提醒' : 'Notify'}
-                    </button>
-                    <button onClick={() => setShowCreate('idea')} className="flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all">
-                        <Plus size={14} /> {isZh ? '想法' : 'Idea'}
-                    </button>
+                <button
+                    onClick={() => setArchiveOpen(!archiveOpen)}
+                    className="p-1.5 rounded-lg border shrink-0 transition-colors"
+                    style={{
+                        borderColor: 'var(--border-default)',
+                        color: archiveOpen ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                        backgroundColor: archiveOpen ? 'var(--accent-blue-bg)' : 'transparent',
+                    }}
+                >
+                    <Archive size={14} />
+                </button>
+            </div>
+
+            {/* Content: 3列 + 归档面板 */}
+            <div className="flex-1 flex min-h-0 gap-2">
+                <div className="flex-1 flex min-w-0">
+                    {activeItems.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center flex-1">
+                            <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                                {isZh ? '完成所有任务！' : 'All tasks complete!'}
+                            </p>
+                        </div>
+                    ) : isMobile ? (
+                        <div className="flex-1 overflow-y-auto px-1 space-y-1.5">
+                            {columnTypes.map(t => renderSectionColumn(t))}
+                        </div>
+                    ) : (
+                        <div className="flex-1 kanban-grid min-h-0">
+                            {/* Col 1: 每日任务 + 审批 */}
+                            <div className="flex flex-col gap-2 min-h-0">
+                                <div className="flex-1 min-h-0">{renderSectionColumn('routine')}</div>
+                                <div className="flex-1 min-h-0">{renderSectionColumn('approval')}</div>
+                            </div>
+                            {/* Col 2: 店铺活动 + 想法测试 */}
+                            <div className="flex flex-col gap-2 min-h-0">
+                                <div className="flex-1 min-h-0">{renderSectionColumn('shop-event')}</div>
+                                <div className="flex-1 min-h-0">{renderSectionColumn('idea')}</div>
+                            </div>
+                            {/* Col 3: 提醒 */}
+                            {renderSectionColumn('notification')}
+                        </div>
+                    )}
                 </div>
-            </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-6">
-                {routines.length > 0 && (
-                    <section>
-                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
-                            {isZh ? '每日任务' : 'Daily Routines'}
-                        </h4>
-                        <div className="space-y-1">
-                            {routines.map(renderItemCard)}
-                        </div>
-                    </section>
-                )}
-
-                {schedules.length > 0 && (
-                    <section>
-                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
-                            {isZh ? '审批事项' : 'Approvals'}
-                        </h4>
-                        <div className="space-y-1">
-                            {schedules.map(renderItemCard)}
-                        </div>
-                    </section>
-                )}
-
-                {shopEvents.length > 0 && (
-                    <section>
-                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
-                            {isZh ? '店铺活动' : 'Shop Events'}
-                        </h4>
-                        <div className="space-y-1">
-                            {shopEvents.map(renderItemCard)}
-                        </div>
-                    </section>
-                )}
-
-                {ideas.length > 0 && (
-                    <section>
-                        <h4 className="text-xs font-bold uppercase tracking-wider mb-2 px-1" style={{ color: 'var(--text-tertiary)' }}>
-                            {isZh ? '想法测试' : 'Ideas'}
-                        </h4>
-                        <div className="space-y-1">
-                            {ideas.map(renderItemCard)}
-                        </div>
-                    </section>
-                )}
-
-                {activeItems.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16">
-                        <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                            {isZh ? '完成所有任务！' : 'All tasks complete!'}
-                        </p>
-                    </div>
-                )}
-            </div>
-
-            {showArchive && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowArchive(false); setArchiveSearch(''); setArchiveDateFilter(''); }}>
-                    <div className="w-full max-w-2xl h-[80vh] rounded-2xl border flex flex-col" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} onClick={e => e.stopPropagation()}>
-                        <div className="px-5 py-3 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-                            <div className="flex items-center gap-2">
-                                <Archive size={16} style={{ color: '#F2C94C' }} />
-                                <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                                    {isZh ? '归档记录' : 'Archived Records'}
-                                </span>
+                {/* Archive Panel */}
+                <div className={`archive-panel flex flex-col border-l ${archiveOpen ? '' : 'collapsed'}`}
+                    style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-primary)' }}>
+                    {archiveOpen ? (
+                        <>
+                            <div className="px-3 py-2 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-default)' }}>
+                                <div className="flex items-center gap-1.5">
+                                    <Archive size={14} style={{ color: '#F2C94C' }} />
+                                    <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '归档' : 'Archive'}</span>
+                                </div>
+                                <button onClick={() => setArchiveOpen(false)} className="p-0.5 rounded" style={{ color: 'var(--text-tertiary)' }}>
+                                    <X size={14} />
+                                </button>
                             </div>
-                            <button onClick={() => { setShowArchive(false); setArchiveSearch(''); setArchiveDateFilter(''); }} className="p-1.5 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
-                                <X size={18} />
-                            </button>
-                        </div>
-                        <div className="px-5 py-3 border-b flex gap-2 shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-                            <div className="relative flex-1">
-                                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                                <input type="text" value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
-                                    placeholder={isZh ? '搜索标题...' : 'Search title...'}
-                                    className="w-full h-8 pl-8 pr-3 rounded-lg border text-xs outline-none transition-colors"
-                                    style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                            <div className="px-2 py-2 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
+                                <div className="relative">
+                                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
+                                    <input type="text" value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
+                                        placeholder={isZh ? '搜索...' : 'Search...'}
+                                        className="w-full h-7 pl-7 pr-2 rounded-lg border text-[11px] outline-none"
+                                        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
+                                </div>
                             </div>
-                            <div className="relative">
-                                <CalendarDays size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--text-tertiary)' }} />
-                                <input type="date" value={archiveDateFilter} onChange={e => setArchiveDateFilter(e.target.value)}
-                                    className="h-8 pl-8 pr-2 rounded-lg border text-xs outline-none transition-colors"
-                                    style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                                {archiveDateFilter && (
-                                    <button onClick={() => setArchiveDateFilter('')}
-                                        className="absolute -right-1 -top-1 w-4 h-4 rounded-full flex items-center justify-center text-white"
-                                        style={{ backgroundColor: 'var(--text-tertiary)', fontSize: '8px' }}>
-                                        <X size={8} />
-                                    </button>
+                            <div className="flex-1 overflow-y-auto p-2 space-y-3">
+                                {filteredArchived.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-10">
+                                        <Archive size={20} className="mb-2 opacity-20" style={{ color: 'var(--text-tertiary)' }} />
+                                        <p className="text-[11px] font-medium text-center" style={{ color: 'var(--text-tertiary)' }}>
+                                            {archivedItems.length === 0 ? (isZh ? '暂无归档' : 'No archive') : (isZh ? '无匹配结果' : 'No match')}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    Object.entries(archivedByDate).sort(([a], [b]) => b.localeCompare(a)).map(([dateKey, dateItems]) => {
+                                        const d = new Date(dateKey);
+                                        const label = dateKey === formatDateShort(new Date().toISOString())
+                                            ? (isZh ? '今天' : 'Today')
+                                            : `${d.getMonth() + 1}/${d.getDate()}`;
+                                        return (
+                                            <div key={dateKey}>
+                                                <div className="flex items-center gap-2 mb-1.5">
+                                                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+                                                    <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    {dateItems.map(item => (
+                                                        <div key={item.id} className="rounded-lg p-2" style={{ backgroundColor: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)' }}>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className={`w-3.5 h-3.5 rounded bg-gradient-to-br ${TYPE_CONFIG[item.type].color} flex items-center justify-center text-white shrink-0`}>
+                                                                    {React.createElement(TYPE_CONFIG[item.type].icon, { size: 7 })}
+                                                                </div>
+                                                                <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
                                 )}
                             </div>
-                        </div>
-                        <div className="flex-1 overflow-auto p-4 space-y-4">
-                            {filteredArchived.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-16">
-                                    <Archive size={32} className="mb-3 opacity-20" style={{ color: 'var(--text-tertiary)' }} />
-                                    <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
-                                        {archivedItems.length === 0 ? (isZh ? '还没有归档记录' : 'No archived items yet') : (isZh ? '没有匹配的结果' : 'No matching results')}
-                                    </p>
-                                </div>
-                            ) : (
-                                Object.entries(archivedByDate).sort(([a], [b]) => b.localeCompare(a)).map(([dateKey, dateItems]) => {
-                                    const d = new Date(dateKey);
-                                    const label = dateKey === formatDateShort(new Date().toISOString())
-                                        ? (isZh ? '今天' : 'Today')
-                                        : `${d.getMonth() + 1}/${d.getDate()}`;
-                                    return (
-                                        <div key={dateKey}>
-                                            <div className="flex items-center gap-3 mb-2">
-                                                <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: '#F2C94C' }} />
-                                                <span className="text-xs font-bold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-                                                <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
-                                            </div>
-                                            <div className="space-y-2 pl-1 border-l-2 ml-1" style={{ borderColor: 'rgba(242,201,76,0.2)' }}>
-                                                {dateItems.map(item => (
-                                                    <div key={item.id} className="relative rounded-xl p-3 border ml-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)' }}>
-                                                        <div className="absolute -left-[1.35rem] top-4 w-2 h-2 rounded-full" style={{ backgroundColor: 'rgba(242,201,76,0.4)' }} />
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${TYPE_CONFIG[item.type].color} flex items-center justify-center text-white`}>
-                                                                {React.createElement(TYPE_CONFIG[item.type].icon, { size: 10 })}
-                                                            </div>
-                                                            <span className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
-                                                            <span className="text-[10px] ml-auto shrink-0" style={{ color: 'var(--text-tertiary)' }}>{formatDate(item.completedAt)}</span>
-                                                        </div>
-                                                        {(item.notes || item.feedback) && (
-                                                            <div className="mt-2 space-y-1 pl-7">
-                                                                {item.notes && (
-                                                                    <div className="flex items-start gap-1.5">
-                                                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
-                                                                        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.notes}</p>
-                                                                    </div>
-                                                                )}
-                                                                {item.feedback && (
-                                                                    <div className="flex items-start gap-1.5">
-                                                                        <Edit3 size={10} className="mt-0.5 shrink-0" style={{ color: 'var(--text-tertiary)' }} />
-                                                                        <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{item.feedback}</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => setArchiveOpen(true)}
+                            className="flex flex-col items-center py-3 w-full"
+                            style={{ color: 'var(--text-tertiary)' }}
+                            title={isZh ? '展开归档' : 'Expand archive'}
+                        >
+                            <Archive size={14} />
+                            <span className="text-[9px] mt-1" style={{ writingMode: 'vertical-rl' }}>{isZh ? '归档' : 'Archive'}</span>
+                        </button>
+                    )}
                 </div>
-            )}
+            </div>
 
             {CreateModal}
             {EditModal}

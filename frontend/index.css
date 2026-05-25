@@ -56,6 +56,13 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
+
+  /* Kanban */
+  --kanban-gap: 0.75rem;
+  --zebra-even: rgba(0, 0, 0, 0.025);
+  --zebra-hover: rgba(0, 0, 0, 0.05);
+  --ghost-border-opacity: 0.35;
+  --ghost-hover-opacity: 0.1;
 }
 
 .dark {
@@ -106,6 +113,13 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: #475569;
   --scrollbar-thumb-hover: #64748b;
+
+  /* Kanban */
+  --kanban-gap: 0.75rem;
+  --zebra-even: rgba(255, 255, 255, 0.03);
+  --zebra-hover: rgba(255, 255, 255, 0.06);
+  --ghost-border-opacity: 0.35;
+  --ghost-hover-opacity: 0.1;
 }
 
 input, select, textarea, button, [role="button"] {
@@ -240,4 +254,123 @@ body {
 
 .dark .bg-gradient-to-br.from-primary-dark.to-primary {
   background: linear-gradient(to bottom right, #2563eb, #3b82f6) !important;
+}
+
+/* ========== Kanban Grid ========== */
+.kanban-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--kanban-gap);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1023px) {
+  .kanban-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 767px) {
+  .kanban-grid { grid-template-columns: 1fr; overflow-y: auto; }
+}
+
+.kanban-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.kanban-column-list {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 40px;
+}
+
+/* ========== Ghost Button ========== */
+.ghost-btn {
+  background: transparent;
+  border: 1px solid;
+  transition: all 0.2s ease;
+}
+
+/* ========== Compact Card (Zebra Striping) ========== */
+.compact-card:nth-child(even) {
+  background-color: var(--zebra-even);
+}
+.compact-card:hover {
+  background-color: var(--zebra-hover);
+}
+
+/* ========== Mobile Accordion ========== */
+.accordion-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+}
+.accordion-content.open {
+  max-height: 800px;
+  opacity: 1;
+}
+
+/* ========== Animations ========== */
+@keyframes urgentGlow {
+  0%, 100% { border-color: rgba(229,115,115,0.5); }
+  50% { border-color: rgba(229,115,115,0.8); }
+}
+
+@keyframes scheduleFlyOut {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.8) translateX(40px); }
+}
+.schedule-fly-out {
+  animation: scheduleFlyOut 0.6s ease forwards;
+}
+
+/* ========== Card Hover ========== */
+.schedule-card {
+  transition: box-shadow 0.2s ease;
+}
+.schedule-card:hover {
+  box-shadow: var(--shadow-md) !important;
+}
+
+/* ========== Long-Press Progress Bar Effects ========== */
+@keyframes progressShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes cardBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.012); }
+}
+
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50%      { transform: scale(1.6); opacity: 0.4; }
+}
+
+/* ========== Sidebar Transition ========== */
+.sidebar-transition {
+  transition: width 0.25s ease;
+}
+
+.main-offset-transition {
+  transition: margin-left 0.25s ease;
+}
+
+/* ========== Archive Panel ========== */
+.archive-panel {
+  width: 280px;
+  min-width: 280px;
+  transition: width 0.25s ease, min-width 0.25s ease, padding 0.25s ease, opacity 0.25s ease;
+  overflow: hidden;
+}
+.archive-panel.collapsed {
+  width: 24px;
+  min-width: 24px;
+  padding: 0;
 }

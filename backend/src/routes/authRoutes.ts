@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/authMiddleware';
 import { logActivity } from '../services/activityLogger';
+import { prisma } from '../index';
 
 const router = Router();
-const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
 
 // POST /api/auth/login
@@ -41,7 +40,7 @@ router.post('/login', async (req, res) => {
         );
 
         const ip = req.ip || req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
-        logActivity(user.id, 'login', 'auth', { username: user.username }, ip).catch(() => {});
+        logActivity(user.id, 'login', 'auth', { username: user.username }, ip).catch(err => console.error('登录活动记录失败:', err));
 
         res.json({
             token,

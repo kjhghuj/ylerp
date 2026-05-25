@@ -21,10 +21,8 @@ declare global {
 /**
  * Verify JWT token and attach user to request
  */
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
-
-const prisma = new PrismaClient();
+import { prisma } from '../index';
 
 export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;

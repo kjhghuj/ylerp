@@ -37,6 +37,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - NODE_ENV=production
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-yangling_erp}?schema=public
       - REDIS_URL=redis://redis:6379
       - PORT=3002
