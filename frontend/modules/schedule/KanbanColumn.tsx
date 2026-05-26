@@ -38,6 +38,38 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   const config = TYPE_CONFIG[type];
   const empty = items.length === 0;
 
+  const renderEmptyState = () => (
+    <div className="flex flex-col items-center justify-center py-8 px-3">
+      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center text-white opacity-25 mb-2`}>
+        {React.createElement(config.icon, { size: 16 })}
+      </div>
+      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+        {isZh ? '暂无任务' : 'No items'}
+      </p>
+      <button
+        onClick={() => onCreate(type)}
+        className="mt-2 text-[11px] font-medium ghost-btn px-3 py-1 rounded-lg"
+        style={{
+          borderColor: 'var(--border-default)',
+          color: 'var(--text-tertiary)',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = `rgba(${config.progressRgb}, 0.12)`;
+          e.currentTarget.style.borderColor = `rgba(${config.progressRgb}, 0.4)`;
+          e.currentTarget.style.color = 'var(--text-primary)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.borderColor = 'var(--border-default)';
+          e.currentTarget.style.color = 'var(--text-tertiary)';
+        }}
+      >
+        <Plus size={10} className="inline mr-0.5" />
+        {isZh ? '新建' : 'New'}
+      </button>
+    </div>
+  );
+
   const renderItemCard = (item: ScheduleItemData, idx: number) => (
     <ItemCard
       key={item.id}
@@ -110,42 +142,19 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       </div>
 
       {/* Card List */}
-      <div className={`${isAccordion ? (isExpanded ? 'accordion-content open' : 'accordion-content') : ''}`}>
+      {isAccordion ? (
+        <div className={isExpanded ? 'accordion-content open' : 'accordion-content'}>
+          <div className="kanban-column-list p-1 space-y-1">
+            {items.map((item, idx) => renderItemCard(item, idx))}
+            {empty && renderEmptyState()}
+          </div>
+        </div>
+      ) : (
         <div className="kanban-column-list p-1 space-y-1">
           {items.map((item, idx) => renderItemCard(item, idx))}
-          {empty && (
-            <div className="flex flex-col items-center justify-center py-8 px-3">
-              <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center text-white opacity-25 mb-2`}>
-                {React.createElement(config.icon, { size: 16 })}
-              </div>
-              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                {isZh ? '暂无任务' : 'No items'}
-              </p>
-              <button
-                onClick={() => onCreate(type)}
-                className="mt-2 text-[11px] font-medium ghost-btn px-3 py-1 rounded-lg"
-                style={{
-                  borderColor: 'var(--border-default)',
-                  color: 'var(--text-tertiary)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = `rgba(${config.progressRgb}, 0.12)`;
-                  e.currentTarget.style.borderColor = `rgba(${config.progressRgb}, 0.4)`;
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.borderColor = 'var(--border-default)';
-                  e.currentTarget.style.color = 'var(--text-tertiary)';
-                }}
-              >
-                <Plus size={10} className="inline mr-0.5" />
-                {isZh ? '新建' : 'New'}
-              </button>
-            </div>
-          )}
+          {empty && renderEmptyState()}
         </div>
-      </div>
+      )}
     </div>
   );
 };
