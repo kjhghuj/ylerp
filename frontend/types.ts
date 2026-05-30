@@ -34,7 +34,10 @@ export interface FinanceRecord {
   amount: number;
   category: string;
   description: string;
-  accountId: 'main'; 
+  accountId: 'main';
+  userId?: string;
+  updatedBy?: string;
+  user?: { id: string; displayName: string };
 }
 
 export interface InventoryItem {

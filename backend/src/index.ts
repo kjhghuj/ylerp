@@ -64,6 +64,7 @@ import restockRecordRoutes from './routes/restockRecordRoutes';
 import scheduleRoutes from './routes/scheduleRoutes';
 import chromaRecordRoutes from './routes/chromaRecordRoutes';
 import usageRoutes from './routes/usageRoutes';
+import { startFinanceBackup } from './services/financeBackup';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
@@ -86,6 +87,8 @@ app.use('/api/usage', usageRoutes);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
+
+startFinanceBackup();
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

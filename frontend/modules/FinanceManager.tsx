@@ -12,6 +12,7 @@ import { MonthPickerModal } from './finance/modals/MonthPickerModal';
 import { DatePickerModal } from './finance/modals/DatePickerModal';
 import { AddTransactionModal } from './finance/modals/AddTransactionModal';
 import { DayDetailModal } from './finance/modals/DayDetailModal';
+import { PasswordConfirmModal } from './finance/modals/PasswordConfirmModal';
 import { MonthGroup } from './finance/components/MonthGroup';
 
 export const FinanceManager: React.FC = () => {
@@ -27,6 +28,7 @@ export const FinanceManager: React.FC = () => {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showAddTransModal, setShowAddTransModal] = useState(false);
     const [selectedDetailDate, setSelectedDetailDate] = useState<string | null>(null);
+    const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; action: () => void } | null>(null);
 
     // --- Accordion State ---
     const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
@@ -144,12 +146,15 @@ export const FinanceManager: React.FC = () => {
         reader.readAsText(file);
     };
 
-    const handleClearData = async () => {
+    const handleClearData = () => {
         if (financeRecords.length === 0) return;
-        if (window.confirm("确定要清空所有的财务流水数据吗？清空后将无法恢复！")) {
-            await clearAllTransactions();
-            alert("账本数据已全部清空。");
-        }
+        setConfirmAction({
+            title: '清空全部数据',
+            description: '此操作不可恢复，所有财务流水将被删除',
+            action: async () => {
+                await clearAllTransactions();
+            }
+        });
     };
 
     const handleExportJSON = () => {
@@ -458,6 +463,14 @@ export const FinanceManager: React.FC = () => {
             }} existingMonths={existingMonths} t={t} />
             <DatePickerModal isOpen={showDatePicker} onClose={() => setShowDatePicker(false)} onSelect={(d) => setActiveDate(d)} existingDates={existingDates} t={t} />
             <AddTransactionModal isOpen={showAddTransModal} onClose={() => setShowAddTransModal(false)} onAdd={handleAddTransaction} initialDate={activeDate} t={t} />
+            {confirmAction && (
+                <PasswordConfirmModal
+                    title={confirmAction.title}
+                    description={confirmAction.description}
+                    onClose={() => setConfirmAction(null)}
+                    onConfirm={confirmAction.action}
+                />
+            )}
 
             {/* Top Section: KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 shrink-0">
@@ -525,9 +538,11 @@ export const FinanceManager: React.FC = () => {
                                 onDateSelect={setActiveDate}
                                 onDateDetail={setSelectedDetailDate}
                                 onDeleteMonth={() => {
-                                    if (window.confirm(`确定要删除 ${formatMonthTitle(monthKey)} 的所有流水数据吗？`)) {
-                                        deleteTransactionsByMonth(monthKey);
-                                    }
+                                    setConfirmAction({
+                                        title: '删除月份数据',
+                                        description: `确定要删除 ${formatMonthTitle(monthKey)} 的所有流水数据吗？`,
+                                        action: () => deleteTransactionsByMonth(monthKey)
+                                    });
                                 }}
                                 formatMonthTitle={formatMonthTitle}
                                 getDayLabel={getDayLabel}

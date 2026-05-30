@@ -21,7 +21,8 @@ const FIELD_CONFIG = [
     { key: 'rentUtilities', type: 'expense', category: 'Operations', label: '房租水电', color: 'slate' },
     { key: 'freightCost', type: 'expense', category: 'Logistics', label: '物流运费', color: 'slate' },
     { key: 'salary', type: 'expense', category: 'HR', label: '人工薪资', color: 'slate' },
-    { key: 'other', type: 'other', category: '', label: '其他收支', color: 'slate' },
+    { key: 'otherIncome', type: 'income', category: '其他收入', label: '其他收入', color: 'teal' },
+    { key: 'otherExpense', type: 'expense', category: '其他支出', label: '其他支出', color: 'rose' },
 ] as const;
 
 const COLORS: Record<string, { bg: string; text: string; border: string; focus: string }> = {
@@ -29,6 +30,8 @@ const COLORS: Record<string, { bg: string; text: string; border: string; focus: 
     amber: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', focus: 'focus:border-amber-400 focus:ring-amber-100' },
     indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', focus: 'focus:border-indigo-400 focus:ring-indigo-100' },
     slate: { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200', focus: 'focus:border-slate-400 focus:ring-slate-100' },
+    teal: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', focus: 'focus:border-teal-400 focus:ring-teal-100' },
+    rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', focus: 'focus:border-rose-400 focus:ring-rose-100' },
 };
 
 export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t }) => {
@@ -43,10 +46,14 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
         const newFields: Record<string, FieldState> = {};
 
         FIELD_CONFIG.forEach(cfg => {
-            let matched = dayRecords.find(r => {
-                if (cfg.key === 'other') return r.type === 'income' && r.category !== 'Revenue' || r.type === 'expense' && !['Operations', 'Logistics', 'HR'].includes(r.category);
-                return r.type === cfg.type && r.category === cfg.category;
-            });
+            let matched;
+            if (cfg.key === 'otherIncome') {
+                matched = dayRecords.find(r => r.type === 'income' && r.category !== 'Revenue');
+            } else if (cfg.key === 'otherExpense') {
+                matched = dayRecords.find(r => r.type === 'expense' && !['Operations', 'Logistics', 'HR'].includes(r.category));
+            } else {
+                matched = dayRecords.find(r => r.type === cfg.type && r.category === cfg.category);
+            }
             newFields[cfg.key] = {
                 amount: matched ? matched.amount.toString() : '',
                 note: matched ? matched.description : '',
@@ -78,27 +85,15 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
                 const amount = parseFloat(f?.amount || '0');
                 if (isNaN(amount) || amount === 0) continue;
 
-                if (cfg.key === 'other') {
-                    await addTransaction({
-                        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-                        date,
-                        type: amount > 0 ? 'income' : 'expense',
-                        amount: Math.abs(amount),
-                        category: 'General',
-                        description: f?.note || '其他收支',
-                        accountId: 'main'
-                    });
-                } else {
-                    await addTransaction({
-                        id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-                        date,
-                        type: cfg.type as any,
-                        amount,
-                        category: cfg.category,
-                        description: f?.note || cfg.label,
-                        accountId: 'main'
-                    });
-                }
+                await addTransaction({
+                    id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+                    date,
+                    type: cfg.type as any,
+                    amount,
+                    category: cfg.category,
+                    description: f?.note || cfg.label,
+                    accountId: 'main'
+                });
             }
             showToast('保存成功', 'success');
             onClose();
@@ -154,6 +149,19 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
                             </div>
                         );
                     })}
+
+                    {date && (() => {
+                        const dayRecords = financeRecords.filter(r => r.date === date);
+                        const creator = dayRecords.find(r => r.user?.displayName)?.user?.displayName;
+                        const modifier = dayRecords.find(r => r.updatedBy)?.updatedBy;
+                        if (!creator && !modifier) return null;
+                        return (
+                            <div className="mt-3 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
+                                {creator && <p>创建者: <span className="font-medium text-slate-700">{creator}</span></p>}
+                                {modifier && <p>最后修改: <span className="font-medium text-slate-700">{modifier}</span></p>}
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">

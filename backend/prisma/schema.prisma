@@ -38,6 +38,7 @@ model FinanceRecord {
   description String
   accountId   String
   userId      String
+  updatedBy   String?
   user        User     @relation(fields: [userId], references: [id])
 }
 
