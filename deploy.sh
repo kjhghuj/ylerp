@@ -21,7 +21,7 @@ docker compose -f "$COMPOSE_FILE" build --parallel
 docker compose -f "$COMPOSE_FILE" up -d --force-recreate --remove-orphans
 
 log "运行数据库迁移..."
-docker compose -f "$COMPOSE_FILE" exec -T api npx prisma migrate deploy 2>/dev/null || true
+docker compose -f "$COMPOSE_FILE" exec -T api npx prisma migrate deploy
 
 log "清理旧镜像和构建缓存..."
 docker image prune -f
