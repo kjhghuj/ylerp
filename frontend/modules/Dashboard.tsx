@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
-import { TrendingUp, AlertTriangle, DollarSign, Package, Bell, Clock, ChevronRight } from 'lucide-react';
+import { TrendingUp, AlertTriangle, DollarSign, Package, Bell, Clock, ChevronRight, RefreshCw } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { hasPermission } from '../components/PermissionTree';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 import api from '../src/api';
 
 interface UpcomingItem {
@@ -25,11 +26,15 @@ const TYPE_LABEL: Record<string, { zh: string; color: string }> = {
   notification: { zh: '提醒', color: '#E57373' },
 };
 
+const CURRENCIES = ['MYR', 'SGD', 'PHP', 'THB', 'IDR'] as const;
+
 export const Dashboard: React.FC = () => {
   const { accountBalance, totalDebt, products, inventory, strings } = useStore();
   const { user } = useAuth();
   const t = strings.dashboard;
   const isZh = strings.sidebar?.dashboard === '总览仪表盘';
+  const { rates, isLoading, lastUpdated, fetchRates } = useExchangeRates();
+  const [cnyToLocal, setCnyToLocal] = useState(false);
 
   const perms = user?.permissions || [];
   const isOwner = user?.role === 'owner';
@@ -85,13 +90,42 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-8">
-        <div>
+      <div className="flex justify-between items-start mb-8 gap-4">
+        <div className="shrink-0">
           <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{t.title}</h2>
           <p className="text-slate-500 dark:text-slate-400">{t.subtitle}</p>
         </div>
-        <div className="text-sm text-slate-400 dark:text-slate-500">
-          {t.lastUpdated}
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <div className="flex items-center gap-1 flex-wrap">
+            {CURRENCIES.map(ccy => {
+              const rate = cnyToLocal ? (rates[ccy] || 0) : (1 / (rates[ccy] || 1));
+              const decimals = ccy === 'IDR' ? 0 : 4;
+              return (
+                <span key={ccy} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600/50 whitespace-nowrap">
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">{cnyToLocal ? ccy : `1 ${ccy}`}</span>
+                  <span className="tabular-nums">{rate.toFixed(decimals)}</span>
+                  {!cnyToLocal && <span className="text-[10px] text-slate-400 dark:text-slate-500">CNY</span>}
+                </span>
+              );
+            })}
+          </div>
+          <button
+            onClick={() => setCnyToLocal(!cnyToLocal)}
+            className="text-[10px] font-bold px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-700/60 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600/50 transition-colors"
+            title={cnyToLocal ? '切换为 1本地币 → CNY' : '切换为 1CNY → 本地币'}
+          >
+            {cnyToLocal ? 'CNY→' : '→CNY'}
+          </button>
+          <button
+            onClick={fetchRates}
+            disabled={isLoading}
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+          {lastUpdated && (
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-0.5">{lastUpdated}</span>
+          )}
         </div>
       </div>
 

@@ -8,7 +8,7 @@ import { PlatformCard } from './PlatformCard';
 import { ProfitTemplate, SiteLevelInputs, DEFAULT_SITE_INPUTS } from './profit/types';
 import { useProfitImport } from './profit/useProfitImport';
 import { useProductActions } from './profit/useProductActions';
-import { useExchangeRates } from './profit/useExchangeRates';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 import { AddNodeMenu } from './profit/AddNodeMenu';
 import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
 import { PlatformType } from '../platformConfig';

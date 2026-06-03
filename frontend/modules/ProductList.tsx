@@ -11,7 +11,7 @@ import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
 import { useToast } from '../components/Toast';
 import { DEFAULT_NODE_DATA, type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
-import { useExchangeRates } from './profit/useExchangeRates';
+import { useExchangeRates } from '../hooks/useExchangeRates';
 
 interface LinkedTemplate {
     id: string;
