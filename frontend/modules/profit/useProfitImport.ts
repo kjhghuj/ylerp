@@ -46,7 +46,8 @@ export const useProfitImport = (
             const importNodeList = calculatorImportNodes.length > 0
                 ? calculatorImportNodes.map(n => ({
                     id: genId(),
-                    templateId: n.id,
+                    templateId: n.templateId || undefined,
+                    productTemplateLinkId: n.productTemplateLinkId || n.id,
                     platform: n.platform || 'other',
                     currency: n.country,
                     name: n.name,

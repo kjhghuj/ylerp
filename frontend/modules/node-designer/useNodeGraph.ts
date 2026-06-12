@@ -28,6 +28,16 @@ const DEFAULT_OUTPUT_DATA: OutputNodeData = {
   name: '输出',
 };
 
+const normalizeEdge = (edge: DesignerEdge): DesignerEdge => ({
+  ...edge,
+  id:
+    edge.id ||
+    `${edge.source}-${edge.sourceHandle || 'out'}-${edge.target}-${
+      edge.targetHandle || 'in'
+    }`,
+  type: 'editable',
+});
+
 export function useNodeGraph() {
   const [nodes, setNodes, onNodesChange] = useNodesState<DesignerNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<DesignerEdge>([]);
@@ -50,6 +60,11 @@ export function useNodeGraph() {
         };
       }),
     [nodes, graphResult]
+  );
+
+  const selectedNodeWithLatestData = useMemo(
+    () => selectedNode ? nodesWithValues.find((n) => n.id === selectedNode.id) || null : null,
+    [selectedNode, nodesWithValues]
   );
 
   const addParameterNode = useCallback(() => {
@@ -90,22 +105,36 @@ export function useNodeGraph() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
-      const newEdge = {
-        id: '',
+      if (!connection.source || !connection.target) return;
+
+      const nextEdge = normalizeEdge({
+        id: `${connection.source}-${connection.sourceHandle || 'out'}-${
+          connection.target
+        }-${connection.targetHandle || 'in'}-${Date.now()}`,
         source: connection.source,
         sourceHandle: connection.sourceHandle || undefined,
         target: connection.target,
         targetHandle: connection.targetHandle || undefined,
-      };
+      });
       const wouldCycle = hasCycle([
         ...edges.map((e) => ({ source: e.source, target: e.target })),
-        newEdge,
+        { source: nextEdge.source, target: nextEdge.target },
       ]);
       if (wouldCycle) {
         alert('不能创建循环依赖');
         return;
       }
-      setEdges((eds) => addEdge(connection, eds));
+
+      setEdges((eds) => {
+        const withoutExistingInput = eds.filter(
+          (edge) =>
+            !(
+              edge.target === nextEdge.target &&
+              edge.targetHandle === nextEdge.targetHandle
+            )
+        );
+        return addEdge(nextEdge, withoutExistingInput).map(normalizeEdge);
+      });
     },
     [edges, setEdges]
   );
@@ -117,6 +146,13 @@ export function useNodeGraph() {
   const onPaneClick = useCallback(() => {
     setSelectedNode(null);
   }, []);
+
+  const onEdgeDoubleClick = useCallback(
+    (_event: React.MouseEvent, edge: DesignerEdge) => {
+      setEdges((eds) => eds.filter((e) => e.id !== edge.id));
+    },
+    [setEdges]
+  );
 
   const updateNodeData = useCallback(
     (id: string, data: Record<string, any>) => {
@@ -130,8 +166,15 @@ export function useNodeGraph() {
   );
 
   const saveTemplate = useCallback(
-    async (name: string) => {
-      await api.post('/node-graphs', { name, nodes, edges });
+    async (name: string, metadata?: { country?: string; platform?: string; type?: string }) => {
+      await api.post('/node-graphs', {
+        name,
+        nodes,
+        edges,
+        type: metadata?.type || 'profit',
+        country: metadata?.country,
+        platform: metadata?.platform,
+      });
     },
     [nodes, edges]
   );
@@ -141,14 +184,21 @@ export function useNodeGraph() {
       const res = await api.get(`/node-graphs/${id}`);
       const template = res.data;
       setNodes(Array.isArray(template?.nodes) ? template.nodes : []);
-      setEdges(Array.isArray(template?.edges) ? template.edges : []);
+      setEdges(
+        Array.isArray(template?.edges) ? template.edges.map(normalizeEdge) : []
+      );
       setSelectedNode(null);
     },
     [setNodes, setEdges]
   );
 
-  const loadTemplates = useCallback(async (): Promise<{ id: string; name: string }[]> => {
-    const res = await api.get('/node-graphs');
+  const loadTemplates = useCallback(async (filters?: { type?: string; country?: string; platform?: string }): Promise<{ id: string; name: string; country?: string; platform?: string; type?: string }[]> => {
+    const params = new URLSearchParams();
+    if (filters?.type) params.set('type', filters.type);
+    if (filters?.country) params.set('country', filters.country);
+    if (filters?.platform) params.set('platform', filters.platform);
+    const query = params.toString();
+    const res = await api.get(`/node-graphs${query ? `?${query}` : ''}`);
     return res.data;
   }, []);
 
@@ -176,12 +226,13 @@ export function useNodeGraph() {
   return {
     nodes: nodesWithValues,
     edges,
-    selectedNode,
+    selectedNode: selectedNodeWithLatestData,
     onNodesChange,
     onEdgesChange,
     onConnect,
     onNodeClick,
     onPaneClick,
+    onEdgeDoubleClick,
     addParameterNode,
     addFormulaNode,
     addOutputNode,

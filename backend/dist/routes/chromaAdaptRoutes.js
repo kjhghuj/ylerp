@@ -97,7 +97,7 @@ router.post('/generate', async (req, res) => {
         const imageUrl = result?.data?.[0]?.url || '';
         const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, '');
         const usedModel = model || 'doubao-seedream-4.5';
-        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'generate', model: usedModel }).catch(() => { });
+        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'generate', model: usedModel }).catch(err => console.error("活动记录失败:", err));
         res.json({ ...result, data: [{ url: imageDataUrl }], cost: config_1.MODEL_COSTS[usedModel] || 0 });
     }
     catch (error) {
@@ -117,7 +117,7 @@ router.post('/edit', async (req, res) => {
         const imageUrl = generated?.data?.[0]?.url || '';
         const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, image);
         const usedModel = model || 'doubao-seedream-4.5';
-        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'edit', model: usedModel }).catch(() => { });
+        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'edit', model: usedModel }).catch(err => console.error("活动记录失败:", err));
         res.json({ ...generated, data: [{ url: imageDataUrl }], cost: config_1.MODEL_COSTS[usedModel] || 0 });
     }
     catch (error) {
@@ -141,7 +141,7 @@ router.post('/color-adaptation', async (req, res) => {
         const imageUrl = generated?.data?.[0]?.url || '';
         const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, poster_image);
         const usedModel = model || 'doubao-seedream-4.5';
-        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'color-adaptation', model: usedModel }).catch(() => { });
+        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'color-adaptation', model: usedModel }).catch(err => console.error("活动记录失败:", err));
         res.json({ data: [{ url: imageDataUrl }], cost: config_1.MODEL_COSTS[usedModel] || 0 });
     }
     catch (error) {
@@ -162,7 +162,7 @@ router.post('/translate', async (req, res) => {
         const imageUrl = generated?.data?.[0]?.url || '';
         const imageDataUrl = await (0, imageUtils_1.downloadImageAsDataUrl)(imageUrl, image);
         const usedModel = model || 'doubao-seedream-4.5';
-        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'translate', model: usedModel, target_lang }).catch(() => { });
+        (0, activityLogger_1.logActivity)(req.user.id, 'image_generate', 'chroma', { mode: 'translate', model: usedModel, target_lang }).catch(err => console.error("活动记录失败:", err));
         res.json({
             translation_instructions: {
                 translations: [],

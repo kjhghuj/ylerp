@@ -42,7 +42,7 @@ router.get('/:country', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
-        const { name, country, data, type, platform, productId } = req.body;
+        const { name, country, data, type, platform } = req.body;
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
@@ -54,10 +54,9 @@ router.post('/', async (req, res) => {
                 type: type || 'profit',
                 platform,
                 userId,
-                ...(productId ? { productId } : {}),
             }
         });
-        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(() => { });
+        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(template);
     }
     catch (error) {
@@ -86,7 +85,7 @@ router.put('/:id', async (req, res) => {
     try {
         const userId = req.user.id;
         const { id } = req.params;
-        const { name, country, data, type, platform, productId } = req.body;
+        const { name, country, data, type, platform } = req.body;
         const existing = await index_1.prisma.profitTemplate.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
@@ -98,10 +97,9 @@ router.put('/:id', async (req, res) => {
                 ...(data ? { data } : {}),
                 ...(type ? { type } : {}),
                 ...(platform !== undefined ? { platform } : {}),
-                ...(productId !== undefined ? { productId } : {}),
             }
         });
-        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(() => { });
+        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(err => console.error("活动记录失败:", err));
         res.json(template);
     }
     catch (error) {

@@ -118,7 +118,7 @@ router.post('/records', async (req, res) => {
                 userId,
             },
         });
-        (0, activityLogger_1.logActivity)(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(() => { });
+        (0, activityLogger_1.logActivity)(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(record);
     }
     catch (error) {

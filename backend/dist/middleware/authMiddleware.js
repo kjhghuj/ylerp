@@ -9,16 +9,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
 /**
  * Verify JWT token and attach user to request
  */
-const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
-const prisma = new client_1.PrismaClient();
+const index_1 = require("../index");
 const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (process.env.NODE_ENV !== 'production' && authHeader === 'Bearer dev-token') {
-        let owner = await prisma.user.findFirst({ where: { role: 'owner' } });
+        let owner = await index_1.prisma.user.findFirst({ where: { role: 'owner' } });
         if (!owner) {
             const hashedPassword = await bcrypt_1.default.hash('admin123', 10);
-            owner = await prisma.user.create({
+            owner = await index_1.prisma.user.create({
                 data: { username: 'admin', password: hashedPassword, displayName: '管理员', role: 'owner', isActive: true },
             });
             console.log('[Dev] 自动创建 owner 账户: admin / admin123');

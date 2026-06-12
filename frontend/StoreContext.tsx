@@ -7,6 +7,8 @@ type Language = 'zh' | 'en';
 
 export interface ImportedNode {
     id?: string;
+    templateId?: string | null;
+    productTemplateLinkId?: string;
     productId?: string;
     name: string;
     country: string;

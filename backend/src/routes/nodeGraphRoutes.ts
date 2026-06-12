@@ -9,6 +9,9 @@ const templateSchema = z.object({
   name: z.string().min(1, 'Template name is required'),
   nodes: z.array(z.unknown()),
   edges: z.array(z.unknown()),
+  country: z.string().optional().nullable(),
+  platform: z.string().optional().nullable(),
+  type: z.string().optional(),
   productId: z.string().optional().nullable(),
 });
 
@@ -19,9 +22,15 @@ const castJson = (value: unknown[]): Prisma.InputJsonValue => value as Prisma.In
 router.get('/', async (req, res) => {
   try {
     const userId = req.user!.id;
+    const { type, country, platform } = req.query;
     const templates = await prisma.nodeGraphTemplate.findMany({
-      where: { userId },
-      select: { id: true, name: true, createdAt: true },
+      where: {
+        userId,
+        ...(type ? { type: String(type) } : {}),
+        ...(country ? { country: String(country) } : {}),
+        ...(platform ? { platform: String(platform) } : {}),
+      },
+      select: { id: true, name: true, country: true, platform: true, type: true, createdAt: true },
       orderBy: { updatedAt: 'desc' },
     });
     res.json(templates);
@@ -52,6 +61,9 @@ router.post('/', async (req, res) => {
     const template = await prisma.nodeGraphTemplate.create({
       data: {
         name: parsed.name,
+        type: parsed.type || 'profit',
+        country: parsed.country ?? undefined,
+        platform: parsed.platform ?? undefined,
         nodes: castJson(parsed.nodes),
         edges: castJson(parsed.edges),
         productId: parsed.productId ?? undefined,
@@ -80,6 +92,9 @@ router.put('/:id', async (req, res) => {
 
     const data: Record<string, unknown> = {};
     if (parsed.name !== undefined) data.name = parsed.name;
+    if (parsed.type !== undefined) data.type = parsed.type;
+    if (parsed.country !== undefined) data.country = parsed.country;
+    if (parsed.platform !== undefined) data.platform = parsed.platform;
     if (parsed.nodes !== undefined) data.nodes = castJson(parsed.nodes);
     if (parsed.edges !== undefined) data.edges = castJson(parsed.edges);
     if (parsed.productId !== undefined) data.productId = parsed.productId;

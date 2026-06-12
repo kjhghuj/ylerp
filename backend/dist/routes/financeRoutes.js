@@ -7,13 +7,14 @@ const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
     try {
-        const userId = req.user.id;
-        const cacheKey = `finance:${userId}`;
+        const cacheKey = 'finance:all';
         const cachedFinance = await index_1.safeRedis.get(cacheKey);
         if (cachedFinance) {
             return res.json(JSON.parse(cachedFinance));
         }
-        const finance = await index_1.prisma.financeRecord.findMany({ where: { userId } });
+        const finance = await index_1.prisma.financeRecord.findMany({
+            include: { user: { select: { id: true, displayName: true } } }
+        });
         await index_1.safeRedis.set(cacheKey, JSON.stringify(finance), 'EX', 3600);
         res.json(finance);
     }
@@ -37,8 +38,8 @@ router.post('/batch', async (req, res) => {
         const result = await index_1.prisma.financeRecord.createMany({
             data: formattedRecords
         });
-        await index_1.safeRedis.del(`finance:${userId}`);
-        (0, activityLogger_1.logActivity)(userId, 'finance_import', 'finance', { count: result.count }).catch(() => { });
+        await index_1.safeRedis.del('finance:all');
+        (0, activityLogger_1.logActivity)(userId, 'finance_import', 'finance', { count: result.count }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json({ count: result.count });
     }
     catch (error) {
@@ -51,7 +52,7 @@ router.post('/', async (req, res) => {
         const userId = req.user.id;
         const recordData = { ...req.body, userId, date: new Date(req.body.date) };
         const record = await index_1.prisma.financeRecord.create({ data: recordData });
-        await index_1.safeRedis.del(`finance:${userId}`);
+        await index_1.safeRedis.del('finance:all');
         res.status(201).json(record);
     }
     catch (error) {
@@ -61,8 +62,7 @@ router.post('/', async (req, res) => {
 });
 router.put('/:id', async (req, res) => {
     try {
-        const userId = req.user.id;
-        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id } });
         if (!existing)
             return res.status(404).json({ error: 'Record not found' });
         const recordData = { ...req.body };
@@ -70,11 +70,12 @@ router.put('/:id', async (req, res) => {
             recordData.date = new Date(req.body.date);
         delete recordData.id;
         delete recordData.userId;
+        recordData.updatedBy = req.user.username;
         const record = await index_1.prisma.financeRecord.update({
             where: { id: req.params.id },
             data: recordData,
         });
-        await index_1.safeRedis.del(`finance:${userId}`);
+        await index_1.safeRedis.del('finance:all');
         res.json(record);
     }
     catch (error) {
@@ -84,9 +85,8 @@ router.put('/:id', async (req, res) => {
 });
 router.delete('/all', (0, authMiddleware_1.authorize)('owner'), async (req, res) => {
     try {
-        const userId = req.user.id;
-        await index_1.prisma.financeRecord.deleteMany({ where: { userId } });
-        await index_1.safeRedis.del(`finance:${userId}`);
+        await index_1.prisma.financeRecord.deleteMany({ where: {} });
+        await index_1.safeRedis.del('finance:all');
         res.status(204).send();
     }
     catch (error) {
@@ -96,7 +96,6 @@ router.delete('/all', (0, authMiddleware_1.authorize)('owner'), async (req, res)
 });
 router.delete('/month/:month', (0, authMiddleware_1.authorize)('owner'), async (req, res) => {
     try {
-        const userId = req.user.id;
         const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
         const [yearStr, monthStr] = monthParam.split('-');
         const year = parseInt(yearStr);
@@ -108,14 +107,13 @@ router.delete('/month/:month', (0, authMiddleware_1.authorize)('owner'), async (
         const endDate = new Date(year, month, 1);
         const result = await index_1.prisma.financeRecord.deleteMany({
             where: {
-                userId,
                 date: {
                     gte: startDate,
                     lt: endDate
                 }
             }
         });
-        await index_1.safeRedis.del(`finance:${userId}`);
+        await index_1.safeRedis.del('finance:all');
         res.json({ message: 'Deleted records', count: result.count });
     }
     catch (error) {
@@ -125,12 +123,11 @@ router.delete('/month/:month', (0, authMiddleware_1.authorize)('owner'), async (
 });
 router.delete('/:id', async (req, res) => {
     try {
-        const userId = req.user.id;
-        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id, userId } });
+        const existing = await index_1.prisma.financeRecord.findFirst({ where: { id: req.params.id } });
         if (!existing)
             return res.status(404).json({ error: 'Record not found' });
         await index_1.prisma.financeRecord.delete({ where: { id: req.params.id } });
-        await index_1.safeRedis.del(`finance:${userId}`);
+        await index_1.safeRedis.del('finance:all');
         res.status(204).send();
     }
     catch (error) {

@@ -26,7 +26,8 @@ model Product {
   platformInfrastructureFee Float            @default(0)
   siteData                  Json?
   user                      User             @relation(fields: [userId], references: [id])
-  templates                 ProfitTemplate[]
+  templates                 ProfitTemplate[] @relation("LegacyProductTemplates")
+  productTemplates          ProductProfitTemplate[]
 }
 
 model FinanceRecord {
@@ -95,8 +96,26 @@ model ProfitTemplate {
   type      String   @default("profit")
   userId    String
   productId String?
-  product   Product? @relation(fields: [productId], references: [id])
+  product   Product? @relation("LegacyProductTemplates", fields: [productId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+  productTemplates ProductProfitTemplate[]
+}
+
+model ProductProfitTemplate {
+  id         String   @id @default(uuid())
+  productId  String
+  templateId String?
+  name       String
+  country    String
+  platform   String?
+  data       Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  template   ProfitTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([productId])
+  @@index([templateId])
 }
 
 model ScheduleItem {
@@ -164,6 +183,9 @@ model NodeGraphTemplate {
   name      String
   nodes     Json
   edges     Json
+  country   String?
+  platform  String?
+  type      String   @default("profit")
   productId String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

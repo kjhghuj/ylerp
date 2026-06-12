@@ -2,6 +2,7 @@ import React from 'react';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
+import type { NodeGraphTemplate } from '../node-designer/types';
 import { translations } from '../../translations';
 
 type ProfitStrings = typeof translations['zh']['profit'];
@@ -13,7 +14,9 @@ interface AddNodeMenuProps {
     setSelectedPlatform: (platform: PlatformType) => void;
     siteCountry: string;
     allTemplates: ProfitTemplate[];
+    graphTemplates?: Pick<NodeGraphTemplate, 'id' | 'name' | 'country' | 'platform' | 'type'>[];
     onAddFromTemplate: (tpl: ProfitTemplate) => void;
+    onAddFromGraphTemplate?: (tpl: Pick<NodeGraphTemplate, 'id' | 'name' | 'country' | 'platform' | 'type'>) => void;
     onAddBlank: () => void;
     onDeleteTemplate: (id: string, e: React.MouseEvent) => void;
     t: ProfitStrings;
@@ -21,7 +24,7 @@ interface AddNodeMenuProps {
 
 export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
     showAddMenu, setShowAddMenu, selectedPlatform, setSelectedPlatform,
-    siteCountry, allTemplates, onAddFromTemplate, onAddBlank, onDeleteTemplate, t
+    siteCountry, allTemplates, graphTemplates = [], onAddFromTemplate, onAddFromGraphTemplate, onAddBlank, onDeleteTemplate, t
 }) => (
     <div className="relative">
         <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition shadow-sm">
@@ -31,6 +34,18 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
         {showAddMenu && (
             <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 p-4 z-50">
                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">{t.matrix.useTemplate}</h4>
+                {graphTemplates.length > 0 && (
+                    <div className="space-y-1 mb-4 max-h-40 overflow-y-auto">
+                        {graphTemplates.map(tpl => (
+                            <div key={tpl.id} className="flex justify-between items-center p-2 hover:bg-emerald-50 rounded-lg cursor-pointer border border-transparent hover:border-emerald-100" onClick={() => onAddFromGraphTemplate?.(tpl)}>
+                                <div>
+                                    <div className="text-sm font-bold text-slate-700">{tpl.name}</div>
+                                    <div className="text-[10px] text-emerald-600 capitalize">节点设计 · {tpl.platform || 'other'}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <div className="space-y-1 mb-4 max-h-48 overflow-y-auto">
                     {allTemplates.filter(tpl => tpl.country === siteCountry).map(tpl => (
                         <div key={tpl.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg cursor-pointer border border-transparent hover:border-slate-200" onClick={() => onAddFromTemplate(tpl)}>

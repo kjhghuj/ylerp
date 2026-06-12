@@ -75,6 +75,7 @@ const restockRecordRoutes_1 = __importDefault(require("./routes/restockRecordRou
 const scheduleRoutes_1 = __importDefault(require("./routes/scheduleRoutes"));
 const chromaRecordRoutes_1 = __importDefault(require("./routes/chromaRecordRoutes"));
 const usageRoutes_1 = __importDefault(require("./routes/usageRoutes"));
+const financeBackup_1 = require("./services/financeBackup");
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes_1.default);
 // Protected routes (auth required)
@@ -94,6 +95,7 @@ app.use('/api/usage', usageRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
+(0, financeBackup_1.startFinanceBackup)();
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });

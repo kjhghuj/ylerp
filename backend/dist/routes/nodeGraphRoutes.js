@@ -8,6 +8,9 @@ const templateSchema = zod_1.z.object({
     name: zod_1.z.string().min(1, 'Template name is required'),
     nodes: zod_1.z.array(zod_1.z.unknown()),
     edges: zod_1.z.array(zod_1.z.unknown()),
+    country: zod_1.z.string().optional().nullable(),
+    platform: zod_1.z.string().optional().nullable(),
+    type: zod_1.z.string().optional(),
     productId: zod_1.z.string().optional().nullable(),
 });
 const updateSchema = templateSchema.partial();
@@ -15,9 +18,15 @@ const castJson = (value) => value;
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
+        const { type, country, platform } = req.query;
         const templates = await index_1.prisma.nodeGraphTemplate.findMany({
-            where: { userId },
-            select: { id: true, name: true, createdAt: true },
+            where: {
+                userId,
+                ...(type ? { type: String(type) } : {}),
+                ...(country ? { country: String(country) } : {}),
+                ...(platform ? { platform: String(platform) } : {}),
+            },
+            select: { id: true, name: true, country: true, platform: true, type: true, createdAt: true },
             orderBy: { updatedAt: 'desc' },
         });
         res.json(templates);
@@ -49,6 +58,9 @@ router.post('/', async (req, res) => {
         const template = await index_1.prisma.nodeGraphTemplate.create({
             data: {
                 name: parsed.name,
+                type: parsed.type || 'profit',
+                country: parsed.country ?? undefined,
+                platform: parsed.platform ?? undefined,
                 nodes: castJson(parsed.nodes),
                 edges: castJson(parsed.edges),
                 productId: parsed.productId ?? undefined,
@@ -77,6 +89,12 @@ router.put('/:id', async (req, res) => {
         const data = {};
         if (parsed.name !== undefined)
             data.name = parsed.name;
+        if (parsed.type !== undefined)
+            data.type = parsed.type;
+        if (parsed.country !== undefined)
+            data.country = parsed.country;
+        if (parsed.platform !== undefined)
+            data.platform = parsed.platform;
         if (parsed.nodes !== undefined)
             data.nodes = castJson(parsed.nodes);
         if (parsed.edges !== undefined)

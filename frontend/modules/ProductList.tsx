@@ -12,14 +12,14 @@ import { calculateProfit } from './profit/calculateProfit';
 import { useToast } from '../components/Toast';
 import { DEFAULT_NODE_DATA, type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
+import {
+    filterProductTemplatesForSite,
+    loadProductTemplateImportNodes,
+    toProductTemplateImportNode,
+    type LinkedProductTemplate,
+} from './productTemplateImport';
 
-interface LinkedTemplate {
-    id: string;
-    productId?: string;
-    name: string;
-    country: string;
-    platform?: string;
-    data: Record<string, any>;
+interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
 }
 
@@ -191,7 +191,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         setLoadingTemplates(true);
         setAllLinkedTemplates([]);
         try {
-            const res = await api.get(`/templates?type=profit&productId=${product.id}`);
+            const res = await api.get(`/products/${product.id}/templates`);
             const allTemplates: LinkedTemplate[] = res.data || [];
             const currency = countryCurrencyMap[activeTab] || activeTab;
             const filtered = allTemplates.filter(tpl => {
@@ -208,22 +208,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const handleImportAllTemplates = () => {
         if (!selectedProduct) return;
         setCalculatorImport({ ...selectedProduct, country: activeTab });
-        const currentCountry = activeTab;
-        const currency = countryCurrencyMap[currentCountry] || currentCountry;
-        const importNodes = allLinkedTemplates
-            .filter(tpl => {
-                return tpl.country === currentCountry || tpl.country === currency;
-            })
-            .map(tpl => ({
-                id: tpl.id,
-                productId: tpl.productId,
-                name: tpl.name,
-                country: tpl.country,
-                platform: tpl.platform || 'other',
-                data: Object.fromEntries(
-                    Object.entries(tpl.data).map(([key, value]) => [key, Number(value) || 0])
-                ),
-            }));
+        const importNodes = filterProductTemplatesForSite(allLinkedTemplates, activeTab).map(toProductTemplateImportNode);
         setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
@@ -232,24 +217,21 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const handleImportSingleTemplate = (tpl: LinkedTemplate) => {
         if (!selectedProduct) return;
         setCalculatorImport({ ...selectedProduct, country: activeTab });
-        const importNodes = [tpl].map(t => ({
-            id: t.id,
-            productId: t.productId,
-            name: t.name,
-            country: t.country,
-            platform: t.platform || 'other',
-            data: Object.fromEntries(
-                Object.entries(t.data).map(([key, value]) => [key, Number(value) || 0])
-            ),
-        }));
+        const importNodes = [toProductTemplateImportNode(tpl)];
         setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
     };
 
-    const handleQuickImport = (product: ProductCalcData) => {
-        setCalculatorImport({ ...product, country: activeTab });
-        onNavigate('profit');
+    const handleQuickImport = async (product: ProductCalcData) => {
+        try {
+            const importNodes = await loadProductTemplateImportNodes(api, product.id, activeTab);
+            setCalculatorImportNodes(importNodes);
+            setCalculatorImport({ ...product, country: activeTab });
+            onNavigate('profit');
+        } catch {
+            showToast(te.templateFetchFailed, 'error');
+        }
     };
 
     const handleDelete = (product: ProductCalcData) => {
@@ -666,7 +648,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         <td className="p-3">
                                             <div className="flex items-center justify-center gap-1">
                                                 <button onClick={() => handleView(p)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="View"><Eye size={15} /></button>
-                                                <button onClick={() => handleQuickImport(p)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
+                                                <button onClick={() => { void handleQuickImport(p); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
                                                 <button onClick={() => handleDelete(p)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
                                             </div>
                                         </td>

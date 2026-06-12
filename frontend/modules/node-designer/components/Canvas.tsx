@@ -9,17 +9,24 @@ import {
   type OnNodesChange,
   type OnEdgesChange,
   type OnConnect,
+  type EdgeMouseHandler,
+  type EdgeTypes,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import ParameterNode from './ParameterNode';
 import FormulaNode from './FormulaNode';
 import OutputNode from './OutputNode';
+import EditableEdge from './EditableEdge';
 import type { DesignerNode, DesignerEdge } from '../types';
 
 const nodeTypes: NodeTypes = {
   parameter: ParameterNode,
   formula: FormulaNode,
   output: OutputNode,
+};
+
+const edgeTypes: EdgeTypes = {
+  editable: EditableEdge,
 };
 
 interface CanvasProps {
@@ -31,6 +38,7 @@ interface CanvasProps {
   onNodesDelete: (deleted: DesignerNode[]) => void;
   onNodeClick: (event: React.MouseEvent, node: DesignerNode) => void;
   onPaneClick: () => void;
+  onEdgeDoubleClick: EdgeMouseHandler<DesignerEdge>;
 }
 
 export const Canvas: React.FC<CanvasProps> = ({
@@ -42,6 +50,7 @@ export const Canvas: React.FC<CanvasProps> = ({
   onNodesDelete,
   onNodeClick,
   onPaneClick,
+  onEdgeDoubleClick,
 }) => (
   <div className="flex-1">
     <ReactFlow
@@ -53,7 +62,13 @@ export const Canvas: React.FC<CanvasProps> = ({
       onNodesDelete={onNodesDelete}
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
+      onEdgeDoubleClick={onEdgeDoubleClick}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      defaultEdgeOptions={{
+        type: 'editable',
+        interactionWidth: 28,
+      }}
       fitView
       deleteKeyCode={['Backspace', 'Delete']}
       multiSelectionKeyCode="Shift"

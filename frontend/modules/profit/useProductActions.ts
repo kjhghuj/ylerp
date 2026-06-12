@@ -3,10 +3,13 @@ import { useStore } from '../../StoreContext';
 import api from '../../src/api';
 import { ProductCalcData } from '../../types';
 import { PlatformType } from '../../platformConfig';
-import { genId, DEFAULT_NODE_DATA, ProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
+import { genId, DEFAULT_NODE_DATA, ProfitTemplate, ProductProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
 import { useToast } from '../../components/Toast';
+import type { NodeGraphTemplate } from '../node-designer/types';
 
 import { safeNumber } from './utils';
+import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from './productTemplateSync';
+import { createDefaultInputValues, evaluateNodeGraphProfitTemplate } from './nodeGraphProfitAdapter';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -73,6 +76,36 @@ export const useProductActions = (
             name: t.templates.unnamedNode,
             data: { ...DEFAULT_NODE_DATA }
         }]);
+    };
+
+    const handleAddNodeFromGraphTemplate = async (tpl: Pick<NodeGraphTemplate, 'id'>) => {
+        try {
+            const response = await api.get(`/node-graphs/${tpl.id}`);
+            const graphTemplate = response.data as NodeGraphTemplate;
+            const inputValues = createDefaultInputValues(graphTemplate);
+            const result = evaluateNodeGraphProfitTemplate(graphTemplate, inputValues);
+            setNodes(prev => [...prev, {
+                id: genId(),
+                graphTemplateId: graphTemplate.id,
+                graphTemplateSnapshot: graphTemplate,
+                graphInputValues: inputValues,
+                graphOutputValues: Object.fromEntries(result.outputs.map(output => [output.id, output.value])),
+                platform: (graphTemplate.platform || 'other') as PlatformType,
+                currency: graphTemplate.country || siteCountry,
+                name: graphTemplate.name,
+                data: { ...DEFAULT_NODE_DATA },
+            }]);
+        } catch {
+            showToast(t.errors.templateSaveFailed, 'error');
+        }
+    };
+
+    const handleUpdateGraphNodeInputs = (id: string, inputValues: Record<string, number>, outputValues: Record<string, number>) => {
+        setNodes(prev => prev.map(n => n.id === id ? {
+            ...n,
+            graphInputValues: inputValues,
+            graphOutputValues: outputValues,
+        } : n));
     };
 
     const handleSaveTemplate = async (nodeId: string, templateName: string) => {
@@ -147,48 +180,38 @@ export const useProductActions = (
         return saved?.id || null;
     };
 
-    const upsertTemplate = async (
-        existingTpl: ProfitTemplate | undefined,
-        payload: Record<string, unknown>,
-        localTemplates: ProfitTemplate[],
-    ): Promise<ProfitTemplate[]> => {
-        if (existingTpl) {
-            try {
-                await api.put(`/templates/${existingTpl.id}`, payload);
-                const updated = { ...existingTpl, data: payload.data as ProfitTemplate['data'] };
-                setAllTemplates(prev => prev.map(t => t.id === existingTpl.id ? updated : t));
-                return localTemplates.map(t => t.id === existingTpl.id ? updated : t);
-            } catch (putError: unknown) {
-                const axiosError = putError as { response?: { status?: number } };
-                if (axiosError?.response?.status !== 404) throw putError;
-                const response = await api.post('/templates', payload);
-                setAllTemplates(prev => prev.filter(t => t.id !== existingTpl.id).concat(response.data));
-                return localTemplates.filter(t => t.id !== existingTpl.id).concat(response.data);
-            }
-        }
-        const response = await api.post('/templates', payload);
-        setAllTemplates(prev => [...prev, response.data]);
-        return [...localTemplates, response.data];
-    };
-
     const syncTemplatesForNodes = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
-        let localTemplates = [...allTemplates];
+        const response = await api.get(`/products/${productId}/templates`);
+        let productTemplates: ProductProfitTemplate[] = response.data || [];
+
         for (const n of nodeList) {
             try {
                 const tplName = n.name || n.platform;
                 const templateData = {
                     ...n.data,
+                    ...(n.graphTemplateId ? {
+                        graphTemplateId: n.graphTemplateId,
+                        graphTemplateSnapshot: n.graphTemplateSnapshot,
+                        graphInputValues: n.graphInputValues || {},
+                        graphOutputValues: n.graphOutputValues || {},
+                    } : {}),
                     vatRate: safeNumber(globalInputs.vatRate),
                     corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
                 };
-                const existingTpl = localTemplates.find(
-                    t => (n.templateId && t.id === n.templateId && (!t.productId || t.productId === productId)) ||
-                         (t.productId === productId && t.name === tplName && t.platform === n.platform)
-                );
-                localTemplates = await upsertTemplate(existingTpl, {
+                const existingLink = findExistingProductTemplateLink(n, productTemplates);
+                const templateId = resolveTemplateIdForPayload(n.templateId, existingLink, allTemplates);
+                const payload = {
+                    templateId,
                     name: tplName, country: n.currency, platform: n.platform,
-                    type: 'profit', data: templateData, productId,
-                }, localTemplates);
+                    data: templateData,
+                };
+                if (existingLink) {
+                    const updated = await api.put(`/products/${productId}/templates/${existingLink.id}`, payload);
+                    productTemplates = productTemplates.map(t => t.id === existingLink.id ? updated.data : t);
+                } else {
+                    const created = await api.post(`/products/${productId}/templates`, payload);
+                    productTemplates = [...productTemplates, created.data];
+                }
             } catch {
                 showToast(t.errors.templateSaveFailed, 'error');
             }
@@ -198,24 +221,22 @@ export const useProductActions = (
     const ensureDefaultTemplate = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
         if (nodeList.length > 0 || !productId) return;
         const defaultName = globalInputs.name || t.templates.defaultTemplate;
-        const existingDefault = allTemplates.find(
-            t => t.productId === productId && t.name === defaultName && t.platform === 'other'
-        );
-        if (existingDefault) return;
         try {
-            const response = await api.post('/templates', {
+            const response = await api.get(`/products/${productId}/templates`);
+            const existingDefault = (response.data || []).find(
+                (tpl: ProductProfitTemplate) => tpl.name === defaultName && tpl.platform === 'other' && tpl.country === siteCountry
+            );
+            if (existingDefault) return;
+            await api.post(`/products/${productId}/templates`, {
                 name: defaultName,
                 country: siteCountry,
                 platform: 'other',
-                type: 'profit',
                 data: {
                     ...DEFAULT_NODE_DATA,
                     vatRate: safeNumber(globalInputs.vatRate),
                     corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
                 },
-                productId,
             });
-            setAllTemplates(prev => [...prev, response.data]);
         } catch {
             showToast(t.errors.defaultTemplateSaveFailed, 'error');
         }
@@ -276,7 +297,9 @@ export const useProductActions = (
         handleUpdateNode,
         handleDeleteNode,
         handleAddNodeFromTemplate,
+        handleAddNodeFromGraphTemplate,
         handleAddBlankNode,
+        handleUpdateGraphNodeInputs,
         handleSaveTemplate,
         handleDeleteTemplate,
         handleSaveProduct,

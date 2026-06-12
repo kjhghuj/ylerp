@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Save, FolderOpen, Trash2 } from 'lucide-react';
+import { PLATFORMS, PlatformType } from '../../../platformConfig';
 
 interface ToolbarProps {
   onAddParameterNode: () => void;
@@ -9,7 +10,11 @@ interface ToolbarProps {
   onLoad: (id: string) => void;
   onDeleteTemplate: (id: string) => Promise<void>;
   onClear: () => void;
-  templates: { id: string; name: string }[];
+  templates: { id: string; name: string; country?: string; platform?: string; type?: string }[];
+  country: string;
+  platform: PlatformType;
+  onCountryChange: (country: string) => void;
+  onPlatformChange: (platform: PlatformType) => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -21,6 +26,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onDeleteTemplate,
   onClear,
   templates,
+  country,
+  platform,
+  onCountryChange,
+  onPlatformChange,
 }) => {
   const [saveName, setSaveName] = useState('');
   const [showSave, setShowSave] = useState(false);
@@ -71,6 +80,30 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       </button>
 
       <div className="w-px h-6" style={{ backgroundColor: 'var(--border-default)' }} />
+
+      <select
+        value={country}
+        onChange={(e) => onCountryChange(e.target.value)}
+        className="text-xs px-2 py-1.5 rounded-lg border"
+        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+      >
+        <option value="MYR">MYR</option>
+        <option value="SGD">SGD</option>
+        <option value="PHP">PHP</option>
+        <option value="IDR">IDR</option>
+        <option value="THB">THB</option>
+      </select>
+
+      <select
+        value={platform}
+        onChange={(e) => onPlatformChange(e.target.value as PlatformType)}
+        className="text-xs px-2 py-1.5 rounded-lg border"
+        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+      >
+        {Object.values(PLATFORMS).map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
 
       <div className="relative">
         <button

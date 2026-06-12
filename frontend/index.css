@@ -375,3 +375,54 @@ body {
   min-width: 24px;
   padding: 0;
 }
+
+/* React Flow ships default styling for built-in node types named "input",
+   "output", and "default". Our node designer uses a custom type named
+   "output", so strip the built-in wrapper box to avoid a double rectangle. */
+.react-flow__node-output {
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  width: auto !important;
+}
+
+.node-designer-edge {
+  stroke: #64748b;
+  stroke-width: 2.5;
+}
+
+.node-designer-edge-selected,
+.react-flow__edge:hover .node-designer-edge {
+  stroke: #2563eb;
+  stroke-width: 3.5;
+}
+
+.node-designer-edge-action {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 18px;
+  pointer-events: all;
+  opacity: 0;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
+  transition: opacity 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.node-designer-edge-action-visible,
+.node-designer-edge-action:hover {
+  opacity: 1;
+}
+
+.node-designer-edge-action:hover {
+  border-color: #fecaca;
+  color: #dc2626;
+}

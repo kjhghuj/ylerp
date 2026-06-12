@@ -6,11 +6,13 @@ import { useToast } from '../components/Toast';
 
 import { PlatformCard } from './PlatformCard';
 import { ProfitTemplate, SiteLevelInputs, DEFAULT_SITE_INPUTS } from './profit/types';
+import type { NodeGraphTemplate } from './node-designer/types';
 import { useProfitImport } from './profit/useProfitImport';
 import { useProductActions } from './profit/useProductActions';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { AddNodeMenu } from './profit/AddNodeMenu';
 import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
+import { GraphTemplateCard } from './profit/GraphTemplateCard';
 import { PlatformType } from '../platformConfig';
 
 export const ProfitCalculator: React.FC = () => {
@@ -31,6 +33,7 @@ export const ProfitCalculator: React.FC = () => {
     const { showToast } = useToast();
 
     const [allTemplates, setAllTemplates] = useState<ProfitTemplate[]>([]);
+    const [graphTemplates, setGraphTemplates] = useState<Pick<NodeGraphTemplate, 'id' | 'name' | 'country' | 'platform' | 'type'>[]>([]);
     const [showAddMenu, setShowAddMenu] = useState(false);
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
@@ -60,9 +63,21 @@ export const ProfitCalculator: React.FC = () => {
         fetchTemplates();
     }, []);
 
+    useEffect(() => {
+        const fetchGraphTemplates = async () => {
+            try {
+                const response = await api.get(`/node-graphs?type=profit&country=${encodeURIComponent(siteCountry)}`);
+                setGraphTemplates(response.data || []);
+            } catch {
+                setGraphTemplates([]);
+            }
+        };
+        fetchGraphTemplates();
+    }, [siteCountry]);
+
     const {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
-        handleAddNodeFromTemplate, handleAddBlankNode, handleSaveTemplate,
+        handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode, handleUpdateGraphNodeInputs, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
@@ -110,7 +125,9 @@ export const ProfitCalculator: React.FC = () => {
                         setSelectedPlatform={setSelectedPlatform}
                         siteCountry={siteCountry}
                         allTemplates={allTemplates}
+                        graphTemplates={graphTemplates}
                         onAddFromTemplate={(tpl) => { handleAddNodeFromTemplate(tpl); setShowAddMenu(false); }}
+                        onAddFromGraphTemplate={(tpl) => { void handleAddNodeFromGraphTemplate(tpl); setShowAddMenu(false); }}
                         onAddBlank={() => { handleAddBlankNode(selectedPlatform); setShowAddMenu(false); }}
                         onDeleteTemplate={handleDeleteTemplate}
                         t={t}
@@ -159,7 +176,14 @@ export const ProfitCalculator: React.FC = () => {
                         <p className="text-sm mt-1">{t.matrix.nodeEmptyDesc}</p>
                     </div>
                 ) : (
-                    nodes.map(node => (
+                    nodes.map(node => node.graphTemplateSnapshot ? (
+                        <GraphTemplateCard
+                            key={node.id}
+                            node={node}
+                            onUpdateInputs={handleUpdateGraphNodeInputs}
+                            onDelete={handleDeleteNode}
+                        />
+                    ) : (
                         <PlatformCard
                             key={node.id}
                             nodeId={node.id}

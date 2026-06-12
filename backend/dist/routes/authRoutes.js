@@ -4,13 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const activityLogger_1 = require("../services/activityLogger");
+const index_1 = require("../index");
 const router = (0, express_1.Router)();
-const prisma = new client_1.PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -19,7 +18,7 @@ router.post('/login', async (req, res) => {
         if (!username || !password) {
             return res.status(400).json({ error: '请输入用户名和密码' });
         }
-        const user = await prisma.user.findUnique({ where: { username } });
+        const user = await index_1.prisma.user.findUnique({ where: { username } });
         if (!user) {
             return res.status(401).json({ error: '用户名或密码错误' });
         }
@@ -32,7 +31,7 @@ router.post('/login', async (req, res) => {
         }
         const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
         const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-        (0, activityLogger_1.logActivity)(user.id, 'login', 'auth', { username: user.username }, ip).catch(() => { });
+        (0, activityLogger_1.logActivity)(user.id, 'login', 'auth', { username: user.username }, ip).catch(err => console.error('登录活动记录失败:', err));
         res.json({
             token,
             user: {
@@ -68,7 +67,7 @@ router.get('/me', authMiddleware_1.authenticate, async (req, res) => {
                 createdAt: new Date(),
             });
         }
-        const user = await prisma.user.findUnique({
+        const user = await index_1.prisma.user.findUnique({
             where: { id: req.user.id },
             select: {
                 id: true,
@@ -103,7 +102,7 @@ router.put('/password', authMiddleware_1.authenticate, async (req, res) => {
         if (newPassword.length < 6) {
             return res.status(400).json({ error: '新密码长度至少6位' });
         }
-        const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+        const user = await index_1.prisma.user.findUnique({ where: { id: req.user.id } });
         if (!user) {
             return res.status(404).json({ error: '用户不存在' });
         }
@@ -112,7 +111,7 @@ router.put('/password', authMiddleware_1.authenticate, async (req, res) => {
             return res.status(401).json({ error: '旧密码错误' });
         }
         const hashedPassword = await bcrypt_1.default.hash(newPassword, 10);
-        await prisma.user.update({
+        await index_1.prisma.user.update({
             where: { id: user.id },
             data: { password: hashedPassword },
         });
@@ -120,6 +119,27 @@ router.put('/password', authMiddleware_1.authenticate, async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: '修改密码失败' });
+    }
+});
+// POST /api/auth/verify-password — Verify current password for sensitive operations
+router.post('/verify-password', authMiddleware_1.authenticate, async (req, res) => {
+    try {
+        const { password } = req.body;
+        if (!password) {
+            return res.status(400).json({ error: '请输入密码' });
+        }
+        const user = await index_1.prisma.user.findUnique({ where: { id: req.user.id } });
+        if (!user) {
+            return res.status(404).json({ error: '用户不存在' });
+        }
+        const isValid = await bcrypt_1.default.compare(password, user.password);
+        if (!isValid) {
+            return res.status(401).json({ valid: false, error: '密码错误' });
+        }
+        res.json({ valid: true });
+    }
+    catch (error) {
+        res.status(500).json({ error: '验证失败' });
     }
 });
 exports.default = router;

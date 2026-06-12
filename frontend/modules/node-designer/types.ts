@@ -28,6 +28,9 @@ export type DesignerEdge = Edge;
 export interface NodeGraphTemplate {
   id: string;
   name: string;
+  type?: string;
+  country?: string | null;
+  platform?: string | null;
   productId?: string;
   nodes: DesignerNode[];
   edges: DesignerEdge[];

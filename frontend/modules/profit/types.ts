@@ -1,4 +1,5 @@
 import { PlatformType } from '../../platformConfig';
+import type { NodeGraphTemplate } from '../node-designer/types';
 
 export interface ProfitTemplate {
     id?: string;
@@ -7,6 +8,18 @@ export interface ProfitTemplate {
     platform?: PlatformType;
     data: NodeData;
     productId?: string;
+}
+
+export interface ProductProfitTemplate {
+    id: string;
+    productId: string;
+    templateId?: string | null;
+    name: string;
+    country: string;
+    platform?: PlatformType;
+    data: NodeData;
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface SiteLevelInputs {
@@ -30,7 +43,12 @@ export const DEFAULT_SITE_INPUTS: SiteLevelInputs = {
 export interface PlatformNode {
     id: string;
     templateId?: string;
+    productTemplateLinkId?: string;
     productId?: string;
+    graphTemplateId?: string;
+    graphTemplateSnapshot?: NodeGraphTemplate;
+    graphInputValues?: Record<string, number>;
+    graphOutputValues?: Record<string, number>;
     platform: PlatformType;
     currency: string;
     name?: string;
