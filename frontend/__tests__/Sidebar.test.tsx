@@ -27,6 +27,7 @@ vi.mock('../StoreContext', () => ({
         productList: '商品明细',
         finance: '财务管理',
         inventory: '智能补货',
+        restockV2: '补货V2',
         restockRecords: '补货记录',
         chromaAdapt: '图片制作',
         personalCenter: '个人中心',
@@ -60,6 +61,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('商品明细')).toBeInTheDocument();
     expect(screen.getByText('财务管理')).toBeInTheDocument();
     expect(screen.getByText('智能补货')).toBeInTheDocument();
+    expect(screen.getByText('补货V2')).toBeInTheDocument();
     expect(screen.getByText('补货记录')).toBeInTheDocument();
     expect(screen.getByText('图片制作')).toBeInTheDocument();
     expect(screen.getByText('用户管理')).toBeInTheDocument();

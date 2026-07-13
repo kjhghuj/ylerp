@@ -51,6 +51,7 @@ import { authenticate } from './middleware/authMiddleware';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
+import shopeeRoutes from './routes/shopeeRoutes';
 import userRoutes from './routes/userRoutes';
 import productRoutes from './routes/productRoutes';
 import financeRoutes from './routes/financeRoutes';
@@ -61,6 +62,7 @@ import nodeGraphRoutes from './routes/nodeGraphRoutes';
 import templateRoutes from './routes/templateRoutes';
 import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
 import restockRecordRoutes from './routes/restockRecordRoutes';
+import restockV2Routes from './routes/restockV2Routes';
 import scheduleRoutes from './routes/scheduleRoutes';
 import chromaRecordRoutes from './routes/chromaRecordRoutes';
 import usageRoutes from './routes/usageRoutes';
@@ -68,6 +70,7 @@ import { startFinanceBackup } from './services/financeBackup';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
+app.use('/api/shopee', shopeeRoutes);
 
 // Protected routes (auth required)
 app.use('/api/users', userRoutes);
@@ -78,6 +81,7 @@ app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
 app.use('/api/sku-groups', authenticate, skuGroupRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
 app.use('/api/restock-records', authenticate, restockRecordRoutes);
+app.use('/api/restock-v2', authenticate, restockV2Routes);
 app.use('/api/schedule', authenticate, scheduleRoutes);
 app.use('/api/node-graphs', authenticate, nodeGraphRoutes);
 app.use('/api/chroma-adapt', authenticate, chromaAdaptRoutes);

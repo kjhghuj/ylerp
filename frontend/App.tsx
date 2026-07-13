@@ -6,6 +6,7 @@ import { Dashboard } from './modules/Dashboard';
 import { ProfitCalculator } from './modules/ProfitCalculator';
 import { FinanceManager } from './modules/FinanceManager';
 import { RestockCalculator } from './modules/RestockCalculator';
+import { RestockV2 } from './modules/RestockV2';
 import { RestockRecords } from './modules/RestockRecords';
 import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
@@ -23,6 +24,7 @@ import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
   });
@@ -38,6 +40,10 @@ const MainContent: React.FC = () => {
     }
   }, [darkMode]);
 
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0 });
+  }, [currentView]);
+
   const handleViewChange = (view: AppState['currentView']) => {
     setCurrentView(view);
   };
@@ -51,7 +57,7 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
-    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-records', 'product-list', 'schedule', 'usage-stats', 'node-designer'];
+    const moduleViews = ['dashboard', 'profit', 'finance', 'inventory', 'restock-v2', 'restock-records', 'product-list', 'schedule', 'usage-stats', 'node-designer'];
     if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !hasPermission(user.permissions || [], currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: 'var(--text-tertiary)' }}>
@@ -68,6 +74,7 @@ const MainContent: React.FC = () => {
       case 'profit': return <ProfitCalculator />;
       case 'finance': return <FinanceManager />;
       case 'inventory': return <RestockCalculator />;
+      case 'restock-v2': return <RestockV2 />;
       case 'restock-records': return <RestockRecords />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
@@ -86,6 +93,7 @@ const MainContent: React.FC = () => {
       case 'profit': return strings.sidebar.profit;
       case 'finance': return strings.sidebar.finance;
       case 'inventory': return strings.sidebar.inventory;
+      case 'restock-v2': return strings.sidebar.restockV2 || '补货V2';
       case 'restock-records': return strings.sidebar.restockRecords || '补货记录';
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
@@ -134,7 +142,7 @@ const MainContent: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 lg:p-6">
+        <div ref={contentRef} className="flex-1 overflow-auto p-4 lg:p-6">
           <div className="h-full">
             {renderView()}
           </div>

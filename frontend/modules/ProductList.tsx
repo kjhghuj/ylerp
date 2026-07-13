@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../StoreContext';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
     ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers,
-    Upload, Download
+    Upload, Download, ArrowUpDown, ArrowDown, ArrowUp
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
@@ -38,6 +38,31 @@ interface ProductListProps {
     onNavigate: (view: AppState['currentView']) => void;
 }
 
+interface YcStockSnapshotItem {
+    sku: string;
+    warehouseCodes: string[];
+    available: number;
+    inventory: number;
+    occupy: number;
+    unshipped: number;
+}
+
+type YcStockSortDirection = 'none' | 'desc' | 'asc';
+
+const normalizeSku = (sku: string | undefined) => (sku || '').trim().toUpperCase();
+
+const formatStockNumber = (value: number | undefined) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return '-';
+    return parsed.toLocaleString();
+};
+
+const ycStockSortLabels: Record<YcStockSortDirection, string> = {
+    none: '未排序',
+    desc: '高到低',
+    asc: '低到高',
+};
+
 export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const {
         products, deleteProduct, addProduct, setCalculatorImport, setCalculatorImportNodes, strings,
@@ -63,21 +88,82 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [allLinkedTemplates, setAllLinkedTemplates] = useState<LinkedTemplate[]>([]);
     const [modalActiveTab, setModalActiveTab] = useState(0);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [ycStockItems, setYcStockItems] = useState<YcStockSnapshotItem[]>([]);
+    const [ycStockLoading, setYcStockLoading] = useState(false);
+    const [ycStockRemoteFetched, setYcStockRemoteFetched] = useState(false);
+    const [ycStockSortDirection, setYcStockSortDirection] = useState<YcStockSortDirection>('none');
 
-    const filteredProducts = products.filter(p => {
+    const filteredProducts = useMemo(() => products.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             p.sku?.toLowerCase().includes(searchTerm.toLowerCase());
         const productSites = p.sites || (p.country ? [p.country] : []);
         const matchesCountry = productSites.includes(activeTab);
         return matchesSearch && matchesCountry;
-    });
+    }), [products, searchTerm, activeTab]);
+    const ycStockBySku = useMemo(() => {
+        return new Map(ycStockItems.map(item => [normalizeSku(item.sku), item]));
+    }, [ycStockItems]);
+    const sortedProducts = useMemo(() => {
+        if (ycStockSortDirection === 'none') return filteredProducts;
 
-    const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+        return [...filteredProducts].sort((a, b) => {
+            const stockA = ycStockBySku.get(normalizeSku(a.sku));
+            const stockB = ycStockBySku.get(normalizeSku(b.sku));
+
+            if (!stockA && !stockB) return 0;
+            if (!stockA) return 1;
+            if (!stockB) return -1;
+
+            const direction = ycStockSortDirection === 'asc' ? 1 : -1;
+            const availableDiff = (Number(stockA.available) || 0) - (Number(stockB.available) || 0);
+            if (availableDiff !== 0) return availableDiff * direction;
+
+            const inventoryDiff = (Number(stockA.inventory) || 0) - (Number(stockB.inventory) || 0);
+            if (inventoryDiff !== 0) return inventoryDiff * direction;
+
+            return a.name.localeCompare(b.name, 'zh-Hans');
+        });
+    }, [filteredProducts, ycStockBySku, ycStockSortDirection]);
+
+    const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage);
+    const currentProducts = sortedProducts.slice(startIndex, startIndex + itemsPerPage);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadYcStock = async () => {
+            setYcStockLoading(true);
+            setYcStockRemoteFetched(false);
+            try {
+                const response = await api.get('/restock-v2/stock-snapshot', {
+                    params: { site: activeTab },
+                });
+                if (cancelled) return;
+                setYcStockItems(Array.isArray(response.data?.items) ? response.data.items : []);
+                setYcStockRemoteFetched(Boolean(response.data?.remoteFetched));
+            } catch {
+                if (!cancelled) {
+                    setYcStockItems([]);
+                    setYcStockRemoteFetched(false);
+                }
+            } finally {
+                if (!cancelled) setYcStockLoading(false);
+            }
+        };
+
+        loadYcStock();
+        return () => {
+            cancelled = true;
+        };
+    }, [activeTab]);
 
     const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSearchTerm(e.target.value);
+        setCurrentPage(1);
+    };
+
+    const toggleYcStockSort = () => {
+        setYcStockSortDirection(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none');
         setCurrentPage(1);
     };
 
@@ -614,11 +700,36 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
             <div className="flex-1 bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden flex flex-col">
                 <div className="overflow-x-auto flex-1">
-                    <table className="w-full text-sm text-left">
+                    <table className="w-full min-w-[1120px] text-sm text-left">
                         <thead className="bg-white/80 text-slate-500 font-bold sticky top-0 z-10 border-b border-slate-100 text-xs uppercase tracking-wider">
                             <tr>
                                 <th className="p-3 pl-4">{t.table.name}</th>
                                 <th className="p-3">{t.table.sku}</th>
+                                <th
+                                    className="p-3 text-right"
+                                    aria-sort={ycStockSortDirection === 'asc' ? 'ascending' : ycStockSortDirection === 'desc' ? 'descending' : 'none'}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={toggleYcStockSort}
+                                        aria-label={`元仓库存排序：${ycStockSortLabels[ycStockSortDirection]}`}
+                                        title={`元仓库存排序：${ycStockSortLabels[ycStockSortDirection]}`}
+                                        className={`ml-auto inline-flex items-center justify-end gap-1.5 rounded-lg px-2 py-1 transition ${
+                                            ycStockSortDirection === 'none'
+                                                ? 'text-slate-500 hover:bg-slate-100 hover:text-indigo-600'
+                                                : 'bg-indigo-50 text-indigo-700'
+                                        }`}
+                                    >
+                                        <span>元仓库存</span>
+                                        {ycStockSortDirection === 'desc' ? (
+                                            <ArrowDown size={13} />
+                                        ) : ycStockSortDirection === 'asc' ? (
+                                            <ArrowUp size={13} />
+                                        ) : (
+                                            <ArrowUpDown size={13} />
+                                        )}
+                                    </button>
+                                </th>
                                 <th className="p-3 text-right">{t.table.cost}</th>
                                 <th className="p-3 text-right">{t.table.weight}</th>
                                 <th className="p-3 text-right">{t.table.priceCNY}</th>
@@ -636,10 +747,34 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const priceCNY = sd?.totalRevenue ?? p.totalRevenue ?? 0;
                                 const priceLocal = priceCNY * rate;
                                 const adROI = sd?.adROI ?? p.adROI ?? 0;
+                                const ycStock = ycStockBySku.get(normalizeSku(p.sku));
                                 return (
                                     <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
                                         <td className="p-3 pl-4 font-bold text-slate-800 truncate max-w-[180px]">{p.name}</td>
                                         <td className="p-3 text-slate-500 font-mono text-xs">{p.sku}</td>
+                                        <td className="p-3 text-right">
+                                            {ycStockLoading ? (
+                                                <span className="text-xs text-slate-400">加载中...</span>
+                                            ) : ycStock ? (
+                                                <div className="space-y-0.5">
+                                                    <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(ycStock.available)}</div>
+                                                    <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(ycStock.inventory)}</div>
+                                                    <div className="text-[11px] text-slate-400">
+                                                        占用 {formatStockNumber(ycStock.occupy)} / 未发 {formatStockNumber(ycStock.unshipped)}
+                                                    </div>
+                                                    <div className="text-[11px] text-slate-400 truncate max-w-[140px] ml-auto">
+                                                        {ycStock.warehouseCodes.length ? ycStock.warehouseCodes.join(', ') : '-'}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-0.5">
+                                                    <div className="text-xs font-bold text-slate-400">
+                                                        {ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}
+                                                    </div>
+                                                    <div className="text-[11px] text-slate-300">-</div>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="p-3 text-right text-slate-700 font-mono">{p.cost?.toFixed(2)}</td>
                                         <td className="p-3 text-right text-slate-600">{p.productWeight}g</td>
                                         <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
@@ -657,7 +792,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             })}
                             {currentProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={8} className="p-12 text-center text-slate-400 italic text-sm">{t.noProducts}</td>
+                                    <td colSpan={9} className="p-12 text-center text-slate-400 italic text-sm">{t.noProducts}</td>
                                 </tr>
                             )}
                         </tbody>

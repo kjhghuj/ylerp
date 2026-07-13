@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import { TYPE_CONFIG, getDeadlineStatus, formatDate, type ScheduleItemData } from './constants';
 
 export const DRAG_HANDLE = 'drag-handle';
@@ -126,11 +126,16 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                     </div>
                 </div>
                 <button
+                    type="button"
+                    aria-label={`Delete ${item.title}`}
+                    title="Delete"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
                     onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-                    className="shrink-0 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="shrink-0 p-1 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
                     style={{ color: 'var(--text-tertiary)' }}
                 >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></svg>
+                    <Trash2 size={12} />
                 </button>
             </div>
             {showProgress && (

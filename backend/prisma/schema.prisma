@@ -28,6 +28,8 @@ model Product {
   user                      User             @relation(fields: [userId], references: [id])
   templates                 ProfitTemplate[] @relation("LegacyProductTemplates")
   productTemplates          ProductProfitTemplate[]
+
+  @@unique([userId, sku])
 }
 
 model FinanceRecord {
@@ -57,6 +59,8 @@ model InventoryItem {
   costPerUnit     Float
   userId          String
   user            User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, sku])
 }
 
 model WarehouseMapping {
@@ -67,6 +71,8 @@ model WarehouseMapping {
   type                  String
   userId                String
   user                  User    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, type, sku, thirdPartyWarehouseId])
 }
 
 model SkuGroup {
@@ -99,6 +105,70 @@ model ProfitTemplate {
   product   Product? @relation("LegacyProductTemplates", fields: [productId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
   productTemplates ProductProfitTemplate[]
+}
+
+model RestockSalesImport {
+  id             String             @id @default(uuid())
+  site           String
+  fileName       String
+  statisticsDays Int                @default(30)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items          RestockSalesItem[]
+
+  @@index([userId, site, createdAt])
+}
+
+model RestockSalesItem {
+  id          String             @id @default(uuid())
+  platformSku String?
+  sourceSku   String?
+  validSales  Float
+  title       String?
+  spec        String?
+  shop        String?
+  targetSku   String?
+  dismissedAt DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  importId    String
+  salesImport RestockSalesImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@index([importId, targetSku])
+  @@index([importId, dismissedAt])
+}
+
+model ExternalSkuMapping {
+  id          String   @id @default(uuid())
+  site        String
+  externalSku String
+  targetSku   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, site, externalSku])
+  @@index([userId, site, targetSku])
+}
+
+model RestockSkuRule {
+  id            String   @id @default(uuid())
+  site          String
+  sku           String
+  leadTimeDays  Int?
+  safetyDays    Int?
+  growthPercent Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, site, sku])
+  @@index([userId, site])
 }
 
 model ProductProfitTemplate {
@@ -215,6 +285,9 @@ model User {
   products          Product[]
   profitTemplates   ProfitTemplate[]
   restockRecords    RestockRecord[]
+  restockSalesImports RestockSalesImport[]
+  externalSkuMappings ExternalSkuMapping[]
+  restockSkuRules     RestockSkuRule[]
   scheduleItems     ScheduleItem[]
   skuGroups         SkuGroup[]
   parent            User?                    @relation("SubAccounts", fields: [parentId], references: [id])

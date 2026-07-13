@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, List, Users, Image, ClipboardList, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, GitBranch } from 'lucide-react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, Users, Image, ClipboardList, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, GitBranch } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
@@ -25,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: 'product-list', label: strings.sidebar.productList, icon: List },
     { id: 'finance', label: strings.sidebar.finance, icon: Wallet },
     { id: 'inventory', label: strings.sidebar.inventory, icon: PackageCheck },
+    { id: 'restock-v2', label: strings.sidebar.restockV2 || '补货V2', icon: PackagePlus },
     { id: 'restock-records', label: strings.sidebar.restockRecords || '补货记录', icon: ClipboardList },
     { id: 'chroma-adapt', label: strings.sidebar.chromaAdapt || '图片制作', icon: Image },
     { id: 'schedule', label: strings.sidebar.schedule || '日程管理', icon: Calendar },

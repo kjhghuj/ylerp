@@ -62,6 +62,7 @@ exports.safeRedis = {
 const authMiddleware_1 = require("./middleware/authMiddleware");
 // Import routes
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const shopeeRoutes_1 = __importDefault(require("./routes/shopeeRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const productRoutes_1 = __importDefault(require("./routes/productRoutes"));
 const financeRoutes_1 = __importDefault(require("./routes/financeRoutes"));
@@ -72,12 +73,14 @@ const nodeGraphRoutes_1 = __importDefault(require("./routes/nodeGraphRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
 const chromaAdaptRoutes_1 = __importDefault(require("./routes/chromaAdaptRoutes"));
 const restockRecordRoutes_1 = __importDefault(require("./routes/restockRecordRoutes"));
+const restockV2Routes_1 = __importDefault(require("./routes/restockV2Routes"));
 const scheduleRoutes_1 = __importDefault(require("./routes/scheduleRoutes"));
 const chromaRecordRoutes_1 = __importDefault(require("./routes/chromaRecordRoutes"));
 const usageRoutes_1 = __importDefault(require("./routes/usageRoutes"));
 const financeBackup_1 = require("./services/financeBackup");
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes_1.default);
+app.use('/api/shopee', shopeeRoutes_1.default);
 // Protected routes (auth required)
 app.use('/api/users', userRoutes_1.default);
 app.use('/api/products', authMiddleware_1.authenticate, productRoutes_1.default);
@@ -87,6 +90,7 @@ app.use('/api/warehouse-mappings', authMiddleware_1.authenticate, mappingRoutes_
 app.use('/api/sku-groups', authMiddleware_1.authenticate, skuGroupRoutes_1.default);
 app.use('/api/templates', authMiddleware_1.authenticate, templateRoutes_1.default);
 app.use('/api/restock-records', authMiddleware_1.authenticate, restockRecordRoutes_1.default);
+app.use('/api/restock-v2', authMiddleware_1.authenticate, restockV2Routes_1.default);
 app.use('/api/schedule', authMiddleware_1.authenticate, scheduleRoutes_1.default);
 app.use('/api/node-graphs', authMiddleware_1.authenticate, nodeGraphRoutes_1.default);
 app.use('/api/chroma-adapt', authMiddleware_1.authenticate, chromaAdaptRoutes_1.default);

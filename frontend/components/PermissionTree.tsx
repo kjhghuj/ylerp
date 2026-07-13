@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye, Activity } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -56,6 +56,13 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
             { key: 'inventory.import', label: '数据导入', labelEn: 'Import Data', icon: Upload },
             { key: 'inventory.mapping', label: '映射管理', labelEn: 'Mappings', icon: Settings },
             { key: 'inventory.restock', label: '补货操作', labelEn: 'Restock', icon: Truck },
+        ]
+    },
+    {
+        key: 'restock-v2', label: '补货V2', labelEn: 'Restock V2', icon: PackagePlus,
+        children: [
+            { key: 'restock-v2.view', label: '查看建议', labelEn: 'View Suggestions', icon: Search },
+            { key: 'restock-v2.refresh', label: '刷新建议', labelEn: 'Refresh Suggestions', icon: Truck },
         ]
     },
     {
