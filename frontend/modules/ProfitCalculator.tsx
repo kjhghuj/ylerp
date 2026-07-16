@@ -13,6 +13,7 @@ import { useExchangeRates } from '../hooks/useExchangeRates';
 import { AddNodeMenu } from './profit/AddNodeMenu';
 import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
 import { GraphTemplateCard } from './profit/GraphTemplateCard';
+import { InvalidTemplateCard } from './profit/InvalidTemplateCard';
 import { PlatformType } from '../platformConfig';
 
 export const ProfitCalculator: React.FC = () => {
@@ -176,7 +177,13 @@ export const ProfitCalculator: React.FC = () => {
                         <p className="text-sm mt-1">{t.matrix.nodeEmptyDesc}</p>
                     </div>
                 ) : (
-                    nodes.map(node => node.graphTemplateSnapshot ? (
+                    nodes.map(node => node.persistedData?.kind === 'invalid' ? (
+                        <InvalidTemplateCard
+                            key={node.id}
+                            node={node}
+                            onDelete={handleDeleteNode}
+                        />
+                    ) : node.graphTemplateSnapshot ? (
                         <GraphTemplateCard
                             key={node.id}
                             node={node}

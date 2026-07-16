@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createRestockV2Router = void 0;
 const express_1 = require("express");
 const index_1 = require("../index");
+const productCache_1 = require("../services/productCache");
 const restockPlanner_1 = require("../services/restockPlanner");
 const ycOpenPlatformClient_1 = require("../services/ycOpenPlatformClient");
 const restockSalesImport_1 = require("../services/restockSalesImport");
@@ -469,7 +470,7 @@ const createRestockV2Router = ({ ycClient = (0, ycOpenPlatformClient_1.createYcO
                 }
             });
             await Promise.all([
-                index_1.safeRedis.del(`products:${userId}`),
+                index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId)),
                 index_1.safeRedis.del(`inventory:${userId}`),
                 index_1.safeRedis.del(`warehouse-mappings:${userId}`),
             ]);
@@ -656,7 +657,7 @@ const createRestockV2Router = ({ ycClient = (0, ycOpenPlatformClient_1.createYcO
                 });
             });
             await Promise.all([
-                index_1.safeRedis.del(`products:${userId}`),
+                index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId)),
                 index_1.safeRedis.del(`inventory:${userId}`),
             ]);
             return res.status(201).json(inventory);

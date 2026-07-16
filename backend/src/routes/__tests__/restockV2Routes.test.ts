@@ -816,7 +816,7 @@ describe('restockV2Routes', () => {
     });
     expect(mockWarehouseMappingCreate).toHaveBeenCalledTimes(2);
     expect(mockTransaction).toHaveBeenCalledTimes(1);
-    expect(mockSafeRedisDel).toHaveBeenCalledWith('products:owner-1');
+    expect(mockSafeRedisDel).toHaveBeenCalledWith('products:v2:owner-1');
     expect(mockSafeRedisDel).toHaveBeenCalledWith('warehouse-mappings:owner-1');
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       site: 'MY',

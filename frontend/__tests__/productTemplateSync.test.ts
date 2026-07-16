@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from '../modules/profit/productTemplateSync';
+import { DEFAULT_NODE_DATA } from '../modules/profit/types';
 
 describe('product template sync helpers', () => {
   const links = [
@@ -10,7 +11,12 @@ describe('product template sync helpers', () => {
       name: 'Shopee MY',
       country: 'MYR',
       platform: 'shopee' as const,
-      data: {} as any,
+      data: {
+        kind: 'standard' as const,
+        schemaVersion: 2,
+        nodeData: {},
+        extraData: {},
+      },
     },
   ];
   const sharedTemplates = [
@@ -19,7 +25,7 @@ describe('product template sync helpers', () => {
       name: 'Shopee MY',
       country: 'MYR',
       platform: 'shopee' as const,
-      data: {} as any,
+      data: {},
     },
   ];
 
@@ -31,7 +37,7 @@ describe('product template sync helpers', () => {
         platform: 'shopee',
         currency: 'MYR',
         name: 'Shopee MY',
-        data: {} as any,
+        data: { ...DEFAULT_NODE_DATA },
       },
       links,
     );
@@ -49,5 +55,42 @@ describe('product template sync helpers', () => {
     const sourceId = resolveTemplateIdForPayload('unknown-old-id', undefined, sharedTemplates);
 
     expect(sourceId).toBeNull();
+  });
+
+  it('prefers an exact product link id over an earlier fuzzy match', () => {
+    const exact = { ...links[0], id: 'exact-link' };
+    const fuzzy = { ...links[0], id: 'fuzzy-link' };
+    const link = findExistingProductTemplateLink({
+      id: 'node-exact',
+      productTemplateLinkId: 'exact-link',
+      templateId: 'shared-template-1',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Shopee MY',
+      data: { ...DEFAULT_NODE_DATA },
+    }, [fuzzy, exact]);
+
+    expect(link?.id).toBe('exact-link');
+  });
+
+  it.each([
+    ['MY', 'MYR'],
+    ['MYR', 'MY'],
+    ['SG', 'SGD'],
+    ['sgd', 'sg'],
+  ])('matches a legacy %s link to a %s runtime node without creating a duplicate', (linkCountry, nodeCurrency) => {
+    const link = findExistingProductTemplateLink({
+      id: 'node-country-alias',
+      templateId: 'shared-template-1',
+      platform: 'shopee',
+      currency: nodeCurrency,
+      name: 'Shopee MY',
+      data: { ...DEFAULT_NODE_DATA },
+    }, [{
+      ...links[0],
+      country: linkCountry,
+    }]);
+
+    expect(link?.id).toBe('product-link-1');
   });
 });

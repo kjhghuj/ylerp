@@ -8,25 +8,27 @@ datasource db {
 }
 
 model Product {
-  id                        String           @id @default(uuid())
+  id                        String                  @id @default(uuid())
   name                      String
   sku                       String
   country                   String?
   cost                      Float
   productWeight             Float
-  sellerCoupon              Float            @default(0)
-  adROI                     Float            @default(15)
+  vatRate                   Float                   @default(1)
+  corporateIncomeTaxRate    Float                   @default(5)
+  sellerCoupon              Float                   @default(0)
+  adROI                     Float                   @default(15)
   supplierTaxPoint          Float
   supplierInvoice           String
-  sellerCouponPlatformRatio Float            @default(0)
-  sellerCouponType          String           @default("fixed")
+  sellerCouponPlatformRatio Float                   @default(0)
+  sellerCouponType          String                  @default("fixed")
   userId                    String
-  sites                     String[]         @default([])
-  totalRevenue              Float            @default(0)
-  platformInfrastructureFee Float            @default(0)
+  sites                     String[]                @default([])
+  totalRevenue              Float                   @default(0)
+  platformInfrastructureFee Float                   @default(0)
   siteData                  Json?
-  user                      User             @relation(fields: [userId], references: [id])
-  templates                 ProfitTemplate[] @relation("LegacyProductTemplates")
+  user                      User                    @relation(fields: [userId], references: [id])
+  templates                 ProfitTemplate[]        @relation("LegacyProductTemplates")
   productTemplates          ProductProfitTemplate[]
 
   @@unique([userId, sku])
@@ -93,17 +95,17 @@ model RestockRecord {
 }
 
 model ProfitTemplate {
-  id        String   @id @default(uuid())
-  name      String
-  country   String
-  data      Json
-  createdAt DateTime @default(now())
-  platform  String?
-  type      String   @default("profit")
-  userId    String
-  productId String?
-  product   Product? @relation("LegacyProductTemplates", fields: [productId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  id               String                  @id @default(uuid())
+  name             String
+  country          String
+  data             Json
+  createdAt        DateTime                @default(now())
+  platform         String?
+  type             String                  @default("profit")
+  userId           String
+  productId        String?
+  product          Product?                @relation("LegacyProductTemplates", fields: [productId], references: [id])
+  user             User                    @relation(fields: [userId], references: [id])
   productTemplates ProductProfitTemplate[]
 }
 
@@ -172,16 +174,16 @@ model RestockSkuRule {
 }
 
 model ProductProfitTemplate {
-  id         String   @id @default(uuid())
+  id         String          @id @default(uuid())
   productId  String
   templateId String?
   name       String
   country    String
   platform   String?
   data       Json
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   template   ProfitTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([productId])
@@ -264,34 +266,34 @@ model NodeGraphTemplate {
 }
 
 model User {
-  id                String                   @id @default(uuid())
-  username          String                   @unique
-  password          String
-  displayName       String
-  role              String                   @default("viewer")
-  parentId          String?
-  isActive          Boolean                  @default(true)
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-  permissions       String[]                 @default([])
-  avatar            String?
-  email             String?
-  phone             String?
-  chromaRecords     ChromaGenerationRecord[]
-  chromaImages      ChromaImage[]
-  financeRecords    FinanceRecord[]
-  inventoryItems    InventoryItem[]
-  nodeGraphTemplates NodeGraphTemplate[]
-  products          Product[]
-  profitTemplates   ProfitTemplate[]
-  restockRecords    RestockRecord[]
+  id                  String                   @id @default(uuid())
+  username            String                   @unique
+  password            String
+  displayName         String
+  role                String                   @default("viewer")
+  parentId            String?
+  isActive            Boolean                  @default(true)
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  permissions         String[]                 @default([])
+  avatar              String?
+  email               String?
+  phone               String?
+  chromaRecords       ChromaGenerationRecord[]
+  chromaImages        ChromaImage[]
+  financeRecords      FinanceRecord[]
+  inventoryItems      InventoryItem[]
+  nodeGraphTemplates  NodeGraphTemplate[]
+  products            Product[]
+  profitTemplates     ProfitTemplate[]
+  restockRecords      RestockRecord[]
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]
   restockSkuRules     RestockSkuRule[]
-  scheduleItems     ScheduleItem[]
-  skuGroups         SkuGroup[]
-  parent            User?                    @relation("SubAccounts", fields: [parentId], references: [id])
-  children          User[]                   @relation("SubAccounts")
-  userActivities    UserActivity[]
-  warehouseMappings WarehouseMapping[]
+  scheduleItems       ScheduleItem[]
+  skuGroups           SkuGroup[]
+  parent              User?                    @relation("SubAccounts", fields: [parentId], references: [id])
+  children            User[]                   @relation("SubAccounts")
+  userActivities      UserActivity[]
+  warehouseMappings   WarehouseMapping[]
 }

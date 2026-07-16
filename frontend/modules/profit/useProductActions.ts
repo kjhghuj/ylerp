@@ -10,20 +10,21 @@ import type { NodeGraphTemplate } from '../node-designer/types';
 import { safeNumber } from './utils';
 import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from './productTemplateSync';
 import { createDefaultInputValues, evaluateNodeGraphProfitTemplate } from './nodeGraphProfitAdapter';
+import { createGraphPlatformNode, createTemplatePlatformNode } from './platformNodeFactory';
+import { buildPlatformNodeTemplatePayload } from './templateDataSerializer';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
     setAllTemplates: React.Dispatch<React.SetStateAction<ProfitTemplate[]>>,
     rates: Record<string, number>,
     siteInputsMap: Record<string, SiteLevelInputs>,
-    setSiteInputsMap: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
+    _setSiteInputsMap: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
 ) => {
     const {
         addProduct, updateProduct, products,
         profitGlobalInputs: globalInputs,
         setProfitGlobalInputs: setGlobalInputs,
         profitSiteCurrency: siteCountry,
-        setProfitSiteCurrency: setSiteCountry,
         profitNodes,
         setProfitNodes,
         profitEditingProductId: editingProductId,
@@ -50,7 +51,11 @@ export const useProductActions = (
     };
 
     const handleUpdateNode = (id: string, partialData: Partial<NodeData>) => {
-        setNodes(prev => prev.map(n => n.id === id ? { ...n, data: { ...n.data, ...partialData } } : n));
+        setNodes(prev => prev.map(n => (
+            n.id === id && n.persistedData?.kind !== 'invalid'
+                ? { ...n, data: { ...n.data, ...partialData } }
+                : n
+        )));
     };
 
     const handleDeleteNode = (id: string) => {
@@ -58,14 +63,12 @@ export const useProductActions = (
     };
 
     const handleAddNodeFromTemplate = (tpl: ProfitTemplate) => {
-        setNodes(prev => [...prev, {
-            id: genId(),
-            templateId: tpl.id,
-            platform: tpl.platform || 'other',
-            currency: tpl.country,
-            name: tpl.name,
-            data: { ...DEFAULT_NODE_DATA, ...tpl.data }
-        }]);
+        try {
+            const node = createTemplatePlatformNode(tpl, siteCountry);
+            setNodes(prev => [...prev, node]);
+        } catch {
+            showToast(t.errors.templateSaveFailed, 'error');
+        }
     };
 
     const handleAddBlankNode = (selectedPlatform: string) => {
@@ -84,17 +87,13 @@ export const useProductActions = (
             const graphTemplate = response.data as NodeGraphTemplate;
             const inputValues = createDefaultInputValues(graphTemplate);
             const result = evaluateNodeGraphProfitTemplate(graphTemplate, inputValues);
-            setNodes(prev => [...prev, {
-                id: genId(),
-                graphTemplateId: graphTemplate.id,
-                graphTemplateSnapshot: graphTemplate,
-                graphInputValues: inputValues,
-                graphOutputValues: Object.fromEntries(result.outputs.map(output => [output.id, output.value])),
-                platform: (graphTemplate.platform || 'other') as PlatformType,
-                currency: graphTemplate.country || siteCountry,
-                name: graphTemplate.name,
-                data: { ...DEFAULT_NODE_DATA },
-            }]);
+            const outputValues = Object.fromEntries(result.outputs.map(output => [output.id, output.value]));
+            setNodes(prev => [...prev, createGraphPlatformNode(
+                graphTemplate,
+                siteCountry,
+                inputValues,
+                outputValues,
+            )]);
         } catch {
             showToast(t.errors.templateSaveFailed, 'error');
         }
@@ -111,18 +110,19 @@ export const useProductActions = (
     const handleSaveTemplate = async (nodeId: string, templateName: string) => {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return;
+        if (node.persistedData?.kind === 'invalid') {
+            showToast(t.errors.templateSaveFailed, 'error');
+            return;
+        }
         try {
-            const response = await api.post('/templates', {
-                name: templateName,
-                country: node.currency,
-                platform: node.platform,
-                type: 'profit',
-                data: {
-                    ...node.data,
+            const response = await api.post('/templates', buildPlatformNodeTemplatePayload(
+                node,
+                templateName,
+                {
                     vatRate: safeNumber(globalInputs.vatRate),
                     corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
                 },
-            });
+            ));
             setAllTemplates(prev => [...prev, response.data]);
             showToast(t.templates.saved);
         } catch {
@@ -187,24 +187,12 @@ export const useProductActions = (
         for (const n of nodeList) {
             try {
                 const tplName = n.name || n.platform;
-                const templateData = {
-                    ...n.data,
-                    ...(n.graphTemplateId ? {
-                        graphTemplateId: n.graphTemplateId,
-                        graphTemplateSnapshot: n.graphTemplateSnapshot,
-                        graphInputValues: n.graphInputValues || {},
-                        graphOutputValues: n.graphOutputValues || {},
-                    } : {}),
-                    vatRate: safeNumber(globalInputs.vatRate),
-                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-                };
                 const existingLink = findExistingProductTemplateLink(n, productTemplates);
                 const templateId = resolveTemplateIdForPayload(n.templateId, existingLink, allTemplates);
-                const payload = {
-                    templateId,
-                    name: tplName, country: n.currency, platform: n.platform,
-                    data: templateData,
-                };
+                const payload = buildPlatformNodeTemplatePayload(n, tplName, {
+                    vatRate: safeNumber(globalInputs.vatRate),
+                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+                }, templateId);
                 if (existingLink) {
                     const updated = await api.put(`/products/${productId}/templates/${existingLink.id}`, payload);
                     productTemplates = productTemplates.map(t => t.id === existingLink.id ? updated.data : t);
@@ -227,16 +215,22 @@ export const useProductActions = (
                 (tpl: ProductProfitTemplate) => tpl.name === defaultName && tpl.platform === 'other' && tpl.country === siteCountry
             );
             if (existingDefault) return;
-            await api.post(`/products/${productId}/templates`, {
+            const defaultNode: PlatformNode = {
+                id: genId(),
                 name: defaultName,
-                country: siteCountry,
+                currency: siteCountry,
                 platform: 'other',
                 data: {
                     ...DEFAULT_NODE_DATA,
+                },
+            };
+            await api.post(
+                `/products/${productId}/templates`,
+                buildPlatformNodeTemplatePayload(defaultNode, defaultName, {
                     vatRate: safeNumber(globalInputs.vatRate),
                     corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-                },
-            });
+                }),
+            );
         } catch {
             showToast(t.errors.defaultTemplateSaveFailed, 'error');
         }
@@ -260,6 +254,8 @@ export const useProductActions = (
             productWeight: safeNumber(globalInputs.productWeight),
             supplierTaxPoint: safeNumber(globalInputs.supplierTaxPoint),
             supplierInvoice: globalInputs.supplierInvoice,
+            vatRate: safeNumber(globalInputs.vatRate),
+            corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
             sellerCouponType: siteSpecificData.sellerCouponType,
             sellerCoupon: siteSpecificData.sellerCoupon,
             sellerCouponPlatformRatio: siteSpecificData.sellerCouponPlatformRatio,

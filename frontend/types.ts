@@ -18,6 +18,8 @@ export interface ProductCalcData {
   productWeight: number;
   supplierInvoice: 'yes' | 'no';
   supplierTaxPoint: number;
+  vatRate?: number;
+  corporateIncomeTaxRate?: number;
   sellerCouponType?: 'fixed' | 'percent';
   sellerCoupon?: number;
   sellerCouponPlatformRatio?: number;

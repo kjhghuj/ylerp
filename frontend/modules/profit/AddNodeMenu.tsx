@@ -3,6 +3,7 @@ import { Plus, Trash2, ChevronDown } from 'lucide-react';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
 import type { NodeGraphTemplate } from '../node-designer/types';
+import { matchesActiveSite } from '../productTemplateImport';
 import { translations } from '../../translations';
 
 type ProfitStrings = typeof translations['zh']['profit'];
@@ -47,7 +48,7 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
                     </div>
                 )}
                 <div className="space-y-1 mb-4 max-h-48 overflow-y-auto">
-                    {allTemplates.filter(tpl => tpl.country === siteCountry).map(tpl => (
+                    {allTemplates.filter(tpl => matchesActiveSite(tpl.country, siteCountry)).map(tpl => (
                         <div key={tpl.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg cursor-pointer border border-transparent hover:border-slate-200" onClick={() => onAddFromTemplate(tpl)}>
                             <div>
                                 <div className="text-sm font-bold text-slate-700">{tpl.name}</div>
@@ -58,7 +59,7 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
                             </button>
                         </div>
                     ))}
-                    {allTemplates.filter(tpl => tpl.country === siteCountry).length === 0 && <p className="text-xs text-slate-400 text-center py-2">{t.templates.empty}</p>}
+                    {allTemplates.filter(tpl => matchesActiveSite(tpl.country, siteCountry)).length === 0 && <p className="text-xs text-slate-400 text-center py-2">{t.templates.empty}</p>}
                 </div>
                 <div className="pt-3 border-t border-slate-100">
                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-tighter">{t.matrix.createBlank}</h4>

@@ -1,16 +1,42 @@
-import type { PlatformNode, ProductProfitTemplate, ProfitTemplate } from './types';
+import {
+    normalizeCurrencyCode,
+    type PlatformNode,
+    type ProductProfitTemplate,
+    type ProfitTemplate,
+} from './types';
+
+const matchesTemplateCountry = (left: string, right: string): boolean => {
+    const normalizedLeft = normalizeCurrencyCode(left);
+    const normalizedRight = normalizeCurrencyCode(right);
+    if (normalizedLeft && normalizedRight) return normalizedLeft === normalizedRight;
+    return left.trim().toUpperCase() === right.trim().toUpperCase();
+};
 
 export const findExistingProductTemplateLink = (
     node: PlatformNode,
     productTemplates: ProductProfitTemplate[],
 ) => {
     const nodeName = node.name || node.platform;
+    if (node.productTemplateLinkId) {
+        const exactLink = productTemplates.find(t => t.id === node.productTemplateLinkId);
+        if (exactLink) return exactLink;
+    }
+    if (node.templateId) {
+        // Compatibility: older imports stored the product link id in templateId.
+        const legacyExactLink = productTemplates.find(t => t.id === node.templateId);
+        if (legacyExactLink) return legacyExactLink;
+        return productTemplates.find(
+            t => t.templateId === node.templateId &&
+                t.name === nodeName &&
+                t.platform === node.platform &&
+                matchesTemplateCountry(t.country, node.currency),
+        );
+    }
     return productTemplates.find(
-        t => (node.productTemplateLinkId && t.id === node.productTemplateLinkId) ||
-            // Compatibility: older imports stored the product link id in templateId.
-            (node.templateId && t.id === node.templateId) ||
-            (node.templateId && t.templateId === node.templateId && t.name === nodeName && t.platform === node.platform && t.country === node.currency) ||
-            (!node.templateId && !t.templateId && t.name === nodeName && t.platform === node.platform && t.country === node.currency)
+        t => !t.templateId &&
+            t.name === nodeName &&
+            t.platform === node.platform &&
+            matchesTemplateCountry(t.country, node.currency),
     );
 };
 

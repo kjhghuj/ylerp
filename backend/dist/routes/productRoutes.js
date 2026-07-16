@@ -3,6 +3,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const index_1 = require("../index");
 const activityLogger_1 = require("../services/activityLogger");
+const productCache_1 = require("../services/productCache");
+const productTaxRates_1 = require("../services/productTaxRates");
 const router = (0, express_1.Router)();
 const countryToCurrency = {
     'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
@@ -13,7 +15,7 @@ const findUserProduct = (id, userId) => {
 router.get('/', async (req, res) => {
     try {
         const userId = req.user.id;
-        const cacheKey = `products:${userId}`;
+        const cacheKey = (0, productCache_1.getProductListCacheKey)(userId);
         const cachedProducts = await index_1.safeRedis.get(cacheKey);
         if (cachedProducts) {
             return res.json(JSON.parse(cachedProducts));
@@ -30,16 +32,20 @@ router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice, sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue, platformInfrastructureFee, sites, siteData } = req.body;
+        const productTaxRates = (0, productTaxRates_1.parseOptionalProductTaxRates)(req.body);
         const product = await index_1.prisma.product.create({
             data: { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice,
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
-                platformInfrastructureFee, sites, siteData, userId }
+                platformInfrastructureFee, sites, siteData, ...productTaxRates, userId }
         });
-        await index_1.safeRedis.del(`products:${userId}`);
+        await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
         (0, activityLogger_1.logActivity)(userId, 'product_create', 'product', { name, sku, country }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(product);
     }
     catch (error) {
+        if (error instanceof productTaxRates_1.ProductTaxRateValidationError) {
+            return res.status(400).json({ error: 'Invalid tax rate fields' });
+        }
         res.status(500).json({ error: 'Failed to create product' });
     }
 });
@@ -152,16 +158,20 @@ router.put('/:id', async (req, res) => {
         if (!existing)
             return res.status(404).json({ error: 'Product not found' });
         const { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice, sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue, platformInfrastructureFee, sites, siteData } = req.body;
+        const productTaxRates = (0, productTaxRates_1.parseOptionalProductTaxRates)(req.body);
         const product = await index_1.prisma.product.update({
             where: { id: req.params.id },
             data: { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice,
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
-                platformInfrastructureFee, sites, siteData },
+                platformInfrastructureFee, sites, siteData, ...productTaxRates },
         });
-        await index_1.safeRedis.del(`products:${userId}`);
+        await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
         res.json(product);
     }
     catch (error) {
+        if (error instanceof productTaxRates_1.ProductTaxRateValidationError) {
+            return res.status(400).json({ error: 'Invalid tax rate fields' });
+        }
         res.status(500).json({ error: 'Failed to update product' });
     }
 });
@@ -197,7 +207,7 @@ router.delete('/:id', async (req, res) => {
             await index_1.prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
             await index_1.prisma.product.delete({ where: { id: req.params.id } });
         }
-        await index_1.safeRedis.del(`products:${userId}`);
+        await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
         res.status(204).send();
     }
     catch (error) {

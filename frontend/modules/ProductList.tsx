@@ -10,14 +10,21 @@ import { writeFile, utils } from 'xlsx';
 import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
 import { useToast } from '../components/Toast';
-import { DEFAULT_NODE_DATA, type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
+import { type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
     filterProductTemplatesForSite,
     loadProductTemplateImportNodes,
+    normalizeProductTemplateData,
     toProductTemplateImportNode,
+    toStandardNodeData,
     type LinkedProductTemplate,
 } from './productTemplateImport';
+import {
+    extractLegacyProductTaxRateCandidate,
+    parseImportedProductTaxRates,
+    resolveCanonicalProductTaxRates,
+} from './productTaxRates';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -175,6 +182,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             [t.table.cost]: p.cost,
             [t.table.weight]: p.productWeight,
             [t.table.invoice]: p.supplierInvoice === 'yes' ? t.table.invoiceYes : t.table.invoiceNo,
+            [t.detail.vatRate]: p.vatRate ?? '',
+            [t.detail.corpTaxRate]: p.corporateIncomeTaxRate ?? '',
         })));
         const wb = utils.book_new();
         utils.book_append_sheet(wb, ws, `${activeTab}_Products`);
@@ -194,6 +203,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             productWeight: p.productWeight,
             supplierInvoice: p.supplierInvoice,
             supplierTaxPoint: p.supplierTaxPoint,
+            vatRate: p.vatRate,
+            corporateIncomeTaxRate: p.corporateIncomeTaxRate,
             sellerCouponType: p.sellerCouponType,
             sellerCoupon: p.sellerCoupon,
             sellerCouponPlatformRatio: p.sellerCouponPlatformRatio,
@@ -243,6 +254,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         productWeight: Number(item.productWeight) || 0,
                         supplierInvoice: item.supplierInvoice || 'no',
                         supplierTaxPoint: Number(item.supplierTaxPoint) || 0,
+                        ...parseImportedProductTaxRates(item),
                         sellerCouponType: item.sellerCouponType || 'fixed',
                         sellerCoupon: Number(item.sellerCoupon) || 0,
                         sellerCouponPlatformRatio: Number(item.sellerCouponPlatformRatio) || 0,
@@ -279,10 +291,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         try {
             const res = await api.get(`/products/${product.id}/templates`);
             const allTemplates: LinkedTemplate[] = res.data || [];
-            const currency = countryCurrencyMap[activeTab] || activeTab;
-            const filtered = allTemplates.filter(tpl => {
-                return tpl.country === activeTab || tpl.country === currency;
-            });
+            const filtered = filterProductTemplatesForSite(allTemplates, activeTab);
             setAllLinkedTemplates(filtered);
         } catch {
             showToast(te.templateFetchFailed, 'error');
@@ -342,34 +351,24 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const computeTemplateProfit = (tpl: LinkedTemplate) => {
         const d = tpl.data;
+        const normalizedData = normalizeProductTemplateData(d);
         const country = tpl.country;
         const currency = countryCurrencyMap[country] || country;
         const rate = exchangeRates[currency] || 1;
 
-        const profitData = {
-            baseShippingFee: Number(d.baseShippingFee) || 0,
-            extraShippingFee: Number(d.extraShippingFee) || 0,
-            crossBorderFee: Number(d.crossBorderFee) || 0,
-            firstWeight: Number(d.firstWeight) || 50,
-            platformCommissionRate: Number(d.platformCommissionRate) || 0,
-            transactionFeeRate: Number(d.transactionFeeRate) || 0,
-            platformCoupon: Number(d.platformCoupon) || 0,
-            platformCouponRate: Number(d.platformCouponRate) || 0,
-            damageReturnRate: Number(d.damageReturnRate) || 0,
-            mdvServiceFeeRate: Number(d.mdvServiceFeeRate) || 0,
-            fssServiceFeeRate: Number(d.fssServiceFeeRate) || 0,
-            ccbServiceFeeRate: Number(d.ccbServiceFeeRate) || 0,
-            warehouseOperationFee: Number(d.warehouseOperationFee) || 0,
-            lastMileFee: Number(d.lastMileFee) || 0,
-        };
+        const profitData = toStandardNodeData(normalizedData);
+        const productTaxRates = resolveCanonicalProductTaxRates(
+            selectedProduct || {},
+            [extractLegacyProductTaxRateCandidate(d)],
+        );
 
         const globalData = {
             purchaseCost: Number(selectedProduct?.cost) || 0,
             productWeight: Number(selectedProduct?.productWeight) || 0,
             supplierTaxPoint: Number(selectedProduct?.supplierTaxPoint) || 0,
             supplierInvoice: (selectedProduct?.supplierInvoice as 'yes' | 'no') || 'no',
-            vatRate: Number(d.vatRate) || 0,
-            corporateIncomeTaxRate: Number(d.corporateIncomeTaxRate) || 0,
+            vatRate: productTaxRates.vatRate,
+            corporateIncomeTaxRate: productTaxRates.corporateIncomeTaxRate,
         };
 
         const siteInputs = (() => {
@@ -392,7 +391,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     };
 
     const renderTemplateDetail = (tpl: LinkedTemplate) => {
-        const d = tpl.data;
+        const normalizedData = normalizeProductTemplateData(tpl.data);
+        const d = toStandardNodeData(normalizedData);
+        const productTaxRates = resolveCanonicalProductTaxRates(
+            selectedProduct || {},
+            [extractLegacyProductTaxRateCandidate(tpl.data)],
+        );
         const profit = computeTemplateProfit(tpl);
 
         const sections = [
@@ -431,8 +435,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             {
                 title: t.detail.taxAd,
                 items: [
-                    { label: t.detail.vatRate, value: d.vatRate, suffix: '%' },
-                    { label: t.detail.corpTaxRate, value: d.corporateIncomeTaxRate, suffix: '%' },
+                    { label: t.detail.vatRate, value: productTaxRates.vatRate, suffix: '%' },
+                    { label: t.detail.corpTaxRate, value: productTaxRates.corporateIncomeTaxRate, suffix: '%' },
                 ]
             },
         ];

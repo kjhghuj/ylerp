@@ -6,7 +6,7 @@ export interface ProfitTemplate {
     name: string;
     country: string;
     platform?: PlatformType;
-    data: NodeData;
+    data: Record<string, unknown>;
     productId?: string;
 }
 
@@ -17,7 +17,7 @@ export interface ProductProfitTemplate {
     name: string;
     country: string;
     platform?: PlatformType;
-    data: NodeData;
+    data: ProductTemplateData;
     createdAt?: string;
     updatedAt?: string;
 }
@@ -53,6 +53,8 @@ export interface PlatformNode {
     currency: string;
     name?: string;
     data: NodeData;
+    /** Canonical imported payload retained solely for lossless re-serialization. */
+    persistedData?: ProductTemplateData;
 }
 
 export const DEFAULT_NODE_DATA = {
@@ -68,6 +70,51 @@ export const DEFAULT_NODE_DATA = {
 
 export type NodeData = typeof DEFAULT_NODE_DATA;
 
+export interface ProductGraphTemplateData {
+    graphTemplateId: string;
+    graphTemplateSnapshot: NodeGraphTemplate;
+    graphInputValues: Record<string, number>;
+    graphOutputValues: Record<string, number>;
+}
+
+interface ProductTemplateDataBase {
+    schemaVersion: number;
+    nodeData: Partial<NodeData>;
+    extraData: Record<string, unknown>;
+}
+
+export interface StandardProductTemplateData extends ProductTemplateDataBase {
+    kind: 'standard';
+    graphTemplateId?: never;
+    graphTemplateSnapshot?: never;
+    graphInputValues?: never;
+    graphOutputValues?: never;
+    rawData?: never;
+}
+
+export interface GraphProductTemplateData extends ProductTemplateDataBase, ProductGraphTemplateData {
+    kind: 'graph';
+    rawData?: never;
+}
+
+export interface InvalidProductTemplateData {
+    kind: 'invalid';
+    schemaVersion: number;
+    rawData: Record<string, unknown>;
+    nodeData?: never;
+    extraData?: never;
+    graphTemplateId?: never;
+    graphTemplateSnapshot?: never;
+    graphInputValues?: never;
+    graphOutputValues?: never;
+}
+
+/** Canonical, discriminated product-template payload after deserialization. */
+export type ProductTemplateData =
+    | StandardProductTemplateData
+    | GraphProductTemplateData
+    | InvalidProductTemplateData;
+
 export type CountryCode = 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN';
 export type CurrencyCode = 'SGD' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'CNY';
 
@@ -77,6 +124,43 @@ export const COUNTRY_TO_CURRENCY: Record<CountryCode, CurrencyCode> = {
 
 export const CURRENCY_TO_COUNTRY: Record<CurrencyCode, CountryCode> = {
     SGD: 'SG', MYR: 'MY', PHP: 'PH', THB: 'TH', IDR: 'ID', CNY: 'CN',
+};
+
+const toSupportedCurrencyCode = (code: string | null | undefined): string => {
+    const normalized = code?.trim().toUpperCase();
+    if (!normalized) return '';
+    const countryCurrency = COUNTRY_TO_CURRENCY[normalized as CountryCode];
+    if (countryCurrency) return countryCurrency;
+    return CURRENCY_TO_COUNTRY[normalized as CurrencyCode] ? normalized : '';
+};
+
+export const normalizeCurrencyCode = (
+    code: string | null | undefined,
+    fallback = '',
+): string => toSupportedCurrencyCode(code) || toSupportedCurrencyCode(fallback);
+
+export class UnsupportedProfitSiteError extends Error {
+    constructor(siteCode: string) {
+        super(`Unsupported profit site: ${siteCode}`);
+        this.name = 'UnsupportedProfitSiteError';
+    }
+}
+
+export const resolveProfitCurrencyCode = (
+    siteCode: string | null | undefined,
+    fallback = '',
+): string => {
+    const explicitSite = siteCode?.trim();
+    if (explicitSite) {
+        const normalized = normalizeCurrencyCode(explicitSite);
+        if (!normalized) throw new UnsupportedProfitSiteError(explicitSite);
+        return normalized;
+    }
+    const explicitFallback = fallback.trim();
+    if (!explicitFallback) return '';
+    const normalizedFallback = normalizeCurrencyCode(explicitFallback);
+    if (!normalizedFallback) throw new UnsupportedProfitSiteError(explicitFallback);
+    return normalizedFallback;
 };
 
 export const SERVICE_FEE_EXEMPT_CURRENCIES: readonly CurrencyCode[] = ['MYR', 'SGD'];

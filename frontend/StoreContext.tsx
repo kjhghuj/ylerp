@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
 import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping, RestockRecord } from './types';
 import { translations } from './translations';
-import { SiteLevelInputs, DEFAULT_SITE_INPUTS, ProfitGlobalInputs, PlatformNode } from './modules/profit/types';
+import { SiteLevelInputs, ProfitGlobalInputs, PlatformNode, type ProductTemplateData } from './modules/profit/types';
+import { normalizeStoredProfitNodes, normalizeStoredProfitSiteCurrency, normalizeStoredProfitSiteInputs } from './modules/profit/profitPersistence';
+import type { LegacyProductTaxRateCandidate } from './modules/productTaxRates';
 
 type Language = 'zh' | 'en';
 
@@ -13,7 +15,8 @@ export interface ImportedNode {
     name: string;
     country: string;
     platform: string;
-    data: Record<string, any>;
+    data: ProductTemplateData;
+    legacyTaxRateCandidate?: LegacyProductTaxRateCandidate;
 }
 
 interface StoreContextType {
@@ -107,7 +110,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     });
 
   const [profitSiteCurrency, setProfitSiteCurrency] = useState<string>(() => {
-    return localStorage.getItem('yl-profit-site-country') || 'MYR';
+    return normalizeStoredProfitSiteCurrency(localStorage.getItem('yl-profit-site-country'));
   });
 
   const [profitNodes, setProfitNodes] = useState<Record<string, PlatformNode[]>>(() => {
@@ -116,23 +119,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       try {
         const parsed = JSON.parse(saved);
         // 兼容旧数据格式：如果是数组，转换为对象结构
-        if (Array.isArray(parsed)) {
-          return {
-            MYR: parsed,
-            SGD: [],
-            PHP: [],
-            THB: [],
-            IDR: [],
-          };
-        }
+        if (Array.isArray(parsed)) return normalizeStoredProfitNodes(parsed, profitSiteCurrency);
         // 新格式已经是对象，确保所有站点都存在
-        return {
-          MYR: parsed.MYR || [],
-          SGD: parsed.SGD || [],
-          PHP: parsed.PHP || [],
-          THB: parsed.THB || [],
-          IDR: parsed.IDR || [],
-        };
+        return normalizeStoredProfitNodes(parsed, profitSiteCurrency);
       } catch (e) {
         console.error('Failed to parse profitNodes from localStorage:', e);
       }
@@ -153,15 +142,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [profitSiteInputsMap, setProfitSiteInputsMap] = useState<Record<string, SiteLevelInputs>>(() => {
     const saved = localStorage.getItem('yl-profit-site-inputs');
     if (saved) {
-      try { return JSON.parse(saved); } catch { /* fall through */ }
+      try { return normalizeStoredProfitSiteInputs(JSON.parse(saved)); } catch { /* fall through */ }
     }
-    return {
-      'MYR': { ...DEFAULT_SITE_INPUTS },
-      'SGD': { ...DEFAULT_SITE_INPUTS },
-      'PHP': { ...DEFAULT_SITE_INPUTS },
-      'THB': { ...DEFAULT_SITE_INPUTS },
-      'IDR': { ...DEFAULT_SITE_INPUTS },
-    };
+    return normalizeStoredProfitSiteInputs(undefined);
   });
 
   // Product List persistent state

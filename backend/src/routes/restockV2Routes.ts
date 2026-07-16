@@ -1,5 +1,6 @@
 import { Router, type NextFunction, type Request, type Response } from 'express';
 import { prisma, safeRedis } from '../index';
+import { getProductListCacheKey } from '../services/productCache';
 import {
   buildRestockPlan,
   RestockPlanValidationError,
@@ -578,7 +579,7 @@ export const createRestockV2Router = ({ ycClient = createYcOpenPlatformClient() 
       });
 
       await Promise.all([
-        safeRedis.del(`products:${userId}`),
+        safeRedis.del(getProductListCacheKey(userId)),
         safeRedis.del(`inventory:${userId}`),
         safeRedis.del(`warehouse-mappings:${userId}`),
       ]);
@@ -771,7 +772,7 @@ export const createRestockV2Router = ({ ycClient = createYcOpenPlatformClient() 
         });
       });
       await Promise.all([
-        safeRedis.del(`products:${userId}`),
+        safeRedis.del(getProductListCacheKey(userId)),
         safeRedis.del(`inventory:${userId}`),
       ]);
       return res.status(201).json(inventory);
