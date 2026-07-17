@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Request, Response, Router } from 'express';
 import { prisma, safeRedis } from '../index';
 import { logActivity } from '../services/activityLogger';
 import { getProductListCacheKey } from '../services/productCache';
@@ -10,6 +10,14 @@ import {
     ProfitTemplateDataValidationError,
     validateProductProfitTemplateData,
 } from '../services/profitTemplateData';
+import {
+    INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
+    isProductWithTemplatesPrismaConflict,
+    isProductWithTemplatesValidationError,
+    parseProductWithTemplatesRequest,
+    ProductWithTemplatesError,
+    saveProductWithTemplates,
+} from '../services/productWithTemplates';
 
 const router = Router();
 
@@ -60,6 +68,71 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create product' });
     }
 });
+
+const saveProductWithTemplatesHandler = (mode: 'create' | 'update') => async (
+    req: Request,
+    res: Response,
+) => {
+    try {
+        const userId = req.user!.id;
+        const request = parseProductWithTemplatesRequest(req.body, mode);
+        const productId = mode === 'update' && typeof req.params.id === 'string'
+            ? req.params.id
+            : undefined;
+        if (mode === 'update' && !productId) {
+            throw new ProductWithTemplatesError(400, 'Product id is required');
+        }
+        const result = await saveProductWithTemplates({
+            prisma,
+            userId,
+            ...(productId ? { productId } : {}),
+            request,
+        });
+
+        await Promise.allSettled([
+            safeRedis.del(getProductListCacheKey(userId)),
+            logActivity(
+                userId,
+                mode === 'create' ? 'product_create' : 'product_update',
+                'product',
+                {
+                    name: String(request.product.name),
+                    sku: String(request.product.sku),
+                    country: request.product.country === null || request.product.country === undefined
+                        ? null
+                        : String(request.product.country),
+                },
+            ),
+        ]);
+        return res.status(mode === 'create' ? 201 : 200).json(result);
+    } catch (error) {
+        if (error instanceof ProductWithTemplatesError) {
+            return res.status(error.status).json({
+                error: error.publicMessage,
+                ...(error.status === 400 ? {
+                    code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
+                } : {}),
+            });
+        }
+        if (isProductWithTemplatesValidationError(error)) {
+            const message = error instanceof ProfitTemplateDataValidationError
+                ? error.message
+                : 'Invalid tax rate fields';
+            return res.status(400).json({
+                error: message,
+                code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
+            });
+        }
+        if (isProductWithTemplatesPrismaConflict(error)) {
+            return res.status(409).json({ error: 'Product conflict' });
+        }
+        console.error('Failed to save product with templates:', error);
+        return res.status(500).json({ error: 'Failed to save product with templates' });
+    }
+};
+
+router.post('/with-templates', saveProductWithTemplatesHandler('create'));
+router.put('/:id/with-templates', saveProductWithTemplatesHandler('update'));
 
 router.get('/:id/templates', async (req, res) => {
     try {

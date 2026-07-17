@@ -9,12 +9,13 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
 const ioredis_1 = __importDefault(require("ioredis"));
+const productAtomicJsonMiddleware_1 = require("./middleware/productAtomicJsonMiddleware");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 4002;
 // Middlewares
 app.use((0, cors_1.default)());
-app.use(express_1.default.json({ limit: '100mb' }));
+(0, productAtomicJsonMiddleware_1.configureJsonBodyParsing)(app);
 exports.prisma = new client_1.PrismaClient();
 exports.redis = new ioredis_1.default(process.env.REDIS_URL || 'redis://localhost:6379', {
     maxRetriesPerRequest: null,
@@ -84,6 +85,7 @@ app.use('/api/shopee', shopeeRoutes_1.default);
 // Protected routes (auth required)
 app.use('/api/users', userRoutes_1.default);
 app.use('/api/products', authMiddleware_1.authenticate, productRoutes_1.default);
+app.use(productAtomicJsonMiddleware_1.productAtomicRouteErrorHandler);
 app.use('/api/finance', authMiddleware_1.authenticate, financeRoutes_1.default);
 app.use('/api/inventory', authMiddleware_1.authenticate, inventoryRoutes_1.default);
 app.use('/api/warehouse-mappings', authMiddleware_1.authenticate, mappingRoutes_1.default);

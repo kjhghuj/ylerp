@@ -8,7 +8,6 @@ import { useToast } from '../../components/Toast';
 import type { NodeGraphTemplate } from '../node-designer/types';
 
 import { safeNumber } from './utils';
-import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from './productTemplateSync';
 import {
     createDefaultInputValues,
     evaluateNodeGraphProfitTemplate,
@@ -21,6 +20,14 @@ import {
     prepareGraphNodeForSave,
     prepareGraphNodesForSave,
 } from './graphNodeSavePreparation';
+import {
+    buildDefaultProductTemplatePayload,
+    buildAtomicProductSitePatch,
+    buildAtomicProductUpdateData,
+    buildProductTemplateMutations,
+    type AtomicProductTemplateCreateRequest,
+    type AtomicProductTemplateUpdateRequest,
+} from './productTemplateAtomic';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -30,7 +37,7 @@ export const useProductActions = (
     _setSiteInputsMap: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
 ) => {
     const {
-        addProduct, updateProduct, products,
+        saveProductWithTemplates, products,
         profitGlobalInputs: globalInputs,
         setProfitGlobalInputs: setGlobalInputs,
         profitSiteCurrency: siteCountry,
@@ -224,75 +231,6 @@ export const useProductActions = (
         return products.find(p => p.name === globalInputs.name && p.sku === globalInputs.sku) || null;
     };
 
-    const saveOrUpdateProduct = async (
-        productData: Omit<ProductCalcData, 'id'>,
-        countryCode: string,
-        existingProduct: ProductCalcData | null,
-    ): Promise<string | null> => {
-        if (existingProduct) {
-            const existingSites = existingProduct.sites || [];
-            const newSites = existingSites.includes(countryCode as ProductCalcData['sites'] extends (infer U)[] ? U : never)
-                ? existingSites
-                : [...existingSites, countryCode] as NonNullable<ProductCalcData['sites']>;
-            const mergedSiteData = {
-                ...((existingProduct.siteData as Record<string, unknown>) || {}),
-                [countryCode]: productData.siteData?.[countryCode],
-            };
-            await updateProduct({ ...productData, id: existingProduct.id, sites: newSites, siteData: mergedSiteData });
-            return existingProduct.id;
-        }
-        const saved = await addProduct(productData);
-        return saved?.id || null;
-    };
-
-    const syncTemplatesForNodes = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
-        const response = await api.get(`/products/${productId}/templates`);
-        let productTemplates: ProductProfitTemplate[] = response.data || [];
-
-        for (const n of nodeList) {
-            const tplName = n.name || n.platform;
-            const existingLink = findExistingProductTemplateLink(n, productTemplates);
-            const templateId = resolveTemplateIdForPayload(n.templateId, existingLink, allTemplates);
-            const payload = buildPlatformNodeTemplatePayload(n, tplName, {
-                vatRate: safeNumber(globalInputs.vatRate),
-                corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-            }, templateId);
-            if (existingLink) {
-                const updated = await api.put(`/products/${productId}/templates/${existingLink.id}`, payload);
-                productTemplates = productTemplates.map(t => t.id === existingLink.id ? updated.data : t);
-            } else {
-                const created = await api.post(`/products/${productId}/templates`, payload);
-                productTemplates = [...productTemplates, created.data];
-            }
-        }
-    };
-
-    const ensureDefaultTemplate = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
-        if (nodeList.length > 0 || !productId) return;
-        const defaultName = globalInputs.name || t.templates.defaultTemplate;
-        const response = await api.get(`/products/${productId}/templates`);
-        const existingDefault = (response.data || []).find(
-            (tpl: ProductProfitTemplate) => tpl.name === defaultName && tpl.platform === 'other' && tpl.country === siteCountry
-        );
-        if (existingDefault) return;
-        const defaultNode: PlatformNode = {
-            id: genId(),
-            name: defaultName,
-            currency: siteCountry,
-            platform: 'other',
-            data: {
-                ...DEFAULT_NODE_DATA,
-            },
-        };
-        await api.post(
-            `/products/${productId}/templates`,
-            buildPlatformNodeTemplatePayload(defaultNode, defaultName, {
-                vatRate: safeNumber(globalInputs.vatRate),
-                corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-            }),
-        );
-    };
-
     const handleSaveProduct = async () => {
         if (!globalInputs.name || !globalInputs.sku) {
             showToast(t.errors.nameAndSkuRequired, 'error');
@@ -307,14 +245,15 @@ export const useProductActions = (
         const preparedNodes = preparation.nodes;
         setNodes(preparedNodes);
 
-        const countryCode = CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
+        const countryCode: NonNullable<ProductCalcData['country']> =
+            CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
         const siteSpecificData = buildSiteSpecificData(siteCountry);
 
-        const productData: Omit<ProductCalcData, 'id'> = {
+        const productData: AtomicProductTemplateCreateRequest['product'] = {
             name: globalInputs.name,
             sku: globalInputs.sku,
-            country: countryCode as ProductCalcData['country'],
-            sites: [countryCode] as NonNullable<ProductCalcData['sites']>,
+            country: countryCode,
+            sites: [countryCode],
             cost: safeNumber(globalInputs.purchaseCost),
             productWeight: safeNumber(globalInputs.productWeight),
             supplierTaxPoint: safeNumber(globalInputs.supplierTaxPoint),
@@ -332,24 +271,61 @@ export const useProductActions = (
 
         const existingProduct = findExistingProduct();
         const isUpdate = !!existingProduct;
-
-        let savedProductId: string | null = null;
-        try {
-            savedProductId = await saveOrUpdateProduct(productData, countryCode, existingProduct);
-            if (!savedProductId) {
-                showToast(t.errors.noIdReturned, 'error');
+        let existingLinks: ProductProfitTemplate[] = [];
+        if (existingProduct && preparedNodes.length > 0) {
+            try {
+                const response = await api.get(`/products/${existingProduct.id}/templates`);
+                existingLinks = Array.isArray(response.data) ? response.data : [];
+            } catch {
+                showToast(t.errors.templateSaveFailed, 'error');
                 return;
             }
+        }
+
+        const taxOverrides = {
+            vatRate: safeNumber(globalInputs.vatRate),
+            corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+        };
+        let templateMutations: ReturnType<typeof buildProductTemplateMutations>;
+        let ensureDefaultTemplate: ReturnType<typeof buildDefaultProductTemplatePayload> | undefined;
+        try {
+            templateMutations = buildProductTemplateMutations(
+                preparedNodes,
+                existingLinks,
+                allTemplates,
+                taxOverrides,
+            );
+            ensureDefaultTemplate = preparedNodes.length === 0
+                ? buildDefaultProductTemplatePayload(
+                    globalInputs.name || t.templates.defaultTemplate,
+                    siteCountry,
+                    taxOverrides,
+                )
+                : undefined;
         } catch {
-            showToast(t.errors.saveFailed, 'error');
+            showToast(t.errors.templateSaveFailed, 'error');
             return;
         }
 
         try {
-            await syncTemplatesForNodes(preparedNodes, savedProductId);
-            await ensureDefaultTemplate(preparedNodes, savedProductId);
+            if (existingProduct) {
+                const request: AtomicProductTemplateUpdateRequest = {
+                    product: buildAtomicProductUpdateData(productData),
+                    templateMutations,
+                    sitePatch: buildAtomicProductSitePatch(countryCode, siteSpecificData),
+                    ...(ensureDefaultTemplate ? { ensureDefaultTemplate } : {}),
+                };
+                await saveProductWithTemplates(request, existingProduct.id);
+            } else {
+                const request: AtomicProductTemplateCreateRequest = {
+                    product: productData,
+                    templateMutations,
+                    ...(ensureDefaultTemplate ? { ensureDefaultTemplate } : {}),
+                };
+                await saveProductWithTemplates(request);
+            }
         } catch {
-            showToast(t.errors.templateSaveFailed, 'error');
+            showToast(t.errors.saveFailed, 'error');
             return;
         }
 

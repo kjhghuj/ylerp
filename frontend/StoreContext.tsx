@@ -4,6 +4,12 @@ import { translations } from './translations';
 import { SiteLevelInputs, ProfitGlobalInputs, PlatformNode, type ProductTemplateData } from './modules/profit/types';
 import { normalizeStoredProfitNodes, normalizeStoredProfitSiteCurrency, normalizeStoredProfitSiteInputs } from './modules/profit/profitPersistence';
 import type { LegacyProductTaxRateCandidate } from './modules/productTaxRates';
+import type {
+  AtomicProductTemplateCreateRequest,
+  AtomicProductTemplateSaveRequest,
+  AtomicProductTemplateSaveResponse,
+  AtomicProductTemplateUpdateRequest,
+} from './modules/profit/productTemplateAtomic';
 
 type Language = 'zh' | 'en';
 
@@ -27,6 +33,13 @@ interface StoreContextType {
   products: ProductCalcData[];
   addProduct: (p: Omit<ProductCalcData, 'id'>) => Promise<ProductCalcData | null>;
   updateProduct: (p: ProductCalcData) => Promise<void>;
+  saveProductWithTemplates: {
+    (request: AtomicProductTemplateCreateRequest): Promise<AtomicProductTemplateSaveResponse>;
+    (
+      request: AtomicProductTemplateUpdateRequest,
+      productId: string,
+    ): Promise<AtomicProductTemplateSaveResponse>;
+  };
   deleteProduct: (id: string, site?: string) => Promise<void>;
 
   calculatorImport: ProductCalcData | null;
@@ -245,6 +258,22 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setProducts(prev => prev.map(prod => prod.id === p.id ? res.data : prod));
     } catch (e) { console.error('Error updating product', e); throw e; }
   };
+  const saveProductWithTemplates = async (
+    request: AtomicProductTemplateSaveRequest,
+    productId?: string,
+  ): Promise<AtomicProductTemplateSaveResponse> => {
+    const response = productId
+      ? await api.put(`/products/${productId}/with-templates`, request)
+      : await api.post('/products/with-templates', request);
+    const saved = response.data as AtomicProductTemplateSaveResponse;
+    if (!saved?.product?.id || !Array.isArray(saved.productTemplates)) {
+      throw new Error('Invalid atomic product/template response');
+    }
+    setProducts(previous => productId
+      ? previous.map(product => product.id === productId ? saved.product : product)
+      : [...previous, saved.product]);
+    return saved;
+  };
   const deleteProduct = async (id: string, site?: string) => {
     try {
       if (site) {
@@ -403,7 +432,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   return (
     <StoreContext.Provider value={{
       language, setLanguage, strings, loading,
-      products, addProduct, updateProduct, deleteProduct,
+      products, addProduct, updateProduct, saveProductWithTemplates, deleteProduct,
       calculatorImport, setCalculatorImport,
       calculatorImportNodes, setCalculatorImportNodes,
       profitGlobalInputs, setProfitGlobalInputs,

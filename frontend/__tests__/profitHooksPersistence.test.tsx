@@ -91,6 +91,7 @@ const baseStore = () => ({
   strings,
   addProduct: vi.fn(),
   updateProduct: vi.fn(),
+  saveProductWithTemplates: vi.fn(),
   products: [],
   profitGlobalInputs: {
     name: 'Product',
@@ -395,6 +396,311 @@ describe('useProductActions persistence payloads', () => {
     vi.clearAllMocks();
   });
 
+  it('creates a product and all node links with one atomic write', async () => {
+    const node: PlatformNode = {
+      id: 'new-node',
+      platform: 'lazada',
+      currency: 'SGD',
+      name: 'Lazada SG',
+      data: { ...DEFAULT_NODE_DATA, extraShippingFee: 6 },
+    };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-new' },
+      productTemplates: [{ id: 'link-new' }],
+    });
+    testState.store = {
+      ...baseStore(),
+      profitSiteCurrency: 'SGD',
+      profitNodes: { SGD: [node] },
+      saveProductWithTemplates,
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { SGD: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.get).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).toHaveBeenCalledTimes(1);
+    expect(saveProductWithTemplates).toHaveBeenCalledWith({
+      product: expect.objectContaining({
+        name: 'Product',
+        sku: 'SKU-1',
+        sites: ['SG'],
+        siteData: { SG: expect.objectContaining({ adROI: 15 }) },
+      }),
+      templateMutations: [expect.objectContaining({
+        operation: 'create',
+        templateId: null,
+        name: 'Lazada SG',
+        country: 'SGD',
+        platform: 'lazada',
+      })],
+    });
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.api.put).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Saved product');
+  });
+
+  it('loads existing links read-only, then updates the product and matched link atomically', async () => {
+    const node: PlatformNode = {
+      id: 'existing-node',
+      productTemplateLinkId: 'link-1',
+      templateId: 'shared-1',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Shopee MY',
+      data: { ...DEFAULT_NODE_DATA },
+    };
+    const existingLink: ProductProfitTemplate = {
+      id: 'link-1',
+      productId: 'product-1',
+      templateId: 'shared-1',
+      name: 'Shopee MY',
+      country: 'MYR',
+      platform: 'shopee',
+      data: { kind: 'standard', schemaVersion: 2, nodeData: {}, extraData: {} },
+    };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-1' },
+      productTemplates: [existingLink],
+    });
+    testState.store = {
+      ...baseStore(),
+      products: [{
+        id: 'product-1',
+        name: 'Product',
+        sku: 'SKU-1',
+        country: 'SG' as const,
+        sites: ['SG' as const],
+        cost: 9,
+        productWeight: 90,
+        supplierTaxPoint: 0,
+        supplierInvoice: 'no' as const,
+        siteData: { SG: { totalRevenue: 9 } },
+      }],
+      profitEditingProductId: 'product-1',
+      profitNodes: { MYR: [node] },
+      saveProductWithTemplates,
+    };
+    testState.api.get.mockResolvedValue({ data: [
+      existingLink,
+      { ...existingLink, id: 'unmentioned-link', name: 'Do not delete' },
+    ] });
+
+    const { result } = renderHook(() => useProductActions(
+      [{ id: 'shared-1', name: 'Shopee MY', country: 'MYR', platform: 'shopee', data: {} }],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.get).toHaveBeenCalledWith('/products/product-1/templates');
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      templateMutations: [expect.objectContaining({
+        operation: 'update',
+        linkId: 'link-1',
+        templateId: 'shared-1',
+      })],
+      sitePatch: {
+        sites: ['MY'],
+        siteData: { MY: expect.objectContaining({ adROI: 15 }) },
+      },
+    }), 'product-1');
+    const updateRequest = saveProductWithTemplates.mock.calls[0][0];
+    expect(updateRequest.product).not.toHaveProperty('sites');
+    expect(updateRequest.product).not.toHaveProperty('siteData');
+    expect(updateRequest.sitePatch.siteData).not.toHaveProperty('SG');
+    expect(updateRequest.templateMutations).toHaveLength(1);
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.api.put).not.toHaveBeenCalled();
+  });
+
+  it('builds update site patches only from this save even when local site collections are corrupt', async () => {
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-corrupt-local' },
+      productTemplates: [],
+    });
+    testState.store = {
+      ...baseStore(),
+      profitSiteCurrency: 'PHP',
+      profitEditingProductId: 'product-corrupt-local',
+      products: [{
+        id: 'product-corrupt-local',
+        name: 'Product',
+        sku: 'SKU-1',
+        country: 'SG' as const,
+        sites: 'not-an-array',
+        cost: 10,
+        productWeight: 100,
+        supplierTaxPoint: 0,
+        supplierInvoice: 'no' as const,
+        siteData: 'not-an-object',
+      } as never],
+      profitNodes: { PHP: [] },
+      saveProductWithTemplates,
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 33 } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).toHaveBeenCalledTimes(1);
+    const [request, productId] = saveProductWithTemplates.mock.calls[0];
+    expect(productId).toBe('product-corrupt-local');
+    expect(request.product).not.toHaveProperty('sites');
+    expect(request.product).not.toHaveProperty('siteData');
+    expect(request.sitePatch).toEqual({
+      sites: ['PH'],
+      siteData: { PH: expect.objectContaining({ totalRevenue: 33 }) },
+    });
+  });
+
+  it('emits independent site-only patches for concurrent saves based on the same stale product', async () => {
+    const staleProduct = {
+      id: 'product-concurrent',
+      name: 'Product',
+      sku: 'SKU-1',
+      country: 'SG' as const,
+      sites: ['SG' as const],
+      cost: 10,
+      productWeight: 100,
+      supplierTaxPoint: 0,
+      supplierInvoice: 'no' as const,
+      siteData: { SG: { totalRevenue: 9 } },
+    };
+    const saveMy = vi.fn().mockResolvedValue({ product: staleProduct, productTemplates: [] });
+    testState.store = {
+      ...baseStore(),
+      products: [staleProduct],
+      profitEditingProductId: staleProduct.id,
+      profitSiteCurrency: 'MYR',
+      profitNodes: { MYR: [] },
+      saveProductWithTemplates: saveMy,
+    };
+    const myHook = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 11 } }, vi.fn(),
+    ));
+
+    const savePh = vi.fn().mockResolvedValue({ product: staleProduct, productTemplates: [] });
+    testState.store = {
+      ...baseStore(),
+      products: [staleProduct],
+      profitEditingProductId: staleProduct.id,
+      profitSiteCurrency: 'PHP',
+      profitNodes: { PHP: [] },
+      saveProductWithTemplates: savePh,
+    };
+    const phHook = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 22 } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await myHook.result.current.handleSaveProduct();
+      await phHook.result.current.handleSaveProduct();
+    });
+
+    expect(saveMy.mock.calls[0][0].sitePatch).toEqual({
+      sites: ['MY'],
+      siteData: { MY: expect.objectContaining({ totalRevenue: 11 }) },
+    });
+    expect(savePh.mock.calls[0][0].sitePatch).toEqual({
+      sites: ['PH'],
+      siteData: { PH: expect.objectContaining({ totalRevenue: 22 }) },
+    });
+    expect(saveMy.mock.calls[0][0].product).not.toHaveProperty('siteData');
+    expect(savePh.mock.calls[0][0].product).not.toHaveProperty('siteData');
+  });
+
+  it('skips the link lookup and atomically ensures the default template for an empty node list', async () => {
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-default' },
+      productTemplates: [{ id: 'default-link' }],
+    });
+    testState.store = {
+      ...baseStore(),
+      saveProductWithTemplates,
+      profitGlobalInputs: {
+        ...baseStore().profitGlobalInputs,
+        vatRate: -5,
+        corporateIncomeTaxRate: 125,
+      },
+      profitNodes: { MYR: [] },
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.get).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).toHaveBeenCalledWith({
+      product: expect.objectContaining({ vatRate: -5, corporateIncomeTaxRate: 125 }),
+      templateMutations: [],
+      ensureDefaultTemplate: expect.objectContaining({
+        templateId: null,
+        name: 'Product',
+        country: 'MYR',
+        platform: 'other',
+        type: 'profit',
+        data: expect.objectContaining({ vatRate: -5, corporateIncomeTaxRate: 125 }),
+      }),
+    });
+  });
+
+  it('keeps editing state and suppresses success when the atomic write fails', async () => {
+    const saveProductWithTemplates = vi.fn().mockRejectedValue(new Error('atomic rollback'));
+    const setEditingProductId = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      saveProductWithTemplates,
+      setProfitEditingProductId: setEditingProductId,
+      profitEditingProductId: 'product-1',
+      products: [{
+        id: 'product-1', name: 'Product', sku: 'SKU-1', country: 'MY', sites: ['MY'],
+        cost: 10, productWeight: 100, supplierTaxPoint: 0, supplierInvoice: 'no', siteData: {},
+      }],
+      profitNodes: { MYR: [] },
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).toHaveBeenCalledTimes(1);
+    expect(setEditingProductId).not.toHaveBeenCalledWith(null);
+    expect(testState.showToast).toHaveBeenCalledWith('Save failed', 'error');
+    expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
+    expect(testState.showToast).not.toHaveBeenCalledWith('Updated');
+  });
+
   it('rejects directly saving an invalid imported payload as a shared template', async () => {
     const invalidRaw = {
       kind: 'future-template',
@@ -492,10 +798,10 @@ describe('useProductActions persistence payloads', () => {
         graphInputValues: { price: 6 },
         graphOutputValues: { out: 6 },
       };
-      const addProduct = vi.fn().mockResolvedValue({ id: 'must-not-save' });
+      const saveProductWithTemplates = vi.fn();
       testState.store = {
         ...baseStore(),
-        addProduct,
+        saveProductWithTemplates,
         profitNodes: { MYR: [node] },
       };
 
@@ -513,7 +819,7 @@ describe('useProductActions persistence payloads', () => {
       });
 
       expect(prepareGraphNodeForSave(node)).toEqual(expect.objectContaining({ ok: false }));
-      expect(addProduct).not.toHaveBeenCalled();
+      expect(saveProductWithTemplates).not.toHaveBeenCalled();
       expect(testState.api.get).not.toHaveBeenCalled();
       expect(testState.api.post).not.toHaveBeenCalled();
       expect(testState.api.put).not.toHaveBeenCalled();
@@ -560,7 +866,10 @@ describe('useProductActions persistence payloads', () => {
       graphInputValues: { price: 100 },
       graphOutputValues: { out: 100 },
     };
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-graph' });
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-graph' },
+      productTemplates: [{ id: 'link-graph' }],
+    });
     const setProfitNodes = vi.fn((update: Record<string, PlatformNode[]> | ((previous: Record<string, PlatformNode[]>) => Record<string, PlatformNode[]>)) => {
       const current = testState.store as ReturnType<typeof baseStore> & {
         profitNodes: Record<string, PlatformNode[]>;
@@ -571,13 +880,10 @@ describe('useProductActions persistence payloads', () => {
     });
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       setProfitNodes,
       profitNodes: { MYR: [graphNode] },
     };
-    testState.api.get.mockResolvedValue({ data: [] });
-    testState.api.post.mockResolvedValue({ data: { id: 'link-graph' } });
-
     const Harness = () => {
       const actions = useProductActions(
         [],
@@ -610,7 +916,7 @@ describe('useProductActions persistence payloads', () => {
       'Fix graph input errors before saving',
       'error',
     ));
-    expect(addProduct).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
     expect(testState.api.get).not.toHaveBeenCalled();
     expect(testState.api.post).not.toHaveBeenCalled();
     expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
@@ -624,15 +930,17 @@ describe('useProductActions persistence payloads', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save product' }));
 
-    await waitFor(() => expect(addProduct).toHaveBeenCalledTimes(1));
-    expect(testState.api.post).toHaveBeenCalledWith(
-      '/products/product-graph/templates',
+    await waitFor(() => expect(saveProductWithTemplates).toHaveBeenCalledTimes(1));
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        templateMutations: [expect.objectContaining({
+          operation: 'create',
+          data: expect.objectContaining({
           kind: 'graph',
           graphInputValues: { price: 0 },
           graphOutputValues: { out: 0 },
-        }),
+          }),
+        })],
       }),
     );
     expect(testState.showToast).toHaveBeenCalledWith('Saved product');
@@ -679,17 +987,17 @@ describe('useProductActions persistence payloads', () => {
     if (prepared.ok === false) throw new Error('expected graph preparation success');
     expect(prepared.node.graphOutputValues).toEqual({ out: 6 });
 
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-stale-output' });
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-stale-output' },
+      productTemplates: [{ id: 'link-stale-output' }],
+    });
     const setProfitNodes = vi.fn();
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       setProfitNodes,
       profitNodes: { MYR: [graphNode] },
     };
-    testState.api.get.mockResolvedValue({ data: [] });
-    testState.api.post.mockResolvedValue({ data: { id: 'link-stale-output' } });
-
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
@@ -702,13 +1010,15 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.post).toHaveBeenCalledWith(
-      '/products/product-stale-output/templates',
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({
+        templateMutations: [expect.objectContaining({
+          operation: 'create',
+          data: expect.objectContaining({
           graphInputValues: { price: 6 },
           graphOutputValues: { out: 6 },
-        }),
+          }),
+        })],
       }),
     );
     expect(setProfitNodes).toHaveBeenCalled();
@@ -798,10 +1108,10 @@ describe('useProductActions persistence payloads', () => {
       ...partial,
     };
     expect(() => serializePlatformNodeTemplateData(node)).toThrow(/all graph fields/);
-    const addProduct = vi.fn().mockResolvedValue({ id: 'must-not-save' });
+    const saveProductWithTemplates = vi.fn();
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       profitNodes: { MYR: [node] },
     };
 
@@ -818,7 +1128,7 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(addProduct).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
     expect(testState.api.post).not.toHaveBeenCalled();
     expect(testState.api.put).not.toHaveBeenCalled();
     expect(testState.showToast).toHaveBeenCalledWith(
@@ -827,7 +1137,7 @@ describe('useProductActions persistence payloads', () => {
     );
   });
 
-  it('does not report product-save success when a template synchronization request fails', async () => {
+  it('does not report product-save success when the aggregate product/template write fails', async () => {
     const node: PlatformNode = {
       id: 'node-sync-failure',
       platform: 'shopee',
@@ -835,15 +1145,12 @@ describe('useProductActions persistence payloads', () => {
       name: 'Sync failure',
       data: { ...DEFAULT_NODE_DATA },
     };
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-sync-failure' });
+    const saveProductWithTemplates = vi.fn().mockRejectedValue(new Error('atomic save failed'));
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       profitNodes: { MYR: [node] },
     };
-    testState.api.get.mockResolvedValue({ data: [] });
-    testState.api.post.mockRejectedValue(new Error('template sync failed'));
-
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
@@ -856,24 +1163,22 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(addProduct).toHaveBeenCalledTimes(1);
-    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    expect(saveProductWithTemplates).toHaveBeenCalledTimes(1);
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.api.put).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Save failed', 'error');
     expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
   });
 
-  it('does not report product-save success when loading the default-template state fails', async () => {
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-default-get-failure' });
+  it('does not read default-template state before an aggregate default save', async () => {
+    const saveProductWithTemplates = vi.fn().mockRejectedValue(new Error('default atomic failure'));
     const setEditingProductId = vi.fn();
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       setProfitEditingProductId: setEditingProductId,
       profitNodes: { MYR: [] },
     };
-    testState.api.get
-      .mockResolvedValueOnce({ data: [] })
-      .mockRejectedValueOnce(new Error('default lookup failed'));
-
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
@@ -886,34 +1191,26 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.get).toHaveBeenNthCalledWith(
-      1,
-      '/products/product-default-get-failure/templates',
-    );
-    expect(testState.api.get).toHaveBeenNthCalledWith(
-      2,
-      '/products/product-default-get-failure/templates',
-    );
+    expect(testState.api.get).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      templateMutations: [],
+      ensureDefaultTemplate: expect.objectContaining({ platform: 'other' }),
+    }));
     expect(testState.api.post).not.toHaveBeenCalled();
-    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    expect(testState.showToast).toHaveBeenCalledWith('Save failed', 'error');
     expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
     expect(setEditingProductId).not.toHaveBeenCalledWith(null);
   });
 
-  it('does not report product-save success when creating the default template fails', async () => {
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-default-post-failure' });
+  it('does not report product-save success when the aggregate default-template creation fails', async () => {
+    const saveProductWithTemplates = vi.fn().mockRejectedValue(new Error('default create failed'));
     const setEditingProductId = vi.fn();
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       setProfitEditingProductId: setEditingProductId,
       profitNodes: { MYR: [] },
     };
-    testState.api.get
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [] });
-    testState.api.post.mockRejectedValueOnce(new Error('default create failed'));
-
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
@@ -926,33 +1223,33 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.post).toHaveBeenCalledWith(
-      '/products/product-default-post-failure/templates',
-      expect.objectContaining({
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      ensureDefaultTemplate: expect.objectContaining({
         name: 'Product',
         country: 'MYR',
         platform: 'other',
       }),
-    );
-    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    }));
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Save failed', 'error');
     expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
     expect(setEditingProductId).not.toHaveBeenCalledWith(null);
   });
 
   it('saves canonical product tax fields, including negative historical values, before template compatibility copies', async () => {
-    const addProduct = vi.fn().mockResolvedValue({ id: 'product-tax-new' });
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-tax-new' },
+      productTemplates: [],
+    });
     testState.store = {
       ...baseStore(),
-      addProduct,
+      saveProductWithTemplates,
       profitGlobalInputs: {
         ...baseStore().profitGlobalInputs,
         vatRate: -5,
         corporateIncomeTaxRate: 125,
       },
     };
-    testState.api.get.mockResolvedValue({ data: [] });
-    testState.api.post.mockResolvedValue({ data: { id: 'default-link' } });
-
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
@@ -965,9 +1262,14 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(addProduct).toHaveBeenCalledWith(expect.objectContaining({
-      vatRate: -5,
-      corporateIncomeTaxRate: 125,
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      product: expect.objectContaining({
+        vatRate: -5,
+        corporateIncomeTaxRate: 125,
+      }),
+      ensureDefaultTemplate: expect.objectContaining({
+        data: expect.objectContaining({ vatRate: -5, corporateIncomeTaxRate: 125 }),
+      }),
     }));
   });
 
@@ -1049,8 +1351,13 @@ describe('useProductActions persistence payloads', () => {
       platform: 'shopee',
       data: node.persistedData!,
     };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-1' },
+      productTemplates: [existingLink],
+    });
     testState.store = {
       ...baseStore(),
+      saveProductWithTemplates,
       products: [{
         id: 'product-1',
         name: 'Product',
@@ -1067,7 +1374,6 @@ describe('useProductActions persistence payloads', () => {
       profitEditingProductId: 'product-1',
     };
     testState.api.get.mockResolvedValue({ data: [existingLink] });
-    testState.api.put.mockResolvedValue({ data: existingLink });
 
     const { result } = renderHook(() => useProductActions(
       [],
@@ -1081,9 +1387,11 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.put).toHaveBeenCalledWith(
-      '/products/product-1/templates/link-invalid',
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(
       expect.objectContaining({
+        templateMutations: [expect.objectContaining({
+          operation: 'update',
+          linkId: 'link-invalid',
         templateId: 'shared-invalid',
         data: {
           kind: 'invalid',
@@ -1091,8 +1399,11 @@ describe('useProductActions persistence payloads', () => {
           compatibilityEnvelope: true,
           rawData: invalidRaw,
         },
+        })],
       }),
+      'product-1',
     );
+    expect(testState.api.put).not.toHaveBeenCalled();
   });
 
   it('rejects adding an unsupported-site shared template and shows an error', () => {
@@ -1148,8 +1459,13 @@ describe('useProductActions persistence payloads', () => {
       platform: 'shopee',
       data: node.persistedData!,
     };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-1' },
+      productTemplates: [existingLink],
+    });
     const store = {
       ...baseStore(),
+      saveProductWithTemplates,
       products: [{
         id: 'product-1',
         name: 'Product',
@@ -1167,7 +1483,6 @@ describe('useProductActions persistence payloads', () => {
     };
     testState.store = store;
     testState.api.get.mockResolvedValue({ data: [existingLink] });
-    testState.api.put.mockResolvedValue({ data: existingLink });
 
     const { result } = renderHook(() => useProductActions(
       [{
@@ -1187,9 +1502,11 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.put).toHaveBeenCalledWith(
-      '/products/product-1/templates/link-1',
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(
       expect.objectContaining({
+        templateMutations: [expect.objectContaining({
+        operation: 'update',
+        linkId: 'link-1',
         templateId: 'shared-1',
         name: 'Shopee MY',
         country: 'MYR',
@@ -1202,8 +1519,11 @@ describe('useProductActions persistence payloads', () => {
           corporateIncomeTaxRate: 5,
           futureOption: { preserve: true },
         }),
+        })],
       }),
+      'product-1',
     );
+    expect(testState.api.put).not.toHaveBeenCalled();
   });
 
   it('uses the same serializer for the actual product-template POST body', async () => {
@@ -1220,15 +1540,18 @@ describe('useProductActions persistence payloads', () => {
         extraData: { futurePostOption: ['keep'] },
       },
     };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'product-new' },
+      productTemplates: [{ id: 'link-new' }],
+    });
     const store = {
       ...baseStore(),
       profitSiteCurrency: 'SGD',
       profitNodes: { SGD: [node] },
-      addProduct: vi.fn().mockResolvedValue({ id: 'product-new' }),
+      saveProductWithTemplates,
     };
     testState.store = store;
     testState.api.get.mockResolvedValue({ data: [] });
-    testState.api.post.mockResolvedValue({ data: { id: 'link-new' } });
 
     const { result } = renderHook(() => useProductActions(
       [],
@@ -1242,9 +1565,10 @@ describe('useProductActions persistence payloads', () => {
       await result.current.handleSaveProduct();
     });
 
-    expect(testState.api.post).toHaveBeenCalledWith(
-      '/products/product-new/templates',
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(
       expect.objectContaining({
+        templateMutations: [expect.objectContaining({
+        operation: 'create',
         templateId: null,
         name: 'Lazada SG',
         country: 'SGD',
@@ -1256,7 +1580,9 @@ describe('useProductActions persistence payloads', () => {
           extraShippingFee: 6,
           futurePostOption: ['keep'],
         }),
+        })],
       }),
     );
+    expect(testState.api.post).not.toHaveBeenCalled();
   });
 });

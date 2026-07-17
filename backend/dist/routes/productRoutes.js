@@ -6,6 +6,7 @@ const activityLogger_1 = require("../services/activityLogger");
 const productCache_1 = require("../services/productCache");
 const productTaxRates_1 = require("../services/productTaxRates");
 const profitTemplateData_1 = require("../services/profitTemplateData");
+const productWithTemplates_1 = require("../services/productWithTemplates");
 const router = (0, express_1.Router)();
 const countryToCurrency = {
     'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
@@ -50,6 +51,61 @@ router.post('/', async (req, res) => {
         res.status(500).json({ error: 'Failed to create product' });
     }
 });
+const saveProductWithTemplatesHandler = (mode) => async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const request = (0, productWithTemplates_1.parseProductWithTemplatesRequest)(req.body, mode);
+        const productId = mode === 'update' && typeof req.params.id === 'string'
+            ? req.params.id
+            : undefined;
+        if (mode === 'update' && !productId) {
+            throw new productWithTemplates_1.ProductWithTemplatesError(400, 'Product id is required');
+        }
+        const result = await (0, productWithTemplates_1.saveProductWithTemplates)({
+            prisma: index_1.prisma,
+            userId,
+            ...(productId ? { productId } : {}),
+            request,
+        });
+        await Promise.allSettled([
+            index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId)),
+            (0, activityLogger_1.logActivity)(userId, mode === 'create' ? 'product_create' : 'product_update', 'product', {
+                name: String(request.product.name),
+                sku: String(request.product.sku),
+                country: request.product.country === null || request.product.country === undefined
+                    ? null
+                    : String(request.product.country),
+            }),
+        ]);
+        return res.status(mode === 'create' ? 201 : 200).json(result);
+    }
+    catch (error) {
+        if (error instanceof productWithTemplates_1.ProductWithTemplatesError) {
+            return res.status(error.status).json({
+                error: error.publicMessage,
+                ...(error.status === 400 ? {
+                    code: productWithTemplates_1.INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
+                } : {}),
+            });
+        }
+        if ((0, productWithTemplates_1.isProductWithTemplatesValidationError)(error)) {
+            const message = error instanceof profitTemplateData_1.ProfitTemplateDataValidationError
+                ? error.message
+                : 'Invalid tax rate fields';
+            return res.status(400).json({
+                error: message,
+                code: productWithTemplates_1.INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
+            });
+        }
+        if ((0, productWithTemplates_1.isProductWithTemplatesPrismaConflict)(error)) {
+            return res.status(409).json({ error: 'Product conflict' });
+        }
+        console.error('Failed to save product with templates:', error);
+        return res.status(500).json({ error: 'Failed to save product with templates' });
+    }
+};
+router.post('/with-templates', saveProductWithTemplatesHandler('create'));
+router.put('/:id/with-templates', saveProductWithTemplatesHandler('update'));
 router.get('/:id/templates', async (req, res) => {
     try {
         const userId = req.user.id;

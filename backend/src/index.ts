@@ -3,6 +3,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
+import {
+  configureJsonBodyParsing,
+  productAtomicRouteErrorHandler,
+} from './middleware/productAtomicJsonMiddleware';
 
 dotenv.config();
 
@@ -11,7 +15,7 @@ const port = process.env.PORT || 4002;
 
 // Middlewares
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
+configureJsonBodyParsing(app);
 
 export const prisma = new PrismaClient();
 export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -75,6 +79,7 @@ app.use('/api/shopee', shopeeRoutes);
 // Protected routes (auth required)
 app.use('/api/users', userRoutes);
 app.use('/api/products', authenticate, productRoutes);
+app.use(productAtomicRouteErrorHandler);
 app.use('/api/finance', authenticate, financeRoutes);
 app.use('/api/inventory', authenticate, inventoryRoutes);
 app.use('/api/warehouse-mappings', authenticate, mappingRoutes);
