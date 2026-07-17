@@ -1,0 +1,30 @@
+{
+  "allowed": [
+    {
+      "expression": "price * rate",
+      "expected": 6
+    },
+    {
+      "expression": "round(sqrt(price) * rate + pi - pi, 4)",
+      "expected": 0.6
+    },
+    {
+      "expression": "max(abs(-price * rate), min(10, pow(2, 3)))",
+      "expected": 8
+    },
+    {
+      "expression": "e - e + price * rate",
+      "expected": 6
+    }
+  ],
+  "rejected": [
+    "evaluate(\"2+2\")",
+    "price = 2",
+    "{a: 2}.a",
+    "[7, 8][1]",
+    "ones(2, 2)",
+    "sum(ones(2, 2))",
+    "price ? 2 : 3",
+    "range(1, 100)"
+  ]
+}

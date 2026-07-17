@@ -33,6 +33,10 @@ const mockTemplateFindFirst = prisma.profitTemplate.findFirst as jest.Mock;
 const mockProductProfitTemplate = (prisma as any).productProfitTemplate;
 const mockLinkFindMany = mockProductProfitTemplate.findMany as jest.Mock;
 const mockLinkCreate = mockProductProfitTemplate.create as jest.Mock;
+const mockLinkFindFirst = mockProductProfitTemplate.findFirst as jest.Mock;
+const mockLinkUpdate = mockProductProfitTemplate.update as jest.Mock;
+
+const validGraphData = require('../../../../test-fixtures/profit-graph-executable.json');
 
 function getHandler(path: string, method: string) {
   const stack = (router as any).stack;
@@ -115,5 +119,142 @@ describe('product template links', () => {
       orderBy: { createdAt: 'desc' },
     });
     expect(res.json).toHaveBeenCalledWith(links);
+  });
+
+  it('accepts and preserves a valid graph payload on create', async () => {
+    req.body = {
+      name: 'Graph',
+      country: 'MYR',
+      platform: 'shopee',
+      data: validGraphData,
+    };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+    mockLinkCreate.mockResolvedValueOnce({ id: 'link-graph', data: validGraphData });
+
+    await getHandler('/:id/templates', 'post')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ data: validGraphData }),
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it('rejects a partial graph payload on create with a concrete field error', async () => {
+    req.body = {
+      name: 'Broken graph',
+      country: 'MYR',
+      data: {
+        kind: 'graph',
+        schemaVersion: 2,
+        graphTemplateId: 'graph-1',
+      },
+    };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+
+    await getHandler('/:id/templates', 'post')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkCreate).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('graphTemplateSnapshot'),
+    });
+  });
+
+  it('allows explicit invalid compatibility payloads for product links', async () => {
+    const invalid = {
+      kind: 'invalid',
+      schemaVersion: 99,
+      compatibilityEnvelope: true,
+      rawData: { future: true },
+    };
+    req.body = {
+      name: 'Future template',
+      country: 'MYR',
+      data: invalid,
+    };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+    mockLinkCreate.mockResolvedValueOnce({ id: 'future-link', data: invalid });
+
+    await getHandler('/:id/templates', 'post')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ data: invalid }),
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+  });
+
+  it.each([
+    ['unknown kind', { kind: 'future', schemaVersion: 99, future: true }],
+    ['future standard version', { kind: 'standard', schemaVersion: 3, platformCommissionRate: 6 }],
+  ])('rejects %s on product-link create unless explicitly wrapped as invalid', async (_label, data) => {
+    req.body = {
+      name: 'Rejected product template',
+      country: 'MYR',
+      data,
+    };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+
+    await getHandler('/:id/templates', 'post')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkCreate).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('rejects invalid graph numeric values on update', async () => {
+    req.params = { id: 'product-1', linkId: 'link-1' };
+    req.body = {
+      data: {
+        ...validGraphData,
+        graphInputValues: { input: '1' },
+      },
+    };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+    mockLinkFindFirst.mockResolvedValueOnce({ id: 'link-1', productId: 'product-1' });
+
+    await getHandler('/:id/templates/:linkId', 'put')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkUpdate).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      error: expect.stringContaining('graphInputValues.input'),
+    });
+  });
+
+  it('accepts a valid graph payload on update without rewriting extra fields', async () => {
+    req.params = { id: 'product-1', linkId: 'link-1' };
+    req.body = { data: validGraphData };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+    mockLinkFindFirst.mockResolvedValueOnce({ id: 'link-1', productId: 'product-1' });
+    mockLinkUpdate.mockResolvedValueOnce({ id: 'link-1', data: validGraphData });
+
+    await getHandler('/:id/templates/:linkId', 'put')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkUpdate).toHaveBeenCalledWith({
+      where: { id: 'link-1' },
+      data: { data: validGraphData },
+    });
+    expect(res.json).toHaveBeenCalledWith({ id: 'link-1', data: validGraphData });
+  });
+
+  it('allows an explicit invalid compatibility payload on update', async () => {
+    const invalid = {
+      kind: 'invalid',
+      schemaVersion: 99,
+      compatibilityEnvelope: true,
+      rawData: { kind: 'future', schemaVersion: 99, future: true },
+    };
+    req.params = { id: 'product-1', linkId: 'link-1' };
+    req.body = { data: invalid };
+    mockProductFindFirst.mockResolvedValueOnce({ id: 'product-1', userId: 'owner-1' });
+    mockLinkFindFirst.mockResolvedValueOnce({ id: 'link-1', productId: 'product-1' });
+    mockLinkUpdate.mockResolvedValueOnce({ id: 'link-1', data: invalid });
+
+    await getHandler('/:id/templates/:linkId', 'put')(req as Request, res as Response, jest.fn());
+
+    expect(mockLinkUpdate).toHaveBeenCalledWith({
+      where: { id: 'link-1' },
+      data: { data: invalid },
+    });
+    expect(res.json).toHaveBeenCalledWith({ id: 'link-1', data: invalid });
   });
 });

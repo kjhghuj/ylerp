@@ -158,11 +158,25 @@ export const zh = {
       nameAndSkuRequired: '请输入商品名称和SKU',
       saveFailed: '商品保存失败',
       noIdReturned: '商品保存失败：未返回ID',
+      graphDraftInvalid: '请先修正节点图输入或执行错误，再保存',
       templateSaveFailed: '模板保存失败',
       defaultTemplateSaveFailed: '默认模板保存失败，请重试',
       templateDbFailed: '模板保存到数据库失败',
       templateDeleteFailed: '模板删除失败',
       rateFetchFailed: '汇率获取失败，正在使用备用汇率',
+    },
+    graphErrors: {
+      missing_input: '缺少输入“{name}”',
+      non_finite_input: '输入“{name}”必须是有限数字',
+      input_out_of_range: '输入“{name}”必须在 {min} 到 {max} 之间',
+      invalid_parameter: '输入节点“{name}”配置无效',
+      invalid_binding: '公式节点“{name}”的变量绑定无效',
+      formula_error: '公式节点“{name}”无效：{detail}',
+      dependency_error: '节点“{name}”依赖的上游计算失败',
+      cycle: '节点图存在循环依赖',
+      graph_structure: '节点图结构无效：{detail}',
+      missing_output: '输出节点“{name}”连接无效',
+      non_finite_output: '节点“{name}”产生了非有限结果',
     },
     templates: {
       btn: '模版',
@@ -440,7 +454,10 @@ export const zh = {
       importAll: '导入所有站点',
       tabProduct: '基本信息',
       noTemplates: '暂无关联模版',
-      noTemplatesHint: '在利润计算器中保存商品时，会自动创建关联模版'
+      noTemplatesHint: '在利润计算器中保存商品时，会自动创建关联模版',
+      graphOutputsTitle: '节点图命名输出',
+      graphOutputsDisclaimer: '节点图输出按模板定义展示，未映射为标准净利润、ROI 或利润率。',
+      invalidCompatibility: '该模板使用当前版本无法执行的兼容数据。'
     },
     errors: {
       noExportData: '当前国家暂无可导出的数据',

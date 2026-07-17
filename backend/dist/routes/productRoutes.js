@@ -5,6 +5,7 @@ const index_1 = require("../index");
 const activityLogger_1 = require("../services/activityLogger");
 const productCache_1 = require("../services/productCache");
 const productTaxRates_1 = require("../services/productTaxRates");
+const profitTemplateData_1 = require("../services/profitTemplateData");
 const router = (0, express_1.Router)();
 const countryToCurrency = {
     'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR',
@@ -76,6 +77,7 @@ router.post('/:id/templates', async (req, res) => {
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
+        const validatedData = (0, profitTemplateData_1.validateProductProfitTemplateData)(data);
         if (templateId) {
             const template = await index_1.prisma.profitTemplate.findFirst({ where: { id: templateId, userId } });
             if (!template)
@@ -88,12 +90,15 @@ router.post('/:id/templates', async (req, res) => {
                 name,
                 country,
                 platform,
-                data,
+                data: validatedData,
             },
         });
         res.status(201).json(template);
     }
     catch (error) {
+        if (error instanceof profitTemplateData_1.ProfitTemplateDataValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('Failed to create product template:', error);
         res.status(500).json({ error: 'Failed to create product template' });
     }
@@ -110,6 +115,9 @@ router.put('/:id/templates/:linkId', async (req, res) => {
         if (!existing)
             return res.status(404).json({ error: 'Product template not found' });
         const { templateId, name, country, platform, data } = req.body;
+        const validatedData = data !== undefined
+            ? (0, profitTemplateData_1.validateProductProfitTemplateData)(data)
+            : undefined;
         if (templateId) {
             const template = await index_1.prisma.profitTemplate.findFirst({ where: { id: templateId, userId } });
             if (!template)
@@ -122,12 +130,15 @@ router.put('/:id/templates/:linkId', async (req, res) => {
                 ...(name ? { name } : {}),
                 ...(country ? { country } : {}),
                 ...(platform !== undefined ? { platform } : {}),
-                ...(data ? { data } : {}),
+                ...(validatedData !== undefined ? { data: validatedData } : {}),
             },
         });
         res.json(template);
     }
     catch (error) {
+        if (error instanceof profitTemplateData_1.ProfitTemplateDataValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('Failed to update product template:', error);
         res.status(500).json({ error: 'Failed to update product template' });
     }

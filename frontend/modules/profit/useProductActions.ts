@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useStore } from '../../StoreContext';
 import api from '../../src/api';
 import { ProductCalcData } from '../../types';
@@ -9,9 +9,18 @@ import type { NodeGraphTemplate } from '../node-designer/types';
 
 import { safeNumber } from './utils';
 import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from './productTemplateSync';
-import { createDefaultInputValues, evaluateNodeGraphProfitTemplate } from './nodeGraphProfitAdapter';
+import {
+    createDefaultInputValues,
+    evaluateNodeGraphProfitTemplate,
+    formatNodeGraphEvaluationError,
+} from './nodeGraphProfitAdapter';
 import { createGraphPlatformNode, createTemplatePlatformNode } from './platformNodeFactory';
 import { buildPlatformNodeTemplatePayload } from './templateDataSerializer';
+import type { GraphNodeRuntimeValidationState } from './GraphTemplateCard';
+import {
+    prepareGraphNodeForSave,
+    prepareGraphNodesForSave,
+} from './graphNodeSavePreparation';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -33,6 +42,12 @@ export const useProductActions = (
     } = useStore();
     const { showToast } = useToast();
     const t = strings.profit;
+    const formatGraphErrors = (errors: Parameters<typeof formatNodeGraphEvaluationError>[0][]) => (
+        errors.map(error => formatNodeGraphEvaluationError(error, t.graphErrors)).join('；')
+    );
+    const [graphNodeValidation, setGraphNodeValidation] = useState<
+        Record<string, GraphNodeRuntimeValidationState>
+    >({});
 
     const nodes: PlatformNode[] = profitNodes[siteCountry] || [];
     const setNodes = useCallback((newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
@@ -59,8 +74,27 @@ export const useProductActions = (
     };
 
     const handleDeleteNode = (id: string) => {
+        setGraphNodeValidation(previous => {
+            if (!Object.prototype.hasOwnProperty.call(previous, id)) return previous;
+            const next = { ...previous };
+            delete next[id];
+            return next;
+        });
         setNodes(prev => prev.filter(n => n.id !== id));
     };
+
+    const handleGraphNodeValidationChange = useCallback((
+        id: string,
+        state: GraphNodeRuntimeValidationState,
+    ) => {
+        setGraphNodeValidation(previous => ({
+            ...previous,
+            [id]: {
+                inputDrafts: { ...state.inputDrafts },
+                error: state.error,
+            },
+        }));
+    }, []);
 
     const handleAddNodeFromTemplate = (tpl: ProfitTemplate) => {
         try {
@@ -87,6 +121,10 @@ export const useProductActions = (
             const graphTemplate = response.data as NodeGraphTemplate;
             const inputValues = createDefaultInputValues(graphTemplate);
             const result = evaluateNodeGraphProfitTemplate(graphTemplate, inputValues);
+            if (result.ok === false) {
+                showToast(formatGraphErrors(result.errors), 'error');
+                return;
+            }
             const outputValues = Object.fromEntries(result.outputs.map(output => [output.id, output.value]));
             setNodes(prev => [...prev, createGraphPlatformNode(
                 graphTemplate,
@@ -107,6 +145,24 @@ export const useProductActions = (
         } : n));
     };
 
+    const getGraphNodeSaveError = (node: PlatformNode): string | null => {
+        const runtimeState = graphNodeValidation[node.id];
+        if (runtimeState?.error) return runtimeState.error;
+        const prepared = prepareGraphNodeForSave(node);
+        return prepared.ok === false
+            ? formatNodeGraphEvaluationError(prepared.error, t.graphErrors)
+            : null;
+    };
+
+    const blockGraphSaveWhenInvalid = (nodeList: PlatformNode[]): boolean => {
+        const error = nodeList
+            .map(getGraphNodeSaveError)
+            .find((message): message is string => Boolean(message));
+        if (!error) return false;
+        showToast(t.errors.graphDraftInvalid, 'error');
+        return true;
+    };
+
     const handleSaveTemplate = async (nodeId: string, templateName: string) => {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return;
@@ -114,9 +170,18 @@ export const useProductActions = (
             showToast(t.errors.templateSaveFailed, 'error');
             return;
         }
+        if (blockGraphSaveWhenInvalid([node])) return;
+        const prepared = prepareGraphNodeForSave(node);
+        if (prepared.ok === false) {
+            showToast(t.errors.graphDraftInvalid, 'error');
+            return;
+        }
+        setNodes(previous => previous.map(candidate => (
+            candidate.id === node.id ? prepared.node : candidate
+        )));
         try {
             const response = await api.post('/templates', buildPlatformNodeTemplatePayload(
-                node,
+                prepared.node,
                 templateName,
                 {
                     vatRate: safeNumber(globalInputs.vatRate),
@@ -185,23 +250,19 @@ export const useProductActions = (
         let productTemplates: ProductProfitTemplate[] = response.data || [];
 
         for (const n of nodeList) {
-            try {
-                const tplName = n.name || n.platform;
-                const existingLink = findExistingProductTemplateLink(n, productTemplates);
-                const templateId = resolveTemplateIdForPayload(n.templateId, existingLink, allTemplates);
-                const payload = buildPlatformNodeTemplatePayload(n, tplName, {
-                    vatRate: safeNumber(globalInputs.vatRate),
-                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-                }, templateId);
-                if (existingLink) {
-                    const updated = await api.put(`/products/${productId}/templates/${existingLink.id}`, payload);
-                    productTemplates = productTemplates.map(t => t.id === existingLink.id ? updated.data : t);
-                } else {
-                    const created = await api.post(`/products/${productId}/templates`, payload);
-                    productTemplates = [...productTemplates, created.data];
-                }
-            } catch {
-                showToast(t.errors.templateSaveFailed, 'error');
+            const tplName = n.name || n.platform;
+            const existingLink = findExistingProductTemplateLink(n, productTemplates);
+            const templateId = resolveTemplateIdForPayload(n.templateId, existingLink, allTemplates);
+            const payload = buildPlatformNodeTemplatePayload(n, tplName, {
+                vatRate: safeNumber(globalInputs.vatRate),
+                corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+            }, templateId);
+            if (existingLink) {
+                const updated = await api.put(`/products/${productId}/templates/${existingLink.id}`, payload);
+                productTemplates = productTemplates.map(t => t.id === existingLink.id ? updated.data : t);
+            } else {
+                const created = await api.post(`/products/${productId}/templates`, payload);
+                productTemplates = [...productTemplates, created.data];
             }
         }
     };
@@ -209,31 +270,27 @@ export const useProductActions = (
     const ensureDefaultTemplate = async (nodeList: PlatformNode[], productId: string): Promise<void> => {
         if (nodeList.length > 0 || !productId) return;
         const defaultName = globalInputs.name || t.templates.defaultTemplate;
-        try {
-            const response = await api.get(`/products/${productId}/templates`);
-            const existingDefault = (response.data || []).find(
-                (tpl: ProductProfitTemplate) => tpl.name === defaultName && tpl.platform === 'other' && tpl.country === siteCountry
-            );
-            if (existingDefault) return;
-            const defaultNode: PlatformNode = {
-                id: genId(),
-                name: defaultName,
-                currency: siteCountry,
-                platform: 'other',
-                data: {
-                    ...DEFAULT_NODE_DATA,
-                },
-            };
-            await api.post(
-                `/products/${productId}/templates`,
-                buildPlatformNodeTemplatePayload(defaultNode, defaultName, {
-                    vatRate: safeNumber(globalInputs.vatRate),
-                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
-                }),
-            );
-        } catch {
-            showToast(t.errors.defaultTemplateSaveFailed, 'error');
-        }
+        const response = await api.get(`/products/${productId}/templates`);
+        const existingDefault = (response.data || []).find(
+            (tpl: ProductProfitTemplate) => tpl.name === defaultName && tpl.platform === 'other' && tpl.country === siteCountry
+        );
+        if (existingDefault) return;
+        const defaultNode: PlatformNode = {
+            id: genId(),
+            name: defaultName,
+            currency: siteCountry,
+            platform: 'other',
+            data: {
+                ...DEFAULT_NODE_DATA,
+            },
+        };
+        await api.post(
+            `/products/${productId}/templates`,
+            buildPlatformNodeTemplatePayload(defaultNode, defaultName, {
+                vatRate: safeNumber(globalInputs.vatRate),
+                corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+            }),
+        );
     };
 
     const handleSaveProduct = async () => {
@@ -241,6 +298,14 @@ export const useProductActions = (
             showToast(t.errors.nameAndSkuRequired, 'error');
             return;
         }
+        if (blockGraphSaveWhenInvalid(nodes)) return;
+        const preparation = prepareGraphNodesForSave(nodes);
+        if (preparation.ok === false) {
+            showToast(t.errors.graphDraftInvalid, 'error');
+            return;
+        }
+        const preparedNodes = preparation.nodes;
+        setNodes(preparedNodes);
 
         const countryCode = CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
         const siteSpecificData = buildSiteSpecificData(siteCountry);
@@ -280,8 +345,13 @@ export const useProductActions = (
             return;
         }
 
-        await syncTemplatesForNodes(nodes, savedProductId);
-        await ensureDefaultTemplate(nodes, savedProductId);
+        try {
+            await syncTemplatesForNodes(preparedNodes, savedProductId);
+            await ensureDefaultTemplate(preparedNodes, savedProductId);
+        } catch {
+            showToast(t.errors.templateSaveFailed, 'error');
+            return;
+        }
 
         setEditingProductId(null);
         showToast(isUpdate ? t.actions.updated : t.actions.saved);
@@ -296,6 +366,7 @@ export const useProductActions = (
         handleAddNodeFromGraphTemplate,
         handleAddBlankNode,
         handleUpdateGraphNodeInputs,
+        handleGraphNodeValidationChange,
         handleSaveTemplate,
         handleDeleteTemplate,
         handleSaveProduct,

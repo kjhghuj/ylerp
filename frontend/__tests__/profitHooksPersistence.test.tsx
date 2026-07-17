@@ -1,9 +1,14 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProfitImport } from '../modules/profit/useProfitImport';
 import { useProductActions } from '../modules/profit/useProductActions';
+import { GraphTemplateCard } from '../modules/profit/GraphTemplateCard';
 import { toProductTemplateImportNode } from '../modules/productTemplateImport';
 import { DEFAULT_PRODUCT_TAX_RATES } from '../modules/productTaxRates';
+import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import { prepareGraphNodeForSave } from '../modules/profit/graphNodeSavePreparation';
+import { serializePlatformNodeTemplateData } from '../modules/profit/templateDataSerializer';
 import {
   DEFAULT_NODE_DATA,
   DEFAULT_SITE_INPUTS,
@@ -51,6 +56,20 @@ const strings = {
       nameAndSkuRequired: 'Name and SKU required',
       noIdReturned: 'No id',
       saveFailed: 'Save failed',
+      graphDraftInvalid: 'Fix graph input errors before saving',
+    },
+    graphErrors: {
+      missing_input: 'Input "{name}" is required',
+      non_finite_input: 'Input "{name}" must be a finite number',
+      input_out_of_range: 'Input "{name}" must be between {min} and {max}',
+      invalid_parameter: 'Input node "{name}" is invalid',
+      invalid_binding: 'Formula node "{name}" has invalid bindings',
+      formula_error: 'Formula node "{name}" is invalid: {detail}',
+      dependency_error: 'Node "{name}" depends on a failed result',
+      cycle: 'The node graph contains a dependency cycle',
+      graph_structure: 'Invalid node graph: {detail}',
+      missing_output: 'Output node "{name}" is not connected correctly',
+      non_finite_output: 'Node "{name}" produced a non-finite result',
     },
     actions: {
       updated: 'Updated',
@@ -417,6 +436,509 @@ describe('useProductActions persistence payloads', () => {
     expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
   });
 
+  it.each([
+    ['name', ''],
+    ['name', '   '],
+    ['name', 42],
+    ['createdAt', ''],
+    ['createdAt', '   '],
+    ['createdAt', 42],
+    ['updatedAt', ''],
+    ['updatedAt', '   '],
+    ['updatedAt', 42],
+  ] as const)(
+    'blocks product and shared-template saves when graph snapshot %s has invalid value %s',
+    async (field, invalidValue) => {
+      const graphTemplate = {
+        id: `graph-invalid-metadata-${field}`,
+        name: 'Graph with validated metadata',
+        type: 'profit',
+        country: 'MYR',
+        platform: 'shopee',
+        createdAt: '2026-07-16T00:00:00.000Z',
+        updatedAt: '2026-07-16T00:00:00.000Z',
+        nodes: [
+          {
+            id: 'price',
+            type: 'parameter',
+            position: { x: 0, y: 0 },
+            data: {
+              name: 'Price',
+              valueType: 'number',
+              min: 0,
+              max: 1000,
+              defaultValue: 6,
+            },
+          },
+          {
+            id: 'out',
+            type: 'output',
+            position: { x: 200, y: 0 },
+            data: { name: 'Output' },
+          },
+        ],
+        edges: [{ id: 'edge', source: 'price', target: 'out' }],
+      } as NodeGraphTemplate;
+      (graphTemplate as unknown as Record<string, unknown>)[field] = invalidValue;
+
+      const node: PlatformNode = {
+        id: `node-invalid-metadata-${field}`,
+        platform: 'shopee',
+        currency: 'MYR',
+        name: 'Graph with invalid snapshot metadata',
+        data: { ...DEFAULT_NODE_DATA },
+        graphTemplateId: graphTemplate.id,
+        graphTemplateSnapshot: graphTemplate,
+        graphInputValues: { price: 6 },
+        graphOutputValues: { out: 6 },
+      };
+      const addProduct = vi.fn().mockResolvedValue({ id: 'must-not-save' });
+      testState.store = {
+        ...baseStore(),
+        addProduct,
+        profitNodes: { MYR: [node] },
+      };
+
+      const { result } = renderHook(() => useProductActions(
+        [],
+        vi.fn(),
+        {},
+        { MYR: { ...DEFAULT_SITE_INPUTS } },
+        vi.fn(),
+      ));
+
+      await act(async () => {
+        await result.current.handleSaveTemplate(node.id, 'Invalid metadata');
+        await result.current.handleSaveProduct();
+      });
+
+      expect(prepareGraphNodeForSave(node)).toEqual(expect.objectContaining({ ok: false }));
+      expect(addProduct).not.toHaveBeenCalled();
+      expect(testState.api.get).not.toHaveBeenCalled();
+      expect(testState.api.post).not.toHaveBeenCalled();
+      expect(testState.api.put).not.toHaveBeenCalled();
+      expect(testState.showToast).toHaveBeenCalledWith(
+        'Fix graph input errors before saving',
+        'error',
+      );
+    },
+  );
+
+  it('connects GraphTemplateCard draft validation to product save blocking and clears it with a valid zero', async () => {
+    const graphTemplate: NodeGraphTemplate = {
+      id: 'graph-save-guard',
+      name: 'Save guard graph',
+      type: 'profit',
+      country: 'MYR',
+      platform: 'shopee',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      nodes: [
+        {
+          id: 'price',
+          type: 'parameter',
+          position: { x: 0, y: 0 },
+          data: { name: 'Price', valueType: 'number', min: 0, max: 1000, defaultValue: 100 },
+        },
+        {
+          id: 'out',
+          type: 'output',
+          position: { x: 200, y: 0 },
+          data: { name: 'Output' },
+        },
+      ],
+      edges: [{ id: 'edge', source: 'price', target: 'out' }],
+    };
+    const graphNode: PlatformNode = {
+      id: 'node-save-guard',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Save guard graph',
+      data: { ...DEFAULT_NODE_DATA },
+      graphTemplateId: graphTemplate.id,
+      graphTemplateSnapshot: graphTemplate,
+      graphInputValues: { price: 100 },
+      graphOutputValues: { out: 100 },
+    };
+    const addProduct = vi.fn().mockResolvedValue({ id: 'product-graph' });
+    const setProfitNodes = vi.fn((update: Record<string, PlatformNode[]> | ((previous: Record<string, PlatformNode[]>) => Record<string, PlatformNode[]>)) => {
+      const current = testState.store as ReturnType<typeof baseStore> & {
+        profitNodes: Record<string, PlatformNode[]>;
+      };
+      const next = typeof update === 'function' ? update(current.profitNodes) : update;
+      Object.assign(graphNode, next.MYR[0]);
+      current.profitNodes = { ...current.profitNodes, MYR: [graphNode] };
+    });
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      setProfitNodes,
+      profitNodes: { MYR: [graphNode] },
+    };
+    testState.api.get.mockResolvedValue({ data: [] });
+    testState.api.post.mockResolvedValue({ data: { id: 'link-graph' } });
+
+    const Harness = () => {
+      const actions = useProductActions(
+        [],
+        vi.fn(),
+        {},
+        { MYR: { ...DEFAULT_SITE_INPUTS } },
+        vi.fn(),
+      );
+      return (
+        <>
+          <GraphTemplateCard
+            node={graphNode}
+            onUpdateInputs={actions.handleUpdateGraphNodeInputs}
+            onValidationChange={actions.handleGraphNodeValidationChange}
+            onDelete={actions.handleDeleteNode}
+            errorLabels={strings.profit.graphErrors}
+          />
+          <button type="button" onClick={() => { void actions.handleSaveProduct(); }}>
+            Save product
+          </button>
+        </>
+      );
+    };
+
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save product' }));
+
+    await waitFor(() => expect(testState.showToast).toHaveBeenCalledWith(
+      'Fix graph input errors before saving',
+      'error',
+    ));
+    expect(addProduct).not.toHaveBeenCalled();
+    expect(testState.api.get).not.toHaveBeenCalled();
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
+    expect(graphNode.graphInputValues).toEqual({ price: 100 });
+    expect(graphNode.graphOutputValues).toEqual({ out: 100 });
+
+    fireEvent.change(screen.getByLabelText('Price'), { target: { value: '0' } });
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(graphNode.graphInputValues).toEqual({ price: 0 });
+    expect(graphNode.graphOutputValues).toEqual({ out: 0 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save product' }));
+
+    await waitFor(() => expect(addProduct).toHaveBeenCalledTimes(1));
+    expect(testState.api.post).toHaveBeenCalledWith(
+      '/products/product-graph/templates',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'graph',
+          graphInputValues: { price: 0 },
+          graphOutputValues: { out: 0 },
+        }),
+      }),
+    );
+    expect(testState.showToast).toHaveBeenCalledWith('Saved product');
+  });
+
+  it('recomputes and replaces stale graph outputs before any save payload is built', async () => {
+    const graphTemplate: NodeGraphTemplate = {
+      id: 'graph-stale-output',
+      name: 'Stale output graph',
+      type: 'profit',
+      country: 'MYR',
+      platform: 'shopee',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      nodes: [
+        {
+          id: 'price',
+          type: 'parameter',
+          position: { x: 0, y: 0 },
+          data: { name: 'Price', valueType: 'number', min: 0, max: 1000, defaultValue: 6 },
+        },
+        {
+          id: 'out',
+          type: 'output',
+          position: { x: 200, y: 0 },
+          data: { name: 'Output' },
+        },
+      ],
+      edges: [{ id: 'edge', source: 'price', target: 'out' }],
+    };
+    const graphNode: PlatformNode = {
+      id: 'node-stale-output',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: graphTemplate.name,
+      data: { ...DEFAULT_NODE_DATA },
+      graphTemplateId: graphTemplate.id,
+      graphTemplateSnapshot: graphTemplate,
+      graphInputValues: { price: 6 },
+      graphOutputValues: { out: 999 },
+    };
+    const prepared = prepareGraphNodeForSave(graphNode);
+    expect(prepared).toEqual(expect.objectContaining({ ok: true }));
+    if (prepared.ok === false) throw new Error('expected graph preparation success');
+    expect(prepared.node.graphOutputValues).toEqual({ out: 6 });
+
+    const addProduct = vi.fn().mockResolvedValue({ id: 'product-stale-output' });
+    const setProfitNodes = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      setProfitNodes,
+      profitNodes: { MYR: [graphNode] },
+    };
+    testState.api.get.mockResolvedValue({ data: [] });
+    testState.api.post.mockResolvedValue({ data: { id: 'link-stale-output' } });
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.post).toHaveBeenCalledWith(
+      '/products/product-stale-output/templates',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          graphInputValues: { price: 6 },
+          graphOutputValues: { out: 6 },
+        }),
+      }),
+    );
+    expect(setProfitNodes).toHaveBeenCalled();
+  });
+
+  it('sends recomputed graph outputs when saving a shared template directly', async () => {
+    const graphTemplate: NodeGraphTemplate = {
+      id: 'graph-stale-shared',
+      name: 'Stale shared graph',
+      type: 'profit',
+      country: 'MYR',
+      platform: 'shopee',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      updatedAt: '2026-07-16T00:00:00.000Z',
+      nodes: [
+        {
+          id: 'price',
+          type: 'parameter',
+          position: { x: 0, y: 0 },
+          data: { name: 'Price', valueType: 'number', min: 0, max: 1000, defaultValue: 6 },
+        },
+        {
+          id: 'out',
+          type: 'output',
+          position: { x: 200, y: 0 },
+          data: { name: 'Output' },
+        },
+      ],
+      edges: [{ id: 'edge', source: 'price', target: 'out' }],
+    };
+    const node: PlatformNode = {
+      id: 'node-stale-shared',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: graphTemplate.name,
+      data: { ...DEFAULT_NODE_DATA },
+      graphTemplateId: graphTemplate.id,
+      graphTemplateSnapshot: graphTemplate,
+      graphInputValues: { price: 6 },
+      graphOutputValues: { out: 999 },
+    };
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+    };
+    testState.api.post.mockResolvedValue({ data: { id: 'shared-fresh-output' } });
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'Fresh shared');
+    });
+
+    expect(testState.api.post).toHaveBeenCalledWith(
+      '/templates',
+      expect.objectContaining({
+        data: expect.objectContaining({
+          graphInputValues: { price: 6 },
+          graphOutputValues: { out: 6 },
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    {
+      label: 'input-only',
+      graphInputValues: { price: 1 },
+    },
+    {
+      label: 'output-only',
+      graphOutputValues: { out: 1 },
+    },
+  ])('blocks a partial runtime graph claim ($label) before product or template APIs', async partial => {
+    const node: PlatformNode = {
+      id: `partial-${partial.label}`,
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Partial graph',
+      data: { ...DEFAULT_NODE_DATA },
+      ...partial,
+    };
+    expect(() => serializePlatformNodeTemplateData(node)).toThrow(/all graph fields/);
+    const addProduct = vi.fn().mockResolvedValue({ id: 'must-not-save' });
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      profitNodes: { MYR: [node] },
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'Partial');
+      await result.current.handleSaveProduct();
+    });
+
+    expect(addProduct).not.toHaveBeenCalled();
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.api.put).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith(
+      'Fix graph input errors before saving',
+      'error',
+    );
+  });
+
+  it('does not report product-save success when a template synchronization request fails', async () => {
+    const node: PlatformNode = {
+      id: 'node-sync-failure',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Sync failure',
+      data: { ...DEFAULT_NODE_DATA },
+    };
+    const addProduct = vi.fn().mockResolvedValue({ id: 'product-sync-failure' });
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      profitNodes: { MYR: [node] },
+    };
+    testState.api.get.mockResolvedValue({ data: [] });
+    testState.api.post.mockRejectedValue(new Error('template sync failed'));
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(addProduct).toHaveBeenCalledTimes(1);
+    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
+  });
+
+  it('does not report product-save success when loading the default-template state fails', async () => {
+    const addProduct = vi.fn().mockResolvedValue({ id: 'product-default-get-failure' });
+    const setEditingProductId = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      setProfitEditingProductId: setEditingProductId,
+      profitNodes: { MYR: [] },
+    };
+    testState.api.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(new Error('default lookup failed'));
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.get).toHaveBeenNthCalledWith(
+      1,
+      '/products/product-default-get-failure/templates',
+    );
+    expect(testState.api.get).toHaveBeenNthCalledWith(
+      2,
+      '/products/product-default-get-failure/templates',
+    );
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
+    expect(setEditingProductId).not.toHaveBeenCalledWith(null);
+  });
+
+  it('does not report product-save success when creating the default template fails', async () => {
+    const addProduct = vi.fn().mockResolvedValue({ id: 'product-default-post-failure' });
+    const setEditingProductId = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      addProduct,
+      setProfitEditingProductId: setEditingProductId,
+      profitNodes: { MYR: [] },
+    };
+    testState.api.get
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [] });
+    testState.api.post.mockRejectedValueOnce(new Error('default create failed'));
+
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.post).toHaveBeenCalledWith(
+      '/products/product-default-post-failure/templates',
+      expect.objectContaining({
+        name: 'Product',
+        country: 'MYR',
+        platform: 'other',
+      }),
+    );
+    expect(testState.showToast).toHaveBeenCalledWith('Template save failed', 'error');
+    expect(testState.showToast).not.toHaveBeenCalledWith('Saved product');
+    expect(setEditingProductId).not.toHaveBeenCalledWith(null);
+  });
+
   it('saves canonical product tax fields, including negative historical values, before template compatibility copies', async () => {
     const addProduct = vi.fn().mockResolvedValue({ id: 'product-tax-new' });
     testState.store = {
@@ -563,7 +1085,12 @@ describe('useProductActions persistence payloads', () => {
       '/products/product-1/templates/link-invalid',
       expect.objectContaining({
         templateId: 'shared-invalid',
-        data: invalidRaw,
+        data: {
+          kind: 'invalid',
+          schemaVersion: 99,
+          compatibilityEnvelope: true,
+          rawData: invalidRaw,
+        },
       }),
     );
   });

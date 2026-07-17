@@ -38,10 +38,12 @@ export const createTemplatePlatformNode = (
         name: template.name,
         data: toStandardNodeData(persistedData),
         persistedData: cloneProductTemplateData(persistedData),
-        graphTemplateId: graphData?.graphTemplateId,
-        graphTemplateSnapshot: cloneTemplateValue(graphData?.graphTemplateSnapshot),
-        graphInputValues: cloneTemplateValue(graphData?.graphInputValues),
-        graphOutputValues: cloneTemplateValue(graphData?.graphOutputValues),
+        ...(graphData ? {
+            graphTemplateId: graphData.graphTemplateId,
+            graphTemplateSnapshot: cloneTemplateValue(graphData.graphTemplateSnapshot),
+            graphInputValues: cloneTemplateValue(graphData.graphInputValues),
+            graphOutputValues: cloneTemplateValue(graphData.graphOutputValues),
+        } : {}),
     };
 };
 

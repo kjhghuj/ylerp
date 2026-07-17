@@ -44,10 +44,12 @@ export const toImportedPlatformNode = (
         name: node.name,
         data: toStandardNodeData(node.data),
         persistedData,
-        graphTemplateId: graphData?.graphTemplateId,
-        graphTemplateSnapshot: cloneTemplateValue(graphData?.graphTemplateSnapshot),
-        graphInputValues: cloneTemplateValue(graphData?.graphInputValues),
-        graphOutputValues: cloneTemplateValue(graphData?.graphOutputValues),
+        ...(graphData ? {
+            graphTemplateId: graphData.graphTemplateId,
+            graphTemplateSnapshot: cloneTemplateValue(graphData.graphTemplateSnapshot),
+            graphInputValues: cloneTemplateValue(graphData.graphInputValues),
+            graphOutputValues: cloneTemplateValue(graphData.graphOutputValues),
+        } : {}),
     };
 };
 

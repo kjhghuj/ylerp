@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const index_1 = require("../index");
 const activityLogger_1 = require("../services/activityLogger");
+const profitTemplateData_1 = require("../services/profitTemplateData");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
     try {
@@ -46,11 +47,12 @@ router.post('/', async (req, res) => {
         if (!name || !country || !data) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
+        const validatedData = (0, profitTemplateData_1.validateSharedProfitTemplateData)(data);
         const template = await index_1.prisma.profitTemplate.create({
             data: {
                 name,
                 country,
-                data,
+                data: validatedData,
                 type: type || 'profit',
                 platform,
                 userId,
@@ -60,6 +62,9 @@ router.post('/', async (req, res) => {
         res.status(201).json(template);
     }
     catch (error) {
+        if (error instanceof profitTemplateData_1.ProfitTemplateDataValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('Error creating template:', error);
         res.status(500).json({ error: 'Failed to create template' });
     }
@@ -89,12 +94,15 @@ router.put('/:id', async (req, res) => {
         const existing = await index_1.prisma.profitTemplate.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
+        const validatedData = data !== undefined
+            ? (0, profitTemplateData_1.validateSharedProfitTemplateData)(data)
+            : undefined;
         const template = await index_1.prisma.profitTemplate.update({
             where: { id },
             data: {
                 ...(name ? { name } : {}),
                 ...(country ? { country } : {}),
-                ...(data ? { data } : {}),
+                ...(validatedData !== undefined ? { data: validatedData } : {}),
                 ...(type ? { type } : {}),
                 ...(platform !== undefined ? { platform } : {}),
             }
@@ -103,6 +111,9 @@ router.put('/:id', async (req, res) => {
         res.json(template);
     }
     catch (error) {
+        if (error instanceof profitTemplateData_1.ProfitTemplateDataValidationError) {
+            return res.status(400).json({ error: error.message });
+        }
         console.error('Error updating template:', error);
         res.status(500).json({ error: 'Failed to update template' });
     }

@@ -61,10 +61,11 @@ describe('node graph profit adapter', () => {
   it('evaluates a node graph template with runtime input values', () => {
     const result = evaluateNodeGraphProfitTemplate(template, { price: 200, rate: 8 });
 
+    expect(result.ok).toBe(true);
+    if (result.ok === false) throw new Error('expected successful graph evaluation');
     expect(result.inputValues).toEqual({ price: 200, rate: 8 });
     expect(result.outputs).toEqual([
       expect.objectContaining({ id: 'out', name: '输出佣金', value: 16 }),
     ]);
-    expect(result.errors.size).toBe(0);
   });
 });

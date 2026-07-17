@@ -20,6 +20,7 @@
     "express": "^5.2.1",
     "ioredis": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
+    "mathjs": "^15.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

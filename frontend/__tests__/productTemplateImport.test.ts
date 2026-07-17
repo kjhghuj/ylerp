@@ -318,4 +318,31 @@ describe('loadProductTemplateImportNodes', () => {
     expect(platformNode.graphInputValues).toBeUndefined();
     expect(platformNode.graphOutputValues).toBeUndefined();
   });
+
+  it('unwraps the explicit invalid product compatibility envelope without nesting it again', () => {
+    const rawData = {
+      kind: 'future-template',
+      schemaVersion: 99,
+      futureRecoveryHint: { keep: true },
+    };
+
+    const normalized = toProductTemplateImportNode({
+      id: 'invalid-envelope',
+      name: 'Future product template',
+      country: 'MYR',
+      platform: 'shopee',
+      data: {
+        kind: 'invalid',
+        schemaVersion: 99,
+        compatibilityEnvelope: true,
+        rawData,
+      },
+    }).data;
+
+    expect(normalized).toEqual({
+      kind: 'invalid',
+      schemaVersion: 99,
+      rawData,
+    });
+  });
 });

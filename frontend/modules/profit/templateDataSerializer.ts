@@ -1,4 +1,8 @@
 import { cloneTemplateValue } from '../productTemplateImport';
+import {
+    hasCompleteRuntimeGraph,
+    hasRuntimeGraphClaim,
+} from './graphNodeSavePreparation';
 import type { NodeData, PlatformNode } from './types';
 
 export const serializePlatformNodeTemplateData = (
@@ -11,12 +15,11 @@ export const serializePlatformNodeTemplateData = (
         return cloneTemplateValue(persisted.rawData);
     }
     const persistedGraph = persisted?.kind === 'graph' ? persisted : undefined;
-    const hasRuntimeGraph = (
-        typeof node.graphTemplateId === 'string' &&
-        node.graphTemplateSnapshot !== undefined &&
-        node.graphInputValues !== undefined &&
-        node.graphOutputValues !== undefined
-    );
+    const runtimeGraphClaim = hasRuntimeGraphClaim(node);
+    if (runtimeGraphClaim && !hasCompleteRuntimeGraph(node)) {
+        throw new Error(`runtime graph node "${node.id}" must provide all graph fields`);
+    }
+    const hasRuntimeGraph = runtimeGraphClaim && hasCompleteRuntimeGraph(node);
 
     if (persistedGraph || hasRuntimeGraph) {
         return {
@@ -44,11 +47,21 @@ export const buildPlatformNodeTemplatePayload = (
     name: string,
     nodeDataOverrides: Partial<NodeData> = {},
     templateId?: string | null,
-) => ({
-    ...(templateId !== undefined ? { templateId } : {}),
-    name,
-    country: node.currency,
-    platform: node.platform,
-    type: 'profit',
-    data: serializePlatformNodeTemplateData(node, nodeDataOverrides),
-});
+) => {
+    const data = node.persistedData?.kind === 'invalid'
+        ? {
+            kind: 'invalid',
+            schemaVersion: node.persistedData.schemaVersion,
+            compatibilityEnvelope: true,
+            rawData: cloneTemplateValue(node.persistedData.rawData),
+        }
+        : serializePlatformNodeTemplateData(node, nodeDataOverrides);
+    return {
+        ...(templateId !== undefined ? { templateId } : {}),
+        name,
+        country: node.currency,
+        platform: node.platform,
+        type: 'profit',
+        data,
+    };
+};

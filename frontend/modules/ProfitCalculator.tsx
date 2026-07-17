@@ -78,7 +78,8 @@ export const ProfitCalculator: React.FC = () => {
 
     const {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
-        handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode, handleUpdateGraphNodeInputs, handleSaveTemplate,
+        handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode,
+        handleUpdateGraphNodeInputs, handleGraphNodeValidationChange, handleSaveTemplate,
         handleDeleteTemplate, handleSaveProduct,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
@@ -188,7 +189,9 @@ export const ProfitCalculator: React.FC = () => {
                             key={node.id}
                             node={node}
                             onUpdateInputs={handleUpdateGraphNodeInputs}
+                            onValidationChange={handleGraphNodeValidationChange}
                             onDelete={handleDeleteNode}
+                            errorLabels={t.graphErrors}
                         />
                     ) : (
                         <PlatformCard

@@ -25,6 +25,8 @@ import {
     parseImportedProductTaxRates,
     resolveCanonicalProductTaxRates,
 } from './productTaxRates';
+import { createProductTemplateProfitViewModel } from './productTemplateProfitViewModel';
+import { ProductTemplateExecutionPanel } from './ProductTemplateExecutionPanel';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -352,52 +354,54 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const computeTemplateProfit = (tpl: LinkedTemplate) => {
         const d = tpl.data;
         const normalizedData = normalizeProductTemplateData(d);
-        const country = tpl.country;
-        const currency = countryCurrencyMap[country] || country;
-        const rate = exchangeRates[currency] || 1;
+        return createProductTemplateProfitViewModel(normalizedData, (standardData) => {
+            const country = tpl.country;
+            const currency = countryCurrencyMap[country] || country;
+            const rate = exchangeRates[currency] || 1;
+            const profitData = toStandardNodeData(standardData);
+            const productTaxRates = resolveCanonicalProductTaxRates(
+                selectedProduct || {},
+                [extractLegacyProductTaxRateCandidate(d)],
+            );
 
-        const profitData = toStandardNodeData(normalizedData);
-        const productTaxRates = resolveCanonicalProductTaxRates(
-            selectedProduct || {},
-            [extractLegacyProductTaxRateCandidate(d)],
-        );
+            const globalData = {
+                purchaseCost: Number(selectedProduct?.cost) || 0,
+                productWeight: Number(selectedProduct?.productWeight) || 0,
+                supplierTaxPoint: Number(selectedProduct?.supplierTaxPoint) || 0,
+                supplierInvoice: (selectedProduct?.supplierInvoice as 'yes' | 'no') || 'no',
+                vatRate: productTaxRates.vatRate,
+                corporateIncomeTaxRate: productTaxRates.corporateIncomeTaxRate,
+            };
 
-        const globalData = {
-            purchaseCost: Number(selectedProduct?.cost) || 0,
-            productWeight: Number(selectedProduct?.productWeight) || 0,
-            supplierTaxPoint: Number(selectedProduct?.supplierTaxPoint) || 0,
-            supplierInvoice: (selectedProduct?.supplierInvoice as 'yes' | 'no') || 'no',
-            vatRate: productTaxRates.vatRate,
-            corporateIncomeTaxRate: productTaxRates.corporateIncomeTaxRate,
-        };
-
-        const siteInputs = (() => {
             const countryKey = countryCurrencyMap[country] ? country : currencyToCountry(country);
             const sd = ((selectedProduct?.siteData as Record<string, any>) || {})[countryKey];
-            return {
+            const siteInputs = {
                 totalRevenue: Number(sd?.totalRevenue ?? selectedProduct?.totalRevenue) || 0,
                 sellerCoupon: Number(sd?.sellerCoupon ?? selectedProduct?.sellerCoupon) || 0,
                 sellerCouponType: ((sd?.sellerCouponType ?? selectedProduct?.sellerCouponType) as 'fixed' | 'percent') || 'fixed',
                 sellerCouponPlatformRatio: Number(sd?.sellerCouponPlatformRatio ?? selectedProduct?.sellerCouponPlatformRatio) || 0,
                 platformInfrastructureFee: Number(sd?.platformInfrastructureFee ?? selectedProduct?.platformInfrastructureFee) || 0,
                 adROI: (() => {
-                    const v = sd?.adROI ?? selectedProduct?.adROI;
-                    return v !== undefined && v !== null ? Number(v) : 15;
+                    const value = sd?.adROI ?? selectedProduct?.adROI;
+                    return value !== undefined && value !== null ? Number(value) : 15;
                 })(),
             };
-        })();
 
-        return calculateProfit(profitData, globalData, siteInputs, rate, currency as CurrencyCode);
+            return calculateProfit(profitData, globalData, siteInputs, rate, currency as CurrencyCode);
+        });
     };
 
     const renderTemplateDetail = (tpl: LinkedTemplate) => {
         const normalizedData = normalizeProductTemplateData(tpl.data);
+        const viewModel = computeTemplateProfit(tpl);
+        if (normalizedData.kind !== 'standard' || viewModel.kind !== 'standard') {
+            return { sections: [], viewModel };
+        }
         const d = toStandardNodeData(normalizedData);
         const productTaxRates = resolveCanonicalProductTaxRates(
             selectedProduct || {},
             [extractLegacyProductTaxRateCandidate(tpl.data)],
         );
-        const profit = computeTemplateProfit(tpl);
 
         const sections = [
             {
@@ -441,7 +445,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             },
         ];
 
-        return { sections, profit };
+        return { sections, viewModel };
     };
 
     const renderDetailSection = (section: any) => (
@@ -614,7 +618,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
                             {modalActiveTab > 0 && siteTabs[modalActiveTab - 1] && (() => {
                                 const tpl = siteTabs[modalActiveTab - 1].tpl;
-                                const { sections, profit } = renderTemplateDetail(tpl);
+                                const { sections, viewModel } = renderTemplateDetail(tpl);
                                 return (
                                     <>
                                         <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
@@ -624,8 +628,21 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                             <span>{tpl.country}</span>
                                         </div>
 
-                                        {renderProfitSummary(profit)}
-                                        {renderCostBreakdown(profit)}
+                                        {viewModel.kind === 'standard' && (
+                                            <>
+                                                {renderProfitSummary(viewModel.result)}
+                                                {renderCostBreakdown(viewModel.result)}
+                                            </>
+                                        )}
+                                        <ProductTemplateExecutionPanel
+                                            viewModel={viewModel}
+                                            labels={{
+                                                graphOutputsTitle: t.modals.graphOutputsTitle,
+                                                graphOutputsDisclaimer: t.modals.graphOutputsDisclaimer,
+                                                invalidCompatibility: t.modals.invalidCompatibility,
+                                                graphErrors: strings.profit.graphErrors,
+                                            }}
+                                        />
 
                                         {sections.map(renderDetailSection)}
                                     </>

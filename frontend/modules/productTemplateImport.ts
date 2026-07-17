@@ -328,6 +328,23 @@ export const normalizeProductTemplateData = (data: Record<string, unknown>): Pro
     };
 };
 
+const normalizeProductTemplateApiData = (data: Record<string, unknown>): ProductTemplateData => {
+    const schemaVersion = readSchemaVersion(data.schemaVersion);
+    if (
+        data.kind === 'invalid' &&
+        data.compatibilityEnvelope === true &&
+        schemaVersion !== undefined &&
+        isRecord(data.rawData)
+    ) {
+        return {
+            kind: 'invalid',
+            schemaVersion,
+            rawData: cloneTemplateValue(data.rawData),
+        };
+    }
+    return normalizeProductTemplateData(data);
+};
+
 /** Parses the explicitly internal persistedData envelope used only by local storage. */
 export const normalizeStoredProductTemplateData = (
     persistedData: unknown,
@@ -411,7 +428,7 @@ export const toProductTemplateImportNode = (
         name: tpl.name,
         country: normalizeCurrencyCode(tpl.country) || tpl.country.trim(),
         platform: tpl.platform || 'other',
-        data: normalizeProductTemplateData(rawData),
+        data: normalizeProductTemplateApiData(rawData),
     } as ProductTemplateImportNode;
     Object.defineProperty(node, 'legacyTaxRateCandidate', {
         value: extractLegacyProductTaxRateCandidate(rawData),

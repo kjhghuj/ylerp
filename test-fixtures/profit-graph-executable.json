@@ -1,0 +1,105 @@
+{
+  "kind": "graph",
+  "schemaVersion": 2,
+  "graphTemplateId": "graph-contract-1",
+  "graphTemplateSnapshot": {
+    "id": "graph-contract-1",
+    "name": "Executable contract fixture",
+    "type": "profit",
+    "country": "MYR",
+    "platform": "shopee",
+    "createdAt": "2026-07-16T00:00:00.000Z",
+    "updatedAt": "2026-07-16T00:00:00.000Z",
+    "nodes": [
+      {
+        "id": "price",
+        "type": "parameter",
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "data": {
+          "name": "Price",
+          "valueType": "number",
+          "min": 0,
+          "max": 1000000,
+          "defaultValue": 100
+        }
+      },
+      {
+        "id": "rate",
+        "type": "parameter",
+        "position": {
+          "x": 0,
+          "y": 120
+        },
+        "data": {
+          "name": "Rate",
+          "valueType": "percentage",
+          "min": 0,
+          "max": 100,
+          "defaultValue": 6
+        }
+      },
+      {
+        "id": "formula",
+        "type": "formula",
+        "position": {
+          "x": 240,
+          "y": 60
+        },
+        "data": {
+          "name": "Rounded commission",
+          "expression": "round(price * rate + pi - pi, 2)",
+          "variables": [
+            {
+              "portId": "price_in",
+              "label": "price"
+            },
+            {
+              "portId": "rate_in",
+              "label": "rate"
+            }
+          ]
+        }
+      },
+      {
+        "id": "out",
+        "type": "output",
+        "position": {
+          "x": 480,
+          "y": 60
+        },
+        "data": {
+          "name": "Commission"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-price",
+        "source": "price",
+        "target": "formula",
+        "targetHandle": "price_in"
+      },
+      {
+        "id": "edge-rate",
+        "source": "rate",
+        "target": "formula",
+        "targetHandle": "rate_in"
+      },
+      {
+        "id": "edge-output",
+        "source": "formula",
+        "target": "out"
+      }
+    ]
+  },
+  "graphInputValues": {
+    "price": 100,
+    "rate": 6
+  },
+  "graphOutputValues": {
+    "out": 6
+  }
+}

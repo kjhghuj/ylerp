@@ -158,11 +158,25 @@ export const en = {
       nameAndSkuRequired: 'Please enter Name and SKU',
       saveFailed: 'Failed to save product',
       noIdReturned: 'Failed to save product: no ID returned',
+      graphDraftInvalid: 'Fix node-graph input or execution errors before saving',
       templateSaveFailed: 'Template save failed',
       defaultTemplateSaveFailed: 'Default template save failed, please retry',
       templateDbFailed: 'Failed to save template to database',
       templateDeleteFailed: 'Failed to delete template',
       rateFetchFailed: 'Exchange rate fetch failed, using fallback rates',
+    },
+    graphErrors: {
+      missing_input: 'Input "{name}" is required',
+      non_finite_input: 'Input "{name}" must be a finite number',
+      input_out_of_range: 'Input "{name}" must be between {min} and {max}',
+      invalid_parameter: 'Input node "{name}" is invalid',
+      invalid_binding: 'Formula node "{name}" has invalid bindings',
+      formula_error: 'Formula node "{name}" is invalid: {detail}',
+      dependency_error: 'Node "{name}" depends on a failed result',
+      cycle: 'The node graph contains a dependency cycle',
+      graph_structure: 'Invalid node graph: {detail}',
+      missing_output: 'Output node "{name}" is not connected correctly',
+      non_finite_output: 'Node "{name}" produced a non-finite result',
     },
     templates: {
       btn: 'Templates',
@@ -440,7 +454,10 @@ export const en = {
       importAll: 'Import All Sites',
       tabProduct: 'Basic Info',
       noTemplates: 'No linked templates',
-      noTemplatesHint: 'Templates are auto-created when saving products from Profit Calculator'
+      noTemplatesHint: 'Templates are auto-created when saving products from Profit Calculator',
+      graphOutputsTitle: 'Named node-graph outputs',
+      graphOutputsDisclaimer: 'Node-graph outputs follow the template definition and are not mapped to standard net profit, ROI, or margin.',
+      invalidCompatibility: 'This template uses compatibility data that the current version cannot execute.'
     },
     errors: {
       noExportData: 'No data to export for this country',
