@@ -10,7 +10,7 @@ import { writeFile, utils } from 'xlsx';
 import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
 import { useToast } from '../components/Toast';
-import { type CurrencyCode, CURRENCY_TO_COUNTRY, COUNTRY_TO_CURRENCY } from './profit/types';
+import { type CurrencyCode, COUNTRY_TO_CURRENCY } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
     filterProductTemplatesForSite,
@@ -22,19 +22,26 @@ import {
 } from './productTemplateImport';
 import {
     extractLegacyProductTaxRateCandidate,
-    parseImportedProductTaxRates,
-    resolveCanonicalProductTaxRates,
 } from './productTaxRates';
 import { createProductTemplateProfitViewModel } from './productTemplateProfitViewModel';
 import { ProductTemplateExecutionPanel } from './ProductTemplateExecutionPanel';
+import {
+    MAX_PRODUCT_IMPORT_FILE_BYTES,
+    MAX_PRODUCT_IMPORT_RECORDS,
+    createProductSiteViewModel,
+    normalizeProductSiteMembership,
+    normalizeImportedProductBatch,
+} from './profit/productSiteViewModel';
+import {
+    normalizeProfitGlobalInputs,
+    normalizeSiteInputs,
+    normalizeStandardNodeData,
+    parseCanonicalPositiveRate,
+} from './profit/profitInputNormalization';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
 }
-
-const currencyToCountry = (currency: string): string => {
-    return CURRENCY_TO_COUNTRY[currency as CurrencyCode] || 'MY';
-};
 
 const countryNameMap: Record<string, string> = {
     'SG': 'SG', 'MY': 'MY', 'PH': 'PH', 'TH': 'TH', 'ID': 'ID',
@@ -101,12 +108,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [ycStockLoading, setYcStockLoading] = useState(false);
     const [ycStockRemoteFetched, setYcStockRemoteFetched] = useState(false);
     const [ycStockSortDirection, setYcStockSortDirection] = useState<YcStockSortDirection>('none');
+    const selectedProductSiteViewModel = useMemo(() => (
+        selectedProduct ? createProductSiteViewModel(selectedProduct, activeTab) : null
+    ), [selectedProduct, activeTab]);
 
     const filteredProducts = useMemo(() => products.filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             p.sku?.toLowerCase().includes(searchTerm.toLowerCase());
-        const productSites = p.sites || (p.country ? [p.country] : []);
-        const matchesCountry = productSites.includes(activeTab);
+        const matchesCountry = normalizeProductSiteMembership(p).some(site => site === activeTab);
         return matchesSearch && matchesCountry;
     }), [products, searchTerm, activeTab]);
     const ycStockBySku = useMemo(() => {
@@ -231,6 +240,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const handleImportJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
+        if (file.size > MAX_PRODUCT_IMPORT_FILE_BYTES) {
+            showToast(te.importFileTooLarge, 'error');
+            if (jsonFileInputRef.current) jsonFileInputRef.current.value = '';
+            return;
+        }
 
         const reader = new FileReader();
         reader.onload = async (e) => {
@@ -242,39 +256,32 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     showToast(te.importInvalidJson, 'error');
                     return;
                 }
+                if (rawData.length > MAX_PRODUCT_IMPORT_RECORDS) {
+                    showToast(te.importTooManyRecords, 'error');
+                    return;
+                }
+
+                const normalizedBatch = normalizeImportedProductBatch(rawData, activeTab);
+                if (normalizedBatch.ok === false || normalizedBatch.value.length === 0) {
+                    showToast(
+                        normalizedBatch.ok === false ? te.importBatchValidationFailed : te.importNoData,
+                        'error',
+                    );
+                    return;
+                }
 
                 let importedCount = 0;
-                for (const item of rawData) {
-                    if (!item.name || !item.sku) continue;
-
-                    const productData: Omit<ProductCalcData, 'id'> = {
-                        name: item.name,
-                        sku: item.sku,
-                        country: item.country || activeTab,
-                        sites: item.sites || [activeTab],
-                        cost: Number(item.cost) || 0,
-                        productWeight: Number(item.productWeight) || 0,
-                        supplierInvoice: item.supplierInvoice || 'no',
-                        supplierTaxPoint: Number(item.supplierTaxPoint) || 0,
-                        ...parseImportedProductTaxRates(item),
-                        sellerCouponType: item.sellerCouponType || 'fixed',
-                        sellerCoupon: Number(item.sellerCoupon) || 0,
-                        sellerCouponPlatformRatio: Number(item.sellerCouponPlatformRatio) || 0,
-                        adROI: Number(item.adROI) || 15,
-                        totalRevenue: Number(item.totalRevenue) || 0,
-                        platformInfrastructureFee: Number(item.platformInfrastructureFee) || 0,
-                        siteData: item.siteData || {},
-                    };
-
-                    await addProduct(productData);
-                    importedCount++;
+                for (const product of normalizedBatch.value) {
+                    try {
+                        await addProduct(product);
+                        importedCount++;
+                    } catch {
+                        showToast(te.importPartialFailure.replace('{count}', String(importedCount)), 'error');
+                        return;
+                    }
                 }
 
-                if (importedCount > 0) {
-                    showToast(`${te.importSuccess}${t.importSuccessCount.replace('{count}', String(importedCount))}`, 'success');
-                } else {
-                    showToast(te.importNoData, 'error');
-                }
+                showToast(`${te.importSuccess}${t.importSuccessCount.replace('{count}', String(importedCount))}`, 'success');
             } catch {
                 showToast(te.importParseFailed, 'error');
             } finally {
@@ -306,15 +313,6 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         if (!selectedProduct) return;
         setCalculatorImport({ ...selectedProduct, country: activeTab });
         const importNodes = filterProductTemplatesForSite(allLinkedTemplates, activeTab).map(toProductTemplateImportNode);
-        setCalculatorImportNodes(importNodes);
-        setShowDetailModal(false);
-        onNavigate('profit');
-    };
-
-    const handleImportSingleTemplate = (tpl: LinkedTemplate) => {
-        if (!selectedProduct) return;
-        setCalculatorImport({ ...selectedProduct, country: activeTab });
-        const importNodes = [toProductTemplateImportNode(tpl)];
         setCalculatorImportNodes(importNodes);
         setShowDetailModal(false);
         onNavigate('profit');
@@ -354,41 +352,44 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const computeTemplateProfit = (tpl: LinkedTemplate) => {
         const d = tpl.data;
         const normalizedData = normalizeProductTemplateData(d);
-        return createProductTemplateProfitViewModel(normalizedData, (standardData) => {
-            const country = tpl.country;
-            const currency = countryCurrencyMap[country] || country;
-            const rate = exchangeRates[currency] || 1;
-            const profitData = toStandardNodeData(standardData);
-            const productTaxRates = resolveCanonicalProductTaxRates(
-                selectedProduct || {},
-                [extractLegacyProductTaxRateCandidate(d)],
-            );
+        try {
+            return createProductTemplateProfitViewModel(normalizedData, (standardData) => {
+                const country = tpl.country;
+                const productSite = createProductSiteViewModel(
+                    selectedProduct || {},
+                    country,
+                    [extractLegacyProductTaxRateCandidate(d)],
+                );
+                const currency = productSite.currency;
+                const rate = parseCanonicalPositiveRate(exchangeRates[currency]);
+                const profitData = normalizeStandardNodeData(
+                    toStandardNodeData(standardData) as unknown as Record<string, unknown>,
+                );
+                const globalInputs = normalizeProfitGlobalInputs(
+                    productSite.globalInputs as unknown as Record<string, unknown>,
+                );
+                const siteInputs = normalizeSiteInputs(
+                    productSite.siteInputs as unknown as Record<string, unknown>,
+                );
+                if (!rate.ok || !profitData.ok || !globalInputs.ok || !siteInputs.ok) {
+                    throw new RangeError('Invalid profit preview inputs');
+                }
 
-            const globalData = {
-                purchaseCost: Number(selectedProduct?.cost) || 0,
-                productWeight: Number(selectedProduct?.productWeight) || 0,
-                supplierTaxPoint: Number(selectedProduct?.supplierTaxPoint) || 0,
-                supplierInvoice: (selectedProduct?.supplierInvoice as 'yes' | 'no') || 'no',
-                vatRate: productTaxRates.vatRate,
-                corporateIncomeTaxRate: productTaxRates.corporateIncomeTaxRate,
+                return calculateProfit(
+                    profitData.value,
+                    globalInputs.value,
+                    siteInputs.value,
+                    rate.value,
+                    currency as CurrencyCode,
+                );
+            });
+        } catch {
+            return {
+                kind: 'error' as const,
+                templateKind: 'invalid' as const,
+                errors: [{ code: 'invalid_compatibility' as const, context: {} }],
             };
-
-            const countryKey = countryCurrencyMap[country] ? country : currencyToCountry(country);
-            const sd = ((selectedProduct?.siteData as Record<string, any>) || {})[countryKey];
-            const siteInputs = {
-                totalRevenue: Number(sd?.totalRevenue ?? selectedProduct?.totalRevenue) || 0,
-                sellerCoupon: Number(sd?.sellerCoupon ?? selectedProduct?.sellerCoupon) || 0,
-                sellerCouponType: ((sd?.sellerCouponType ?? selectedProduct?.sellerCouponType) as 'fixed' | 'percent') || 'fixed',
-                sellerCouponPlatformRatio: Number(sd?.sellerCouponPlatformRatio ?? selectedProduct?.sellerCouponPlatformRatio) || 0,
-                platformInfrastructureFee: Number(sd?.platformInfrastructureFee ?? selectedProduct?.platformInfrastructureFee) || 0,
-                adROI: (() => {
-                    const value = sd?.adROI ?? selectedProduct?.adROI;
-                    return value !== undefined && value !== null ? Number(value) : 15;
-                })(),
-            };
-
-            return calculateProfit(profitData, globalData, siteInputs, rate, currency as CurrencyCode);
-        });
+        }
     };
 
     const renderTemplateDetail = (tpl: LinkedTemplate) => {
@@ -398,8 +399,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             return { sections: [], viewModel };
         }
         const d = toStandardNodeData(normalizedData);
-        const productTaxRates = resolveCanonicalProductTaxRates(
+        const productSite = createProductSiteViewModel(
             selectedProduct || {},
+            tpl.country,
             [extractLegacyProductTaxRateCandidate(tpl.data)],
         );
 
@@ -439,8 +441,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             {
                 title: t.detail.taxAd,
                 items: [
-                    { label: t.detail.vatRate, value: productTaxRates.vatRate, suffix: '%' },
-                    { label: t.detail.corpTaxRate, value: productTaxRates.corporateIncomeTaxRate, suffix: '%' },
+                    { label: t.detail.vatRate, value: productSite.globalInputs.vatRate, suffix: '%' },
+                    { label: t.detail.corpTaxRate, value: productSite.globalInputs.corporateIncomeTaxRate, suffix: '%' },
                 ]
             },
         ];
@@ -556,7 +558,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                             {[
                                                 { label: t.detail.name, value: selectedProduct.name },
                                                 { label: t.detail.sku, value: selectedProduct.sku },
-                                                { label: t.detail.country, value: (selectedProduct.sites || []).join(', ') || selectedProduct.country },
+                                                { label: t.detail.country, value: selectedProductSiteViewModel!.sites.join(', ') },
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                     <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -569,10 +571,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.priceCost}</h4>
                                         <div className="grid grid-cols-1 gap-2">
                                             {[
-                                                { label: t.table.cost, value: `${selectedProduct.cost?.toFixed(2)} CNY` },
-                                                { label: t.table.weight, value: `${selectedProduct.productWeight}g` },
-                                                { label: t.detail.invoice, value: selectedProduct.supplierInvoice === 'yes' ? t.detail.invoiceYes : t.detail.invoiceNo },
-                                                { label: t.detail.taxPoint, value: `${selectedProduct.supplierTaxPoint}%` },
+                                                { label: t.table.cost, value: `${selectedProductSiteViewModel!.globalInputs.purchaseCost.toFixed(2)} CNY` },
+                                                { label: t.table.weight, value: `${selectedProductSiteViewModel!.globalInputs.productWeight}g` },
+                                                { label: t.detail.invoice, value: selectedProductSiteViewModel!.globalInputs.supplierInvoice === 'yes' ? t.detail.invoiceYes : t.detail.invoiceNo },
+                                                { label: t.detail.taxPoint, value: `${selectedProductSiteViewModel!.globalInputs.supplierTaxPoint}%` },
                                             ].map(item => (
                                                 <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                     <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -584,22 +586,16 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                     <div className="md:col-span-2">
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.siteParams}</h4>
                                         {(() => {
-                                            const sd = ((selectedProduct.siteData as Record<string, any>) || {})[activeTab];
-                                            const siteTotalRevenue = sd?.totalRevenue ?? selectedProduct.totalRevenue ?? 0;
-                                            const siteSellerCoupon = sd?.sellerCoupon ?? selectedProduct.sellerCoupon ?? 0;
-                                            const siteSellerCouponType = (sd?.sellerCouponType ?? selectedProduct.sellerCouponType) as 'fixed' | 'percent' || 'fixed';
-                                            const siteSellerCouponPlatformRatio = sd?.sellerCouponPlatformRatio ?? selectedProduct.sellerCouponPlatformRatio ?? 0;
-                                            const siteAdROI = sd?.adROI ?? selectedProduct.adROI ?? 15;
-                                            const sitePlatformInfrastructureFee = sd?.platformInfrastructureFee ?? selectedProduct.platformInfrastructureFee ?? 0;
+                                            const siteInputs = selectedProductSiteViewModel!.siteInputs;
                                             return (
                                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                                 {[
-                                                    { label: t.table.priceCNY, value: `${siteTotalRevenue.toFixed(2)} CNY` },
-                                                    { label: t.table.sellerCoupon, value: `${siteSellerCoupon}`, suffix: siteSellerCouponType === 'percent' ? '%' : 'CNY' },
-                                                    { label: t.detail.couponPlatformRatio, value: `${siteSellerCouponPlatformRatio}%` },
-                                                    { label: t.table.adROI, value: `${siteAdROI}` },
-                                                    { label: t.detail.infraFee, value: `${sitePlatformInfrastructureFee.toFixed(2)} CNY` },
-                                                    { label: t.detail.couponType, value: siteSellerCouponType === 'percent' ? t.detail.percentType : t.detail.fixedType },
+                                                    { label: t.table.priceCNY, value: `${siteInputs.totalRevenue.toFixed(2)} CNY` },
+                                                    { label: t.table.sellerCoupon, value: `${siteInputs.sellerCoupon}`, suffix: siteInputs.sellerCouponType === 'percent' ? '%' : 'CNY' },
+                                                    { label: t.detail.couponPlatformRatio, value: `${siteInputs.sellerCouponPlatformRatio}%` },
+                                                    { label: t.table.adROI, value: `${siteInputs.adROI}` },
+                                                    { label: t.detail.infraFee, value: `${siteInputs.platformInfrastructureFee.toFixed(2)} CNY` },
+                                                    { label: t.detail.couponType, value: siteInputs.sellerCouponType === 'percent' ? t.detail.percentType : t.detail.fixedType },
                                                 ].map(item => (
                                                     <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                                                         <span className="text-xs font-medium text-slate-500">{item.label}</span>
@@ -761,13 +757,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {currentProducts.map(p => {
-                                const productSites = p.sites || (p.country ? [p.country] : []);
+                                const productSite = createProductSiteViewModel(p, activeTab);
                                 const currency = countryCurrencyMap[activeTab] || activeTab;
-                                const rate = exchangeRates[currency] || 1;
-                                const sd = (p.siteData as Record<string, any> || {})[activeTab];
-                                const priceCNY = sd?.totalRevenue ?? p.totalRevenue ?? 0;
-                                const priceLocal = priceCNY * rate;
-                                const adROI = sd?.adROI ?? p.adROI ?? 0;
+                                const rate = parseCanonicalPositiveRate(exchangeRates[currency]);
+                                const priceCNY = productSite.siteInputs.totalRevenue;
+                                const calculatedPriceLocal = rate.ok ? priceCNY * rate.value : null;
+                                const priceLocal = calculatedPriceLocal !== null && Number.isFinite(calculatedPriceLocal)
+                                    ? calculatedPriceLocal
+                                    : null;
+                                const adROI = productSite.siteInputs.adROI;
                                 const ycStock = ycStockBySku.get(normalizeSku(p.sku));
                                 return (
                                     <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
@@ -796,10 +794,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="p-3 text-right text-slate-700 font-mono">{p.cost?.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-slate-600">{p.productWeight}g</td>
+                                        <td className="p-3 text-right text-slate-700 font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</td>
+                                        <td className="p-3 text-right text-slate-600">{productSite.globalInputs.productWeight}g</td>
                                         <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-slate-600 font-mono">{priceLocal.toFixed(2)}</td>
+                                        <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : priceLocal.toFixed(2)}</td>
                                         <td className="p-3 text-right text-slate-600 font-mono">{adROI}</td>
                                         <td className="p-3">
                                             <div className="flex items-center justify-center gap-1">

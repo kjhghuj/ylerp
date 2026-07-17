@@ -64,6 +64,9 @@ export interface ProfitResult {
     vat: number;
     corporateIncomeTax: number;
     costTaxAmount: number;
+    grossSellerCoupon: number;
+    sellerCouponSellerContribution: number;
+    sellerCouponPlatformContribution: number;
     actualSellerCoupon: number;
     platformCouponCNY: number;
     taxableRevenue: number;
@@ -135,6 +138,7 @@ export const calculateProfit = (
         ? totalRevenue * (sellerCouponValue / 100)
         : sellerCouponValue;
     const actualSellerCoupon = grossSellerCoupon * (1 - sellerCouponPlatformRatio / 100);
+    const sellerCouponPlatformContribution = grossSellerCoupon - actualSellerCoupon;
 
     const taxableRevenue = totalRevenue - actualSellerCoupon - platformCouponCNY;
 
@@ -180,7 +184,7 @@ export const calculateProfit = (
     const finalRevenueCNY = totalRevenue - actualSellerCoupon - platformCouponCNY - platformFee - shippingFee - totalTax - g.purchaseCost;
     const finalRevenueLocal = finalRevenueCNY * safeRate;
 
-    return {
+    const result: ProfitResult = {
         purchaseCost: g.purchaseCost,
         totalRevenue,
         commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
@@ -188,8 +192,15 @@ export const calculateProfit = (
         roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
         margin: revenueAfterSellerCoupon > 0 ? (finalRevenueCNY / revenueAfterSellerCoupon) * 100 : 0,
         vat, corporateIncomeTax, costTaxAmount,
+        grossSellerCoupon,
+        sellerCouponSellerContribution: actualSellerCoupon,
+        sellerCouponPlatformContribution,
         actualSellerCoupon, platformCouponCNY, taxableRevenue, revenueAfterSellerCoupon,
     };
+    if (Object.values(result).some(value => !Number.isFinite(value))) {
+        throw new RangeError('Profit result must contain only finite numbers');
+    }
+    return result;
 };
 
 export const calculateLastMileFee = (weightInGrams: number): number => {

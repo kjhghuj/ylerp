@@ -3,8 +3,27 @@ import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
 import { ProfitGlobalInputs } from './types';
 import { translations } from '../../translations';
+import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profitInputNormalization';
 
 type ProfitStrings = typeof translations['zh']['profit'];
+
+const renderPercentCouponAmount = (
+    totalRevenue: unknown,
+    sellerCoupon: unknown,
+    currency: string,
+): React.ReactNode => {
+    const revenue = parseCanonicalProfitNumber(totalRevenue, { field: 'totalRevenue', min: 0 });
+    const coupon = parseCanonicalProfitNumber(sellerCoupon, { field: 'sellerCoupon', min: 0, max: 100 });
+    if (!revenue.ok || !coupon.ok) return null;
+    const amount = revenue.value * (coupon.value / 100);
+    if (!Number.isFinite(amount)) return null;
+    return <span>≈ {amount.toFixed(2)} {currency}</span>;
+};
+
+const formatCurrentRate = (value: unknown): string => {
+    const parsed = parseCanonicalPositiveRate(value, 'currentRate');
+    return parsed.ok ? parsed.value.toFixed(4) : '-';
+};
 
 interface GlobalInputsPanelProps {
     globalInputs: ProfitGlobalInputs;
@@ -30,13 +49,14 @@ interface GlobalInputsPanelProps {
         adROI: number;
     };
     onSiteInputChange: (field: string, value: string | number) => void;
+    inputErrors?: Record<string, string>;
 }
 
 export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
     globalInputs, siteCountry, useLocalCurrency, rates,
     onGlobalChange, onSetGlobalInputs, onSetUseLocalCurrency, onSetSiteCountry, t,
     currentRate, isLoadingRate, lastUpdated, onRefreshRates, onReset,
-    siteInputs, onSiteInputChange,
+    siteInputs, onSiteInputChange, inputErrors = {},
 }) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-4 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
@@ -55,10 +75,9 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 >
                     <RotateCcw size={14} />
                 </button>
-                {currentRate > 0 && (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
                         <span className="text-xs font-bold text-emerald-700">
-                            1 CNY ≈ {currentRate.toFixed(4)} {siteCountry}
+                            1 CNY ≈ {formatCurrentRate(currentRate)} {siteCountry}
                         </span>
                         {lastUpdated && (
                             <span className="text-[10px] text-emerald-500 font-medium">
@@ -72,8 +91,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                         >
                             <RefreshCw size={12} className={isLoadingRate ? 'animate-spin' : ''} />
                         </button>
-                    </div>
-                )}
+                </div>
                 <button
                     onClick={() => onSetUseLocalCurrency(prev => !prev)}
                     className={`text-xs font-bold px-3 py-2 rounded-lg transition-all border ${useLocalCurrency
@@ -105,12 +123,14 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 invertCurrency={useLocalCurrency}
                 exchangeRate={rates[siteCountry] || 0}
                 currencyCode={siteCountry}
+                min={0}
+                error={inputErrors.purchaseCost}
             />
-            <NumberInput label={t.inputs.weight} name="productWeight" value={globalInputs.productWeight} onChange={onGlobalChange} />
+            <NumberInput label={t.inputs.weight} name="productWeight" value={globalInputs.productWeight} onChange={onGlobalChange} min={0} error={inputErrors.productWeight} />
             <SelectInput label={t.inputs.supplierInvoice} name="supplierInvoice" value={globalInputs.supplierInvoice} onChange={onGlobalChange} options={[{ value: 'yes', label: t.inputs.invoiceYes }, { value: 'no', label: t.inputs.invoiceNo }]} />
-            <NumberInput label={t.inputs.supplierTax} name="supplierTaxPoint" value={globalInputs.supplierTaxPoint} onChange={onGlobalChange} suffix="%" />
-            <NumberInput label={t.inputs.vat} name="vatRate" value={globalInputs.vatRate} onChange={onGlobalChange} suffix="%" />
-            <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={onGlobalChange} suffix="%" />
+            <NumberInput label={t.inputs.supplierTax} name="supplierTaxPoint" value={globalInputs.supplierTaxPoint} onChange={onGlobalChange} suffix="%" error={inputErrors.supplierTaxPoint} />
+            <NumberInput label={t.inputs.vat} name="vatRate" value={globalInputs.vatRate} onChange={onGlobalChange} suffix="%" error={inputErrors.vatRate} />
+            <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={onGlobalChange} suffix="%" error={inputErrors.corporateIncomeTaxRate} />
         </div>
 
         <div className="mt-4 pt-4 border-t border-slate-100">
@@ -133,6 +153,8 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     invertCurrency={useLocalCurrency}
                     exchangeRate={rates[siteCountry] || 0}
                     currencyCode={siteCountry}
+                    min={0}
+                    error={inputErrors.totalRevenue}
                 />
                 <NumberInput
                     label={t.inputs.sellerCoupon}
@@ -143,9 +165,16 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     invertCurrency={siteInputs.sellerCouponType === 'fixed' && useLocalCurrency}
                     exchangeRate={siteInputs.sellerCouponType === 'fixed' ? (rates[siteCountry] || 0) : 0}
                     currencyCode={siteInputs.sellerCouponType === 'fixed' ? siteCountry : ''}
-                    customDisplay={siteInputs.sellerCouponType === 'percent' ? (
-                        <span>≈ {(siteInputs.totalRevenue * (siteInputs.sellerCoupon / 100)).toFixed(2)} {useLocalCurrency ? siteCountry : 'CNY'}</span>
-                    ) : null}
+                    customDisplay={siteInputs.sellerCouponType === 'percent'
+                        ? renderPercentCouponAmount(
+                            siteInputs.totalRevenue,
+                            siteInputs.sellerCoupon,
+                            useLocalCurrency ? siteCountry : 'CNY',
+                        )
+                        : null}
+                    min={0}
+                    max={siteInputs.sellerCouponType === 'percent' ? 100 : undefined}
+                    error={inputErrors.sellerCoupon}
                 />
                 <SelectInput
                     label={t.inputs.sellerCouponType}
@@ -163,6 +192,9 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     value={siteInputs.sellerCouponPlatformRatio}
                     onChange={(e) => onSiteInputChange('sellerCouponPlatformRatio', e.target.value)}
                     suffix="%"
+                    min={0}
+                    max={100}
+                    error={inputErrors.sellerCouponPlatformRatio}
                 />
                 <NumberInput
                     label={`${t.inputs.infraFee} (${useLocalCurrency ? siteCountry : 'CNY'})`}
@@ -172,12 +204,16 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     invertCurrency={useLocalCurrency}
                     exchangeRate={rates[siteCountry] || 0}
                     currencyCode={siteCountry}
+                    min={0}
+                    error={inputErrors.platformInfrastructureFee}
                 />
                 <NumberInput
                     label={t.inputs.adROI}
                     name="adROI"
                     value={siteInputs.adROI}
                     onChange={(e) => onSiteInputChange('adROI', e.target.value)}
+                    min={0}
+                    error={inputErrors.adROI}
                 />
             </div>
         </div>

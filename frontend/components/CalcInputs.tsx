@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Info, ChevronRight } from 'lucide-react';
+import {
+    parseCanonicalPositiveRate,
+    parseCanonicalProfitNumber,
+} from '../modules/profit/profitInputNormalization';
+
+const readCanonicalNumber = (value: unknown, field: string): number | null => {
+    const parsed = parseCanonicalProfitNumber(value, { field });
+    return parsed.ok ? parsed.value : null;
+};
 
 export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildren<{ title: string, icon: any }>) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl flex flex-col h-full">
@@ -15,30 +24,53 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
     </div>
 );
 
-function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode }: any) {
-    const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
-    const safeRate = exchangeRate > 0 ? exchangeRate : 0;
-    const [localDisplay, setLocalDisplay] = useState((safeValue * safeRate).toFixed(2));
+function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
+    const safeValue = readCanonicalNumber(value, name);
+    const parsedRate = parseCanonicalPositiveRate(exchangeRate);
+    const safeRate = parsedRate.ok ? parsedRate.value : null;
+    const calculatedLocalDisplay = safeValue !== null && safeRate !== null
+        ? safeValue * safeRate
+        : null;
+    const formattedLocalDisplay = calculatedLocalDisplay !== null && Number.isFinite(calculatedLocalDisplay)
+        ? calculatedLocalDisplay.toFixed(2)
+        : String(value ?? '');
+    const [localDisplay, setLocalDisplay] = useState(formattedLocalDisplay);
     const [isFocused, setIsFocused] = useState(false);
 
     useEffect(() => {
         if (!isFocused) {
-            setLocalDisplay((safeValue * safeRate).toFixed(2));
+            setLocalDisplay(formattedLocalDisplay);
         }
-    }, [safeValue, safeRate, isFocused]);
+    }, [formattedLocalDisplay, isFocused]);
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
         setIsFocused(false);
-        const localValue = parseFloat(e.target.value) || 0;
-        const cnyValue = safeRate > 0 ? localValue / safeRate : localValue;
+        const localValue = readCanonicalNumber(e.target.value, name);
+        if (localValue === null) {
+            setLocalDisplay(e.target.value);
+            onChange({ target: { name, value: e.target.value } });
+            return;
+        }
+        const cnyValue = safeRate !== null ? localValue / safeRate : localValue;
+        if (!Number.isFinite(cnyValue)) {
+            setLocalDisplay(formattedLocalDisplay);
+            return;
+        }
         setLocalDisplay(localValue.toFixed(2));
         onChange({ target: { name, value: String(cnyValue) } });
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setLocalDisplay(e.target.value);
-        const localValue = parseFloat(e.target.value) || 0;
-        const cnyValue = safeRate > 0 ? localValue / safeRate : localValue;
+        const nextDisplay = e.target.value;
+        const localValue = readCanonicalNumber(nextDisplay, name);
+        if (localValue === null) {
+            setLocalDisplay(nextDisplay);
+            onChange({ target: { name, value: nextDisplay } });
+            return;
+        }
+        const cnyValue = safeRate !== null ? localValue / safeRate : localValue;
+        if (!Number.isFinite(cnyValue)) return;
+        setLocalDisplay(nextDisplay);
         onChange({ target: { name, value: String(cnyValue) } });
     };
 
@@ -52,11 +84,18 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
                     inputMode="decimal"
                     name={name}
                     value={localDisplay}
+                    min={min}
+                    max={max}
+                    step={step}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? `${name}-error` : undefined}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     onFocus={(e) => { setIsFocused(true); e.target.select(); }}
                     className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
-                        ${highlight
+                        ${error
+                            ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                            : highlight
                             ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                             : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                 />
@@ -66,18 +105,22 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
                     </div>
                 )}
             </div>
-            <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                <span>≈ {safeValue.toFixed(2)} CNY</span>
-            </div>
+            {error && <div id={`${name}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{error}</div>}
+            {safeValue !== null && (
+                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
+                    <span>≈ {safeValue.toFixed(2)} CNY</span>
+                </div>
+            )}
         </div>
     );
 }
 
-export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null }: any) => {
-    const safeValue = typeof value === 'string' ? parseFloat(value) || 0 : (typeof value === 'number' ? value : 0);
-    const safeRate = exchangeRate > 0 ? exchangeRate : 0;
+export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null, min, max, step = 'any', error }: any) => {
+    const safeValue = readCanonicalNumber(value, name);
+    const parsedRate = parseCanonicalPositiveRate(exchangeRate);
+    const safeRate = parsedRate.ok ? parsedRate.value : null;
 
-    if (invertCurrency && safeRate > 0 && currencyCode) {
+    if (invertCurrency && safeRate !== null && currencyCode) {
         return (
             <InvertedCurrencyInput
                 label={label}
@@ -89,11 +132,20 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                 colSpan={colSpan}
                 exchangeRate={exchangeRate}
                 currencyCode={currencyCode}
+                min={min}
+                max={max}
+                step={step}
+                error={error}
             />
         );
     }
 
-    const convertedValue = (safeRate > 0 && currencyCode) ? (safeValue * safeRate).toFixed(2) : null;
+    const calculatedConvertedValue = safeValue !== null && safeRate !== null && currencyCode
+        ? safeValue * safeRate
+        : null;
+    const convertedValue = calculatedConvertedValue !== null && Number.isFinite(calculatedConvertedValue)
+        ? calculatedConvertedValue.toFixed(2)
+        : null;
 
     return (
         <div className={colSpan}>
@@ -105,10 +157,17 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                     inputMode="decimal"
                     name={name}
                     value={value ?? ''}
+                    min={min}
+                    max={max}
+                    step={step}
+                    aria-invalid={Boolean(error)}
+                    aria-describedby={error ? `${name}-error` : undefined}
                     onChange={onChange}
                     onFocus={(e) => e.target.select()}
                     className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
-                        ${highlight
+                        ${error
+                            ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                            : highlight
                             ? 'border-blue-300 bg-blue-50/50 text-blue-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100'
                             : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                 />
@@ -118,6 +177,7 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                     </div>
                 )}
             </div>
+            {error && <div id={`${name}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{error}</div>}
             {customDisplay ? (
                 <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                     {customDisplay}

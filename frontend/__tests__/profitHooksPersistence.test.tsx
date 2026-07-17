@@ -57,6 +57,7 @@ const strings = {
       noIdReturned: 'No id',
       saveFailed: 'Save failed',
       graphDraftInvalid: 'Fix graph input errors before saving',
+      inputValidationFailed: 'Fix invalid profit inputs before saving',
     },
     graphErrors: {
       missing_input: 'Input "{name}" is required',
@@ -117,6 +118,42 @@ const baseStore = () => ({
 describe('useProfitImport persistence compatibility', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it.each([
+    { label: 'missing', adROI: undefined, expected: 15 },
+    { label: 'explicit zero', adROI: 0, expected: 0 },
+    { label: 'numeric-string zero', adROI: '0', expected: 0 },
+    { label: 'invalid text', adROI: 'invalid', expected: 15 },
+    { label: 'negative historical value', adROI: -1, expected: 15 },
+  ])('normalizes $label adROI in the actual history import flow', async ({ adROI, expected }) => {
+    const setSiteInputsMap = vi.fn();
+    const store = {
+      ...baseStore(),
+      calculatorImport: {
+        id: 'product-ad-roi',
+        name: 'Imported Product',
+        sku: 'SKU-AD',
+        country: 'MY',
+        cost: 5,
+        productWeight: 20,
+        supplierTaxPoint: 0,
+        supplierInvoice: 'no' as const,
+        siteData: { MY: { adROI } },
+      },
+    };
+    testState.store = store;
+
+    renderHook(() => useProfitImport(
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      setSiteInputsMap,
+    ));
+
+    await waitFor(() => expect(setSiteInputsMap).toHaveBeenCalledTimes(1));
+    const update = setSiteInputsMap.mock.calls[0][0] as (
+      previous: Record<string, SiteLevelInputs>,
+    ) => Record<string, SiteLevelInputs>;
+    expect(update({ MYR: { ...DEFAULT_SITE_INPUTS } }).MYR.adROI).toBe(expected);
   });
 
   it.each([
@@ -394,6 +431,143 @@ describe('useProfitImport persistence compatibility', () => {
 describe('useProductActions persistence payloads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('trims name and SKU once for validation, lookup, and the saved payload', async () => {
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'trimmed-product' },
+      productTemplates: [],
+    });
+    testState.store = {
+      ...baseStore(),
+      saveProductWithTemplates,
+      profitGlobalInputs: {
+        ...baseStore().profitGlobalInputs,
+        name: '  Product  ',
+        sku: '  SKU-1  ',
+      },
+    };
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      product: expect.objectContaining({ name: 'Product', sku: 'SKU-1' }),
+    }));
+  });
+
+  it('rejects whitespace-only name and SKU before persistence', async () => {
+    const saveProductWithTemplates = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      saveProductWithTemplates,
+      profitGlobalInputs: {
+        ...baseStore().profitGlobalInputs,
+        name: '   ',
+        sku: '\t',
+      },
+    };
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Name and SKU required', 'error');
+  });
+
+  it('blocks product and shared-template APIs when firstWeight is blank', async () => {
+    const node: PlatformNode = {
+      id: 'blank-first-weight',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Blank first weight',
+      data: { ...DEFAULT_NODE_DATA, firstWeight: '' } as unknown as PlatformNode['data'],
+    };
+    const saveProductWithTemplates = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+      saveProductWithTemplates,
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'Must not save');
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.api.get).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(result.current.inputErrors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'nodes.blank-first-weight.firstWeight' }),
+    ]));
+    expect(testState.showToast).toHaveBeenCalledWith(
+      'Fix invalid profit inputs before saving',
+      'error',
+    );
+  });
+
+  it('normalizes standard-node numeric strings before state and product serialization and preserves zero', async () => {
+    const node: PlatformNode = {
+      id: 'numeric-node',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Numeric strings',
+      data: {
+        ...DEFAULT_NODE_DATA,
+        firstWeight: '0',
+        extraShippingFee: '2.5',
+      } as unknown as PlatformNode['data'],
+    };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({ product: { id: 'p' }, productTemplates: [] });
+    const setProfitNodes = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+      setProfitNodes,
+      saveProductWithTemplates,
+    };
+
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS, adROI: 0 } }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    const stateUpdate = setProfitNodes.mock.calls.find(([update]) => typeof update === 'function')?.[0] as (
+      previous: Record<string, PlatformNode[]>,
+    ) => Record<string, PlatformNode[]>;
+    expect(stateUpdate({ MYR: [node] }).MYR[0].data).toEqual(expect.objectContaining({
+      firstWeight: 0,
+      extraShippingFee: 2.5,
+    }));
+    expect(saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      product: expect.objectContaining({
+        adROI: 0,
+        siteData: { MY: expect.objectContaining({ adROI: 0 }) },
+      }),
+      templateMutations: [expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'standard',
+          firstWeight: 0,
+          extraShippingFee: 2.5,
+        }),
+      })],
+    }));
   });
 
   it('creates a product and all node links with one atomic write', async () => {

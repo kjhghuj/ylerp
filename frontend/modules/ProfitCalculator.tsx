@@ -80,8 +80,21 @@ export const ProfitCalculator: React.FC = () => {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
         handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode,
         handleUpdateGraphNodeInputs, handleGraphNodeValidationChange, handleSaveTemplate,
-        handleDeleteTemplate, handleSaveProduct,
+        handleDeleteTemplate, handleSaveProduct, inputErrors, clearInputError,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
+
+    const formatInputError = (error: (typeof inputErrors)[number]): string => {
+        switch (error.code) {
+            case 'required': return t.errors.inputRequired;
+            case 'min': return t.errors.inputMin.replace('{min}', String(error.min));
+            case 'max': return t.errors.inputMax.replace('{max}', String(error.max));
+            case 'invalid_enum': return t.errors.inputEnum;
+            default: return t.errors.inputFinite;
+        }
+    };
+    const inputErrorMessages = Object.fromEntries(
+        inputErrors.map(error => [error.field, formatInputError(error)]),
+    );
 
     const handleReset = () => {
         setGlobalInputs(prev => ({
@@ -141,6 +154,17 @@ export const ProfitCalculator: React.FC = () => {
                 </div>
             </div>
 
+            {inputErrors.length > 0 && (
+                <div role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                    <div>{t.errors.inputValidationFailed}</div>
+                    <ul className="mt-1 list-disc pl-5 font-medium">
+                        {inputErrors.map(error => (
+                            <li key={`${error.field}-${error.code}`}>{error.field}: {formatInputError(error)}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             {/* Global Product Inputs */}
             <GlobalInputsPanel
                 globalInputs={profitGlobalInputs}
@@ -158,7 +182,9 @@ export const ProfitCalculator: React.FC = () => {
                 onRefreshRates={refreshRates}
                 onReset={handleReset}
                 siteInputs={profitSiteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
+                inputErrors={inputErrorMessages}
                 onSiteInputChange={(field, value) => {
+                    clearInputError(field);
                     setProfitSiteInputsMap(prev => ({
                         ...prev,
                         [siteCountry]: {
@@ -205,6 +231,11 @@ export const ProfitCalculator: React.FC = () => {
                             siteInputs={profitSiteInputsMap[node.currency] || DEFAULT_SITE_INPUTS}
                             rateToCNY={rates[node.currency] || 1}
                             strings={t}
+                            inputErrors={Object.fromEntries(
+                                Object.entries(inputErrorMessages)
+                                    .filter(([field]) => field.startsWith(`nodes.${node.id}.`))
+                                    .map(([field, message]) => [field.slice(`nodes.${node.id}.`.length), message]),
+                            )}
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}
                             onSaveTemplate={handleSaveTemplate}

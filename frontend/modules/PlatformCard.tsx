@@ -1,11 +1,19 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
 import { Trash2 } from 'lucide-react';
 import { calculateProfit, calculateLastMileFee } from './profit/calculateProfit';
-import { SiteLevelInputs, SERVICE_FEE_EXEMPT_CURRENCIES, type CurrencyCode, type NodeData, CURRENCY_TO_COUNTRY } from './profit/types';
+import { DEFAULT_NODE_DATA, SiteLevelInputs, SERVICE_FEE_EXEMPT_CURRENCIES, type CurrencyCode, type NodeData, CURRENCY_TO_COUNTRY } from './profit/types';
 import { GlobalInput } from './profit/calculateProfit';
 import { translations } from '../translations';
+import {
+    normalizeProfitGlobalInputs,
+    normalizeSiteInputs,
+    normalizeStandardNodeData,
+    parseCanonicalPositiveRate,
+    parseCanonicalProfitNumber,
+    type ProfitInputError,
+} from './profit/profitInputNormalization';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 
@@ -23,30 +31,90 @@ interface PlatformCardProps {
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
     useLocalCurrency?: boolean;
+    inputErrors?: Record<string, string>;
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false
+    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false, inputErrors = {}
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
-    const onUpdateRef = useRef(onUpdate);
-    onUpdateRef.current = onUpdate;
-
     const siteName = CURRENCY_TO_COUNTRY[country as CurrencyCode] || country;
 
     const [templateName, setTemplateName] = useState('');
     const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
-    const showLocal = rateToCNY > 0 && rateToCNY !== 1;
-    const safeRate = rateToCNY || 1;
+    const parsedRate = parseCanonicalPositiveRate(rateToCNY);
+    const safeRate = parsedRate.ok ? parsedRate.value : null;
+    const showLocal = safeRate !== null && safeRate !== 1;
 
-    const toLocal = (cny: number) => cny * safeRate;
+    const toLocal = (cny: number) => cny * (safeRate ?? 1);
+
+    const preview = useMemo(() => {
+        const previewRate = parseCanonicalPositiveRate(rateToCNY);
+        const normalizedData = normalizeStandardNodeData(data as unknown as Record<string, unknown>);
+        const normalizedGlobal = normalizeProfitGlobalInputs(
+            globalInputs as unknown as Record<string, unknown>,
+            { requireIdentity: false },
+        );
+        const normalizedSite = normalizeSiteInputs(siteInputs as unknown as Record<string, unknown>);
+        const errors: ProfitInputError[] = [
+            ...(normalizedData.ok === false ? normalizedData.errors : []),
+            ...(normalizedGlobal.ok === false ? normalizedGlobal.errors : []),
+            ...(normalizedSite.ok === false ? normalizedSite.errors : []),
+            ...(previewRate.ok === false ? [previewRate.error] : []),
+        ];
+        if (
+            normalizedData.ok === false
+            || normalizedGlobal.ok === false
+            || normalizedSite.ok === false
+            || previewRate.ok === false
+        ) {
+            return { result: null, errors };
+        }
+        try {
+            return {
+                result: calculateProfit(
+                    normalizedData.value,
+                    normalizedGlobal.value,
+                    normalizedSite.value,
+                    previewRate.value,
+                    country as CurrencyCode,
+                ),
+                errors,
+            };
+        } catch {
+            return {
+                result: null,
+                errors: [...errors, { field: 'result', code: 'not_finite' as const }],
+            };
+        }
+    }, [data, globalInputs, siteInputs, rateToCNY, country]);
+
+    const formatInputError = (error: ProfitInputError): string => {
+        switch (error.code) {
+            case 'required': return t.errors.inputRequired;
+            case 'min': return t.errors.inputMin.replace('{min}', String(error.min));
+            case 'max': return t.errors.inputMax.replace('{max}', String(error.max));
+            case 'invalid_enum': return t.errors.inputEnum;
+            default: return t.errors.inputFinite;
+        }
+    };
+    const previewNodeErrors = Object.fromEntries(
+        preview.errors
+            .filter(error => Object.prototype.hasOwnProperty.call(DEFAULT_NODE_DATA, error.field))
+            .map(error => [error.field, formatInputError(error)]),
+    );
+    const resolvedInputErrors = { ...previewNodeErrors, ...inputErrors };
 
     React.useEffect(() => {
         if (country === 'SGD') {
-            const productWeight = Number(globalInputs.productWeight) || 0;
-            const firstWeight = Number(data.firstWeight) || 0;
-            const currentLastMileFee = Number(data.lastMileFee) || 0;
+            const productWeightResult = parseCanonicalProfitNumber(globalInputs.productWeight, { field: 'productWeight', min: 0 });
+            const firstWeightResult = parseCanonicalProfitNumber(data.firstWeight, { field: 'firstWeight' });
+            const lastMileResult = parseCanonicalProfitNumber(data.lastMileFee, { field: 'lastMileFee' });
+            if (!productWeightResult.ok || !firstWeightResult.ok || !lastMileResult.ok) return;
+            const productWeight = productWeightResult.value;
+            const firstWeight = firstWeightResult.value;
+            const currentLastMileFee = lastMileResult.value;
 
             if (firstWeight === 0) {
                 const calculatedFee = calculateLastMileFee(productWeight);
@@ -65,9 +133,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         onUpdate(nodeId, { [e.target.name]: e.target.value });
     };
 
-    const results = useMemo(() => {
-        return calculateProfit(data, globalInputs, siteInputs, rateToCNY, country as CurrencyCode);
-    }, [data, globalInputs, siteInputs, rateToCNY, country]);
+    const results = preview.result;
 
     const isMoneyField = (key: string) => [
         'platformCoupon', 'baseShippingFee',
@@ -77,8 +143,12 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const renderInput = (key: string) => {
         const isMoney = isMoneyField(key);
         if (isMoney && useLocalCurrency) {
-            const localValue = Number(data[key]) || 0;
-            const cnyEquiv = localValue / safeRate;
+            const parsedValue = parseCanonicalProfitNumber(data[key], { field: key });
+            const localValue = parsedValue.ok ? parsedValue.value : null;
+            const calculatedCnyEquiv = localValue !== null && safeRate !== null ? localValue / safeRate : null;
+            const cnyEquiv = calculatedCnyEquiv !== null && Number.isFinite(calculatedCnyEquiv)
+                ? calculatedCnyEquiv
+                : null;
             return (
                 <div key={key} className="col-span-1">
                     <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{t.inputs[key] || key} ({country})</label>
@@ -89,27 +159,41 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             inputMode="decimal"
                             name={key}
                             value={data[key] ?? ''}
+                            step="any"
+                            aria-invalid={Boolean(resolvedInputErrors[key])}
+                            aria-describedby={resolvedInputErrors[key] ? `${nodeId}-${key}-error` : undefined}
                             onChange={(e) => {
                                 onUpdate(nodeId, { [key]: e.target.value });
                             }}
                             onBlur={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                onUpdate(nodeId, { [key]: val.toString() });
+                                const parsed = parseCanonicalProfitNumber(e.target.value, { field: key });
+                                onUpdate(nodeId, { [key]: parsed.ok ? parsed.value : e.target.value });
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
+                            className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all ${resolvedInputErrors[key]
+                                ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                         />
                     </div>
-                    <div className="text-[10px] text-blue-600 font-bold text-right mt-0.5 px-1">
-                        ≈ {cnyEquiv.toFixed(2)} CNY
-                    </div>
+                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
+                    {cnyEquiv !== null && (
+                        <div className="text-[10px] text-blue-600 font-bold text-right mt-0.5 px-1">
+                            ≈ {cnyEquiv.toFixed(2)} CNY
+                        </div>
+                    )}
                 </div>
             );
         }
         if (isMoney) {
-            const localValue = Number(data[key]) || 0;
-            const cnyValue = localValue / safeRate;
-            const displayValue = editingCNY[key] !== undefined ? editingCNY[key] : cnyValue.toFixed(2);
+            const parsedValue = parseCanonicalProfitNumber(data[key], { field: key });
+            const localValue = parsedValue.ok ? parsedValue.value : null;
+            const calculatedCnyValue = localValue !== null && safeRate !== null ? localValue / safeRate : null;
+            const cnyValue = calculatedCnyValue !== null && Number.isFinite(calculatedCnyValue)
+                ? calculatedCnyValue
+                : null;
+            const displayValue = editingCNY[key] !== undefined
+                ? editingCNY[key]
+                : cnyValue !== null ? cnyValue.toFixed(2) : String(data[key] ?? '');
             return (
                 <div key={key} className="col-span-1">
                     <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={`${t.inputs[key] || key} (CNY)`}>{t.inputs[key] || key} (CNY)</label>
@@ -119,26 +203,39 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             inputMode="decimal"
                             name={key}
                             value={displayValue}
+                            step="any"
+                            aria-invalid={Boolean(resolvedInputErrors[key])}
+                            aria-describedby={resolvedInputErrors[key] ? `${nodeId}-${key}-error` : undefined}
                             onChange={(e) => {
                                 setEditingCNY(prev => ({ ...prev, [key]: e.target.value }));
+                                const parsed = parseCanonicalProfitNumber(e.target.value, { field: key });
+                                onUpdate(nodeId, {
+                                    [key]: parsed.ok && safeRate !== null ? parsed.value * safeRate : e.target.value,
+                                });
                             }}
                             onBlur={(e) => {
-                                const cnyInput = parseFloat(e.target.value) || 0;
-                                const localConverted = cnyInput * safeRate;
+                                const parsed = parseCanonicalProfitNumber(e.target.value, { field: key });
                                 setEditingCNY(prev => {
                                     const next = { ...prev };
                                     delete next[key];
                                     return next;
                                 });
-                                onUpdate(nodeId, { [key]: localConverted });
+                                onUpdate(nodeId, {
+                                    [key]: parsed.ok && safeRate !== null ? parsed.value * safeRate : e.target.value,
+                                });
                             }}
                             onFocus={(e) => e.target.select()}
-                            className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100"
+                            className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all ${resolvedInputErrors[key]
+                                ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
                         />
                     </div>
-                    <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                        <span>≈ {localValue.toFixed(2)} {country}</span>
-                    </div>
+                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
+                    {localValue !== null && (
+                        <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
+                            <span>≈ {localValue.toFixed(2)} {country}</span>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -149,9 +246,12 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 name={key}
                 value={data[key] ?? ''}
                 onChange={handleChange}
+                error={resolvedInputErrors[key]}
             />
         );
     };
+    const firstWeightResult = parseCanonicalProfitNumber(data.firstWeight, { field: 'firstWeight' });
+    const usesAutomaticLastMileFee = firstWeightResult.ok && firstWeightResult.value === 0;
 
     return (
         <div className={`min-w-[340px] w-[340px] border-2 ${config.colors.border} rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center transition-all hover:shadow-md`}>
@@ -192,10 +292,16 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.services.includes('fssServiceFeeRate') && !SERVICE_FEE_EXEMPT_CURRENCIES.includes(country as CurrencyCode) && renderInput('fssServiceFeeRate')}
                         {config.fields.services.includes('ccbServiceFeeRate') && !SERVICE_FEE_EXEMPT_CURRENCIES.includes(country as CurrencyCode) && renderInput('ccbServiceFeeRate')}
                         {config.fields.services.includes('warehouseOperationFee') && renderInput('warehouseOperationFee')}
-                        {country === 'SGD' && (Number(data.firstWeight) || 0) === 0 && renderInput('lastMileFee')}
+                        {country === 'SGD' && usesAutomaticLastMileFee && renderInput('lastMileFee')}
                     </div>
                 </div>
             </div>
+
+            {preview.errors.length > 0 && (
+                <div role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[11px] font-bold text-rose-700">
+                    {t.errors.inputValidationFailed}
+                </div>
+            )}
 
             {/* Results Block */}
             {results && (
@@ -225,6 +331,22 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                                     <span className="text-white">¥{results.totalRevenue.toFixed(2)}</span>
                                     {showLocal && <div className="text-slate-400 text-[10px]">≈ {toLocal(results.totalRevenue).toFixed(2)} {country}</div>}
                                 </div>
+                            </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>{t.results.grossSellerCoupon}</span>
+                                <span className="text-slate-200">¥{results.grossSellerCoupon.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>{t.results.sellerCouponPlatformContribution}</span>
+                                <span className="text-sky-300">¥{results.sellerCouponPlatformContribution.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>{t.results.sellerCouponSellerContribution}</span>
+                                <span className="text-rose-300">-¥{results.sellerCouponSellerContribution.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>{t.results.platformCoupon}</span>
+                                <span className="text-rose-300">-¥{results.platformCouponCNY.toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.inputs.cost || '成本'}</span>

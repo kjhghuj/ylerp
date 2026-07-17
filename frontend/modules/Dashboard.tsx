@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { TrendingUp, AlertTriangle, DollarSign, Package, Bell, Clock, ChevronRight, RefreshCw } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { hasPermission } from '../components/PermissionTree';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import api from '../src/api';
+import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profit/profitInputNormalization';
 
 interface UpcomingItem {
   id: string;
@@ -14,6 +14,7 @@ interface UpcomingItem {
   deadline?: string;
   remindAt?: string;
   completed: boolean;
+  overdue?: boolean;
 }
 
 const normalizeType = (t: string): string => t === 'schedule' ? 'approval' : t;
@@ -27,6 +28,27 @@ const TYPE_LABEL: Record<string, { zh: string; color: string }> = {
 };
 
 const CURRENCIES = ['MYR', 'SGD', 'PHP', 'THB', 'IDR'] as const;
+
+const readPurchaseCost = (value: unknown): number | null => {
+  const parsed = parseCanonicalProfitNumber(value, { field: 'cost', min: 0 });
+  return parsed.ok ? parsed.value : null;
+};
+
+const readFiniteDashboardValue = (value: unknown): number => {
+  const parsed = parseCanonicalProfitNumber(value, { field: 'dashboardValue' });
+  return parsed.ok ? parsed.value : 0;
+};
+
+const readDisplayExchangeRate = (value: unknown, inverse: boolean): number | null => {
+  const parsed = parseCanonicalPositiveRate(value);
+  if (!parsed.ok) return null;
+  const displayRate = inverse ? 1 / parsed.value : parsed.value;
+  return Number.isFinite(displayRate) ? displayRate : null;
+};
+
+const isDateBefore = (value: string | undefined, referenceTime: number): boolean => (
+  value ? new Date(value).getTime() < referenceTime : false
+);
 
 export const Dashboard: React.FC = () => {
   const { accountBalance, totalDebt, products, inventory, strings } = useStore();
@@ -45,13 +67,21 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     api.get('/schedule/upcoming').then(res => {
       const data = Array.isArray(res.data) ? res.data : [];
-      setUpcoming(data.map((item: any) => ({ ...item, type: normalizeType(item.type) })).slice(0, 5));
+      const referenceTime = Date.now();
+      setUpcoming(data.map((item: UpcomingItem) => ({
+        ...item,
+        type: normalizeType(item.type),
+        overdue: isDateBefore(item.remindAt, referenceTime) || isDateBefore(item.deadline, referenceTime),
+      })).slice(0, 5));
     }).catch(() => {});
   }, []);
 
-  const avgCost = products.length
-    ? (products.reduce((acc, p) => acc + p.cost, 0) / products.length).toFixed(2)
-    : '0';
+  const finiteProductCosts = products
+    .map(product => readPurchaseCost(product.cost))
+    .filter((cost): cost is number => cost !== null);
+  const avgCost = finiteProductCosts.length
+    ? finiteProductCosts.reduce((average, cost) => average + (cost / finiteProductCosts.length), 0).toFixed(2)
+    : '0.00';
 
   const lowStockCount = inventory.filter(i => {
     const dailySales = i.dailySales;
@@ -60,21 +90,11 @@ export const Dashboard: React.FC = () => {
   }).length;
 
   const kpiCards = [
-    { label: t.kpi.balance, value: `$${accountBalance.toLocaleString()}`, icon: DollarSign, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30', perm: 'dashboard.balance' },
-    { label: t.kpi.margin, value: `¥${avgCost}`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
+    { label: t.kpi.balance, value: `$${readFiniteDashboardValue(accountBalance).toLocaleString()}`, icon: DollarSign, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30', perm: 'dashboard.balance' },
+    { label: t.kpi.margin, value: `CNY ${avgCost}`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
     { label: t.kpi.alerts, value: lowStockCount, icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30', perm: 'dashboard.alerts' },
-    { label: t.kpi.debt, value: `$${totalDebt.toLocaleString()}`, icon: Package, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30', perm: 'dashboard.debt' },
+    { label: t.kpi.debt, value: `$${readFiniteDashboardValue(totalDebt).toLocaleString()}`, icon: Package, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30', perm: 'dashboard.debt' },
   ].filter(card => can(card.perm));
-
-  const data = [
-    { name: 'Mon', balance: 4000, inventory: 2400 },
-    { name: 'Tue', balance: 3000, inventory: 1398 },
-    { name: 'Wed', balance: 2000, inventory: 9800 },
-    { name: 'Thu', balance: 2780, inventory: 3908 },
-    { name: 'Fri', balance: 1890, inventory: 4800 },
-    { name: 'Sat', balance: 2390, inventory: 3800 },
-    { name: 'Sun', balance: 3490, inventory: 4300 },
-  ];
 
   const showChart = can('dashboard.chart');
   const showProfitTable = can('dashboard.profitTable');
@@ -86,8 +106,6 @@ export const Dashboard: React.FC = () => {
     return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
-  const isOverdue = (s?: string) => s ? new Date(s).getTime() < Date.now() : false;
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-start mb-8 gap-4">
@@ -98,12 +116,12 @@ export const Dashboard: React.FC = () => {
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
           <div className="flex items-center gap-1 flex-wrap">
             {CURRENCIES.map(ccy => {
-              const rate = cnyToLocal ? (rates[ccy] || 0) : (1 / (rates[ccy] || 1));
+              const rate = readDisplayExchangeRate(rates[ccy], !cnyToLocal);
               const decimals = ccy === 'IDR' ? 0 : 4;
               return (
                 <span key={ccy} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600/50 whitespace-nowrap">
                   <span className="text-[10px] text-slate-400 dark:text-slate-500">{cnyToLocal ? ccy : `1 ${ccy}`}</span>
-                  <span className="tabular-nums">{rate.toFixed(decimals)}</span>
+                  <span className="tabular-nums">{rate === null ? '-' : rate.toFixed(decimals)}</span>
                   {!cnyToLocal && <span className="text-[10px] text-slate-400 dark:text-slate-500">CNY</span>}
                 </span>
               );
@@ -160,7 +178,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <div className="space-y-2">
             {upcoming.map(item => {
-              const overdue = isOverdue(item.remindAt) || isOverdue(item.deadline);
+              const overdue = Boolean(item.overdue);
               const tl = TYPE_LABEL[item.type] || { zh: item.type, color: '#94a3b8' };
               return (
                 <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded-lg transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30"
@@ -199,30 +217,8 @@ export const Dashboard: React.FC = () => {
         <div className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 transition-all duration-200 relative z-10"
           style={{ boxShadow: 'var(--shadow-card)' }}>
           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6">{t.chart.title}</h3>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height={320}>
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorInventory" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} />
-                <Tooltip
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value, name) => [value, name === 'balance' ? t.chart.balance : t.chart.inventory]}
-                />
-                <Area type="monotone" dataKey="balance" name="balance" stroke="#3B82F6" strokeWidth={3} fillOpacity={1} fill="url(#colorBalance)" />
-                <Area type="monotone" dataKey="inventory" name="inventory" stroke="#10B981" strokeWidth={3} fillOpacity={1} fill="url(#colorInventory)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="h-48 w-full flex items-center justify-center rounded-xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20 text-sm text-slate-400 dark:text-slate-500">
+            {t.chart.empty}
           </div>
         </div>
       )}
@@ -246,7 +242,12 @@ export const Dashboard: React.FC = () => {
                     {products.slice(0, 5).map(p => (
                       <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
                         <td className="p-3 font-medium text-slate-700 dark:text-slate-200">{p.name}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">¥{p.cost}</td>
+                        <td className="p-3 text-slate-600 dark:text-slate-300">
+                          {(() => {
+                            const cost = readPurchaseCost(p.cost);
+                            return cost === null ? '-' : `CNY ${cost.toFixed(2)}`;
+                          })()}
+                        </td>
                         <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{(p.sites || []).join(', ') || p.country || '-'}</td>
                       </tr>
                     ))}

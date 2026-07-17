@@ -130,6 +130,48 @@ describe('calculateProfit', () => {
             );
             expect(result.actualSellerCoupon).toBe(15);
         });
+
+        it.each([
+            {
+                label: 'fixed',
+                site: { sellerCoupon: 20, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 25 },
+                gross: 20,
+                seller: 15,
+                platform: 5,
+            },
+            {
+                label: 'percent',
+                site: { sellerCoupon: 20, sellerCouponType: 'percent' as const, sellerCouponPlatformRatio: 25 },
+                gross: 20,
+                seller: 15,
+                platform: 5,
+            },
+        ])('derives $label coupon contributions without changing any core result', ({ site, gross, seller, platform }) => {
+            const result = calculateProfit(
+                { ...defaultData, platformCommissionRate: 10, platformCoupon: 2 },
+                { ...defaultGlobal, purchaseCost: 30, vatRate: 6, corporateIncomeTaxRate: 10 },
+                { ...defaultSiteInputs, totalRevenue: 100, adROI: 10, ...site },
+                1, 'MYR',
+            );
+
+            expect(result.grossSellerCoupon).toBe(gross);
+            expect(result.sellerCouponSellerContribution).toBe(seller);
+            expect(result.sellerCouponPlatformContribution).toBe(platform);
+            expect(result.actualSellerCoupon).toBe(seller);
+            expect(result).toEqual(expect.objectContaining({
+                taxableRevenue: 83,
+                revenueAfterSellerCoupon: 85,
+                commission: 8.5,
+                platformCouponCNY: 2,
+                corporateIncomeTax: 8.3,
+                totalTax: 13.280000000000001,
+                adFee: 8.3,
+            }));
+            expect(result.vat).toBeCloseTo(4.98, 12);
+            expect(result.finalRevenueCNY).toBeCloseTo(22.92, 12);
+            expect(result.roi).toBeCloseTo(76.4, 12);
+            expect(result.margin).toBeCloseTo(26.96470588235294, 12);
+        });
     });
 
     describe('platform coupon', () => {
@@ -532,6 +574,16 @@ describe('calculateProfit', () => {
             );
             expect(result.actualSellerCoupon).toBe(10);
         });
+    });
+
+    it('rejects a calculation whose final result contains a non-finite number', () => {
+        expect(() => calculateProfit(
+            { ...defaultData, platformCoupon: Number.MAX_SAFE_INTEGER },
+            defaultGlobal,
+            defaultSiteInputs,
+            Number.MIN_VALUE,
+            'MYR',
+        )).toThrow(/finite/i);
     });
 });
 

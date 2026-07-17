@@ -10,6 +10,30 @@ import {
 } from '../components/PermissionTree';
 
 describe('getAllPermissionKeys', () => {
+  it('keeps the dashboard.profitTable key while labeling it as product cost overview', () => {
+    const costOverviewPermission = ALL_PERMISSIONS
+      .find(node => node.key === 'dashboard')
+      ?.children?.find(node => node.key === 'dashboard.profitTable');
+
+    expect(costOverviewPermission).toEqual(expect.objectContaining({
+      key: 'dashboard.profitTable',
+      label: '商品成本概览',
+      labelEn: 'Product Cost Overview',
+    }));
+  });
+
+  it('keeps the dashboard.margin key while labeling it as average purchase cost', () => {
+    const marginPermission = ALL_PERMISSIONS
+      .find(node => node.key === 'dashboard')
+      ?.children?.find(node => node.key === 'dashboard.margin');
+
+    expect(marginPermission).toEqual(expect.objectContaining({
+      key: 'dashboard.margin',
+      label: '平均采购成本',
+      labelEn: 'Avg Purchase Cost',
+    }));
+  });
+
   it('should return all module keys and their sub-keys', () => {
     const keys = getAllPermissionKeys();
     expect(keys).toContain('dashboard');

@@ -4,6 +4,10 @@ import { useToast } from '../../components/Toast';
 import { SiteLevelInputs } from './types';
 import { buildImportedProfitNodes, selectImportedSiteData } from './importCompatibility';
 import { resolveCanonicalProductTaxRates } from '../productTaxRates';
+import {
+    normalizeHistoricalSiteInputs,
+    readHistoricalProfitNumber,
+} from './profitInputNormalization';
 
 export const useProfitImport = (
     siteInputsMap?: Record<string, SiteLevelInputs>,
@@ -40,9 +44,9 @@ export const useProfitImport = (
             const globalData = {
                 name: calculatorImport.name,
                 sku: calculatorImport.sku,
-                purchaseCost: calculatorImport.cost || 0,
-                productWeight: calculatorImport.productWeight || 0,
-                supplierTaxPoint: calculatorImport.supplierTaxPoint || 0,
+                purchaseCost: readHistoricalProfitNumber(calculatorImport.cost, 0, { min: 0 }),
+                productWeight: readHistoricalProfitNumber(calculatorImport.productWeight, 0, { min: 0 }),
+                supplierTaxPoint: readHistoricalProfitNumber(calculatorImport.supplierTaxPoint, 0),
                 supplierInvoice: calculatorImport.supplierInvoice || 'no',
             };
             setGlobalInputs(prev => ({
@@ -69,17 +73,14 @@ export const useProfitImport = (
                     calculatorImport.siteData,
                     currency,
                 ) || {};
-                const siteInputs: SiteLevelInputs = {
+                const siteInputs = normalizeHistoricalSiteInputs({
                     totalRevenue: siteSpecific.totalRevenue ?? calculatorImport.totalRevenue ?? 0,
                     sellerCoupon: siteSpecific.sellerCoupon ?? calculatorImport.sellerCoupon ?? 0,
                     sellerCouponType: siteSpecific.sellerCouponType ?? calculatorImport.sellerCouponType ?? 'fixed',
                     sellerCouponPlatformRatio: siteSpecific.sellerCouponPlatformRatio ?? calculatorImport.sellerCouponPlatformRatio ?? 0,
                     platformInfrastructureFee: siteSpecific.platformInfrastructureFee ?? calculatorImport.platformInfrastructureFee ?? 0,
-                    adROI: (() => {
-                        const v = siteSpecific.adROI ?? calculatorImport.adROI;
-                        return v !== undefined && v !== null ? v : 15;
-                    })(),
-                };
+                    adROI: siteSpecific.adROI ?? calculatorImport.adROI,
+                });
                 setSiteInputsMap(prev => ({
                     ...prev,
                     [currency]: siteInputs,

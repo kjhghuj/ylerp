@@ -3,11 +3,10 @@ import { useStore } from '../../StoreContext';
 import api from '../../src/api';
 import { ProductCalcData } from '../../types';
 import { PlatformType } from '../../platformConfig';
-import { genId, DEFAULT_NODE_DATA, ProfitTemplate, ProductProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
+import { genId, DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS, ProfitTemplate, ProductProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
 import { useToast } from '../../components/Toast';
 import type { NodeGraphTemplate } from '../node-designer/types';
 
-import { safeNumber } from './utils';
 import {
     createDefaultInputValues,
     evaluateNodeGraphProfitTemplate,
@@ -28,6 +27,13 @@ import {
     type AtomicProductTemplateCreateRequest,
     type AtomicProductTemplateUpdateRequest,
 } from './productTemplateAtomic';
+import {
+    normalizeProfitGlobalInputs,
+    normalizeSiteInputs,
+    normalizeStandardNodesForSave,
+    parseCanonicalProfitNumber,
+    type ProfitInputError,
+} from './profitInputNormalization';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -55,6 +61,10 @@ export const useProductActions = (
     const [graphNodeValidation, setGraphNodeValidation] = useState<
         Record<string, GraphNodeRuntimeValidationState>
     >({});
+    const [inputErrors, setInputErrors] = useState<ProfitInputError[]>([]);
+    const clearInputError = useCallback((field: string) => {
+        setInputErrors(previous => previous.filter(error => error.field !== field));
+    }, []);
 
     const nodes: PlatformNode[] = profitNodes[siteCountry] || [];
     const setNodes = useCallback((newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
@@ -69,10 +79,13 @@ export const useProductActions = (
 
     const handleGlobalChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
+        setInputErrors(previous => previous.filter(error => error.field !== name));
         setGlobalInputs(prev => ({ ...prev, [name]: value }));
     };
 
     const handleUpdateNode = (id: string, partialData: Partial<NodeData>) => {
+        const changedFields = new Set(Object.keys(partialData).map(field => `nodes.${id}.${field}`));
+        setInputErrors(previous => previous.filter(error => !changedFields.has(error.field)));
         setNodes(prev => prev.map(n => (
             n.id === id && n.persistedData?.kind !== 'invalid'
                 ? { ...n, data: { ...n.data, ...partialData } }
@@ -170,6 +183,13 @@ export const useProductActions = (
         return true;
     };
 
+    const blockSaveWithInputErrors = (errors: ProfitInputError[]): boolean => {
+        if (errors.length === 0) return false;
+        setInputErrors(errors);
+        showToast(t.errors.inputValidationFailed, 'error');
+        return true;
+    };
+
     const handleSaveTemplate = async (nodeId: string, templateName: string) => {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return;
@@ -183,16 +203,31 @@ export const useProductActions = (
             showToast(t.errors.graphDraftInvalid, 'error');
             return;
         }
+        const normalized = normalizeStandardNodesForSave([prepared.node]);
+        if (normalized.ok === false) {
+            blockSaveWithInputErrors(normalized.errors);
+            return;
+        }
+        const vatRate = parseCanonicalProfitNumber(globalInputs.vatRate, { field: 'vatRate' });
+        const corporateIncomeTaxRate = parseCanonicalProfitNumber(globalInputs.corporateIncomeTaxRate, {
+            field: 'corporateIncomeTaxRate',
+        });
+        const taxErrors: ProfitInputError[] = [];
+        if (vatRate.ok === false) taxErrors.push(vatRate.error);
+        if (corporateIncomeTaxRate.ok === false) taxErrors.push(corporateIncomeTaxRate.error);
+        if (blockSaveWithInputErrors(taxErrors)) return;
+        const normalizedNode = normalized.value[0];
+        setInputErrors([]);
         setNodes(previous => previous.map(candidate => (
-            candidate.id === node.id ? prepared.node : candidate
+            candidate.id === node.id ? normalizedNode : candidate
         )));
         try {
             const response = await api.post('/templates', buildPlatformNodeTemplatePayload(
-                prepared.node,
+                normalizedNode,
                 templateName,
                 {
-                    vatRate: safeNumber(globalInputs.vatRate),
-                    corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+                    vatRate: vatRate.ok ? vatRate.value : 0,
+                    corporateIncomeTaxRate: corporateIncomeTaxRate.ok ? corporateIncomeTaxRate.value : 0,
                 },
             ));
             setAllTemplates(prev => [...prev, response.data]);
@@ -212,27 +247,15 @@ export const useProductActions = (
         }
     };
 
-    const buildSiteSpecificData = (currency: string): SiteLevelInputs => {
-        const current = siteInputsMap[currency] || { totalRevenue: 0, sellerCoupon: 0, sellerCouponType: 'fixed' as const, sellerCouponPlatformRatio: 0, platformInfrastructureFee: 0, adROI: 15 };
-        return {
-            totalRevenue: safeNumber(current.totalRevenue),
-            sellerCoupon: safeNumber(current.sellerCoupon),
-            sellerCouponType: current.sellerCouponType || 'fixed',
-            sellerCouponPlatformRatio: safeNumber(current.sellerCouponPlatformRatio),
-            adROI: current.adROI !== undefined && current.adROI !== null ? safeNumber(current.adROI) : 15,
-            platformInfrastructureFee: safeNumber(current.platformInfrastructureFee),
-        };
-    };
-
-    const findExistingProduct = () => {
+    const findExistingProduct = (name: string, sku: string) => {
         if (editingProductId) {
             return products.find(p => p.id === editingProductId) || null;
         }
-        return products.find(p => p.name === globalInputs.name && p.sku === globalInputs.sku) || null;
+        return products.find(p => p.name.trim() === name && p.sku.trim() === sku) || null;
     };
 
     const handleSaveProduct = async () => {
-        if (!globalInputs.name || !globalInputs.sku) {
+        if (!globalInputs.name?.trim() || !globalInputs.sku?.trim()) {
             showToast(t.errors.nameAndSkuRequired, 'error');
             return;
         }
@@ -242,24 +265,40 @@ export const useProductActions = (
             showToast(t.errors.graphDraftInvalid, 'error');
             return;
         }
-        const preparedNodes = preparation.nodes;
+        const normalizedGlobal = normalizeProfitGlobalInputs(
+            globalInputs as unknown as Record<string, unknown>,
+        );
+        const normalizedSite = normalizeSiteInputs(
+            (siteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS) as unknown as Record<string, unknown>,
+        );
+        const normalizedNodes = normalizeStandardNodesForSave(preparation.nodes);
+        const validationErrors = [
+            ...(normalizedGlobal.ok === false ? normalizedGlobal.errors : []),
+            ...(normalizedSite.ok === false ? normalizedSite.errors : []),
+            ...(normalizedNodes.ok === false ? normalizedNodes.errors : []),
+        ];
+        if (blockSaveWithInputErrors(validationErrors)) return;
+        if (normalizedGlobal.ok === false || normalizedSite.ok === false || normalizedNodes.ok === false) return;
+        const preparedNodes = normalizedNodes.value;
+        const normalizedGlobalInputs = normalizedGlobal.value;
+        const siteSpecificData = normalizedSite.value;
+        setInputErrors([]);
+        setGlobalInputs(normalizedGlobalInputs);
         setNodes(preparedNodes);
 
         const countryCode: NonNullable<ProductCalcData['country']> =
             CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
-        const siteSpecificData = buildSiteSpecificData(siteCountry);
-
         const productData: AtomicProductTemplateCreateRequest['product'] = {
-            name: globalInputs.name,
-            sku: globalInputs.sku,
+            name: normalizedGlobalInputs.name,
+            sku: normalizedGlobalInputs.sku,
             country: countryCode,
             sites: [countryCode],
-            cost: safeNumber(globalInputs.purchaseCost),
-            productWeight: safeNumber(globalInputs.productWeight),
-            supplierTaxPoint: safeNumber(globalInputs.supplierTaxPoint),
-            supplierInvoice: globalInputs.supplierInvoice,
-            vatRate: safeNumber(globalInputs.vatRate),
-            corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+            cost: normalizedGlobalInputs.purchaseCost,
+            productWeight: normalizedGlobalInputs.productWeight,
+            supplierTaxPoint: normalizedGlobalInputs.supplierTaxPoint,
+            supplierInvoice: normalizedGlobalInputs.supplierInvoice,
+            vatRate: normalizedGlobalInputs.vatRate,
+            corporateIncomeTaxRate: normalizedGlobalInputs.corporateIncomeTaxRate,
             sellerCouponType: siteSpecificData.sellerCouponType,
             sellerCoupon: siteSpecificData.sellerCoupon,
             sellerCouponPlatformRatio: siteSpecificData.sellerCouponPlatformRatio,
@@ -269,7 +308,10 @@ export const useProductActions = (
             siteData: { [countryCode]: siteSpecificData },
         };
 
-        const existingProduct = findExistingProduct();
+        const existingProduct = findExistingProduct(
+            normalizedGlobalInputs.name,
+            normalizedGlobalInputs.sku,
+        );
         const isUpdate = !!existingProduct;
         let existingLinks: ProductProfitTemplate[] = [];
         if (existingProduct && preparedNodes.length > 0) {
@@ -283,8 +325,8 @@ export const useProductActions = (
         }
 
         const taxOverrides = {
-            vatRate: safeNumber(globalInputs.vatRate),
-            corporateIncomeTaxRate: safeNumber(globalInputs.corporateIncomeTaxRate),
+            vatRate: normalizedGlobalInputs.vatRate,
+            corporateIncomeTaxRate: normalizedGlobalInputs.corporateIncomeTaxRate,
         };
         let templateMutations: ReturnType<typeof buildProductTemplateMutations>;
         let ensureDefaultTemplate: ReturnType<typeof buildDefaultProductTemplatePayload> | undefined;
@@ -297,7 +339,7 @@ export const useProductActions = (
             );
             ensureDefaultTemplate = preparedNodes.length === 0
                 ? buildDefaultProductTemplatePayload(
-                    globalInputs.name || t.templates.defaultTemplate,
+                    normalizedGlobalInputs.name || t.templates.defaultTemplate,
                     siteCountry,
                     taxOverrides,
                 )
@@ -335,6 +377,8 @@ export const useProductActions = (
 
     return {
         nodes,
+        inputErrors,
+        clearInputError,
         handleGlobalChange,
         handleUpdateNode,
         handleDeleteNode,
