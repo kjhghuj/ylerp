@@ -181,6 +181,36 @@ describe('ProductList site input normalization', () => {
     }));
   });
 
+  it('derives the platform coupon percentage in product detail instead of showing a stored legacy rate', async () => {
+    productListState.rates = { MYR: 2 };
+    products = [{
+      ...baseProduct,
+      siteData: { MY: { totalRevenue: 50 } },
+    }];
+    setApiResponses([{
+      id: 'link-coupon',
+      name: 'Coupon template',
+      country: 'MY',
+      platform: 'Shopee',
+      createdAt: '2026-01-01',
+      data: {
+        kind: 'standard',
+        schemaVersion: 2,
+        platformCoupon: 20,
+        platformCouponRate: 99,
+      },
+    }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /Coupon template/ }));
+
+    const rateLabel = screen.getAllByText(zh.productList.detail.platformCouponRate)
+      .find(element => element.tagName === 'SPAN');
+    expect(rateLabel?.parentElement).toHaveTextContent('20.00%');
+    expect(rateLabel?.parentElement).not.toHaveTextContent('99.00%');
+  });
+
   it('does not render a non-finite local price from a third-party exchange rate', () => {
     products = [{
       ...baseProduct,

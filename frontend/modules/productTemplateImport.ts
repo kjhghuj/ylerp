@@ -35,6 +35,7 @@ export interface ProductTemplateImportNode {
 
 const nodeDataKeys = Object.keys(DEFAULT_NODE_DATA) as (keyof NodeData)[];
 const CURRENT_SCHEMA_VERSION = 2;
+const DEPRECATED_DERIVED_NODE_KEYS = new Set(['platformCouponRate']);
 
 export const cloneTemplateValue = <T>(value: T): T => {
     if (Array.isArray(value)) {
@@ -47,6 +48,14 @@ export const cloneTemplateValue = <T>(value: T): T => {
     }
     return value;
 };
+
+const stripDeprecatedDerivedNodeFields = (
+    data: Record<string, unknown>,
+): Record<string, unknown> => Object.fromEntries(
+    Object.entries(data)
+        .filter(([key]) => !DEPRECATED_DERIVED_NODE_KEYS.has(key))
+        .map(([key, value]) => [key, cloneTemplateValue(value)]),
+);
 
 const normalizeNumber = (value: unknown, fallback: number) => {
     if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) return fallback;
@@ -228,8 +237,10 @@ export const cloneProductTemplateData = (data: ProductTemplateData): ProductTemp
         return {
             kind: 'graph',
             schemaVersion: data.schemaVersion,
-            nodeData: cloneTemplateValue(data.nodeData),
-            extraData: cloneTemplateValue(data.extraData),
+            nodeData: stripDeprecatedDerivedNodeFields(
+                data.nodeData as Record<string, unknown>,
+            ) as Partial<NodeData>,
+            extraData: stripDeprecatedDerivedNodeFields(data.extraData),
             graphTemplateId: data.graphTemplateId,
             graphTemplateSnapshot: cloneTemplateValue(data.graphTemplateSnapshot),
             graphInputValues: cloneTemplateValue(data.graphInputValues),
@@ -239,8 +250,10 @@ export const cloneProductTemplateData = (data: ProductTemplateData): ProductTemp
     return {
         kind: 'standard',
         schemaVersion: data.schemaVersion,
-        nodeData: cloneTemplateValue(data.nodeData),
-        extraData: cloneTemplateValue(data.extraData),
+        nodeData: stripDeprecatedDerivedNodeFields(
+            data.nodeData as Record<string, unknown>,
+        ) as Partial<NodeData>,
+        extraData: stripDeprecatedDerivedNodeFields(data.extraData),
     };
 };
 
@@ -299,6 +312,7 @@ export const normalizeProductTemplateData = (data: Record<string, unknown>): Pro
 
     const excludedKeys = new Set<string>([
         ...nodeDataKeys,
+        ...DEPRECATED_DERIVED_NODE_KEYS,
         ...GRAPH_FIELD_KEYS,
         'kind',
         'schemaVersion',
@@ -376,7 +390,7 @@ export const normalizeStoredProductTemplateData = (
             kind: 'standard',
             schemaVersion: persistedSchemaVersion,
             nodeData: cloneTemplateValue(toPartialNodeData(persistedData.nodeData)),
-            extraData: cloneTemplateValue(persistedData.extraData),
+            extraData: stripDeprecatedDerivedNodeFields(persistedData.extraData),
         };
     }
     if (persistedData.kind === 'graph') {
@@ -398,7 +412,7 @@ export const normalizeStoredProductTemplateData = (
             kind: 'graph',
             schemaVersion: persistedSchemaVersion,
             nodeData: cloneTemplateValue(toPartialNodeData(persistedData.nodeData)),
-            extraData: cloneTemplateValue(persistedData.extraData),
+            extraData: stripDeprecatedDerivedNodeFields(persistedData.extraData),
             graphTemplateId: persistedData.graphTemplateId,
             graphTemplateSnapshot: cloneTemplateValue(persistedData.graphTemplateSnapshot),
             graphInputValues: cloneTemplateValue(graphInputValues),

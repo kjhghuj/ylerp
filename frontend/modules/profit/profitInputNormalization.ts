@@ -20,6 +20,22 @@ export interface ProfitInputError {
     max?: number;
 }
 
+const STANDARD_NODE_NUMBER_OPTIONS: Partial<Record<keyof NodeData, Omit<CanonicalProfitNumberOptions, 'field'>>> = {
+    baseShippingFee: { min: 0 },
+    extraShippingFee: { min: 0 },
+    crossBorderFee: { min: 0 },
+    firstWeight: { min: 0 },
+    platformCoupon: { min: 0 },
+    warehouseOperationFee: { min: 0 },
+    lastMileFee: { min: 0 },
+    platformCommissionRate: { min: 0, max: 100 },
+    transactionFeeRate: { min: 0, max: 100 },
+    damageReturnRate: { min: 0, max: 100 },
+    mdvServiceFeeRate: { min: 0, max: 100 },
+    fssServiceFeeRate: { min: 0, max: 100 },
+    ccbServiceFeeRate: { min: 0, max: 100 },
+};
+
 export type ProfitInputNormalizationResult<T> =
     | { ok: true; value: T }
     | { ok: false; errors: ProfitInputError[] };
@@ -141,7 +157,7 @@ export const normalizeProfitGlobalInputs = (
     }
     collectNumber(input, values, errors, 'purchaseCost', { min: 0 });
     collectNumber(input, values, errors, 'productWeight', { min: 0 });
-    collectNumber(input, values, errors, 'supplierTaxPoint');
+    collectNumber(input, values, errors, 'supplierTaxPoint', { min: 0, max: 100 });
     collectNumber(input, values, errors, 'vatRate');
     collectNumber(input, values, errors, 'corporateIncomeTaxRate');
     if (errors.length > 0) return { ok: false, errors };
@@ -188,6 +204,18 @@ export const normalizeSiteInputs = (
         min: 0,
         defaultValue: DEFAULT_SITE_INPUTS.adROI,
     });
+    if (
+        couponType === 'fixed'
+        && values.sellerCoupon !== undefined
+        && values.totalRevenue !== undefined
+        && values.sellerCoupon > values.totalRevenue
+    ) {
+        errors.push({
+            field: 'sellerCoupon',
+            code: 'max',
+            max: values.totalRevenue,
+        });
+    }
     if (errors.length > 0) return { ok: false, errors };
     return {
         ok: true,
@@ -233,10 +261,42 @@ export const normalizeStandardNodeData = (
     const values: Record<string, number> = {};
     const errors: ProfitInputError[] = [];
     for (const [key, defaultValue] of Object.entries(DEFAULT_NODE_DATA)) {
-        collectNumber(input, values, errors, key, { defaultValue });
+        collectNumber(input, values, errors, key, {
+            ...STANDARD_NODE_NUMBER_OPTIONS[key as keyof NodeData],
+            defaultValue,
+        });
     }
     if (errors.length > 0) return { ok: false, errors };
     return { ok: true, value: values as NodeData };
+};
+
+export const validateCouponRevenueBudget = (
+    nodeData: NodeData,
+    siteInputs: SiteLevelInputs,
+    rateToLocal: unknown,
+): ProfitInputError[] => {
+    const parsedRate = parseCanonicalPositiveRate(rateToLocal);
+    if (parsedRate.ok === false) {
+        return nodeData.platformCoupon > 0
+            ? [{ field: 'platformCoupon', code: 'not_finite' }]
+            : [];
+    }
+
+    const grossSellerCoupon = siteInputs.sellerCouponType === 'percent'
+        ? siteInputs.totalRevenue * (siteInputs.sellerCoupon / 100)
+        : siteInputs.sellerCoupon;
+    const sellerContribution = grossSellerCoupon * (1 - siteInputs.sellerCouponPlatformRatio / 100);
+    const availableRevenueCNY = Math.max(0, siteInputs.totalRevenue - sellerContribution);
+    const maxPlatformCouponLocal = availableRevenueCNY * parsedRate.value;
+    const tolerance = Number.EPSILON * Math.max(1, Math.abs(maxPlatformCouponLocal));
+    if (nodeData.platformCoupon > maxPlatformCouponLocal + tolerance) {
+        return [{
+            field: 'platformCoupon',
+            code: 'max',
+            max: maxPlatformCouponLocal,
+        }];
+    }
+    return [];
 };
 
 export const normalizeStandardNodesForSave = (

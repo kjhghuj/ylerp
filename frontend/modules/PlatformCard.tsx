@@ -12,8 +12,13 @@ import {
     normalizeStandardNodeData,
     parseCanonicalPositiveRate,
     parseCanonicalProfitNumber,
+    validateCouponRevenueBudget,
     type ProfitInputError,
 } from './profit/profitInputNormalization';
+import {
+    derivePlatformCouponAmountLocal,
+    derivePlatformCouponRate,
+} from './profit/platformCoupon';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 
@@ -30,12 +35,13 @@ interface PlatformCardProps {
     onUpdate: (id: string, partialData: Partial<NodeData>) => void;
     onDelete: (id: string) => void;
     onSaveTemplate: (id: string, templateName: string) => void;
+    onInputValidationChange?: (id: string, error: ProfitInputError | null) => void;
     useLocalCurrency?: boolean;
     inputErrors?: Record<string, string>;
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, useLocalCurrency = false, inputErrors = {}
+    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, onInputValidationChange, useLocalCurrency = false, inputErrors = {}
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -43,6 +49,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const [templateName, setTemplateName] = useState('');
     const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
+    const [editingPlatformCouponRate, setEditingPlatformCouponRate] = useState<string | null>(null);
     const parsedRate = parseCanonicalPositiveRate(rateToCNY);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
     const showLocal = safeRate !== null && safeRate !== 1;
@@ -63,12 +70,22 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             ...(normalizedSite.ok === false ? normalizedSite.errors : []),
             ...(previewRate.ok === false ? [previewRate.error] : []),
         ];
+        if (normalizedData.ok && normalizedSite.ok) {
+            errors.push(...validateCouponRevenueBudget(
+                normalizedData.value,
+                normalizedSite.value,
+                rateToCNY,
+            ));
+        }
         if (
             normalizedData.ok === false
             || normalizedGlobal.ok === false
             || normalizedSite.ok === false
             || previewRate.ok === false
         ) {
+            return { result: null, errors };
+        }
+        if (errors.length > 0) {
             return { result: null, errors };
         }
         try {
@@ -163,6 +180,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             aria-invalid={Boolean(resolvedInputErrors[key])}
                             aria-describedby={resolvedInputErrors[key] ? `${nodeId}-${key}-error` : undefined}
                             onChange={(e) => {
+                                if (key === 'platformCoupon') setEditingPlatformCouponRate(null);
                                 onUpdate(nodeId, { [key]: e.target.value });
                             }}
                             onBlur={(e) => {
@@ -207,6 +225,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             aria-invalid={Boolean(resolvedInputErrors[key])}
                             aria-describedby={resolvedInputErrors[key] ? `${nodeId}-${key}-error` : undefined}
                             onChange={(e) => {
+                                if (key === 'platformCoupon') setEditingPlatformCouponRate(null);
                                 setEditingCNY(prev => ({ ...prev, [key]: e.target.value }));
                                 const parsed = parseCanonicalProfitNumber(e.target.value, { field: key });
                                 onUpdate(nodeId, {
@@ -252,6 +271,108 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
     const firstWeightResult = parseCanonicalProfitNumber(data.firstWeight, { field: 'firstWeight' });
     const usesAutomaticLastMileFee = firstWeightResult.ok && firstWeightResult.value === 0;
+    const couponAmountResult = parseCanonicalProfitNumber(data.platformCoupon, {
+        field: 'platformCoupon',
+        min: 0,
+    });
+    const couponRevenueResult = parseCanonicalProfitNumber(siteInputs.totalRevenue, {
+        field: 'totalRevenue',
+        min: 0,
+    });
+    const canEditPlatformCouponRate = (
+        couponRevenueResult.ok
+        && couponRevenueResult.value > 0
+        && safeRate !== null
+    );
+    const derivedPlatformCouponRate = (
+        couponAmountResult.ok
+        && couponRevenueResult.ok
+        && safeRate !== null
+    )
+        ? derivePlatformCouponRate(
+            couponAmountResult.value,
+            couponRevenueResult.value,
+            safeRate,
+        )
+        : null;
+    const displayedPlatformCouponRate = editingPlatformCouponRate
+        ?? (derivedPlatformCouponRate === null ? '' : derivedPlatformCouponRate.toFixed(2));
+    const parsedEditingCouponRate = useMemo(() => editingPlatformCouponRate === null
+        ? null
+        : parseCanonicalProfitNumber(editingPlatformCouponRate, {
+            field: 'platformCouponRate',
+            min: 0,
+            max: 100,
+        }), [editingPlatformCouponRate]);
+    const platformCouponRateInvalid = (
+        parsedEditingCouponRate?.ok === false
+        || Boolean(resolvedInputErrors.platformCouponRate)
+        || Boolean(resolvedInputErrors.platformCoupon)
+    );
+    const platformCouponRateErrorMessage = parsedEditingCouponRate?.ok === false
+        ? formatInputError(parsedEditingCouponRate.error)
+        : resolvedInputErrors.platformCouponRate
+            || resolvedInputErrors.platformCoupon
+            || t.errors.inputFinite;
+
+    React.useEffect(() => {
+        if (!onInputValidationChange) return;
+        onInputValidationChange(
+            nodeId,
+            parsedEditingCouponRate?.ok === false ? parsedEditingCouponRate.error : null,
+        );
+        return () => onInputValidationChange(nodeId, null);
+    }, [nodeId, onInputValidationChange, parsedEditingCouponRate]);
+
+    const renderPlatformCouponRateInput = () => (
+        <div className="col-span-1">
+            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">
+                {t.inputs.platformCouponRate}
+            </label>
+            <div className="relative">
+                <input
+                    type="text"
+                    inputMode="decimal"
+                    name="platformCouponRate"
+                    value={displayedPlatformCouponRate}
+                    disabled={!canEditPlatformCouponRate}
+                    aria-invalid={platformCouponRateInvalid}
+                    aria-describedby={platformCouponRateInvalid ? `${nodeId}-platformCouponRate-error` : undefined}
+                    onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setEditingPlatformCouponRate(nextValue);
+                        const parsed = parseCanonicalProfitNumber(nextValue, {
+                            field: 'platformCouponRate',
+                            min: 0,
+                            max: 100,
+                        });
+                        if (!parsed.ok || !couponRevenueResult.ok || safeRate === null) return;
+                        const amount = derivePlatformCouponAmountLocal(
+                            parsed.value,
+                            couponRevenueResult.value,
+                            safeRate,
+                        );
+                        if (amount !== null) onUpdate(nodeId, { platformCoupon: amount });
+                    }}
+                    onBlur={() => {
+                        if (parsedEditingCouponRate?.ok === true) {
+                            setEditingPlatformCouponRate(null);
+                        }
+                    }}
+                    onFocus={(event) => event.target.select()}
+                    className={`w-full h-9 px-2 pr-7 rounded-lg border outline-none text-sm font-bold transition-all disabled:bg-slate-100 disabled:text-slate-400 ${platformCouponRateInvalid
+                        ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                        : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">%</span>
+            </div>
+            {platformCouponRateInvalid && (
+                <div id={`${nodeId}-platformCouponRate-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">
+                    {platformCouponRateErrorMessage}
+                </div>
+            )}
+        </div>
+    );
 
     return (
         <div className={`min-w-[340px] w-[340px] border-2 ${config.colors.border} rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center transition-all hover:shadow-md`}>
@@ -282,6 +403,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}
                         {config.fields.base.includes('damageReturnRate') && renderInput('damageReturnRate')}
+                        {config.fields.base.includes('platformCoupon') && renderInput('platformCoupon')}
+                        {config.fields.base.includes('platformCouponRate') && renderPlatformCouponRateInput()}
 
                         {config.fields.shipping.includes('firstWeight') && renderInput('firstWeight')}
                         {config.fields.shipping.includes('baseShippingFee') && renderInput('baseShippingFee')}

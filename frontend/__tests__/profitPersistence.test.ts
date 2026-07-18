@@ -984,4 +984,32 @@ describe('profit local-storage compatibility', () => {
       adROI: -2.5,
     });
   });
+
+  it('drops a legacy derived coupon rate from valid local state and remains idempotent', () => {
+    const once = normalizeStoredProfitNodes({
+      MYR: [{
+        id: 'legacy-coupon-rate',
+        platform: 'shopee',
+        currency: 'MYR',
+        data: { platformCoupon: 12.5, platformCouponRate: 88 },
+        persistedData: {
+          kind: 'standard',
+          schemaVersion: 2,
+          nodeData: { platformCoupon: 12.5, platformCouponRate: 88 },
+          extraData: { futureField: { keep: true } },
+        },
+      }],
+    }, 'MYR');
+    const node = once.MYR[0];
+    const serialized = serializePlatformNodeTemplateData(node);
+
+    expect(node.data).toEqual(expect.objectContaining({ platformCoupon: 12.5 }));
+    expect(node.data).not.toHaveProperty('platformCouponRate');
+    expect(serialized).toEqual(expect.objectContaining({
+      platformCoupon: 12.5,
+      futureField: { keep: true },
+    }));
+    expect(serialized).not.toHaveProperty('platformCouponRate');
+    expect(normalizeStoredProfitNodes(once, 'MYR')).toEqual(once);
+  });
 });

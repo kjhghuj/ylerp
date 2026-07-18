@@ -5,12 +5,21 @@ import {
 } from './graphNodeSavePreparation';
 import type { NodeData, PlatformNode } from './types';
 
+const stripDeprecatedDerivedNodeFields = (
+    data: Record<string, unknown>,
+): Record<string, unknown> => Object.fromEntries(
+    Object.entries(data).filter(([key]) => key !== 'platformCouponRate'),
+);
+
 export const serializePlatformNodeTemplateData = (
     node: PlatformNode,
     nodeDataOverrides: Partial<NodeData> = {},
 ): Record<string, unknown> => {
     const persisted = node.persistedData;
-    const currentNodeData = { ...node.data, ...nodeDataOverrides };
+    const currentNodeData = stripDeprecatedDerivedNodeFields({
+        ...node.data,
+        ...nodeDataOverrides,
+    });
     if (persisted?.kind === 'invalid') {
         return cloneTemplateValue(persisted.rawData);
     }
@@ -23,7 +32,7 @@ export const serializePlatformNodeTemplateData = (
 
     if (persistedGraph || hasRuntimeGraph) {
         return {
-            ...cloneTemplateValue(persistedGraph?.extraData ?? {}),
+            ...cloneTemplateValue(stripDeprecatedDerivedNodeFields(persistedGraph?.extraData ?? {})),
             ...cloneTemplateValue(currentNodeData),
             kind: 'graph',
             schemaVersion: persistedGraph?.schemaVersion ?? 2,
@@ -35,7 +44,7 @@ export const serializePlatformNodeTemplateData = (
     }
 
     return {
-        ...cloneTemplateValue(persisted?.extraData ?? {}),
+        ...cloneTemplateValue(stripDeprecatedDerivedNodeFields(persisted?.extraData ?? {})),
         ...cloneTemplateValue(currentNodeData),
         kind: 'standard',
         schemaVersion: persisted?.schemaVersion ?? 2,

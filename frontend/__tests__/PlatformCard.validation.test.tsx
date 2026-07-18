@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -112,6 +112,72 @@ describe('PlatformCard strict preview', () => {
       expect(screen.getByText(amount)).toBeInTheDocument();
     }
     expect(container).not.toHaveTextContent('楼');
+  });
+
+  it('renders a canonical platform coupon amount and a derived percentage', () => {
+    render(<PlatformCard
+      {...defaultProps}
+      data={{ ...DEFAULT_NODE_DATA, platformCoupon: 20 }}
+    />);
+
+    expect(document.querySelector('input[name="platformCoupon"]')).toHaveValue('10.00');
+    expect(document.querySelector('input[name="platformCouponRate"]')).toHaveValue('10.00');
+  });
+
+  it('writes only the canonical local-currency amount when the derived percentage changes', () => {
+    const onUpdate = vi.fn();
+    render(<PlatformCard {...defaultProps} onUpdate={onUpdate} />);
+
+    fireEvent.change(document.querySelector('input[name="platformCouponRate"]')!, {
+      target: { value: '25' },
+    });
+
+    expect(onUpdate).toHaveBeenCalledWith('node-1', { platformCoupon: 50 });
+    expect(onUpdate).not.toHaveBeenCalledWith(
+      'node-1',
+      expect.objectContaining({ platformCouponRate: expect.anything() }),
+    );
+  });
+
+  it('keeps an invalid percentage draft visible and reports it to save validation', () => {
+    const onInputValidationChange = vi.fn();
+    render(<PlatformCard
+      {...defaultProps}
+      onInputValidationChange={onInputValidationChange}
+    />);
+    const rateInput = document.querySelector('input[name="platformCouponRate"]')!;
+
+    fireEvent.change(rateInput, { target: { value: '101' } });
+    fireEvent.blur(rateInput);
+
+    expect(rateInput).toHaveValue('101');
+    expect(rateInput).toHaveAttribute('aria-invalid', 'true');
+    expect(onInputValidationChange).toHaveBeenLastCalledWith(
+      'node-1',
+      expect.objectContaining({ field: 'platformCouponRate', code: 'max', max: 100 }),
+    );
+  });
+
+  it('disables percentage editing and hides the preview when zero revenue has a non-zero coupon', () => {
+    render(<PlatformCard
+      {...defaultProps}
+      data={{ ...DEFAULT_NODE_DATA, platformCoupon: 1 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 0 }}
+    />);
+
+    expect(document.querySelector('input[name="platformCouponRate"]')).toBeDisabled();
+    expect(profitMocks.calculateProfit).not.toHaveBeenCalled();
+    expect(screen.getByText(zh.profit.errors.inputValidationFailed)).toBeInTheDocument();
+  });
+
+  it('rejects negative standard fees before calculation', () => {
+    render(<PlatformCard
+      {...defaultProps}
+      data={{ ...DEFAULT_NODE_DATA, extraShippingFee: -0.01 }}
+    />);
+
+    expect(document.querySelector('input[name="extraShippingFee"]')).toHaveAttribute('aria-invalid', 'true');
+    expect(profitMocks.calculateProfit).not.toHaveBeenCalled();
   });
 
   it.each([true, false])('hides non-finite auxiliary conversions when local-currency mode is %s', (useLocalCurrency) => {

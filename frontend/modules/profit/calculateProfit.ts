@@ -6,7 +6,6 @@ export interface ProfitInput {
     platformCommissionRate: number;
     transactionFeeRate: number;
     platformCoupon: number;
-    platformCouponRate: number;
     damageReturnRate: number;
     mdvServiceFeeRate: number;
     fssServiceFeeRate: number;

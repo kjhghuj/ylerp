@@ -519,6 +519,178 @@ describe('useProductActions persistence payloads', () => {
     );
   });
 
+  it('blocks product and shared-template saves when combined coupon deductions exceed revenue', async () => {
+    const node: PlatformNode = {
+      id: 'coupon-over-revenue',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Coupon over revenue',
+      data: { ...DEFAULT_NODE_DATA, platformCoupon: 20 },
+    };
+    const saveProductWithTemplates = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+      saveProductWithTemplates,
+    };
+    const siteInputs = {
+      ...DEFAULT_SITE_INPUTS,
+      totalRevenue: 100,
+      sellerCouponType: 'fixed' as const,
+      sellerCoupon: 95,
+      sellerCouponPlatformRatio: 0,
+    };
+    const { result } = renderHook(() => useProductActions(
+      [], vi.fn(), { MYR: 2 }, { MYR: siteInputs }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'Must not save');
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(result.current.inputErrors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: 'nodes.coupon-over-revenue.platformCoupon',
+        code: 'max',
+      }),
+    ]));
+  });
+
+  it('blocks product and shared-template saves while a derived coupon-rate draft is invalid', async () => {
+    const node: PlatformNode = {
+      id: 'invalid-coupon-rate-draft',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Invalid coupon rate draft',
+      data: { ...DEFAULT_NODE_DATA, platformCoupon: 20 },
+    };
+    const saveProductWithTemplates = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+      saveProductWithTemplates,
+    };
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      { MYR: 2 },
+      { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } },
+      vi.fn(),
+    ));
+
+    act(() => {
+      result.current.handleNodeInputValidationChange(node.id, {
+        field: 'platformCouponRate',
+        code: 'max',
+        max: 100,
+      });
+    });
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'Must not save');
+      await result.current.handleSaveProduct();
+    });
+
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(result.current.inputErrors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        field: 'nodes.invalid-coupon-rate-draft.platformCouponRate',
+        code: 'max',
+      }),
+    ]));
+  });
+
+  it('does not let another node coupon-rate draft block a valid shared-template save', async () => {
+    const invalidDraftNode: PlatformNode = {
+      id: 'invalid-draft-other-node',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Other invalid draft',
+      data: { ...DEFAULT_NODE_DATA },
+    };
+    const validNode: PlatformNode = {
+      id: 'valid-shared-template-node',
+      platform: 'lazada',
+      currency: 'MYR',
+      name: 'Valid shared template',
+      data: { ...DEFAULT_NODE_DATA },
+    };
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [invalidDraftNode, validNode] },
+    };
+    testState.api.post.mockResolvedValue({ data: { id: 'saved-valid-node' } });
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      { MYR: 2 },
+      { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } },
+      vi.fn(),
+    ));
+
+    act(() => {
+      result.current.handleNodeInputValidationChange(invalidDraftNode.id, {
+        field: 'platformCouponRate',
+        code: 'max',
+        max: 100,
+      });
+    });
+    await act(async () => {
+      await result.current.handleSaveTemplate(validNode.id, 'Valid template');
+    });
+
+    expect(testState.api.post).toHaveBeenCalledWith(
+      '/templates',
+      expect.objectContaining({ name: 'Valid template' }),
+    );
+  });
+
+  it('recomputes coupon-budget errors after site inputs are corrected instead of keeping stale errors', async () => {
+    const node: PlatformNode = {
+      id: 'corrected-coupon-budget',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'Corrected coupon budget',
+      data: { ...DEFAULT_NODE_DATA, platformCoupon: 20 },
+    };
+    const saveProductWithTemplates = vi.fn().mockResolvedValue({
+      product: { id: 'corrected-product' },
+      productTemplates: [],
+    });
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+      saveProductWithTemplates,
+    };
+    let currentSiteInputs = {
+      ...DEFAULT_SITE_INPUTS,
+      totalRevenue: 100,
+      sellerCouponType: 'fixed' as const,
+      sellerCoupon: 95,
+      sellerCouponPlatformRatio: 0,
+    };
+    const { result, rerender } = renderHook(() => useProductActions(
+      [], vi.fn(), { MYR: 2 }, { MYR: currentSiteInputs }, vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+
+    currentSiteInputs = { ...currentSiteInputs, totalRevenue: 200 };
+    rerender();
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).toHaveBeenCalledTimes(1);
+    expect(result.current.inputErrors).toEqual([]);
+  });
+
   it('normalizes standard-node numeric strings before state and product serialization and preserves zero', async () => {
     const node: PlatformNode = {
       id: 'numeric-node',
@@ -1500,6 +1672,7 @@ describe('useProductActions persistence payloads', () => {
       kind: 'future-template',
       schemaVersion: 99,
       firstWeight: 'recover-me',
+      platformCoupon: Number.MAX_SAFE_INTEGER,
       future: { nested: true },
     };
     const node: PlatformNode = {
@@ -1509,7 +1682,11 @@ describe('useProductActions persistence payloads', () => {
       platform: 'shopee',
       currency: 'MYR',
       name: 'Invalid imported node',
-      data: { ...DEFAULT_NODE_DATA, firstWeight: 3 },
+      data: {
+        ...DEFAULT_NODE_DATA,
+        firstWeight: 3,
+        platformCoupon: Number.MAX_SAFE_INTEGER,
+      },
       persistedData: {
         kind: 'invalid',
         schemaVersion: 99,

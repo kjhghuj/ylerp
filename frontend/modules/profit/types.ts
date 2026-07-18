@@ -61,7 +61,7 @@ export const DEFAULT_NODE_DATA = {
     baseShippingFee: 0, extraShippingFee: 0, crossBorderFee: 0,
     firstWeight: 50,
     platformCommissionRate: 0, transactionFeeRate: 0,
-    platformCoupon: 0, platformCouponRate: 0,
+    platformCoupon: 0,
     damageReturnRate: 0,
     mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0, warehouseOperationFee: 0,
     lastMileFee: 0,

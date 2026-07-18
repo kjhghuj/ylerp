@@ -10,7 +10,7 @@ describe('DEFAULT_NODE_DATA', () => {
         expect(DEFAULT_NODE_DATA).toHaveProperty('platformCommissionRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('transactionFeeRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('platformCoupon');
-        expect(DEFAULT_NODE_DATA).toHaveProperty('platformCouponRate');
+        expect(DEFAULT_NODE_DATA).not.toHaveProperty('platformCouponRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('damageReturnRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('mdvServiceFeeRate');
         expect(DEFAULT_NODE_DATA).toHaveProperty('fssServiceFeeRate');

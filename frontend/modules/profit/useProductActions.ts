@@ -16,6 +16,7 @@ import { createGraphPlatformNode, createTemplatePlatformNode } from './platformN
 import { buildPlatformNodeTemplatePayload } from './templateDataSerializer';
 import type { GraphNodeRuntimeValidationState } from './GraphTemplateCard';
 import {
+    hasRuntimeGraphClaim,
     prepareGraphNodeForSave,
     prepareGraphNodesForSave,
 } from './graphNodeSavePreparation';
@@ -32,6 +33,7 @@ import {
     normalizeSiteInputs,
     normalizeStandardNodesForSave,
     parseCanonicalProfitNumber,
+    validateCouponRevenueBudget,
     type ProfitInputError,
 } from './profitInputNormalization';
 
@@ -62,8 +64,32 @@ export const useProductActions = (
         Record<string, GraphNodeRuntimeValidationState>
     >({});
     const [inputErrors, setInputErrors] = useState<ProfitInputError[]>([]);
+    const [draftInputErrors, setDraftInputErrors] = useState<ProfitInputError[]>([]);
     const clearInputError = useCallback((field: string) => {
         setInputErrors(previous => previous.filter(error => error.field !== field));
+    }, []);
+    const handleNodeInputValidationChange = useCallback((
+        id: string,
+        error: ProfitInputError | null,
+    ) => {
+        const field = `nodes.${id}.${error?.field ?? 'platformCouponRate'}`;
+        setDraftInputErrors(previous => {
+            const withoutField = previous.filter(candidate => candidate.field !== field);
+            if (!error) {
+                return withoutField.length === previous.length ? previous : withoutField;
+            }
+            const qualifiedError = { ...error, field };
+            const existing = previous.find(candidate => candidate.field === field);
+            if (
+                existing
+                && existing.code === qualifiedError.code
+                && existing.min === qualifiedError.min
+                && existing.max === qualifiedError.max
+            ) {
+                return previous;
+            }
+            return [...withoutField, qualifiedError];
+        });
     }, []);
 
     const nodes: PlatformNode[] = profitNodes[siteCountry] || [];
@@ -94,6 +120,12 @@ export const useProductActions = (
     };
 
     const handleDeleteNode = (id: string) => {
+        setInputErrors(previous => previous.filter(
+            error => !error.field.startsWith(`nodes.${id}.`),
+        ));
+        setDraftInputErrors(previous => previous.filter(
+            error => !error.field.startsWith(`nodes.${id}.`),
+        ));
         setGraphNodeValidation(previous => {
             if (!Object.prototype.hasOwnProperty.call(previous, id)) return previous;
             const next = { ...previous };
@@ -183,8 +215,19 @@ export const useProductActions = (
         return true;
     };
 
-    const blockSaveWithInputErrors = (errors: ProfitInputError[]): boolean => {
-        if (errors.length === 0) return false;
+    const blockSaveWithInputErrors = (
+        errors: ProfitInputError[],
+        draftNodeId?: string,
+    ): boolean => {
+        const errorsByField = new Map<string, ProfitInputError>();
+        const relevantDraftErrors = draftNodeId
+            ? draftInputErrors.filter(error => error.field.startsWith(`nodes.${draftNodeId}.`))
+            : draftInputErrors;
+        for (const error of [...relevantDraftErrors, ...errors]) {
+            errorsByField.set(error.field, error);
+        }
+        const mergedErrors = [...errorsByField.values()];
+        if (mergedErrors.length === 0) return false;
         setInputErrors(errors);
         showToast(t.errors.inputValidationFailed, 'error');
         return true;
@@ -205,7 +248,7 @@ export const useProductActions = (
         }
         const normalized = normalizeStandardNodesForSave([prepared.node]);
         if (normalized.ok === false) {
-            blockSaveWithInputErrors(normalized.errors);
+            blockSaveWithInputErrors(normalized.errors, node.id);
             return;
         }
         const vatRate = parseCanonicalProfitNumber(globalInputs.vatRate, { field: 'vatRate' });
@@ -215,8 +258,27 @@ export const useProductActions = (
         const taxErrors: ProfitInputError[] = [];
         if (vatRate.ok === false) taxErrors.push(vatRate.error);
         if (corporateIncomeTaxRate.ok === false) taxErrors.push(corporateIncomeTaxRate.error);
-        if (blockSaveWithInputErrors(taxErrors)) return;
         const normalizedNode = normalized.value[0];
+        const isGraphNode = hasRuntimeGraphClaim(normalizedNode);
+        const normalizedSite = normalizeSiteInputs(
+            (siteInputsMap[normalizedNode.currency] || DEFAULT_SITE_INPUTS) as unknown as Record<string, unknown>,
+        );
+        const couponBudgetErrors = normalizedSite.ok && !isGraphNode
+            ? validateCouponRevenueBudget(
+                normalizedNode.data,
+                normalizedSite.value,
+                rates[normalizedNode.currency],
+            ).map(error => ({
+                ...error,
+                field: `nodes.${normalizedNode.id}.${error.field}`,
+            }))
+            : [];
+        const templateValidationErrors = [
+            ...taxErrors,
+            ...(!isGraphNode && normalizedSite.ok === false ? normalizedSite.errors : []),
+            ...couponBudgetErrors,
+        ];
+        if (blockSaveWithInputErrors(templateValidationErrors, node.id)) return;
         setInputErrors([]);
         setNodes(previous => previous.map(candidate => (
             candidate.id === node.id ? normalizedNode : candidate
@@ -277,6 +339,19 @@ export const useProductActions = (
             ...(normalizedSite.ok === false ? normalizedSite.errors : []),
             ...(normalizedNodes.ok === false ? normalizedNodes.errors : []),
         ];
+        if (normalizedSite.ok && normalizedNodes.ok) {
+            for (const node of normalizedNodes.value) {
+                if (node.persistedData?.kind === 'invalid' || hasRuntimeGraphClaim(node)) continue;
+                validationErrors.push(...validateCouponRevenueBudget(
+                    node.data,
+                    normalizedSite.value,
+                    rates[node.currency],
+                ).map(error => ({
+                    ...error,
+                    field: `nodes.${node.id}.${error.field}`,
+                })));
+            }
+        }
         if (blockSaveWithInputErrors(validationErrors)) return;
         if (normalizedGlobal.ok === false || normalizedSite.ok === false || normalizedNodes.ok === false) return;
         const preparedNodes = normalizedNodes.value;
@@ -377,7 +452,7 @@ export const useProductActions = (
 
     return {
         nodes,
-        inputErrors,
+        inputErrors: [...inputErrors, ...draftInputErrors],
         clearInputError,
         handleGlobalChange,
         handleUpdateNode,
@@ -387,6 +462,7 @@ export const useProductActions = (
         handleAddBlankNode,
         handleUpdateGraphNodeInputs,
         handleGraphNodeValidationChange,
+        handleNodeInputValidationChange,
         handleSaveTemplate,
         handleDeleteTemplate,
         handleSaveProduct,

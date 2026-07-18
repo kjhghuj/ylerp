@@ -37,7 +37,9 @@ import {
     normalizeSiteInputs,
     normalizeStandardNodeData,
     parseCanonicalPositiveRate,
+    validateCouponRevenueBudget,
 } from './profit/profitInputNormalization';
+import { derivePlatformCouponRate } from './profit/platformCoupon';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -374,6 +376,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 if (!rate.ok || !profitData.ok || !globalInputs.ok || !siteInputs.ok) {
                     throw new RangeError('Invalid profit preview inputs');
                 }
+                if (validateCouponRevenueBudget(
+                    profitData.value,
+                    siteInputs.value,
+                    rate.value,
+                ).length > 0) {
+                    throw new RangeError('Coupon deductions exceed revenue');
+                }
 
                 return calculateProfit(
                     profitData.value,
@@ -404,6 +413,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             tpl.country,
             [extractLegacyProductTaxRateCandidate(tpl.data)],
         );
+        const detailRate = parseCanonicalPositiveRate(exchangeRates[productSite.currency]);
+        const platformCouponRate = detailRate.ok
+            ? derivePlatformCouponRate(
+                d.platformCoupon,
+                productSite.siteInputs.totalRevenue,
+                detailRate.value,
+            )
+            : null;
 
         const sections = [
             {
@@ -435,7 +452,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 title: t.detail.platformCoupon,
                 items: [
                     { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: tpl.country },
-                    { label: t.detail.platformCouponRate, value: d.platformCouponRate, suffix: '%' },
+                    { label: t.detail.platformCouponRate, value: platformCouponRate, suffix: '%' },
                 ]
             },
             {

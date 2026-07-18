@@ -80,7 +80,7 @@ export const ProfitCalculator: React.FC = () => {
         nodes, handleGlobalChange, handleUpdateNode, handleDeleteNode,
         handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode,
         handleUpdateGraphNodeInputs, handleGraphNodeValidationChange, handleSaveTemplate,
-        handleDeleteTemplate, handleSaveProduct, inputErrors, clearInputError,
+        handleNodeInputValidationChange, handleDeleteTemplate, handleSaveProduct, inputErrors, clearInputError,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
     const formatInputError = (error: (typeof inputErrors)[number]): string => {
@@ -229,7 +229,7 @@ export const ProfitCalculator: React.FC = () => {
                             data={node.data}
                             globalInputs={profitGlobalInputs}
                             siteInputs={profitSiteInputsMap[node.currency] || DEFAULT_SITE_INPUTS}
-                            rateToCNY={rates[node.currency] || 1}
+                            rateToCNY={rates[node.currency]}
                             strings={t}
                             inputErrors={Object.fromEntries(
                                 Object.entries(inputErrorMessages)
@@ -239,6 +239,7 @@ export const ProfitCalculator: React.FC = () => {
                             onUpdate={handleUpdateNode}
                             onDelete={handleDeleteNode}
                             onSaveTemplate={handleSaveTemplate}
+                            onInputValidationChange={handleNodeInputValidationChange}
                             useLocalCurrency={useLocalCurrency}
                         />
                     ))

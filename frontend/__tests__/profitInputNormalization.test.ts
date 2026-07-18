@@ -6,6 +6,7 @@ import {
   normalizeSiteInputs,
   normalizeStandardNodeData,
   parseCanonicalProfitNumber,
+  validateCouponRevenueBudget,
 } from '../modules/profit/profitInputNormalization';
 import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 
@@ -76,16 +77,16 @@ describe('profit input normalization', () => {
     });
   });
 
-  it('accepts negative finite tax fields but rejects negative cost and weight', () => {
+  it('keeps broad canonical tax compatibility while bounding supplier tax point', () => {
     expect(normalizeProfitGlobalInputs({
       name: 'Product',
       sku: 'SKU',
       purchaseCost: '10.5',
       productWeight: 0,
-      supplierTaxPoint: '-3',
+      supplierTaxPoint: '100',
       supplierInvoice: 'no',
       vatRate: -5,
-      corporateIncomeTaxRate: '-8.5',
+      corporateIncomeTaxRate: '125',
     })).toEqual({
       ok: true,
       value: {
@@ -93,10 +94,10 @@ describe('profit input normalization', () => {
         sku: 'SKU',
         purchaseCost: 10.5,
         productWeight: 0,
-        supplierTaxPoint: -3,
+        supplierTaxPoint: 100,
         supplierInvoice: 'no',
         vatRate: -5,
-        corporateIncomeTaxRate: -8.5,
+        corporateIncomeTaxRate: 125,
       },
     });
 
@@ -105,7 +106,7 @@ describe('profit input normalization', () => {
       sku: 'SKU',
       purchaseCost: -1,
       productWeight: -2,
-      supplierTaxPoint: 0,
+      supplierTaxPoint: -1,
       supplierInvoice: 'yes',
       vatRate: 0,
       corporateIncomeTaxRate: 0,
@@ -113,7 +114,7 @@ describe('profit input normalization', () => {
     expect(negative.ok).toBe(false);
     if (negative.ok === false) {
       expect(negative.errors.map(error => error.field)).toEqual(
-        expect.arrayContaining(['purchaseCost', 'productWeight']),
+        expect.arrayContaining(['purchaseCost', 'productWeight', 'supplierTaxPoint']),
       );
     }
   });
@@ -190,21 +191,98 @@ describe('profit input normalization', () => {
     expect(upper).toEqual({ ok: true, value: expect.objectContaining({ sellerCoupon: 100, sellerCouponPlatformRatio: 100, adROI: 15 }) });
   });
 
-  it('normalizes every standard node numeric string without clamping negative values', () => {
+  it('rejects a fixed seller coupon greater than total revenue', () => {
+    const result = normalizeSiteInputs({
+      ...DEFAULT_SITE_INPUTS,
+      totalRevenue: 100,
+      sellerCouponType: 'fixed',
+      sellerCoupon: 100.01,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: expect.arrayContaining([{ field: 'sellerCoupon', code: 'max', max: 100 }]),
+    });
+  });
+
+  it('normalizes canonical standard-node strings and preserves legal zero', () => {
     const rawData = Object.fromEntries(
       Object.entries(DEFAULT_NODE_DATA).map(([key, value]) => [key, String(value)]),
     );
-    rawData.extraShippingFee = '-2.5';
+    rawData.extraShippingFee = '2.5';
     rawData.firstWeight = '0';
 
     expect(normalizeStandardNodeData(rawData)).toEqual({
       ok: true,
       value: {
         ...DEFAULT_NODE_DATA,
-        extraShippingFee: -2.5,
+        extraShippingFee: 2.5,
         firstWeight: 0,
       },
     });
+  });
+
+  it.each([
+    ['baseShippingFee', -0.01],
+    ['extraShippingFee', -0.01],
+    ['crossBorderFee', -0.01],
+    ['firstWeight', -0.01],
+    ['platformCoupon', -0.01],
+    ['warehouseOperationFee', -0.01],
+    ['lastMileFee', -0.01],
+    ['platformCommissionRate', 100.01],
+    ['transactionFeeRate', 100.01],
+    ['damageReturnRate', 100.01],
+    ['mdvServiceFeeRate', 100.01],
+    ['fssServiceFeeRate', 100.01],
+    ['ccbServiceFeeRate', 100.01],
+  ])('rejects standard-node boundary violation %s=%s', (field, value) => {
+    const result = normalizeStandardNodeData({ ...DEFAULT_NODE_DATA, [field]: value });
+    expect(result.ok).toBe(false);
+    if (result.ok === false) expect(result.errors.map(error => error.field)).toContain(field);
+  });
+
+  it('accepts inclusive operational percentage boundaries', () => {
+    const result = normalizeStandardNodeData({
+      ...DEFAULT_NODE_DATA,
+      platformCommissionRate: 0,
+      transactionFeeRate: 100,
+      damageReturnRate: 100,
+      mdvServiceFeeRate: 0,
+      fssServiceFeeRate: 100,
+      ccbServiceFeeRate: 0,
+      firstWeight: 0,
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects coupon deductions whose combined CNY amount exceeds revenue', () => {
+    expect(validateCouponRevenueBudget(
+      { ...DEFAULT_NODE_DATA, platformCoupon: 20 },
+      {
+        ...DEFAULT_SITE_INPUTS,
+        totalRevenue: 100,
+        sellerCouponType: 'fixed',
+        sellerCoupon: 95,
+        sellerCouponPlatformRatio: 0,
+      },
+      2,
+    )).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'platformCoupon', code: 'max' }),
+    ]));
+
+    expect(validateCouponRevenueBudget(
+      { ...DEFAULT_NODE_DATA, platformCoupon: 180 },
+      {
+        ...DEFAULT_SITE_INPUTS,
+        totalRevenue: 100,
+        sellerCouponType: 'fixed',
+        sellerCoupon: 10,
+        sellerCouponPlatformRatio: 50,
+      },
+      2,
+    )).toEqual([]);
   });
 
   it.each(['', '   ', 'not-a-number', Number.NaN, Number.POSITIVE_INFINITY])(

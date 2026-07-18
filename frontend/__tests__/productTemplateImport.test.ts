@@ -345,4 +345,36 @@ describe('loadProductTemplateImportNodes', () => {
       rawData,
     });
   });
+
+  it('migrates a valid legacy platform coupon rate to amount-only canonical data', () => {
+    const normalized = normalizeProductTemplateData({
+      kind: 'standard',
+      schemaVersion: 2,
+      platformCoupon: 12.5,
+      platformCouponRate: 88,
+      futureField: { keep: true },
+    });
+
+    expect(normalized).toEqual(expect.objectContaining({
+      kind: 'standard',
+      nodeData: expect.objectContaining({ platformCoupon: 12.5 }),
+      extraData: { futureField: { keep: true } },
+    }));
+    expect(normalized.kind === 'standard' && normalized.nodeData).not.toHaveProperty('platformCouponRate');
+  });
+
+  it('preserves the deprecated coupon rate inside a future invalid raw payload', () => {
+    const rawData = {
+      kind: 'future-template',
+      schemaVersion: 99,
+      platformCoupon: 12.5,
+      platformCouponRate: 88,
+    };
+
+    expect(normalizeProductTemplateData(rawData)).toEqual({
+      kind: 'invalid',
+      schemaVersion: 99,
+      rawData,
+    });
+  });
 });
