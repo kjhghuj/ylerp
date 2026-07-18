@@ -45,4 +45,40 @@ describe('CalcInputs canonical numeric conversion', () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(container.textContent).not.toMatch(/Infinity|NaN/);
   });
+
+  it('formats converted IDR values with zero settlement decimals', () => {
+    render(<NumberInput
+      label="Cost"
+      name="purchaseCost"
+      value="1.2"
+      onChange={() => undefined}
+      exchangeRate={2150}
+      currencyCode="IDR"
+    />);
+
+    expect(screen.getByText(/2580 IDR/)).toBeInTheDocument();
+    expect(screen.queryByText(/2580\.00 IDR/)).not.toBeInTheDocument();
+  });
+
+  it('commits the same rounded IDR amount that is shown after blur', () => {
+    const onChange = vi.fn();
+    const { container } = render(<NumberInput
+      label="Local fee"
+      name="baseShippingFee"
+      value="0"
+      onChange={onChange}
+      exchangeRate={2150}
+      currencyCode="IDR"
+      invertCurrency
+    />);
+    const input = container.querySelector('input[name="baseShippingFee"]')!;
+
+    fireEvent.change(input, { target: { value: '12.5' } });
+    fireEvent.blur(input);
+
+    expect(input).toHaveValue('13');
+    expect(onChange).toHaveBeenLastCalledWith({
+      target: { name: 'baseShippingFee', value: String(13 / 2150) },
+    });
+  });
 });

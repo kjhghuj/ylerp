@@ -4,6 +4,7 @@ import {
     hasRuntimeGraphClaim,
 } from './graphNodeSavePreparation';
 import type { NodeData, PlatformNode } from './types';
+import type { ExchangeRateSnapshot } from './exchangeRateSnapshot';
 
 const stripDeprecatedDerivedNodeFields = (
     data: Record<string, unknown>,
@@ -56,6 +57,7 @@ export const buildPlatformNodeTemplatePayload = (
     name: string,
     nodeDataOverrides: Partial<NodeData> = {},
     templateId?: string | null,
+    exchangeRateSnapshot?: ExchangeRateSnapshot,
 ) => {
     const data = node.persistedData?.kind === 'invalid'
         ? {
@@ -64,7 +66,10 @@ export const buildPlatformNodeTemplatePayload = (
             compatibilityEnvelope: true,
             rawData: cloneTemplateValue(node.persistedData.rawData),
         }
-        : serializePlatformNodeTemplateData(node, nodeDataOverrides);
+        : {
+            ...serializePlatformNodeTemplateData(node, nodeDataOverrides),
+            ...(exchangeRateSnapshot ?? {}),
+        };
     return {
         ...(templateId !== undefined ? { templateId } : {}),
         name,

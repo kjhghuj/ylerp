@@ -10,7 +10,7 @@ import { writeFile, utils } from 'xlsx';
 import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
 import { useToast } from '../components/Toast';
-import { type CurrencyCode, COUNTRY_TO_CURRENCY } from './profit/types';
+import { type CurrencyCode, COUNTRY_TO_CURRENCY, normalizeCurrencyCode } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
     filterProductTemplatesForSite,
@@ -40,6 +40,12 @@ import {
     validateCouponRevenueBudget,
 } from './profit/profitInputNormalization';
 import { derivePlatformCouponRate } from './profit/platformCoupon';
+import { formatCurrencyAmount } from './profit/currencyRounding';
+import {
+    readExchangeRateSnapshot,
+    resolveProfitExchangeRate,
+    type ResolvedProfitExchangeRate,
+} from './profit/exchangeRateSnapshot';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -106,6 +112,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [allLinkedTemplates, setAllLinkedTemplates] = useState<LinkedTemplate[]>([]);
     const [modalActiveTab, setModalActiveTab] = useState(0);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [useLiveTemplateRates, setUseLiveTemplateRates] = useState<Record<string, boolean>>({});
     const [ycStockItems, setYcStockItems] = useState<YcStockSnapshotItem[]>([]);
     const [ycStockLoading, setYcStockLoading] = useState(false);
     const [ycStockRemoteFetched, setYcStockRemoteFetched] = useState(false);
@@ -297,6 +304,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         setSelectedProduct(product);
         setShowDetailModal(true);
         setModalActiveTab(0);
+        setUseLiveTemplateRates({});
         setLoadingTemplates(true);
         setAllLinkedTemplates([]);
         try {
@@ -363,7 +371,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     [extractLegacyProductTaxRateCandidate(d)],
                 );
                 const currency = productSite.currency;
-                const rate = parseCanonicalPositiveRate(exchangeRates[currency]);
+                const rate = resolveProfitExchangeRate(
+                    tpl.data,
+                    exchangeRates[currency],
+                    Boolean(useLiveTemplateRates[tpl.id]),
+                );
                 const profitData = normalizeStandardNodeData(
                     toStandardNodeData(standardData) as unknown as Record<string, unknown>,
                 );
@@ -373,13 +385,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 const siteInputs = normalizeSiteInputs(
                     productSite.siteInputs as unknown as Record<string, unknown>,
                 );
-                if (!rate.ok || !profitData.ok || !globalInputs.ok || !siteInputs.ok) {
+                if (!profitData.ok || !globalInputs.ok || !siteInputs.ok) {
                     throw new RangeError('Invalid profit preview inputs');
                 }
                 if (validateCouponRevenueBudget(
                     profitData.value,
                     siteInputs.value,
-                    rate.value,
+                    rate.rate,
                 ).length > 0) {
                     throw new RangeError('Coupon deductions exceed revenue');
                 }
@@ -388,7 +400,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     profitData.value,
                     globalInputs.value,
                     siteInputs.value,
-                    rate.value,
+                    rate.rate,
                     currency as CurrencyCode,
                 );
             });
@@ -413,12 +425,21 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             tpl.country,
             [extractLegacyProductTaxRateCandidate(tpl.data)],
         );
-        const detailRate = parseCanonicalPositiveRate(exchangeRates[productSite.currency]);
-        const platformCouponRate = detailRate.ok
+        let exchangeRate: ResolvedProfitExchangeRate | null = null;
+        try {
+            exchangeRate = resolveProfitExchangeRate(
+                tpl.data,
+                exchangeRates[productSite.currency],
+                Boolean(useLiveTemplateRates[tpl.id]),
+            );
+        } catch {
+            exchangeRate = null;
+        }
+        const platformCouponRate = exchangeRate
             ? derivePlatformCouponRate(
                 d.platformCoupon,
                 productSite.siteInputs.totalRevenue,
-                detailRate.value,
+                exchangeRate.rate,
             )
             : null;
 
@@ -434,10 +455,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             {
                 title: t.detail.fees,
                 items: [
-                    { label: t.detail.baseShipping, value: d.baseShippingFee, suffix: tpl.country },
-                    { label: t.detail.extraShipping, value: d.extraShippingFee, suffix: `${tpl.country}/10g` },
-                    { label: t.detail.crossBorder, value: d.crossBorderFee, suffix: tpl.country },
-                    { label: t.detail.warehouseFee, value: d.warehouseOperationFee, suffix: tpl.country },
+                    { label: t.detail.baseShipping, value: d.baseShippingFee, suffix: productSite.currency, currency: productSite.currency },
+                    { label: t.detail.extraShipping, value: d.extraShippingFee, suffix: `${productSite.currency}/10g`, currency: productSite.currency },
+                    { label: t.detail.crossBorder, value: d.crossBorderFee, suffix: productSite.currency, currency: productSite.currency },
+                    { label: t.detail.warehouseFee, value: d.warehouseOperationFee, suffix: productSite.currency, currency: productSite.currency },
                 ]
             },
             {
@@ -451,7 +472,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             {
                 title: t.detail.platformCoupon,
                 items: [
-                    { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: tpl.country },
+                    { label: t.detail.platformCoupon, value: d.platformCoupon, suffix: productSite.currency, currency: productSite.currency },
                     { label: t.detail.platformCouponRate, value: platformCouponRate, suffix: '%' },
                 ]
             },
@@ -464,7 +485,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             },
         ];
 
-        return { sections, viewModel };
+        return {
+            sections,
+            viewModel,
+            exchangeRate,
+            snapshot: readExchangeRateSnapshot(tpl.data),
+        };
     };
 
     const renderDetailSection = (section: any) => (
@@ -475,7 +501,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
                         <span className="text-xs font-medium text-slate-500">{item.label}</span>
                         <span className="text-sm font-bold text-slate-700">
-                            {item.value !== undefined && item.value !== null ? (typeof item.value === 'number' ? item.value.toFixed?.(2) || item.value : item.value) : '-'}
+                            {item.value !== undefined && item.value !== null
+                                ? typeof item.value === 'number'
+                                    ? item.currency
+                                        ? formatCurrencyAmount(item.value, item.currency as CurrencyCode)
+                                        : item.value.toFixed(2)
+                                    : item.value
+                                : '-'}
                             {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
                         </span>
                     </div>
@@ -484,11 +516,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         </div>
     );
 
-    const renderProfitSummary = (profit: ReturnType<typeof calculateProfit>) => (
+    const renderProfitSummary = (
+        profit: ReturnType<typeof calculateProfit>,
+        currency: CurrencyCode,
+    ) => (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
                 { label: t.netProfitCNY, value: `¥${profit.finalRevenueCNY.toFixed(2)}`, color: profit.finalRevenueCNY >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: t.netProfitLocal, value: `${profit.finalRevenueLocal.toFixed(2)}`, color: profit.finalRevenueLocal >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.netProfitLocal, value: formatCurrencyAmount(profit.finalRevenueLocal, currency), color: profit.finalRevenueLocal >= 0 ? 'text-emerald-600' : 'text-red-600' },
                 { label: t.roiLabel, value: `${profit.roi.toFixed(1)}%`, color: profit.roi >= 0 ? 'text-emerald-600' : 'text-red-600' },
                 { label: t.marginLabel, value: `${profit.margin.toFixed(1)}%`, color: profit.margin >= 0 ? 'text-emerald-600' : 'text-red-600' },
             ].map(item => (
@@ -631,7 +666,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
                             {modalActiveTab > 0 && siteTabs[modalActiveTab - 1] && (() => {
                                 const tpl = siteTabs[modalActiveTab - 1].tpl;
-                                const { sections, viewModel } = renderTemplateDetail(tpl);
+                                const { sections, viewModel, exchangeRate, snapshot } = renderTemplateDetail(tpl);
                                 return (
                                     <>
                                         <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
@@ -641,9 +676,44 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                             <span>{tpl.country}</span>
                                         </div>
 
+                                        {exchangeRate && (
+                                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5">
+                                                <div className="text-xs text-indigo-800">
+                                                    <span className="font-bold">
+                                                        {exchangeRate.source === 'snapshot'
+                                                            ? t.detail.historicalExchangeRate
+                                                            : t.detail.currentExchangeRate}
+                                                    </span>
+                                                    <span className="ml-2 font-mono">{exchangeRate.rate}</span>
+                                                    {exchangeRate.exchangeRateAt && (
+                                                        <span className="ml-3 text-indigo-500">
+                                                            {t.detail.exchangeRateSavedAt}: {exchangeRate.exchangeRateAt}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {snapshot && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setUseLiveTemplateRates(previous => ({
+                                                            ...previous,
+                                                            [tpl.id]: !previous[tpl.id],
+                                                        }))}
+                                                        className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+                                                    >
+                                                        {useLiveTemplateRates[tpl.id]
+                                                            ? t.detail.useHistoricalExchangeRate
+                                                            : t.detail.recalculateWithCurrentExchangeRate}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {viewModel.kind === 'standard' && (
                                             <>
-                                                {renderProfitSummary(viewModel.result)}
+                                                {renderProfitSummary(
+                                                    viewModel.result,
+                                                    normalizeCurrencyCode(tpl.country) as CurrencyCode,
+                                                )}
                                                 {renderCostBreakdown(viewModel.result)}
                                             </>
                                         )}
@@ -814,7 +884,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         <td className="p-3 text-right text-slate-700 font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</td>
                                         <td className="p-3 text-right text-slate-600">{productSite.globalInputs.productWeight}g</td>
                                         <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : priceLocal.toFixed(2)}</td>
+                                        <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : formatCurrencyAmount(priceLocal, currency as CurrencyCode)}</td>
                                         <td className="p-3 text-right text-slate-600 font-mono">{adROI}</td>
                                         <td className="p-3">
                                             <div className="flex items-center justify-center gap-1">

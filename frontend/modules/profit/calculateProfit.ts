@@ -34,6 +34,7 @@ const LAST_MILE_FEE_TIERS: readonly { readonly maxKg: number; readonly fee: numb
 const LAST_MILE_FEE_DEFAULT = 10.00;
 
 import { safeNumber } from './utils';
+import { roundCurrencyAmount } from './currencyRounding';
 
 export type { SiteLevelInputs };
 export interface GlobalInput {
@@ -69,6 +70,7 @@ export interface ProfitResult {
     actualSellerCoupon: number;
     platformCouponCNY: number;
     taxableRevenue: number;
+    buyerPaidRevenue: number;
     revenueAfterSellerCoupon: number;
 }
 
@@ -80,6 +82,10 @@ export const calculateProfit = (
     currency: CurrencyCode,
 ): ProfitResult => {
     const safeRate = rateToCNY || 1;
+    const roundCNY = (amount: number) => roundCurrencyAmount(amount, 'CNY');
+    const roundLocal = (amount: number) => roundCurrencyAmount(amount, currency);
+    const localToCNY = (amount: number) => roundLocal(amount) / safeRate;
+    const settleCNY = (amount: number) => localToCNY(amount * safeRate);
     const safeData = {
         ...DEFAULT_NODE_DATA,
         ...(data ? Object.fromEntries(
@@ -117,84 +123,87 @@ export const calculateProfit = (
         adROI: 15,
     };
 
-    const totalRevenue = site.totalRevenue;
+    const totalRevenue = roundCNY(site.totalRevenue);
     const sellerCouponValue = site.sellerCoupon;
     const sellerCouponPlatformRatio = site.sellerCouponPlatformRatio;
     const adROI = site.adROI;
     const vatRate = g.vatRate;
     const corporateIncomeTaxRate = g.corporateIncomeTaxRate;
 
-    const platformCouponCNY = safeData.platformCoupon / safeRate;
-    const baseShippingFeeCNY = safeData.baseShippingFee / safeRate;
-    const crossBorderFeeCNY = safeData.crossBorderFee / safeRate;
-    const extraShippingFeeCNY = safeData.extraShippingFee / safeRate;
-    const warehouseOperationFeeCNY = safeData.warehouseOperationFee / safeRate;
-    const platformInfrastructureFeeCNY = site.platformInfrastructureFee;
+    const platformCouponCNY = localToCNY(safeData.platformCoupon);
+    const baseShippingFeeCNY = localToCNY(safeData.baseShippingFee);
+    const crossBorderFeeCNY = localToCNY(safeData.crossBorderFee);
+    const warehouseOperationFeeCNY = localToCNY(safeData.warehouseOperationFee);
+    const platformInfrastructureFeeCNY = roundCNY(site.platformInfrastructureFee);
 
-    const costTaxAmount = g.purchaseCost * (g.supplierTaxPoint / 100);
+    const purchaseCost = roundCNY(g.purchaseCost);
+    const costTaxAmount = g.supplierInvoice === 'yes'
+        ? roundCNY(purchaseCost * (g.supplierTaxPoint / 100))
+        : 0;
     const sellerCouponType = site.sellerCouponType || 'fixed';
-    const grossSellerCoupon = sellerCouponType === 'percent'
+    const grossSellerCoupon = settleCNY(sellerCouponType === 'percent'
         ? totalRevenue * (sellerCouponValue / 100)
-        : sellerCouponValue;
-    const actualSellerCoupon = grossSellerCoupon * (1 - sellerCouponPlatformRatio / 100);
+        : sellerCouponValue);
+    const actualSellerCoupon = settleCNY(grossSellerCoupon * (1 - sellerCouponPlatformRatio / 100));
     const sellerCouponPlatformContribution = grossSellerCoupon - actualSellerCoupon;
 
-    const taxableRevenue = totalRevenue - actualSellerCoupon - platformCouponCNY;
+    const buyerPaidRevenue = Math.max(0, roundCNY(
+        totalRevenue - grossSellerCoupon - platformCouponCNY,
+    ));
+    const taxableRevenue = buyerPaidRevenue;
 
-    let vat: number, corporateIncomeTax: number;
-    if (g.supplierInvoice === 'yes') {
-        vat = taxableRevenue * (vatRate / 100);
-        const corporateIncomeTaxableAmount = taxableRevenue - g.purchaseCost;
-        corporateIncomeTax = ((corporateIncomeTaxRate / 100) * corporateIncomeTaxableAmount) + costTaxAmount;
-    } else {
-        vat = taxableRevenue * (vatRate / 100);
-        corporateIncomeTax = (corporateIncomeTaxRate / 100) * taxableRevenue;
-    }
-    const totalTax = vat + corporateIncomeTax;
+    const vat = roundCNY(taxableRevenue * (vatRate / 100));
+    const corporateIncomeTax = Math.max(
+        0,
+        roundCNY((corporateIncomeTaxRate / 100) * buyerPaidRevenue),
+    );
+    const totalTax = roundCNY(vat + corporateIncomeTax);
 
-    const revenueAfterSellerCoupon = totalRevenue - actualSellerCoupon;
-    const commission = revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100);
-    const transactionFee = revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100);
+    const revenueAfterSellerCoupon = roundCNY(totalRevenue - actualSellerCoupon);
+    const commission = settleCNY(revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100));
+    const transactionFee = settleCNY(revenueAfterSellerCoupon * (safeData.transactionFeeRate / 100));
 
     const isServiceFeeExempt = SERVICE_FEE_EXEMPT_CURRENCIES.includes(currency);
     const mdvRate = isServiceFeeExempt ? 0 : safeData.mdvServiceFeeRate;
     const fssRate = isServiceFeeExempt ? 0 : safeData.fssServiceFeeRate;
     const ccbRate = isServiceFeeExempt ? 0 : safeData.ccbServiceFeeRate;
 
-    const mdvServiceFee = Math.min(revenueAfterSellerCoupon * (mdvRate / 100), MDV_SERVICE_FEE_CAP_CNY);
-    const fssServiceFee = Math.min(revenueAfterSellerCoupon * (fssRate / 100), OTHER_SERVICE_FEE_CAP_CNY);
-    const ccbServiceFee = Math.min(revenueAfterSellerCoupon * (ccbRate / 100), OTHER_SERVICE_FEE_CAP_CNY);
-    const serviceFee = mdvServiceFee + fssServiceFee + ccbServiceFee + platformInfrastructureFeeCNY;
+    const mdvServiceFee = settleCNY(Math.min(revenueAfterSellerCoupon * (mdvRate / 100), MDV_SERVICE_FEE_CAP_CNY));
+    const fssServiceFee = settleCNY(Math.min(revenueAfterSellerCoupon * (fssRate / 100), OTHER_SERVICE_FEE_CAP_CNY));
+    const ccbServiceFee = settleCNY(Math.min(revenueAfterSellerCoupon * (ccbRate / 100), OTHER_SERVICE_FEE_CAP_CNY));
+    const serviceFee = roundCNY(mdvServiceFee + fssServiceFee + ccbServiceFee + platformInfrastructureFeeCNY);
 
     let shippingFee = baseShippingFeeCNY + crossBorderFeeCNY;
     if (g.productWeight > safeData.firstWeight) {
         const extraWeight = g.productWeight - safeData.firstWeight;
-        shippingFee += extraShippingFeeCNY * (extraWeight / EXTRA_WEIGHT_UNIT_G);
+        shippingFee += localToCNY(safeData.extraShippingFee * (extraWeight / EXTRA_WEIGHT_UNIT_G));
     }
     if (currency === 'SGD') {
-        const lastMileFeeCNY = (safeData.lastMileFee || 0) / safeRate;
+        const lastMileFeeCNY = localToCNY(safeData.lastMileFee || 0);
         shippingFee += lastMileFeeCNY;
     }
+    shippingFee = roundCNY(shippingFee);
 
-    const adFee = adROI > 0 ? taxableRevenue / adROI : 0;
-    const damage = totalRevenue * (safeData.damageReturnRate / 100);
-    const platformFee = commission + transactionFee + serviceFee + adFee + warehouseOperationFeeCNY + damage;
+    const adChargeableRevenue = Math.max(0, roundCNY(totalRevenue - grossSellerCoupon));
+    const adFee = adROI > 0 ? settleCNY(adChargeableRevenue / adROI) : 0;
+    const damage = settleCNY(totalRevenue * (safeData.damageReturnRate / 100));
+    const platformFee = roundCNY(commission + transactionFee + serviceFee + adFee + warehouseOperationFeeCNY + damage);
 
-    const finalRevenueCNY = totalRevenue - actualSellerCoupon - platformCouponCNY - platformFee - shippingFee - totalTax - g.purchaseCost;
-    const finalRevenueLocal = finalRevenueCNY * safeRate;
+    const finalRevenueCNY = roundCNY(totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - purchaseCost);
+    const finalRevenueLocal = roundLocal(finalRevenueCNY * safeRate);
 
     const result: ProfitResult = {
-        purchaseCost: g.purchaseCost,
+        purchaseCost,
         totalRevenue,
         commission, transactionFee, serviceFee, shippingFee, platformFee, totalTax, adFee, damage,
         finalRevenueLocal, finalRevenueCNY,
-        roi: g.purchaseCost > 0 ? (finalRevenueCNY / g.purchaseCost) * 100 : 0,
+        roi: purchaseCost > 0 ? (finalRevenueCNY / purchaseCost) * 100 : 0,
         margin: revenueAfterSellerCoupon > 0 ? (finalRevenueCNY / revenueAfterSellerCoupon) * 100 : 0,
         vat, corporateIncomeTax, costTaxAmount,
         grossSellerCoupon,
         sellerCouponSellerContribution: actualSellerCoupon,
         sellerCouponPlatformContribution,
-        actualSellerCoupon, platformCouponCNY, taxableRevenue, revenueAfterSellerCoupon,
+        actualSellerCoupon, platformCouponCNY, taxableRevenue, buyerPaidRevenue, revenueAfterSellerCoupon,
     };
     if (Object.values(result).some(value => !Number.isFinite(value))) {
         throw new RangeError('Profit result must contain only finite numbers');

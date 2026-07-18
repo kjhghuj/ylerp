@@ -211,6 +211,40 @@ describe('ProductList site input normalization', () => {
     expect(rateLabel?.parentElement).not.toHaveTextContent('99.00%');
   });
 
+  it('uses the saved exchange-rate snapshot by default and supports an explicit live recalculation', async () => {
+    productListState.rates = { MYR: 1.67 };
+    products = [{
+      ...baseProduct,
+      siteData: { MY: { totalRevenue: 50 } },
+    }];
+    setApiResponses([{
+      id: 'link-snapshot',
+      name: 'Snapshot template',
+      country: 'MY',
+      platform: 'Shopee',
+      createdAt: '2026-07-18T08:00:00.000Z',
+      data: {
+        kind: 'standard',
+        schemaVersion: 2,
+        exchangeRate: 0.65,
+        exchangeRateAt: '2026-07-18T08:00:00.000Z',
+      },
+    }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /Snapshot template/ }));
+
+    await waitFor(() => expect(calculateProfit).toHaveBeenCalled());
+    expect(calculateProfit.mock.calls.at(-1)?.[3]).toBe(0.65);
+    expect(screen.getByText(/0\.65/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '按当前汇率重算' }));
+
+    await waitFor(() => expect(calculateProfit.mock.calls.at(-1)?.[3]).toBe(1.67));
+    expect(screen.getByRole('button', { name: '使用历史汇率' })).toBeInTheDocument();
+  });
+
   it('does not render a non-finite local price from a third-party exchange rate', () => {
     products = [{
       ...baseProduct,
@@ -254,6 +288,51 @@ describe('ProductList site input normalization', () => {
     const row = screen.getByText('Normalized Product').closest('tr');
     expect(row).toBeTruthy();
     expect(row!.querySelectorAll('td')[6]).toHaveTextContent('150.00');
+  });
+
+  it('formats IDR table prices with zero settlement decimals', () => {
+    productListState.activeTab = 'ID';
+    productListState.rates = { IDR: 2150 } as never;
+    products = [{
+      ...baseProduct,
+      country: 'ID',
+      sites: ['ID'],
+      siteData: { ID: { totalRevenue: 1.2 } },
+    }];
+
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    const row = screen.getByText('Normalized Product').closest('tr');
+    expect(row).toBeTruthy();
+    expect(row!.querySelectorAll('td')[6]).toHaveTextContent('2580');
+    expect(row!.querySelectorAll('td')[6]).not.toHaveTextContent('2580.00');
+  });
+
+  it('formats IDR settlement amounts with zero decimals in template detail', async () => {
+    productListState.activeTab = 'ID';
+    productListState.rates = { IDR: 2150 } as never;
+    products = [{
+      ...baseProduct,
+      country: 'ID',
+      sites: ['ID'],
+      siteData: { ID: { totalRevenue: 1.2 } },
+    }];
+    setApiResponses([{
+      id: 'link-idr-detail',
+      name: 'IDR template',
+      country: 'ID',
+      platform: 'Shopee',
+      createdAt: '2026-01-01',
+      data: { baseShippingFee: 12.5 },
+    }]);
+
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /IDR template/ }));
+
+    const feeLabel = screen.getByText(zh.productList.detail.baseShipping);
+    expect(feeLabel.parentElement).toHaveTextContent('13IDR');
+    expect(feeLabel.parentElement).not.toHaveTextContent('12.50');
   });
 });
 

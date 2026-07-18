@@ -8,6 +8,7 @@ import {
     type ProductProfitTemplate,
     type ProfitTemplate,
 } from './types';
+import type { ExchangeRateSnapshot } from './exchangeRateSnapshot';
 
 export interface ProductTemplateWritePayload {
     templateId: string | null;
@@ -118,6 +119,7 @@ export const buildProductTemplateMutations = (
     existingLinks: ProductProfitTemplate[],
     sharedTemplates: ProfitTemplate[],
     taxOverrides: TaxOverrides,
+    exchangeRateSnapshots: Readonly<Record<string, ExchangeRateSnapshot>> = {},
 ): ProductTemplateMutation[] => {
     const updatedLinkIds = new Set<string>();
     return nodes.map(node => {
@@ -132,6 +134,7 @@ export const buildProductTemplateMutations = (
             node.name || node.platform,
             taxOverrides,
             templateId,
+            node.graphTemplateSnapshot ? undefined : exchangeRateSnapshots[node.currency],
         ) as ProductTemplateWritePayload;
 
         if (!existingLink) {
@@ -149,10 +152,11 @@ export const buildDefaultProductTemplatePayload = (
     name: string,
     country: string,
     taxOverrides: TaxOverrides,
+    exchangeRateSnapshot?: ExchangeRateSnapshot,
 ): ProductTemplateWritePayload => buildPlatformNodeTemplatePayload({
     id: 'default-product-template',
     name,
     currency: country,
     platform: 'other',
     data: { ...DEFAULT_NODE_DATA },
-}, name, taxOverrides, null) as ProductTemplateWritePayload;
+}, name, taxOverrides, null, exchangeRateSnapshot) as ProductTemplateWritePayload;

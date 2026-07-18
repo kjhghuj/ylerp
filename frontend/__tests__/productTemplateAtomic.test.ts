@@ -12,6 +12,7 @@ import {
   type ProductProfitTemplate,
   type ProfitTemplate,
 } from '../modules/profit/types';
+import { createExchangeRateSnapshot } from '../modules/profit/exchangeRateSnapshot';
 
 describe('atomic product/template request construction', () => {
   const taxes = { vatRate: -5, corporateIncomeTaxRate: 125 };
@@ -47,6 +48,27 @@ describe('atomic product/template request construction', () => {
         futureOption: ['keep'],
       }),
     }]);
+  });
+
+  it('attaches the matching save-time exchange-rate snapshot to standard product templates', () => {
+    const snapshot = createExchangeRateSnapshot(0.65, new Date('2026-07-18T08:00:00.000Z'));
+    const nodes: PlatformNode[] = [{
+      id: 'snapshot-node',
+      platform: 'shopee',
+      currency: 'MYR',
+      name: 'MY snapshot',
+      data: { ...DEFAULT_NODE_DATA },
+    }];
+
+    const [mutation] = buildProductTemplateMutations(
+      nodes,
+      [],
+      [],
+      taxes,
+      { MYR: snapshot },
+    );
+
+    expect(mutation.data).toEqual(expect.objectContaining(snapshot));
   });
 
   it('updates a matched link, preserves shared-template identity, and omits unmatched links', () => {
@@ -136,6 +158,13 @@ describe('atomic product/template request construction', () => {
         corporateIncomeTaxRate: 125,
       }),
     });
+  });
+
+  it('attaches a save-time exchange-rate snapshot to a generated default template', () => {
+    const snapshot = createExchangeRateSnapshot(0.65, new Date('2026-07-18T08:00:00.000Z'));
+
+    expect(buildDefaultProductTemplatePayload('Product', 'MYR', taxes, snapshot).data)
+      .toEqual(expect.objectContaining(snapshot));
   });
 
   it('represents aggregate response templates as raw API DTOs', () => {

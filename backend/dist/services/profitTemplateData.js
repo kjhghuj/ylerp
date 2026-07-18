@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateProductProfitTemplateData = exports.validateSharedProfitTemplateData = exports.ProfitTemplateDataValidationError = exports.GRAPH_EXECUTION_LIMITS = void 0;
 const mathjs_1 = require("mathjs");
 const CURRENT_SCHEMA_VERSION = 2;
+const MIN_SAFE_PROFIT_EXCHANGE_RATE = Number.MAX_SAFE_INTEGER / Number.MAX_VALUE;
 const SUPPORTED_GRAPH_SCHEMA_VERSIONS = new Set([CURRENT_SCHEMA_VERSION]);
 const GRAPH_KEYS = [
     'graphTemplateId',
@@ -498,6 +499,25 @@ const validateInvalidCompatibilityData = (data) => {
         fail('kind', 'invalid compatibility data must use only the rawData envelope');
     }
 };
+const validateExchangeRateSnapshot = (data) => {
+    const hasRate = Object.prototype.hasOwnProperty.call(data, 'exchangeRate');
+    const hasTimestamp = Object.prototype.hasOwnProperty.call(data, 'exchangeRateAt');
+    if (!hasRate && !hasTimestamp)
+        return;
+    if (!hasRate)
+        fail('exchangeRate', 'is required when exchangeRateAt is provided');
+    if (!hasTimestamp)
+        fail('exchangeRateAt', 'is required when exchangeRate is provided');
+    const rate = requireFiniteNumber(data.exchangeRate, 'exchangeRate');
+    if (rate < MIN_SAFE_PROFIT_EXCHANGE_RATE || rate > Number.MAX_SAFE_INTEGER) {
+        fail('exchangeRate', 'must be within the supported finite conversion range');
+    }
+    const timestamp = requireString(data.exchangeRateAt, 'exchangeRateAt');
+    const parsedTimestamp = Date.parse(timestamp);
+    if (!Number.isFinite(parsedTimestamp) || new Date(parsedTimestamp).toISOString() !== timestamp) {
+        fail('exchangeRateAt', 'must be a canonical ISO timestamp');
+    }
+};
 const validateStandardData = (data) => {
     if (data.schemaVersion !== undefined) {
         validateCurrentSchemaVersion(data.schemaVersion);
@@ -505,6 +525,7 @@ const validateStandardData = (data) => {
     else if (data.kind === 'standard') {
         fail('schemaVersion', `is required for current standard templates`);
     }
+    validateExchangeRateSnapshot(data);
 };
 const validateTemplateData = (value, allowInvalid) => {
     const data = requireRecord(value, 'data');

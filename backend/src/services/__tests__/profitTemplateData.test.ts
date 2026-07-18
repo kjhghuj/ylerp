@@ -187,6 +187,41 @@ describe('profit template data validation', () => {
     });
   });
 
+  it('accepts an optional complete exchange-rate snapshot on standard templates', () => {
+    const data = {
+      kind: 'standard',
+      schemaVersion: 2,
+      platformCommissionRate: 6,
+      exchangeRate: 0.65,
+      exchangeRateAt: '2026-07-18T08:00:00.000Z',
+    };
+
+    expect(validateSharedProfitTemplateData(data)).toBe(data);
+    expect(validateProductProfitTemplateData(data)).toBe(data);
+  });
+
+  it.each([
+    [{ exchangeRate: 0.65 }, 'exchangeRateAt'],
+    [{ exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: 0, exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: -1, exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: Number.MIN_VALUE, exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: Number.MAX_SAFE_INTEGER + 1, exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: '0.65', exchangeRateAt: '2026-07-18T08:00:00.000Z' }, 'exchangeRate'],
+    [{ exchangeRate: 0.65, exchangeRateAt: 'not-a-date' }, 'exchangeRateAt'],
+    [{ exchangeRate: 0.65, exchangeRateAt: '2026-07-18' }, 'exchangeRateAt'],
+  ])('rejects an incomplete or invalid standard exchange-rate snapshot %#', (snapshot, field) => {
+    expect(() => validateSharedProfitTemplateData({
+      kind: 'standard',
+      schemaVersion: 2,
+      ...snapshot,
+    })).toThrow(
+      expect.objectContaining<Partial<ProfitTemplateDataValidationError>>({
+        message: expect.stringContaining(field),
+      }),
+    );
+  });
+
   it.each([
     [{ kind: 'future', schemaVersion: 2, future: true }, 'kind'],
     [{ kind: 'standard', schemaVersion: 3, platformCommissionRate: 6 }, 'schemaVersion'],

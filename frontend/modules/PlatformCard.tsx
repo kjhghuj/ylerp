@@ -19,6 +19,7 @@ import {
     derivePlatformCouponAmountLocal,
     derivePlatformCouponRate,
 } from './profit/platformCoupon';
+import { formatCurrencyAmount } from './profit/currencyRounding';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 
@@ -46,6 +47,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
     const siteName = CURRENCY_TO_COUNTRY[country as CurrencyCode] || country;
+    const currencyCode = country as CurrencyCode;
 
     const [templateName, setTemplateName] = useState('');
     const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
@@ -55,6 +57,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const showLocal = safeRate !== null && safeRate !== 1;
 
     const toLocal = (cny: number) => cny * (safeRate ?? 1);
+    const formatLocal = (amount: number) => formatCurrencyAmount(amount, currencyCode);
 
     const preview = useMemo(() => {
         const previewRate = parseCanonicalPositiveRate(rateToCNY);
@@ -252,7 +255,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                     {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
                     {localValue !== null && (
                         <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                            <span>≈ {localValue.toFixed(2)} {country}</span>
+                            <span>≈ {formatLocal(localValue)} {country}</span>
                         </div>
                     )}
                 </div>
@@ -438,7 +441,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         </div>
                         {showLocal && (
                             <div className={`text-sm font-bold mt-0.5 ${results.finalRevenueLocal > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                ≈ {results.finalRevenueLocal.toFixed(2)} {country}
+                                ≈ {formatLocal(results.finalRevenueLocal)} {country}
                             </div>
                         )}
                         <div className="flex gap-2 mt-2">
@@ -452,7 +455,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                                 <span>{t.inputs.totalRevenue || '售价'}</span>
                                 <div className="text-right">
                                     <span className="text-white">¥{results.totalRevenue.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-400 text-[10px]">≈ {toLocal(results.totalRevenue).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-400 text-[10px]">≈ {formatLocal(toLocal(results.totalRevenue))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
@@ -469,62 +472,72 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.platformCoupon}</span>
-                                <span className="text-rose-300">-¥{results.platformCouponCNY.toFixed(2)}</span>
+                                <span className="text-sky-300">¥{results.platformCouponCNY.toFixed(2)}</span>
                             </div>
+                            <div className="flex justify-between text-slate-400">
+                                <span>{t.results.buyerPaidRevenue}</span>
+                                <span className="text-white">¥{results.buyerPaidRevenue.toFixed(2)}</span>
+                            </div>
+                            {results.costTaxAmount !== 0 && (
+                                <div className="flex justify-between text-slate-400">
+                                    <span>{t.results.costTaxAmount}</span>
+                                    <span className="text-sky-300">¥{results.costTaxAmount.toFixed(2)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.inputs.cost || '成本'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.purchaseCost.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.purchaseCost).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.purchaseCost))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.commission || '佣金'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.commission.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.commission).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.commission))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.transFee || '交易手续费'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.transactionFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.transactionFee).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.transactionFee))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.serviceFee || '服务费'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.serviceFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.serviceFee).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.serviceFee))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.shipping || '运费'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.shippingFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.shippingFee).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.shippingFee))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.totalTax || '税费'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.totalTax.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.totalTax).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.totalTax))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.adFee || '广告费'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.adFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.adFee).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.adFee))} {country}</div>}
                                 </div>
                             </div>
                             <div className="flex justify-between text-slate-400">
                                 <span>{t.results.damage || '货损'}</span>
                                 <div className="text-right">
                                     <span className="text-rose-300">-¥{results.damage.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {toLocal(results.damage).toFixed(2)} {country}</div>}
+                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.damage))} {country}</div>}
                                 </div>
                             </div>
                             <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800/95"></div>

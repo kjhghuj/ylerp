@@ -10,6 +10,9 @@ import {
 
 const DECIMAL_NUMBER_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 export const MAX_STANDARD_PROFIT_INPUT_ABS = Number.MAX_SAFE_INTEGER;
+export const MIN_SAFE_PROFIT_EXCHANGE_RATE = (
+    MAX_STANDARD_PROFIT_INPUT_ABS / Number.MAX_VALUE
+);
 
 export type ProfitInputErrorCode = 'required' | 'not_finite' | 'min' | 'max' | 'invalid_enum';
 
@@ -111,7 +114,7 @@ export const parseCanonicalPositiveRate = (
     field = 'exchangeRate',
 ): CanonicalProfitNumberResult => parseCanonicalProfitNumber(value, {
     field,
-    min: Number.MIN_VALUE,
+    min: MIN_SAFE_PROFIT_EXCHANGE_RATE,
 });
 
 export const readHistoricalProfitNumber = (
@@ -285,8 +288,7 @@ export const validateCouponRevenueBudget = (
     const grossSellerCoupon = siteInputs.sellerCouponType === 'percent'
         ? siteInputs.totalRevenue * (siteInputs.sellerCoupon / 100)
         : siteInputs.sellerCoupon;
-    const sellerContribution = grossSellerCoupon * (1 - siteInputs.sellerCouponPlatformRatio / 100);
-    const availableRevenueCNY = Math.max(0, siteInputs.totalRevenue - sellerContribution);
+    const availableRevenueCNY = Math.max(0, siteInputs.totalRevenue - grossSellerCoupon);
     const maxPlatformCouponLocal = availableRevenueCNY * parsedRate.value;
     const tolerance = Number.EPSILON * Math.max(1, Math.abs(maxPlatformCouponLocal));
     if (nodeData.platformCoupon > maxPlatformCouponLocal + tolerance) {

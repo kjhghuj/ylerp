@@ -36,6 +36,10 @@ import {
     validateCouponRevenueBudget,
     type ProfitInputError,
 } from './profitInputNormalization';
+import {
+    createExchangeRateSnapshot,
+    type ExchangeRateSnapshot,
+} from './exchangeRateSnapshot';
 
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
@@ -283,6 +287,15 @@ export const useProductActions = (
         setNodes(previous => previous.map(candidate => (
             candidate.id === node.id ? normalizedNode : candidate
         )));
+        let exchangeRateSnapshot: ExchangeRateSnapshot | undefined;
+        if (!isGraphNode) {
+            try {
+                exchangeRateSnapshot = createExchangeRateSnapshot(rates[normalizedNode.currency]);
+            } catch {
+                showToast(t.errors.rateFetchFailed, 'error');
+                return;
+            }
+        }
         try {
             const response = await api.post('/templates', buildPlatformNodeTemplatePayload(
                 normalizedNode,
@@ -291,6 +304,8 @@ export const useProductActions = (
                     vatRate: vatRate.ok ? vatRate.value : 0,
                     corporateIncomeTaxRate: corporateIncomeTaxRate.ok ? corporateIncomeTaxRate.value : 0,
                 },
+                undefined,
+                exchangeRateSnapshot,
             ));
             setAllTemplates(prev => [...prev, response.data]);
             showToast(t.templates.saved);
@@ -403,6 +418,26 @@ export const useProductActions = (
             vatRate: normalizedGlobalInputs.vatRate,
             corporateIncomeTaxRate: normalizedGlobalInputs.corporateIncomeTaxRate,
         };
+        const exchangeRateSnapshots: Record<string, ExchangeRateSnapshot> = {};
+        try {
+            const capturedAt = new Date();
+            const standardCurrencies = new Set(
+                preparedNodes
+                    .filter(node => (
+                        node.persistedData?.kind !== 'invalid' && !hasRuntimeGraphClaim(node)
+                    ))
+                    .map(node => node.currency),
+            );
+            for (const currency of standardCurrencies) {
+                exchangeRateSnapshots[currency] = createExchangeRateSnapshot(
+                    rates[currency],
+                    capturedAt,
+                );
+            }
+        } catch {
+            showToast(t.errors.rateFetchFailed, 'error');
+            return;
+        }
         let templateMutations: ReturnType<typeof buildProductTemplateMutations>;
         let ensureDefaultTemplate: ReturnType<typeof buildDefaultProductTemplatePayload> | undefined;
         try {
@@ -411,12 +446,14 @@ export const useProductActions = (
                 existingLinks,
                 allTemplates,
                 taxOverrides,
+                exchangeRateSnapshots,
             );
             ensureDefaultTemplate = preparedNodes.length === 0
                 ? buildDefaultProductTemplatePayload(
                     normalizedGlobalInputs.name || t.templates.defaultTemplate,
                     siteCountry,
                     taxOverrides,
+                    exchangeRateSnapshots[siteCountry],
                 )
                 : undefined;
         } catch {

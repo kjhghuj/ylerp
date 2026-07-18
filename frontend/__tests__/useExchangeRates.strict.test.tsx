@@ -13,7 +13,11 @@ const fallbackRates = {
 const mockRateResponse = (rates: Record<string, unknown>) => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: true,
-    json: vi.fn().mockResolvedValue({ rates }),
+    json: vi.fn().mockResolvedValue({
+      base: 'CNY',
+      time_last_updated: Math.floor(Date.now() / 1000),
+      rates,
+    }),
   }));
 };
 
@@ -57,6 +61,7 @@ describe('useExchangeRates strict API normalization', () => {
     true,
     -1,
     0,
+    Number.MIN_VALUE,
     '12abc',
     String(Number.MAX_SAFE_INTEGER + 1),
   ])('rejects invalid rate %j and keeps that currency on its safe fallback', async (invalidRate) => {
@@ -93,6 +98,42 @@ describe('useExchangeRates strict API normalization', () => {
     await waitFor(() => expect(result.current.isStale).toBe(true));
 
     expect(result.current.rates).toEqual({ ...fallbackRates, MYR: 0.7 });
+    expect(result.current.lastUpdated).toBeNull();
+  });
+
+  it.each([
+    {
+      base: 'USD',
+      time_last_updated: Math.floor(Date.now() / 1000),
+      rates: fallbackRates,
+    },
+    {
+      base: 'CNY',
+      time_last_updated: Math.floor((Date.now() - 8 * 24 * 60 * 60 * 1000) / 1000),
+      rates: fallbackRates,
+    },
+    {
+      base: 'CNY',
+      time_last_updated: Math.floor(Date.now() / 1000),
+      rates: { ...fallbackRates, MYR: fallbackRates.MYR * 10 },
+    },
+    {
+      base: 'CNY',
+      time_last_updated: Math.floor(Date.now() / 1000),
+      rates: { ...fallbackRates, MYR: fallbackRates.MYR / 10 },
+    },
+    {
+      base: 'CNY',
+      time_last_updated: Math.floor(Date.now() / 1000),
+      rates: { ...fallbackRates, MYR: 1e-292 },
+    },
+  ])('rejects untrusted third-party rate metadata or semantic outliers %#', async (payload) => {
+    mockPayloadResponse(payload);
+
+    const { result } = renderHook(() => useExchangeRates());
+    await waitFor(() => expect(result.current.isStale).toBe(true));
+
+    expect(result.current.rates).toEqual(fallbackRates);
     expect(result.current.lastUpdated).toBeNull();
   });
 });

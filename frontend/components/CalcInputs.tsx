@@ -4,6 +4,8 @@ import {
     parseCanonicalPositiveRate,
     parseCanonicalProfitNumber,
 } from '../modules/profit/profitInputNormalization';
+import { formatCurrencyAmount, roundCurrencyAmount } from '../modules/profit/currencyRounding';
+import { normalizeCurrencyCode, type CurrencyCode } from '../modules/profit/types';
 
 const readCanonicalNumber = (value: unknown, field: string): number | null => {
     const parsed = parseCanonicalProfitNumber(value, { field });
@@ -25,6 +27,10 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
 );
 
 function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
+    const normalizedCurrency = normalizeCurrencyCode(currencyCode) as CurrencyCode;
+    const formatLocalAmount = (amount: number) => normalizedCurrency
+        ? formatCurrencyAmount(amount, normalizedCurrency)
+        : amount.toFixed(2);
     const safeValue = readCanonicalNumber(value, name);
     const parsedRate = parseCanonicalPositiveRate(exchangeRate);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
@@ -32,7 +38,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
         ? safeValue * safeRate
         : null;
     const formattedLocalDisplay = calculatedLocalDisplay !== null && Number.isFinite(calculatedLocalDisplay)
-        ? calculatedLocalDisplay.toFixed(2)
+        ? formatLocalAmount(calculatedLocalDisplay)
         : String(value ?? '');
     const [localDisplay, setLocalDisplay] = useState(formattedLocalDisplay);
     const [isFocused, setIsFocused] = useState(false);
@@ -45,22 +51,30 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
         setIsFocused(false);
+        if (safeRate === null) {
+            setLocalDisplay(formattedLocalDisplay);
+            return;
+        }
         const localValue = readCanonicalNumber(e.target.value, name);
         if (localValue === null) {
             setLocalDisplay(e.target.value);
             onChange({ target: { name, value: e.target.value } });
             return;
         }
-        const cnyValue = safeRate !== null ? localValue / safeRate : localValue;
+        const roundedLocalValue = normalizedCurrency
+            ? roundCurrencyAmount(localValue, normalizedCurrency)
+            : Number(localValue.toFixed(2));
+        const cnyValue = roundedLocalValue / safeRate;
         if (!Number.isFinite(cnyValue)) {
             setLocalDisplay(formattedLocalDisplay);
             return;
         }
-        setLocalDisplay(localValue.toFixed(2));
+        setLocalDisplay(formatLocalAmount(roundedLocalValue));
         onChange({ target: { name, value: String(cnyValue) } });
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (safeRate === null) return;
         const nextDisplay = e.target.value;
         const localValue = readCanonicalNumber(nextDisplay, name);
         if (localValue === null) {
@@ -68,7 +82,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
             onChange({ target: { name, value: nextDisplay } });
             return;
         }
-        const cnyValue = safeRate !== null ? localValue / safeRate : localValue;
+        const cnyValue = localValue / safeRate;
         if (!Number.isFinite(cnyValue)) return;
         setLocalDisplay(nextDisplay);
         onChange({ target: { name, value: String(cnyValue) } });
@@ -84,6 +98,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
                     inputMode="decimal"
                     name={name}
                     value={localDisplay}
+                    disabled={safeRate === null}
                     min={min}
                     max={max}
                     step={step}
@@ -119,8 +134,9 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
     const safeValue = readCanonicalNumber(value, name);
     const parsedRate = parseCanonicalPositiveRate(exchangeRate);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
+    const normalizedCurrency = normalizeCurrencyCode(currencyCode) as CurrencyCode;
 
-    if (invertCurrency && safeRate !== null && currencyCode) {
+    if (invertCurrency && currencyCode) {
         return (
             <InvertedCurrencyInput
                 label={label}
@@ -144,7 +160,9 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
         ? safeValue * safeRate
         : null;
     const convertedValue = calculatedConvertedValue !== null && Number.isFinite(calculatedConvertedValue)
-        ? calculatedConvertedValue.toFixed(2)
+        ? normalizedCurrency
+            ? formatCurrencyAmount(calculatedConvertedValue, normalizedCurrency)
+            : calculatedConvertedValue.toFixed(2)
         : null;
 
     return (

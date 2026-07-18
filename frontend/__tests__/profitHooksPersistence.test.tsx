@@ -28,6 +28,14 @@ const testState = vi.hoisted(() => ({
   },
 }));
 
+const validExchangeRates = {
+  MYR: 0.65,
+  SGD: 4.8,
+  PHP: 8.05,
+  THB: 5.01,
+  IDR: 2150,
+};
+
 vi.mock('../StoreContext', () => ({
   useStore: () => testState.store,
 }));
@@ -58,6 +66,7 @@ const strings = {
       saveFailed: 'Save failed',
       graphDraftInvalid: 'Fix graph input errors before saving',
       inputValidationFailed: 'Fix invalid profit inputs before saving',
+      rateFetchFailed: 'Exchange rate unavailable',
     },
     graphErrors: {
       missing_input: 'Input "{name}" is required',
@@ -448,7 +457,7 @@ describe('useProductActions persistence payloads', () => {
       },
     };
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -472,7 +481,7 @@ describe('useProductActions persistence payloads', () => {
       },
     };
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -499,7 +508,7 @@ describe('useProductActions persistence payloads', () => {
     };
 
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -644,7 +653,13 @@ describe('useProductActions persistence payloads', () => {
 
     expect(testState.api.post).toHaveBeenCalledWith(
       '/templates',
-      expect.objectContaining({ name: 'Valid template' }),
+      expect.objectContaining({
+        name: 'Valid template',
+        data: expect.objectContaining({
+          exchangeRate: 2,
+          exchangeRateAt: expect.any(String),
+        }),
+      }),
     );
   });
 
@@ -713,7 +728,7 @@ describe('useProductActions persistence payloads', () => {
     };
 
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS, adROI: 0 } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS, adROI: 0 } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -764,7 +779,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { SGD: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -788,11 +803,72 @@ describe('useProductActions persistence payloads', () => {
         name: 'Lazada SG',
         country: 'SGD',
         platform: 'lazada',
+        data: expect.objectContaining({
+          exchangeRate: 4.8,
+          exchangeRateAt: expect.any(String),
+        }),
       })],
     });
     expect(testState.api.post).not.toHaveBeenCalled();
     expect(testState.api.put).not.toHaveBeenCalled();
     expect(testState.showToast).toHaveBeenCalledWith('Saved product');
+  });
+
+  it('blocks a standard product save when no valid exchange rate can be snapshotted', async () => {
+    const saveProductWithTemplates = vi.fn();
+    testState.store = {
+      ...baseStore(),
+      profitNodes: {
+        MYR: [{
+          id: 'missing-rate-node',
+          platform: 'shopee',
+          currency: 'MYR',
+          data: { ...DEFAULT_NODE_DATA },
+        }],
+      },
+      saveProductWithTemplates,
+    };
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveProduct();
+    });
+
+    expect(saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Exchange rate unavailable', 'error');
+  });
+
+  it('blocks a shared standard-template save when no valid exchange rate can be snapshotted', async () => {
+    const node: PlatformNode = {
+      id: 'missing-shared-rate',
+      platform: 'shopee',
+      currency: 'MYR',
+      data: { ...DEFAULT_NODE_DATA },
+    };
+    testState.store = {
+      ...baseStore(),
+      profitNodes: { MYR: [node] },
+    };
+    const { result } = renderHook(() => useProductActions(
+      [],
+      vi.fn(),
+      {},
+      { MYR: { ...DEFAULT_SITE_INPUTS } },
+      vi.fn(),
+    ));
+
+    await act(async () => {
+      await result.current.handleSaveTemplate(node.id, 'No rate');
+    });
+
+    expect(testState.api.post).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith('Exchange rate unavailable', 'error');
   });
 
   it('loads existing links read-only, then updates the product and matched link atomically', async () => {
@@ -844,7 +920,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [{ id: 'shared-1', name: 'Shopee MY', country: 'MYR', platform: 'shopee', data: {} }],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -900,7 +976,7 @@ describe('useProductActions persistence payloads', () => {
     };
 
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 33 } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 33 } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -941,7 +1017,7 @@ describe('useProductActions persistence payloads', () => {
       saveProductWithTemplates: saveMy,
     };
     const myHook = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 11 } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 11 } }, vi.fn(),
     ));
 
     const savePh = vi.fn().mockResolvedValue({ product: staleProduct, productTemplates: [] });
@@ -954,7 +1030,7 @@ describe('useProductActions persistence payloads', () => {
       saveProductWithTemplates: savePh,
     };
     const phHook = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 22 } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { PHP: { ...DEFAULT_SITE_INPUTS, totalRevenue: 22 } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -1033,7 +1109,7 @@ describe('useProductActions persistence payloads', () => {
     };
 
     const { result } = renderHook(() => useProductActions(
-      [], vi.fn(), {}, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
+      [], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn(),
     ));
 
     await act(async () => {
@@ -1075,7 +1151,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1154,7 +1230,7 @@ describe('useProductActions persistence payloads', () => {
       const { result } = renderHook(() => useProductActions(
         [],
         vi.fn(),
-        {},
+      validExchangeRates,
         { MYR: { ...DEFAULT_SITE_INPUTS } },
         vi.fn(),
       ));
@@ -1234,7 +1310,7 @@ describe('useProductActions persistence payloads', () => {
       const actions = useProductActions(
         [],
         vi.fn(),
-        {},
+      validExchangeRates,
         { MYR: { ...DEFAULT_SITE_INPUTS } },
         vi.fn(),
       );
@@ -1415,7 +1491,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1464,7 +1540,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1500,7 +1576,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1528,7 +1604,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1560,7 +1636,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1599,7 +1675,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1647,7 +1723,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1766,7 +1842,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1844,7 +1920,7 @@ describe('useProductActions persistence payloads', () => {
         data: { ...DEFAULT_NODE_DATA },
       }],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1907,7 +1983,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { SGD: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));

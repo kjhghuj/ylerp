@@ -34,13 +34,14 @@ const result = {
   margin: 50,
   vat: 1,
   corporateIncomeTax: 5,
-  costTaxAmount: 0,
+  costTaxAmount: 9.99,
   grossSellerCoupon: 11.11,
   sellerCouponSellerContribution: 22.22,
   sellerCouponPlatformContribution: 33.33,
   actualSellerCoupon: 22.22,
   platformCouponCNY: 44.44,
   taxableRevenue: 60,
+  buyerPaidRevenue: 55.56,
   revenueAfterSellerCoupon: 70,
 };
 
@@ -105,13 +106,22 @@ describe('PlatformCard strict preview', () => {
     expect(profitMocks.calculateProfit).toHaveBeenCalledTimes(1);
   });
 
-  it('renders all four coupon breakdown amounts with CNY symbols and no 楼 placeholder', () => {
+  it('shows platform funding without a seller-cost minus sign and exposes buyer payment', () => {
     const { container } = render(<PlatformCard {...defaultProps} />);
 
-    for (const amount of ['¥11.11', '¥33.33', '-¥22.22', '-¥44.44']) {
+    for (const amount of ['¥11.11', '¥33.33', '-¥22.22', '¥44.44', '¥55.56']) {
       expect(screen.getByText(amount)).toBeInTheDocument();
     }
+    expect(screen.queryByText('-¥44.44')).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent('楼');
+  });
+
+  it('shows invoiced supplier tax separately without marking it as a profit deduction', () => {
+    render(<PlatformCard {...defaultProps} />);
+
+    expect(screen.getByText('供应商税额（不计入单品利润）')).toBeInTheDocument();
+    expect(screen.getByText('¥9.99')).toBeInTheDocument();
+    expect(screen.queryByText('-¥9.99')).not.toBeInTheDocument();
   });
 
   it('renders a canonical platform coupon amount and a derived percentage', () => {
@@ -189,6 +199,17 @@ describe('PlatformCard strict preview', () => {
     />);
 
     expect(container.textContent).not.toMatch(/Infinity|NaN/);
+  });
+
+  it('formats IDR result previews with zero settlement decimals', () => {
+    render(<PlatformCard
+      {...defaultProps}
+      country="IDR"
+      rateToCNY={2150}
+    />);
+
+    expect(screen.getByText('≈ 100 IDR')).toBeInTheDocument();
+    expect(screen.queryByText('≈ 100.00 IDR')).not.toBeInTheDocument();
   });
 
   it('uses the shared positive-rate parser for both preview rate checks', () => {

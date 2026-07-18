@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MIN_SAFE_PROFIT_EXCHANGE_RATE,
   MAX_STANDARD_PROFIT_INPUT_ABS,
   normalizeHistoricalSiteInputs,
   normalizeProfitGlobalInputs,
   normalizeSiteInputs,
   normalizeStandardNodeData,
   parseCanonicalProfitNumber,
+  parseCanonicalPositiveRate,
   validateCouponRevenueBudget,
 } from '../modules/profit/profitInputNormalization';
 import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
@@ -42,6 +44,21 @@ describe('profit input normalization', () => {
     expect(parseCanonicalProfitNumber(-(MAX_STANDARD_PROFIT_INPUT_ABS + 1), { field: 'tax' })).toEqual({
       ok: false,
       error: { field: 'tax', code: 'min', min: -MAX_STANDARD_PROFIT_INPUT_ABS },
+    });
+  });
+
+  it('rejects positive exchange rates too small for finite canonical amount conversion', () => {
+    expect(parseCanonicalPositiveRate(Number.MIN_VALUE)).toEqual({
+      ok: false,
+      error: {
+        field: 'exchangeRate',
+        code: 'min',
+        min: MIN_SAFE_PROFIT_EXCHANGE_RATE,
+      },
+    });
+    expect(parseCanonicalPositiveRate(MIN_SAFE_PROFIT_EXCHANGE_RATE)).toEqual({
+      ok: true,
+      value: MIN_SAFE_PROFIT_EXCHANGE_RATE,
     });
   });
 
@@ -283,6 +300,20 @@ describe('profit input normalization', () => {
       },
       2,
     )).toEqual([]);
+
+    expect(validateCouponRevenueBudget(
+      { ...DEFAULT_NODE_DATA, platformCoupon: 190 },
+      {
+        ...DEFAULT_SITE_INPUTS,
+        totalRevenue: 100,
+        sellerCouponType: 'fixed',
+        sellerCoupon: 10,
+        sellerCouponPlatformRatio: 50,
+      },
+      2,
+    )).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: 'platformCoupon', code: 'max', max: 180 }),
+    ]));
   });
 
   it.each(['', '   ', 'not-a-number', Number.NaN, Number.POSITIVE_INFINITY])(

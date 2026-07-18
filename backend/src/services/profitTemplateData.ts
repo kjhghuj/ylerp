@@ -4,6 +4,7 @@ import { all, create } from 'mathjs';
 type JsonRecord = Record<string, unknown>;
 
 const CURRENT_SCHEMA_VERSION = 2;
+const MIN_SAFE_PROFIT_EXCHANGE_RATE = Number.MAX_SAFE_INTEGER / Number.MAX_VALUE;
 const SUPPORTED_GRAPH_SCHEMA_VERSIONS = new Set([CURRENT_SCHEMA_VERSION]);
 const GRAPH_KEYS = [
   'graphTemplateId',
@@ -626,12 +627,31 @@ const validateInvalidCompatibilityData = (data: JsonRecord): void => {
   }
 };
 
+const validateExchangeRateSnapshot = (data: JsonRecord): void => {
+  const hasRate = Object.prototype.hasOwnProperty.call(data, 'exchangeRate');
+  const hasTimestamp = Object.prototype.hasOwnProperty.call(data, 'exchangeRateAt');
+  if (!hasRate && !hasTimestamp) return;
+  if (!hasRate) fail('exchangeRate', 'is required when exchangeRateAt is provided');
+  if (!hasTimestamp) fail('exchangeRateAt', 'is required when exchangeRate is provided');
+
+  const rate = requireFiniteNumber(data.exchangeRate, 'exchangeRate');
+  if (rate < MIN_SAFE_PROFIT_EXCHANGE_RATE || rate > Number.MAX_SAFE_INTEGER) {
+    fail('exchangeRate', 'must be within the supported finite conversion range');
+  }
+  const timestamp = requireString(data.exchangeRateAt, 'exchangeRateAt');
+  const parsedTimestamp = Date.parse(timestamp);
+  if (!Number.isFinite(parsedTimestamp) || new Date(parsedTimestamp).toISOString() !== timestamp) {
+    fail('exchangeRateAt', 'must be a canonical ISO timestamp');
+  }
+};
+
 const validateStandardData = (data: JsonRecord): void => {
   if (data.schemaVersion !== undefined) {
     validateCurrentSchemaVersion(data.schemaVersion);
   } else if (data.kind === 'standard') {
     fail('schemaVersion', `is required for current standard templates`);
   }
+  validateExchangeRateSnapshot(data);
 };
 
 const validateTemplateData = (
