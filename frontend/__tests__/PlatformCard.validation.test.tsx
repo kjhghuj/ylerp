@@ -77,6 +77,7 @@ describe('PlatformCard strict preview', () => {
     expect(profitMocks.calculateProfit).not.toHaveBeenCalled();
     expect(document.querySelector('input[name="firstWeight"]')).toHaveAttribute('aria-invalid', 'true');
     expect(container).not.toHaveTextContent('¥50.00');
+    expect(screen.queryByRole('button', { name: '查看完整利润明细' })).not.toBeInTheDocument();
     expect(screen.getByText(zh.profit.errors.inputValidationFailed)).toBeInTheDocument();
   });
 
@@ -108,6 +109,7 @@ describe('PlatformCard strict preview', () => {
 
   it('shows platform funding without a seller-cost minus sign and exposes buyer payment', () => {
     const { container } = render(<PlatformCard {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: '查看完整利润明细' }));
 
     for (const amount of ['¥11.11', '¥33.33', '-¥22.22', '¥44.44', '¥55.56']) {
       expect(screen.getByText(amount)).toBeInTheDocument();
@@ -118,6 +120,7 @@ describe('PlatformCard strict preview', () => {
 
   it('shows invoiced supplier tax separately without marking it as a profit deduction', () => {
     render(<PlatformCard {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: '查看完整利润明细' }));
 
     expect(screen.getByText('供应商税额（不计入单品利润）')).toBeInTheDocument();
     expect(screen.getByText('¥9.99')).toBeInTheDocument();

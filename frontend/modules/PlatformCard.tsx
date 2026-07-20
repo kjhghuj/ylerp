@@ -20,6 +20,7 @@ import {
     derivePlatformCouponRate,
 } from './profit/platformCoupon';
 import { formatCurrencyAmount } from './profit/currencyRounding';
+import { ProfitBreakdown } from './profit/ProfitBreakdown';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 
@@ -54,9 +55,6 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     const [editingPlatformCouponRate, setEditingPlatformCouponRate] = useState<string | null>(null);
     const parsedRate = parseCanonicalPositiveRate(rateToCNY);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
-    const showLocal = safeRate !== null && safeRate !== 1;
-
-    const toLocal = (cny: number) => cny * (safeRate ?? 1);
     const formatLocal = (amount: number) => formatCurrencyAmount(amount, currencyCode);
 
     const preview = useMemo(() => {
@@ -432,117 +430,16 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             {/* Results Block */}
             {results && (
                 <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50 to-white pb-3 rounded-b-2xl">
-                    <div className="p-4 border-b border-slate-100/50 flex flex-col items-center relative group/tooltip cursor-help">
-                        <div className="text-[10px] items-center gap-1 font-bold text-slate-400 mb-1 tracking-wider border-b border-dashed border-slate-300 pb-0.5">
-                            {t.matrix.netProfitCNY}
-                        </div>
-                        <div className={`text-4xl font-black tracking-tight transition-transform group-hover/tooltip:scale-105 ${results.finalRevenueCNY > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            <span className="text-xl text-slate-400">¥</span>{results.finalRevenueCNY.toFixed(2)}
-                        </div>
-                        {showLocal && (
-                            <div className={`text-sm font-bold mt-0.5 ${results.finalRevenueLocal > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                ≈ {formatLocal(results.finalRevenueLocal)} {country}
-                            </div>
-                        )}
-                        <div className="flex gap-2 mt-2">
-                            <div className="px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{t.matrix.margin}: {results.margin.toFixed(1)}%</div>
-                            <div className="px-2 py-0.5 rounded text-xs font-bold bg-purple-50 text-purple-700">{t.matrix.roi}: {results.roi.toFixed(0)}%</div>
-                        </div>
-
-                        {/* Tooltip Detailed Breakdown */}
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 bg-slate-800/95 backdrop-blur-md text-white border border-slate-700 rounded-xl p-4 shadow-2xl opacity-0 group-hover/tooltip:opacity-100 pointer-events-none z-50 transition-all duration-200 translate-y-2 group-hover/tooltip:translate-y-0 flex flex-col gap-1.5 text-[11px] font-medium">
-                            <div className="flex justify-between font-bold text-slate-300 pb-2 mb-1 border-b border-slate-600">
-                                <span>{t.inputs.totalRevenue || '售价'}</span>
-                                <div className="text-right">
-                                    <span className="text-white">¥{results.totalRevenue.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-400 text-[10px]">≈ {formatLocal(toLocal(results.totalRevenue))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.grossSellerCoupon}</span>
-                                <span className="text-slate-200">¥{results.grossSellerCoupon.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.sellerCouponPlatformContribution}</span>
-                                <span className="text-sky-300">¥{results.sellerCouponPlatformContribution.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.sellerCouponSellerContribution}</span>
-                                <span className="text-rose-300">-¥{results.sellerCouponSellerContribution.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.platformCoupon}</span>
-                                <span className="text-sky-300">¥{results.platformCouponCNY.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.buyerPaidRevenue}</span>
-                                <span className="text-white">¥{results.buyerPaidRevenue.toFixed(2)}</span>
-                            </div>
-                            {results.costTaxAmount !== 0 && (
-                                <div className="flex justify-between text-slate-400">
-                                    <span>{t.results.costTaxAmount}</span>
-                                    <span className="text-sky-300">¥{results.costTaxAmount.toFixed(2)}</span>
-                                </div>
-                            )}
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.inputs.cost || '成本'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.purchaseCost.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.purchaseCost))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.commission || '佣金'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.commission.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.commission))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.transFee || '交易手续费'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.transactionFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.transactionFee))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.serviceFee || '服务费'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.serviceFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.serviceFee))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.shipping || '运费'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.shippingFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.shippingFee))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.totalTax || '税费'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.totalTax.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.totalTax))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.adFee || '广告费'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.adFee.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.adFee))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="flex justify-between text-slate-400">
-                                <span>{t.results.damage || '货损'}</span>
-                                <div className="text-right">
-                                    <span className="text-rose-300">-¥{results.damage.toFixed(2)}</span>
-                                    {showLocal && <div className="text-slate-500 text-[10px]">≈ {formatLocal(toLocal(results.damage))} {country}</div>}
-                                </div>
-                            </div>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-800/95"></div>
-                        </div>
-                    </div>
+                    <ProfitBreakdown
+                        result={results}
+                        currency={currencyCode}
+                        rateToCNY={rateToCNY}
+                        useLocalCurrency={useLocalCurrency}
+                        platformName={t.matrix.platforms[platform] || config.name}
+                        siteName={siteName}
+                        nodeName={nodeName}
+                        strings={t}
+                    />
                     {/* Save Template Action */}
                     <div className="px-4 pt-3 pb-1 flex gap-2">
                         <input
