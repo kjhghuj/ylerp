@@ -33,6 +33,7 @@ export interface NodeGraphOutputDescriptor {
     id: string;
     name: string;
     value: number;
+    metricKey?: 'netProfitCNY';
 }
 
 export type NodeGraphEvaluationErrorCode =
@@ -729,6 +730,9 @@ export const evaluateNodeGraphProfitTemplate = (
             id: node.id,
             name: ((node.data as OutputNodeData).name || node.id),
             value: values.get(node.id)!,
+            ...((node.data as OutputNodeData).metricKey === 'netProfitCNY'
+                ? { metricKey: 'netProfitCNY' as const }
+                : {}),
         })),
         values,
     };

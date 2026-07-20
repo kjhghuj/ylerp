@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.isProductWithTemplatesValidationError = exports.isProductWithTemplatesPrismaConflict = exports.saveProductWithTemplates = exports.parseProductWithTemplatesRequest = exports.canonicalizeProductTemplateCountry = exports.ProductWithTemplatesError = exports.INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE = exports.PRODUCT_WITH_TEMPLATES_LIMITS = void 0;
+exports.isProductWithTemplatesValidationError = exports.isProductWithTemplatesPrismaConflict = exports.saveProductWithTemplates = exports.parseProductWithTemplatesRequest = exports.parseProductTemplateCountry = exports.canonicalizeProductTemplateCountry = exports.ProductWithTemplatesError = exports.INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE = exports.PRODUCT_WITH_TEMPLATES_LIMITS = void 0;
 const client_1 = require("@prisma/client");
 const productTaxRates_1 = require("./productTaxRates");
 const profitTemplateData_1 = require("./profitTemplateData");
@@ -12,6 +12,7 @@ const COUNTRY_TO_CURRENCY = Object.freeze({
     ID: 'IDR',
     CN: 'CNY',
 });
+const SUPPORTED_PRODUCT_TEMPLATE_CURRENCIES = new Set(Object.values(COUNTRY_TO_CURRENCY));
 exports.PRODUCT_WITH_TEMPLATES_LIMITS = Object.freeze({
     maxRequestBytes: 2 * 1024 * 1024,
     maxTemplateMutations: 50,
@@ -272,6 +273,19 @@ const parsePlatform = (value, field) => {
         return null;
     return requireNonEmptyString(value, field, exports.PRODUCT_WITH_TEMPLATES_LIMITS.maxPlatformLength);
 };
+const canonicalizeProductTemplateCountry = (value) => {
+    const normalized = value.trim().toUpperCase();
+    return COUNTRY_TO_CURRENCY[normalized] || normalized;
+};
+exports.canonicalizeProductTemplateCountry = canonicalizeProductTemplateCountry;
+const parseProductTemplateCountry = (value, field) => {
+    const country = (0, exports.canonicalizeProductTemplateCountry)(requireNonEmptyString(value, field, exports.PRODUCT_WITH_TEMPLATES_LIMITS.maxCountryLength));
+    if (!SUPPORTED_PRODUCT_TEMPLATE_CURRENCIES.has(country)) {
+        badRequest(`${field} must be a supported profit site`);
+    }
+    return country;
+};
+exports.parseProductTemplateCountry = parseProductTemplateCountry;
 const parseTemplatePayload = (source, field) => {
     if (source.type !== undefined && source.type !== 'profit') {
         badRequest(`${field}.type must be profit when provided`);
@@ -279,7 +293,7 @@ const parseTemplatePayload = (source, field) => {
     return {
         templateId: parseTemplateId(source, field),
         name: requireNonEmptyString(source.name, `${field}.name`, exports.PRODUCT_WITH_TEMPLATES_LIMITS.maxNameLength),
-        country: requireNonEmptyString(source.country, `${field}.country`, exports.PRODUCT_WITH_TEMPLATES_LIMITS.maxCountryLength),
+        country: (0, exports.parseProductTemplateCountry)(source.country, `${field}.country`),
         platform: parsePlatform(source.platform, `${field}.platform`),
         data: (0, profitTemplateData_1.validateProductProfitTemplateData)(source.data),
     };
@@ -311,11 +325,6 @@ const parseEnsureDefault = (value) => {
     }
     return parseTemplatePayload(source, 'ensureDefaultTemplate');
 };
-const canonicalizeProductTemplateCountry = (value) => {
-    const normalized = value.trim().toUpperCase();
-    return COUNTRY_TO_CURRENCY[normalized] || normalized;
-};
-exports.canonicalizeProductTemplateCountry = canonicalizeProductTemplateCountry;
 const identityOf = (template) => ([
     template.name.trim().toLowerCase(),
     (0, exports.canonicalizeProductTemplateCountry)(template.country),

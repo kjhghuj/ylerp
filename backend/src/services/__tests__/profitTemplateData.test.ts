@@ -1,5 +1,6 @@
 import {
   GRAPH_EXECUTION_LIMITS,
+  MAX_PROFIT_TEMPLATE_DATA_BYTES,
   ProfitTemplateDataValidationError,
   validateProductProfitTemplateData,
   validateSharedProfitTemplateData,
@@ -10,6 +11,62 @@ const formulaPolicyFixture = require('../../../../test-fixtures/profit-graph-for
 const validGraph = () => structuredClone(executableFixture);
 
 describe('profit template data validation', () => {
+  it('rejects product template payloads above the storage boundary', () => {
+    const oversized = {
+      kind: 'standard',
+      schemaVersion: 2,
+      padding: 'x'.repeat(MAX_PROFIT_TEMPLATE_DATA_BYTES),
+    };
+
+    expect(() => validateProductProfitTemplateData(oversized)).toThrow(
+      expect.objectContaining<Partial<ProfitTemplateDataValidationError>>({
+        message: expect.stringContaining('must not exceed'),
+      }),
+    );
+  });
+
+  it('accepts one explicitly marked net-profit output and preserves the marker', () => {
+    const graph = validGraph();
+    graph.graphTemplateSnapshot.nodes[3].data.metricKey = 'netProfitCNY';
+
+    expect(validateSharedProfitTemplateData(graph)).toBe(graph);
+  });
+
+  it.each([
+    ['unknown output metric', () => {
+      const graph = validGraph();
+      graph.graphTemplateSnapshot.nodes[3].data.metricKey = 'profit';
+      return graph;
+    }],
+    ['metric on a parameter', () => {
+      const graph = validGraph();
+      graph.graphTemplateSnapshot.nodes[0].data.metricKey = 'netProfitCNY';
+      return graph;
+    }],
+    ['duplicate net-profit metrics', () => {
+      const graph = validGraph();
+      graph.graphTemplateSnapshot.nodes[3].data.metricKey = 'netProfitCNY';
+      graph.graphTemplateSnapshot.nodes.push({
+        ...structuredClone(graph.graphTemplateSnapshot.nodes[3]),
+        id: 'out-2',
+        data: { name: 'Second net profit', metricKey: 'netProfitCNY' },
+      });
+      graph.graphTemplateSnapshot.edges.push({
+        id: 'edge-output-2',
+        source: 'formula',
+        target: 'out-2',
+      });
+      graph.graphOutputValues['out-2'] = 6;
+      return graph;
+    }],
+  ])('rejects %s', (_label, factory) => {
+    expect(() => validateSharedProfitTemplateData(factory())).toThrow(
+      expect.objectContaining<Partial<ProfitTemplateDataValidationError>>({
+        message: expect.stringContaining('metricKey'),
+      }),
+    );
+  });
+
   it('accepts a complete graph and preserves unknown fields by reference', () => {
     const graph = validGraph();
 

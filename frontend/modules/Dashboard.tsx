@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { TrendingUp, AlertTriangle, DollarSign, Package, Bell, Clock, ChevronRight, RefreshCw } from 'lucide-react';
@@ -6,6 +6,9 @@ import { hasPermission } from '../components/PermissionTree';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import api from '../src/api';
 import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profit/profitInputNormalization';
+import {
+  aggregatePrimaryProfitTemplates,
+} from './profit/dashboardProfit';
 
 interface UpcomingItem {
   id: string;
@@ -16,6 +19,25 @@ interface UpcomingItem {
   completed: boolean;
   overdue?: boolean;
 }
+
+type PrimaryProfitStatus = 'loading' | 'ready' | 'error';
+
+const PRIMARY_PROFIT_PAGE_SIZE = 4;
+const PRIMARY_PROFIT_MAX_PAGES = 251;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const parsePrimaryProfitPage = (value: unknown): { items: unknown[]; hasMore: boolean } => {
+  if (!isRecord(value) || !Array.isArray(value.items) || typeof value.hasMore !== 'boolean') {
+    throw new Error('Invalid primary profit response');
+  }
+  if (value.items.length > PRIMARY_PROFIT_PAGE_SIZE) {
+    throw new Error('Primary profit page exceeds its item limit');
+  }
+  return { items: value.items, hasMore: value.hasMore };
+};
 
 const normalizeType = (t: string): string => t === 'schedule' ? 'approval' : t;
 
@@ -28,11 +50,6 @@ const TYPE_LABEL: Record<string, { zh: string; color: string }> = {
 };
 
 const CURRENCIES = ['MYR', 'SGD', 'PHP', 'THB', 'IDR'] as const;
-
-const readPurchaseCost = (value: unknown): number | null => {
-  const parsed = parseCanonicalProfitNumber(value, { field: 'cost', min: 0 });
-  return parsed.ok ? parsed.value : null;
-};
 
 const readFiniteDashboardValue = (value: unknown): number => {
   const parsed = parseCanonicalProfitNumber(value, { field: 'dashboardValue' });
@@ -51,7 +68,7 @@ const isDateBefore = (value: string | undefined, referenceTime: number): boolean
 );
 
 export const Dashboard: React.FC = () => {
-  const { accountBalance, totalDebt, products, inventory, strings } = useStore();
+  const { accountBalance, totalDebt, inventory, strings } = useStore();
   const { user } = useAuth();
   const t = strings.dashboard;
   const isZh = strings.sidebar?.dashboard === '总览仪表盘';
@@ -61,8 +78,11 @@ export const Dashboard: React.FC = () => {
   const perms = user?.permissions || [];
   const isOwner = user?.role === 'owner';
   const can = (key: string) => isOwner || hasPermission(perms, key);
+  const canViewProfitMetrics = can('dashboard.margin') || can('dashboard.profitTable');
 
   const [upcoming, setUpcoming] = useState<UpcomingItem[]>([]);
+  const [primaryTemplates, setPrimaryTemplates] = useState<unknown[]>([]);
+  const [primaryProfitStatus, setPrimaryProfitStatus] = useState<PrimaryProfitStatus>('loading');
 
   useEffect(() => {
     api.get('/schedule/upcoming').then(res => {
@@ -76,12 +96,43 @@ export const Dashboard: React.FC = () => {
     }).catch(() => {});
   }, []);
 
-  const finiteProductCosts = products
-    .map(product => readPurchaseCost(product.cost))
-    .filter((cost): cost is number => cost !== null);
-  const avgCost = finiteProductCosts.length
-    ? finiteProductCosts.reduce((average, cost) => average + (cost / finiteProductCosts.length), 0).toFixed(2)
-    : '0.00';
+  const fetchPrimaryProfitTemplates = useCallback(async () => {
+    if (!canViewProfitMetrics) {
+      setPrimaryTemplates([]);
+      setPrimaryProfitStatus('ready');
+      return;
+    }
+    setPrimaryProfitStatus('loading');
+    try {
+      const templates: unknown[] = [];
+      for (let page = 0; page < PRIMARY_PROFIT_MAX_PAGES; page += 1) {
+        const response = await api.get(`/products/primary-profit-templates?page=${page}`);
+        const payload = parsePrimaryProfitPage(response.data);
+        templates.push(...payload.items);
+        if (!payload.hasMore) {
+          setPrimaryTemplates(templates);
+          setPrimaryProfitStatus('ready');
+          return;
+        }
+      }
+      throw new Error('Primary profit response exceeds its page limit');
+    } catch {
+      setPrimaryTemplates([]);
+      setPrimaryProfitStatus('error');
+    }
+  }, [canViewProfitMetrics]);
+
+  useEffect(() => {
+    void fetchPrimaryProfitTemplates();
+  }, [fetchPrimaryProfitTemplates]);
+
+  const profitAggregation = useMemo(
+    () => aggregatePrimaryProfitTemplates(
+      primaryProfitStatus === 'ready' ? primaryTemplates : [],
+      rates,
+    ),
+    [primaryTemplates, primaryProfitStatus, rates],
+  );
 
   const lowStockCount = inventory.filter(i => {
     const dailySales = i.dailySales;
@@ -91,7 +142,7 @@ export const Dashboard: React.FC = () => {
 
   const kpiCards = [
     { label: t.kpi.balance, value: `$${readFiniteDashboardValue(accountBalance).toLocaleString()}`, icon: DollarSign, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/30', perm: 'dashboard.balance' },
-    { label: t.kpi.margin, value: `CNY ${avgCost}`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
+    { label: t.kpi.margin, value: primaryProfitStatus === 'error' ? t.kpi.unavailable : primaryProfitStatus === 'loading' ? '…' : profitAggregation.marginPercent === null ? '--' : `${profitAggregation.marginPercent.toFixed(2)}%`, icon: TrendingUp, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/30', perm: 'dashboard.margin' },
     { label: t.kpi.alerts, value: lowStockCount, icon: AlertTriangle, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-900/30', perm: 'dashboard.alerts' },
     { label: t.kpi.debt, value: `$${readFiniteDashboardValue(totalDebt).toLocaleString()}`, icon: Package, color: 'text-rose-600 dark:text-rose-400', bg: 'bg-rose-50 dark:bg-rose-900/30', perm: 'dashboard.debt' },
   ].filter(card => can(card.perm));
@@ -234,23 +285,50 @@ export const Dashboard: React.FC = () => {
                   <thead className="bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400">
                     <tr>
                       <th className="p-3 rounded-l-lg">{t.tables.cols.product}</th>
-                      <th className="p-3">{t.tables.cols.cost}</th>
-                      <th className="p-3 rounded-r-lg">{t.tables.cols.sites || '站点'}</th>
+                      <th className="p-3">{t.tables.cols.sites || '站点'}</th>
+                      <th className="p-3">{t.tables.cols.netProfit}</th>
+                      <th className="p-3">{t.tables.cols.revenue}</th>
+                      <th className="p-3 rounded-r-lg">{t.tables.cols.margin}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100/50 dark:divide-slate-700/50">
-                    {products.slice(0, 5).map(p => (
-                      <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="p-3 font-medium text-slate-700 dark:text-slate-200">{p.name}</td>
-                        <td className="p-3 text-slate-600 dark:text-slate-300">
-                          {(() => {
-                            const cost = readPurchaseCost(p.cost);
-                            return cost === null ? '-' : `CNY ${cost.toFixed(2)}`;
-                          })()}
-                        </td>
-                        <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{(p.sites || []).join(', ') || p.country || '-'}</td>
+                    {primaryProfitStatus === 'ready' && profitAggregation.rows.slice(0, 5).map(row => (
+                      <tr key={row.templateId} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="p-3 font-medium text-slate-700 dark:text-slate-200">{row.productName}</td>
+                        <td className="p-3 text-slate-500 dark:text-slate-400 text-xs">{row.country}</td>
+                        <td className="p-3 text-slate-600 dark:text-slate-300">CNY {row.netProfitCNY.toFixed(2)}</td>
+                        <td className="p-3 text-slate-600 dark:text-slate-300">CNY {row.postCouponRevenueCNY.toFixed(2)}</td>
+                        <td className="p-3 text-slate-600 dark:text-slate-300">{row.marginPercent.toFixed(2)}%</td>
                       </tr>
                     ))}
+                    {primaryProfitStatus === 'loading' && (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-slate-400">
+                          {t.tables.loadingProfit}
+                        </td>
+                      </tr>
+                    )}
+                    {primaryProfitStatus === 'error' && (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-slate-400">
+                          <div>{t.tables.profitUnavailable}</div>
+                          <button
+                            type="button"
+                            onClick={() => void fetchPrimaryProfitTemplates()}
+                            className="mt-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                          >
+                            {t.tables.retry}
+                          </button>
+                        </td>
+                      </tr>
+                    )}
+                    {primaryProfitStatus === 'ready' && profitAggregation.rows.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-6 text-center text-slate-400">
+                          {t.tables.emptyPrimary}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

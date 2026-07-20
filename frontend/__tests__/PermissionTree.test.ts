@@ -10,27 +10,27 @@ import {
 } from '../components/PermissionTree';
 
 describe('getAllPermissionKeys', () => {
-  it('keeps the dashboard.profitTable key while labeling it as product cost overview', () => {
+  it('keeps the dashboard.profitTable key while labeling it as primary profit overview', () => {
     const costOverviewPermission = ALL_PERMISSIONS
       .find(node => node.key === 'dashboard')
       ?.children?.find(node => node.key === 'dashboard.profitTable');
 
     expect(costOverviewPermission).toEqual(expect.objectContaining({
       key: 'dashboard.profitTable',
-      label: '商品成本概览',
-      labelEn: 'Product Cost Overview',
+      label: '主模板利润概览',
+      labelEn: 'Primary Profit Overview',
     }));
   });
 
-  it('keeps the dashboard.margin key while labeling it as average purchase cost', () => {
+  it('keeps the dashboard.margin key while labeling it as weighted profit margin', () => {
     const marginPermission = ALL_PERMISSIONS
       .find(node => node.key === 'dashboard')
       ?.children?.find(node => node.key === 'dashboard.margin');
 
     expect(marginPermission).toEqual(expect.objectContaining({
       key: 'dashboard.margin',
-      label: '平均采购成本',
-      labelEn: 'Avg Purchase Cost',
+      label: '加权利润率',
+      labelEn: 'Weighted Profit Margin',
     }));
   });
 

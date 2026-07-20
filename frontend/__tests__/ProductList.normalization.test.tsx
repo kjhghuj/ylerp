@@ -9,7 +9,11 @@ import {
   MAX_PRODUCT_IMPORT_RECORDS,
 } from '../modules/profit/productSiteViewModel';
 
-const productListState = vi.hoisted(() => ({ rates: { MYR: 1.67 }, activeTab: 'MY' }));
+const productListState = vi.hoisted(() => ({
+  rates: { MYR: 1.67 },
+  activeTab: 'MY',
+  user: { role: 'owner', permissions: [] as string[] },
+}));
 
 const addProduct = vi.fn();
 const showToast = vi.fn();
@@ -32,7 +36,7 @@ const calculateProfit = vi.fn((..._args: unknown[]) => ({
 let products: any[] = [];
 
 vi.mock('../src/api', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), put: vi.fn() },
 }));
 
 vi.mock('../modules/profit/calculateProfit', () => ({
@@ -54,6 +58,10 @@ vi.mock('../components/Toast', () => ({
 
 vi.mock('../hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({ rates: productListState.rates }),
+}));
+
+vi.mock('../AuthContext', () => ({
+  useAuth: () => ({ user: productListState.user }),
 }));
 
 vi.mock('../StoreContext', () => ({
@@ -95,8 +103,14 @@ describe('ProductList site input normalization', () => {
     products = [];
     productListState.rates = { MYR: 1.67 };
     productListState.activeTab = 'MY';
+    productListState.user = { role: 'owner', permissions: [] };
     vi.clearAllMocks();
     setApiResponses();
+    (api.put as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, body: { isPrimary: boolean }) => Promise.resolve({
+        data: { id: 'link-secondary', country: 'MYR', isPrimary: body.isPrimary },
+      }),
+    );
   });
 
   it('renders numeric strings safely and defaults invalid historical fields without a toFixed crash', () => {
@@ -243,6 +257,55 @@ describe('ProductList site input normalization', () => {
 
     await waitFor(() => expect(calculateProfit.mock.calls.at(-1)?.[3]).toBe(1.67));
     expect(screen.getByRole('button', { name: '使用历史汇率' })).toBeInTheDocument();
+  });
+
+  it('moves the primary marker through the dedicated atomic endpoint', async () => {
+    products = [{
+      ...baseProduct,
+      siteData: { MY: { totalRevenue: 100, adROI: 0 } },
+    }];
+    setApiResponses([
+      {
+        id: 'link-primary', name: 'Current primary', country: 'MYR', platform: 'Shopee',
+        createdAt: '2026-07-18T08:00:00.000Z', isPrimary: true,
+        data: { kind: 'standard', schemaVersion: 2, exchangeRate: 1, exchangeRateAt: '2026-07-18T08:00:00.000Z' },
+      },
+      {
+        id: 'link-secondary', name: 'Secondary', country: 'MY', platform: 'Shopee',
+        createdAt: '2026-07-18T08:01:00.000Z', isPrimary: false,
+        data: { kind: 'standard', schemaVersion: 2, exchangeRate: 1, exchangeRateAt: '2026-07-18T08:00:00.000Z' },
+      },
+    ]);
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /Secondary/ }));
+    fireEvent.click(screen.getByRole('button', { name: '设为主模板' }));
+
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith(
+      '/products/product-1/templates/link-secondary/primary',
+      { isPrimary: true },
+    ));
+    expect(await screen.findByText('主模板')).toBeInTheDocument();
+  });
+
+  it('does not expose the primary-marker write control to a view-only user', async () => {
+    productListState.user = { role: 'viewer', permissions: ['product-list.view'] };
+    products = [{
+      ...baseProduct,
+      siteData: { MY: { totalRevenue: 100, adROI: 0 } },
+    }];
+    setApiResponses([{
+      id: 'link-view', name: 'View only template', country: 'MYR', platform: 'Shopee',
+      createdAt: '2026-07-18T08:00:00.000Z', isPrimary: false,
+      data: { kind: 'standard', schemaVersion: 2, exchangeRate: 1, exchangeRateAt: '2026-07-18T08:00:00.000Z' },
+    }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /View only template/ }));
+
+    expect(screen.queryByRole('button', { name: '设为主模板' })).not.toBeInTheDocument();
   });
 
   it('does not render a non-finite local price from a third-party exchange rate', () => {

@@ -27,7 +27,8 @@ export const zh = {
     lastUpdated: '最后更新: 今天',
     kpi: {
       balance: '账户总余额',
-      margin: '平均采购成本',
+      margin: '加权利润率',
+      unavailable: '暂不可用',
       alerts: '缺货预警',
       debt: '总负债金额',
     },
@@ -38,11 +39,16 @@ export const zh = {
       empty: '历史趋势数据尚未接入',
     },
     tables: {
-      profitTitle: '商品成本概览',
+      profitTitle: '主模板利润概览',
       inventoryTitle: '库存健康度监控',
+      emptyPrimary: '暂无可参与聚合的主利润模板',
+      loadingProfit: '正在加载主模板利润数据…',
+      profitUnavailable: '利润数据暂不可用',
+      retry: '重试',
       cols: {
         product: '产品名称',
         cost: '成本',
+        netProfit: '净利润',
         revenue: '营收',
         margin: '利润率',
         sites: '站点',
@@ -469,7 +475,7 @@ export const zh = {
       noTemplates: '暂无关联模版',
       noTemplatesHint: '在利润计算器中保存商品时，会自动创建关联模版',
       graphOutputsTitle: '节点图命名输出',
-      graphOutputsDisclaimer: '节点图输出按模板定义展示，未映射为标准净利润、ROI 或利润率。',
+      graphOutputsDisclaimer: '只有显式标记为 netProfitCNY 的输出才参与 Dashboard 利润聚合。',
       invalidCompatibility: '该模板使用当前版本无法执行的兼容数据。'
     },
     errors: {
@@ -484,6 +490,7 @@ export const zh = {
       importTooManyRecords: '导入失败：商品记录数量过多',
       importPartialFailure: '导入中断，已成功保存 {count} 条商品数据',
       templateFetchFailed: '加载模版详情失败',
+      primaryUpdateFailed: '更新主模板失败',
     },
     detail: {
       baseInfo: '基本信息',
@@ -512,6 +519,9 @@ export const zh = {
       exchangeRateSavedAt: '保存时间',
       recalculateWithCurrentExchangeRate: '按当前汇率重算',
       useHistoricalExchangeRate: '使用历史汇率',
+      primaryTemplate: '主模板',
+      setPrimaryTemplate: '设为主模板',
+      unsetPrimaryTemplate: '取消主模板',
       commission: '佣金率',
       transactionFee: '交易费率',
       damageReturn: '货损退货率',

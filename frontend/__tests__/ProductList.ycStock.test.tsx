@@ -27,6 +27,10 @@ vi.mock('../hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({ rates: { MYR: 1.67, PHP: 0.11, SGD: 5.26, IDR: 0, THB: 0.2 } }),
 }));
 
+vi.mock('../AuthContext', () => ({
+  useAuth: () => ({ user: { role: 'owner', permissions: [] } }),
+}));
+
 const mockSetActiveTab = vi.fn();
 const mockSetCurrentPage = vi.fn();
 

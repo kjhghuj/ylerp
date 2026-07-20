@@ -80,6 +80,11 @@ describe('atomic product raw JSON body limits', () => {
     };
     app.post('/api/products/with-templates', atomicHandler);
     app.put('/api/products/:id/with-templates', atomicHandler);
+    app.post('/api/products/:id/templates', atomicHandler);
+    app.put('/api/products/:id/templates/:linkId', atomicHandler);
+    app.put('/api/products/:id/templates/:linkId/primary', atomicHandler);
+    app.post('/api/templates', atomicHandler);
+    app.put('/api/templates/:id', atomicHandler);
     app.post('/api/ordinary', (_req, res) => {
       ordinaryHandlerCalls += 1;
       res.json({ ok: true });
@@ -209,6 +214,21 @@ describe('atomic product raw JSON body limits', () => {
     expect(result.status).toBe(413);
     expect(atomicHandlerCalls).toBe(0);
     expect(atomicTransactionCalls).toBe(0);
+  });
+
+  it.each([
+    ['POST' as const, '/api/products/product-1/templates'],
+    ['PUT' as const, '/api/products/product-1/templates/link-1'],
+    ['PUT' as const, '/api/products/product-1/templates/link-1/primary'],
+    ['POST' as const, '/api/templates'],
+    ['PUT' as const, '/api/templates/template-1'],
+  ])('applies the 2 MiB raw limit to %s %s', async (method, path) => {
+    const body = '{}'.padEnd(ATOMIC_BODY_LIMIT + 1, ' ');
+
+    const result = await sendRaw(port, method, path, [body], true);
+
+    expect(result.status).toBe(413);
+    expect(atomicHandlerCalls).toBe(0);
   });
 
   it('returns generic JSON for a malformed percent-encoded atomic PUT id', async () => {

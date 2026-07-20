@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.validateProductProfitTemplateData = exports.validateSharedProfitTemplateData = exports.ProfitTemplateDataValidationError = exports.GRAPH_EXECUTION_LIMITS = void 0;
+exports.validateProductProfitTemplateData = exports.validateSharedProfitTemplateData = exports.ProfitTemplateDataValidationError = exports.GRAPH_EXECUTION_LIMITS = exports.MAX_PROFIT_TEMPLATE_DATA_BYTES = void 0;
 const mathjs_1 = require("mathjs");
+exports.MAX_PROFIT_TEMPLATE_DATA_BYTES = 2 * 1024 * 1024;
 const CURRENT_SCHEMA_VERSION = 2;
 const MIN_SAFE_PROFIT_EXCHANGE_RATE = Number.MAX_SAFE_INTEGER / Number.MAX_VALUE;
 const SUPPORTED_GRAPH_SCHEMA_VERSIONS = new Set([CURRENT_SCHEMA_VERSION]);
@@ -242,9 +243,15 @@ const validateFormulaNode = (data, path) => {
     const expressionNode = validateFormulaExpression(expression, labels, `${path}.data.expression`);
     return { name, expression, variables: parsedVariables, expressionNode };
 };
-const validateOutputNode = (data, path) => ({
-    name: requireString(data.name, `${path}.data.name`),
-});
+const validateOutputNode = (data, path) => {
+    if (data.metricKey !== undefined && data.metricKey !== 'netProfitCNY') {
+        fail(`${path}.data.metricKey`, 'must be netProfitCNY when provided');
+    }
+    return {
+        name: requireString(data.name, `${path}.data.name`),
+        ...(data.metricKey === 'netProfitCNY' ? { metricKey: 'netProfitCNY' } : {}),
+    };
+};
 const topologicalOrder = (nodes, edges) => {
     const inDegree = new Map(nodes.map(node => [node.id, 0]));
     const outgoing = new Map(nodes.map(node => [node.id, []]));
@@ -311,6 +318,9 @@ const validateGraphSnapshot = (value, graphTemplateId) => {
         requireFiniteNumber(position.x, `${path}.position.x`);
         requireFiniteNumber(position.y, `${path}.position.y`);
         const data = requireRecord(node.data, `${path}.data`);
+        if (type !== 'output' && data.metricKey !== undefined) {
+            fail(`${path}.data.metricKey`, 'is only allowed on output nodes');
+        }
         if (type === 'parameter') {
             return { id, type, data: validateParameterNode(data, path), path };
         }
@@ -364,6 +374,10 @@ const validateGraphSnapshot = (value, graphTemplateId) => {
     const outputNodes = nodes.filter(node => node.type === 'output');
     if (outputNodes.length === 0) {
         fail('graphTemplateSnapshot.nodes', 'must contain at least one output node');
+    }
+    const netProfitOutputs = outputNodes.filter(node => node.data.metricKey === 'netProfitCNY');
+    if (netProfitOutputs.length > 1) {
+        fail('graphTemplateSnapshot.nodes.metricKey', 'netProfitCNY may be assigned to at most one output');
     }
     for (const node of nodes) {
         const incoming = incomingByTarget.get(node.id) || [];
@@ -528,6 +542,17 @@ const validateStandardData = (data) => {
     validateExchangeRateSnapshot(data);
 };
 const validateTemplateData = (value, allowInvalid) => {
+    let serialized;
+    try {
+        serialized = JSON.stringify(value);
+    }
+    catch {
+        fail('data', 'must be JSON serializable');
+    }
+    if (serialized === undefined ||
+        Buffer.byteLength(serialized, 'utf8') > exports.MAX_PROFIT_TEMPLATE_DATA_BYTES) {
+        fail('data', `must not exceed ${exports.MAX_PROFIT_TEMPLATE_DATA_BYTES} bytes`);
+    }
     const data = requireRecord(value, 'data');
     if (data.kind === 'invalid') {
         if (!allowInvalid)

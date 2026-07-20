@@ -18,6 +18,7 @@ const COUNTRY_TO_CURRENCY: Readonly<Record<string, string>> = Object.freeze({
   ID: 'IDR',
   CN: 'CNY',
 });
+const SUPPORTED_PRODUCT_TEMPLATE_CURRENCIES = new Set(Object.values(COUNTRY_TO_CURRENCY));
 
 export const PRODUCT_WITH_TEMPLATES_LIMITS = Object.freeze({
   maxRequestBytes: 2 * 1024 * 1024,
@@ -399,6 +400,26 @@ const parsePlatform = (value: unknown, field: string): string | null => {
   return requireNonEmptyString(value, field, PRODUCT_WITH_TEMPLATES_LIMITS.maxPlatformLength);
 };
 
+export const canonicalizeProductTemplateCountry = (value: string): string => {
+  const normalized = value.trim().toUpperCase();
+  return COUNTRY_TO_CURRENCY[normalized] || normalized;
+};
+
+export const parseProductTemplateCountry = (
+  value: unknown,
+  field: string,
+): string => {
+  const country = canonicalizeProductTemplateCountry(requireNonEmptyString(
+    value,
+    field,
+    PRODUCT_WITH_TEMPLATES_LIMITS.maxCountryLength,
+  ));
+  if (!SUPPORTED_PRODUCT_TEMPLATE_CURRENCIES.has(country)) {
+    badRequest(`${field} must be a supported profit site`);
+  }
+  return country;
+};
+
 const parseTemplatePayload = (
   source: JsonRecord,
   field: string,
@@ -413,11 +434,7 @@ const parseTemplatePayload = (
       `${field}.name`,
       PRODUCT_WITH_TEMPLATES_LIMITS.maxNameLength,
     ),
-    country: requireNonEmptyString(
-      source.country,
-      `${field}.country`,
-      PRODUCT_WITH_TEMPLATES_LIMITS.maxCountryLength,
-    ),
+    country: parseProductTemplateCountry(source.country, `${field}.country`),
     platform: parsePlatform(source.platform, `${field}.platform`),
     data: validateProductProfitTemplateData(source.data),
   };
@@ -452,11 +469,6 @@ const parseEnsureDefault = (value: unknown): ParsedTemplatePayload | undefined =
     badRequest('ensureDefaultTemplate must not contain operation or linkId');
   }
   return parseTemplatePayload(source, 'ensureDefaultTemplate');
-};
-
-export const canonicalizeProductTemplateCountry = (value: string): string => {
-  const normalized = value.trim().toUpperCase();
-  return COUNTRY_TO_CURRENCY[normalized] || normalized;
 };
 
 const identityOf = (template: Pick<ParsedTemplatePayload, 'name' | 'country' | 'platform'>): string => (

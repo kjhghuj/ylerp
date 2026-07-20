@@ -289,6 +289,50 @@ describe('loadProductTemplateImportNodes', () => {
     }));
   });
 
+  it('preserves one explicit netProfitCNY output marker and rejects invalid markers', () => {
+    const graphTemplateSnapshot: NodeGraphTemplate = {
+      id: 'graph-metric',
+      name: 'Dashboard graph',
+      nodes: [
+        {
+          id: 'profit',
+          type: 'parameter',
+          position: { x: 0, y: 0 },
+          data: { name: 'Profit', valueType: 'number', min: -100, max: 100, defaultValue: 10 },
+        },
+        {
+          id: 'out',
+          type: 'output',
+          position: { x: 100, y: 0 },
+          data: { name: 'Any name', metricKey: 'netProfitCNY' },
+        },
+      ],
+      edges: [{ id: 'edge', source: 'profit', target: 'out' }],
+      createdAt: '2026-07-18T00:00:00.000Z',
+      updatedAt: '2026-07-18T00:00:00.000Z',
+    };
+    const source = {
+      kind: 'graph',
+      schemaVersion: 2,
+      graphTemplateId: 'graph-metric',
+      graphTemplateSnapshot,
+      graphInputValues: { profit: 10 },
+      graphOutputValues: { out: 10 },
+    };
+
+    expect(normalizeProductTemplateData(source)).toEqual(expect.objectContaining({
+      kind: 'graph',
+      graphTemplateSnapshot,
+    }));
+
+    const invalid = structuredClone(source);
+    (invalid.graphTemplateSnapshot.nodes[1].data as Record<string, unknown>).metricKey = 'profit';
+    expect(normalizeProductTemplateData(invalid)).toEqual(expect.objectContaining({
+      kind: 'invalid',
+      rawData: invalid,
+    }));
+  });
+
   it('keeps malformed partial graph fields without rebuilding a graph platform node', () => {
     const normalized = normalizeProductTemplateData({
       graphTemplateId: 'half-graph',

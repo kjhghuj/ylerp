@@ -47,6 +47,36 @@ export const NodeEditorPanel: React.FC<NodeEditorPanelProps> = ({ node, onUpdate
         />
       </label>
 
+      {isOutput && (() => {
+        const data = node.data as OutputNodeData;
+        return (
+          <label className="block">
+            <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+              Dashboard 指标
+            </span>
+            <select
+              aria-label="Dashboard 指标"
+              value={data.metricKey || ''}
+              onChange={(event) => onUpdate(node.id, {
+                metricKey: event.target.value === 'netProfitCNY' ? 'netProfitCNY' : undefined,
+              })}
+              className="mt-1 w-full text-sm px-3 py-2 rounded-lg border"
+              style={{
+                backgroundColor: 'var(--bg-primary)',
+                borderColor: 'var(--border-default)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">不参与 Dashboard 聚合</option>
+              <option value="netProfitCNY">净利润（CNY）</option>
+            </select>
+            <span className="mt-1 block text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              每个节点图最多标记一个净利润输出。
+            </span>
+          </label>
+        );
+      })()}
+
       {!isFormula && !isOutput && (() => {
         const data = node.data as ParameterNodeData;
         return (

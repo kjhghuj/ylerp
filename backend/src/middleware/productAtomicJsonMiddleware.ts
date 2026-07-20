@@ -7,30 +7,40 @@ import express, {
 export const PRODUCT_ATOMIC_RAW_BODY_LIMIT = '2mb';
 export const LEGACY_JSON_RAW_BODY_LIMIT = '100mb';
 
-export const isProductAtomicWriteRequest = (
+export const isBoundedProfitTemplateWriteRequest = (
   method: string,
   path: string,
 ): boolean => {
   const normalizedMethod = method.toUpperCase();
   if (normalizedMethod === 'POST') {
-    return /^\/api\/products\/with-templates\/?$/i.test(path);
+    return (
+      /^\/api\/products\/with-templates\/?$/i.test(path) ||
+      /^\/api\/products\/[^/]+\/templates\/?$/i.test(path) ||
+      /^\/api\/templates\/?$/i.test(path)
+    );
   }
   if (normalizedMethod === 'PUT') {
-    return /^\/api\/products\/[^/]+\/with-templates\/?$/i.test(path);
+    return (
+      /^\/api\/products\/[^/]+\/with-templates\/?$/i.test(path) ||
+      /^\/api\/products\/[^/]+\/templates\/[^/]+(?:\/primary)?\/?$/i.test(path) ||
+      /^\/api\/templates\/[^/]+\/?$/i.test(path)
+    );
   }
   return false;
 };
+
+export const isProductAtomicWriteRequest = isBoundedProfitTemplateWriteRequest;
 
 const atomicJsonParser = express.json({ limit: PRODUCT_ATOMIC_RAW_BODY_LIMIT });
 const legacyJsonParser = express.json({ limit: LEGACY_JSON_RAW_BODY_LIMIT });
 
 export const productAtomicJsonParser: RequestHandler = (req, res, next) => {
-  if (!isProductAtomicWriteRequest(req.method, req.path)) return next();
+  if (!isBoundedProfitTemplateWriteRequest(req.method, req.path)) return next();
   return atomicJsonParser(req, res, next);
 };
 
 export const legacyJsonParserWithAtomicSkip: RequestHandler = (req, res, next) => {
-  if (isProductAtomicWriteRequest(req.method, req.path)) return next();
+  if (isBoundedProfitTemplateWriteRequest(req.method, req.path)) return next();
   return legacyJsonParser(req, res, next);
 };
 
@@ -45,7 +55,7 @@ export const productAtomicJsonErrorHandler: ErrorRequestHandler = (
   res,
   next,
 ) => {
-  if (!isProductAtomicWriteRequest(req.method, req.path)) return next(error);
+  if (!isBoundedProfitTemplateWriteRequest(req.method, req.path)) return next(error);
   if (error.status === 413 || error.type === 'entity.too.large') {
     return res.status(413).json({ error: 'Request body too large' });
   }
@@ -66,7 +76,7 @@ export const productAtomicRouteErrorHandler: ErrorRequestHandler = (
 ) => {
   if (
     (error instanceof URIError || error.name === 'URIError') &&
-    isProductAtomicWriteRequest(req.method, req.path)
+    isBoundedProfitTemplateWriteRequest(req.method, req.path)
   ) {
     return res.status(400).json({ error: 'Invalid product request path' });
   }

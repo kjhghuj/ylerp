@@ -180,6 +180,7 @@ model ProductProfitTemplate {
   name       String
   country    String
   platform   String?
+  isPrimary  Boolean   @default(false)
   data       Json
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
@@ -187,6 +188,7 @@ model ProductProfitTemplate {
   template   ProfitTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([productId])
+  @@index([productId, country])
   @@index([templateId])
 }
 

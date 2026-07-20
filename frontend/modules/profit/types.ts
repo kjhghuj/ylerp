@@ -17,6 +17,7 @@ export interface ProductProfitTemplate {
     name: string;
     country: string;
     platform?: PlatformType;
+    isPrimary?: boolean;
     data: ProductTemplateData;
     createdAt?: string;
     updatedAt?: string;

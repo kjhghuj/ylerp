@@ -19,6 +19,7 @@ export interface FormulaNodeData extends Record<string, unknown> {
 
 export interface OutputNodeData extends Record<string, unknown> {
   name: string;
+  metricKey?: 'netProfitCNY';
 }
 
 export type DesignerNodeData = ParameterNodeData | FormulaNodeData | OutputNodeData;

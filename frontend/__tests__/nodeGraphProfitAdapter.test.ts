@@ -40,7 +40,7 @@ const template: NodeGraphTemplate = {
       id: 'out',
       type: 'output',
       position: { x: 0, y: 0 },
-      data: { name: '输出佣金' },
+      data: { name: '输出佣金', metricKey: 'netProfitCNY' },
     },
   ],
   edges: [
@@ -65,7 +65,12 @@ describe('node graph profit adapter', () => {
     if (result.ok === false) throw new Error('expected successful graph evaluation');
     expect(result.inputValues).toEqual({ price: 200, rate: 8 });
     expect(result.outputs).toEqual([
-      expect.objectContaining({ id: 'out', name: '输出佣金', value: 16 }),
+      expect.objectContaining({
+        id: 'out',
+        name: '输出佣金',
+        value: 16,
+        metricKey: 'netProfitCNY',
+      }),
     ]);
   });
 });

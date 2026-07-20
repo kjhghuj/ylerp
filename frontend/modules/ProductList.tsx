@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../StoreContext';
+import { useAuth } from '../AuthContext';
+import { hasPermission } from '../components/PermissionTree';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
     ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers,
@@ -93,6 +95,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         productListActiveTab, setProductListActiveTab,
         productListCurrentPage, setProductListCurrentPage,
     } = useStore();
+    const { user } = useAuth();
+    const canEditPrimaryTemplate = user?.role === 'owner' ||
+        user?.permissions?.includes('*') ||
+        hasPermission(user?.permissions || [], 'product-list.edit');
     const t = strings.productList;
     const te = t.errors;
     const siteNames = strings.profit.matrix.sites;
@@ -112,6 +118,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [allLinkedTemplates, setAllLinkedTemplates] = useState<LinkedTemplate[]>([]);
     const [modalActiveTab, setModalActiveTab] = useState(0);
     const [loadingTemplates, setLoadingTemplates] = useState(false);
+    const [updatingPrimaryTemplateId, setUpdatingPrimaryTemplateId] = useState<string | null>(null);
     const [useLiveTemplateRates, setUseLiveTemplateRates] = useState<Record<string, boolean>>({});
     const [ycStockItems, setYcStockItems] = useState<YcStockSnapshotItem[]>([]);
     const [ycStockLoading, setYcStockLoading] = useState(false);
@@ -336,6 +343,34 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             onNavigate('profit');
         } catch {
             showToast(te.templateFetchFailed, 'error');
+        }
+    };
+
+    const handlePrimaryTemplateChange = async (tpl: LinkedTemplate, isPrimary: boolean) => {
+        if (!selectedProduct || updatingPrimaryTemplateId) return;
+        setUpdatingPrimaryTemplateId(tpl.id);
+        try {
+            const response = await api.put(
+                `/products/${selectedProduct.id}/templates/${tpl.id}/primary`,
+                { isPrimary },
+            );
+            const updated = response.data as Partial<LinkedTemplate>;
+            const targetCountry = normalizeCurrencyCode(updated.country || tpl.country);
+            setAllLinkedTemplates(previous => previous.map(item => {
+                if (item.id === tpl.id) return { ...item, ...updated, isPrimary };
+                if (
+                    isPrimary &&
+                    targetCountry &&
+                    normalizeCurrencyCode(item.country) === targetCountry
+                ) {
+                    return { ...item, isPrimary: false };
+                }
+                return item;
+            }));
+        } catch {
+            showToast(t.errors.primaryUpdateFailed, 'error');
+        } finally {
+            setUpdatingPrimaryTemplateId(null);
         }
     };
 
@@ -669,11 +704,30 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 const { sections, viewModel, exchangeRate, snapshot } = renderTemplateDetail(tpl);
                                 return (
                                     <>
-                                        <div className="flex items-center gap-2 text-sm text-slate-500 mb-3">
-                                            {tpl.platform && (
-                                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{tpl.platform}</span>
+                                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                                                {tpl.platform && (
+                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{tpl.platform}</span>
+                                                )}
+                                                <span>{tpl.country}</span>
+                                                {tpl.isPrimary && (
+                                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold">
+                                                        {t.detail.primaryTemplate}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {canEditPrimaryTemplate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handlePrimaryTemplateChange(tpl, !tpl.isPrimary)}
+                                                    disabled={updatingPrimaryTemplateId !== null}
+                                                    className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                                >
+                                                    {tpl.isPrimary
+                                                        ? t.detail.unsetPrimaryTemplate
+                                                        : t.detail.setPrimaryTemplate}
+                                                </button>
                                             )}
-                                            <span>{tpl.country}</span>
                                         </div>
 
                                         {exchangeRate && (

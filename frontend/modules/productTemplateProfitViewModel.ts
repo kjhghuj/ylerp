@@ -14,7 +14,12 @@ export type ProductTemplateProfitViewModel<TStandardResult> =
     }
     | {
         kind: 'graph';
-        outputs: Array<{ id: string; name: string; value: number }>;
+        outputs: Array<{
+            id: string;
+            name: string;
+            value: number;
+            metricKey?: 'netProfitCNY';
+        }>;
     }
     | {
         kind: 'error';

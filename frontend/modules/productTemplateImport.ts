@@ -18,6 +18,7 @@ export interface LinkedProductTemplate {
     name: string;
     country: string;
     platform?: string;
+    isPrimary?: boolean;
     data: Record<string, unknown>;
 }
 
@@ -103,7 +104,8 @@ const isFormulaData = (value: Record<string, unknown>): boolean => (
 );
 
 const isOutputData = (value: Record<string, unknown>): boolean => (
-    isNonEmptyString(value.name)
+    isNonEmptyString(value.name) &&
+    (value.metricKey === undefined || value.metricKey === 'netProfitCNY')
 );
 
 const isGraphNode = (value: unknown): boolean => {
@@ -117,6 +119,7 @@ const isGraphNode = (value: unknown): boolean => {
     ) {
         return false;
     }
+    if (value.type !== 'output' && value.data.metricKey !== undefined) return false;
     if (value.type === 'parameter') return isParameterData(value.data);
     if (value.type === 'formula') return isFormulaData(value.data);
     if (value.type === 'output') return isOutputData(value.data);
@@ -153,6 +156,13 @@ const isNodeGraphTemplate = (value: unknown): value is NodeGraphTemplate => {
     }
     const nodeIds = new Set(value.nodes.map(node => (node as Record<string, unknown>).id as string));
     if (nodeIds.size !== value.nodes.length) return false;
+    const netProfitOutputs = value.nodes.filter(node => (
+        isRecord(node) &&
+        node.type === 'output' &&
+        isRecord(node.data) &&
+        node.data.metricKey === 'netProfitCNY'
+    ));
+    if (netProfitOutputs.length > 1) return false;
     const edgeIds = new Set<string>();
     for (const edge of value.edges) {
         if (!isGraphEdge(edge, nodeIds)) return false;

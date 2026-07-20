@@ -5,6 +5,7 @@ const OutputNode: React.FC<NodeProps> = ({ data, selected }) => {
   const d = data as Record<string, unknown>;
   const name = typeof d.name === 'string' ? d.name : null;
   const computedValue = typeof d.computedValue === 'number' ? d.computedValue : undefined;
+  const isNetProfitMetric = d.metricKey === 'netProfitCNY';
 
   return (
     <div
@@ -21,6 +22,11 @@ const OutputNode: React.FC<NodeProps> = ({ data, selected }) => {
       <div className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
         {name || '输出'}
       </div>
+      {isNetProfitMetric && (
+        <div className="mt-1 text-[10px] font-bold uppercase tracking-wide text-emerald-600">
+          Dashboard · 净利润 CNY
+        </div>
+      )}
       {computedValue !== undefined ? (
         <div className="text-lg font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
           {Number(computedValue.toFixed(4))}

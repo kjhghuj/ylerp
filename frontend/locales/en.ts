@@ -27,7 +27,8 @@ export const en = {
     lastUpdated: 'Last updated: Today',
     kpi: {
       balance: 'Total Balance',
-      margin: 'Avg Purchase Cost',
+      margin: 'Weighted Profit Margin',
+      unavailable: 'Unavailable',
       alerts: 'Low Stock Alerts',
       debt: 'Total Debt',
     },
@@ -38,11 +39,16 @@ export const en = {
       empty: 'Historical trend data is not available',
     },
     tables: {
-      profitTitle: 'Product Cost Overview',
+      profitTitle: 'Primary Profit Overview',
       inventoryTitle: 'Inventory Health',
+      emptyPrimary: 'No eligible primary profit templates',
+      loadingProfit: 'Loading primary profit data…',
+      profitUnavailable: 'Profit data is temporarily unavailable',
+      retry: 'Retry',
       cols: {
         product: 'Product',
         cost: 'Cost',
+        netProfit: 'Net Profit',
         revenue: 'Revenue',
         margin: 'Margin',
         sites: 'Sites',
@@ -469,7 +475,7 @@ export const en = {
       noTemplates: 'No linked templates',
       noTemplatesHint: 'Templates are auto-created when saving products from Profit Calculator',
       graphOutputsTitle: 'Named node-graph outputs',
-      graphOutputsDisclaimer: 'Node-graph outputs follow the template definition and are not mapped to standard net profit, ROI, or margin.',
+      graphOutputsDisclaimer: 'Only an output explicitly marked as netProfitCNY participates in Dashboard profit aggregation.',
       invalidCompatibility: 'This template uses compatibility data that the current version cannot execute.'
     },
     errors: {
@@ -484,6 +490,7 @@ export const en = {
       importTooManyRecords: 'Import failed: too many product records',
       importPartialFailure: 'Import stopped after {count} products were saved',
       templateFetchFailed: 'Failed to load template details',
+      primaryUpdateFailed: 'Failed to update the primary template',
     },
     detail: {
       baseInfo: 'Basic Info',
@@ -512,6 +519,9 @@ export const en = {
       exchangeRateSavedAt: 'Saved At',
       recalculateWithCurrentExchangeRate: 'Recalculate at Current Rate',
       useHistoricalExchangeRate: 'Use Historical Rate',
+      primaryTemplate: 'Primary',
+      setPrimaryTemplate: 'Set as Primary',
+      unsetPrimaryTemplate: 'Unset Primary',
       commission: 'Commission Rate',
       transactionFee: 'Transaction Fee',
       damageReturn: 'Damage Return Rate',
