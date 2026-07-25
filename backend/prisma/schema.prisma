@@ -14,6 +14,11 @@ model Product {
   country                   String?
   cost                      Float
   productWeight             Float
+  ycLengthCm                Float?
+  ycWidthCm                 Float?
+  ycHeightCm                Float?
+  ycVolumeM3                Float?
+  ycSpecsSyncedAt           DateTime?
   vatRate                   Float                   @default(1)
   corporateIncomeTaxRate    Float                   @default(5)
   sellerCoupon              Float                   @default(0)
@@ -281,6 +286,8 @@ model User {
   avatar              String?
   email               String?
   phone               String?
+  ycAppKey            String?
+  ycAppSecret         String?
   chromaRecords       ChromaGenerationRecord[]
   chromaImages        ChromaImage[]
   financeRecords      FinanceRecord[]

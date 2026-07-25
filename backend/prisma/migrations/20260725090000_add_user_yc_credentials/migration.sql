@@ -1,0 +1,3 @@
+ALTER TABLE "User"
+ADD COLUMN "ycAppKey" TEXT,
+ADD COLUMN "ycAppSecret" TEXT;

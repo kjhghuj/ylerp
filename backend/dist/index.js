@@ -78,6 +78,7 @@ const restockV2Routes_1 = __importDefault(require("./routes/restockV2Routes"));
 const scheduleRoutes_1 = __importDefault(require("./routes/scheduleRoutes"));
 const chromaRecordRoutes_1 = __importDefault(require("./routes/chromaRecordRoutes"));
 const usageRoutes_1 = __importDefault(require("./routes/usageRoutes"));
+const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
 const financeBackup_1 = require("./services/financeBackup");
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes_1.default);
@@ -98,6 +99,7 @@ app.use('/api/node-graphs', authMiddleware_1.authenticate, nodeGraphRoutes_1.def
 app.use('/api/chroma-adapt', authMiddleware_1.authenticate, chromaAdaptRoutes_1.default);
 app.use('/api/chroma-data', authMiddleware_1.authenticate, chromaRecordRoutes_1.default);
 app.use('/api/usage', usageRoutes_1.default);
+app.use('/api/dashboard', authMiddleware_1.authenticate, dashboardRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });

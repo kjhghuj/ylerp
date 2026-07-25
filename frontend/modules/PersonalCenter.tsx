@@ -1,9 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Phone, Mail, Camera, Save, Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import {
+    User,
+    Phone,
+    Mail,
+    Camera,
+    Save,
+    Lock,
+    Eye,
+    EyeOff,
+    CheckCircle,
+    AlertCircle,
+    KeyRound,
+} from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 
 type TabType = 'profile' | 'password';
+const YC_SECRET_MASK = '••••••••';
 
 export const PersonalCenter: React.FC = () => {
     const { user, refreshUser } = useAuth();
@@ -15,6 +28,14 @@ export const PersonalCenter: React.FC = () => {
     const [avatarUrl, setAvatarUrl] = useState(user?.avatar || '');
     const [saving, setSaving] = useState(false);
     const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [ycAppKey, setYcAppKey] = useState('');
+    const [ycAppSecret, setYcAppSecret] = useState('');
+    const [ycSecretConfigured, setYcSecretConfigured] = useState(false);
+    const [ycEnvironmentConfigured, setYcEnvironmentConfigured] = useState(false);
+    const [showYcSecret, setShowYcSecret] = useState(false);
+    const [ycLoading, setYcLoading] = useState(true);
+    const [ycSaving, setYcSaving] = useState(false);
+    const [ycMsg, setYcMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -34,6 +55,34 @@ export const PersonalCenter: React.FC = () => {
             setAvatarUrl(user.avatar || '');
         }
     }, [user]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const loadYcCredentials = async () => {
+            setYcLoading(true);
+            try {
+                const response = await api.get('/users/me/yc-credentials');
+                if (cancelled) return;
+                setYcAppKey(response.data.appKey || '');
+                setYcSecretConfigured(Boolean(response.data.appSecretConfigured));
+                setYcEnvironmentConfigured(Boolean(response.data.environmentConfigured));
+                setYcAppSecret(response.data.appSecretConfigured ? YC_SECRET_MASK : '');
+            } catch (error: any) {
+                if (!cancelled) {
+                    setYcMsg({
+                        type: 'error',
+                        text: error.response?.data?.error || '获取元仓配置失败',
+                    });
+                }
+            } finally {
+                if (!cancelled) setYcLoading(false);
+            }
+        };
+        void loadYcCredentials();
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.id]);
 
     const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -100,6 +149,32 @@ export const PersonalCenter: React.FC = () => {
             setPwdMsg({ type: 'error', text: error.response?.data?.error || '修改失败' });
         } finally {
             setPwdSaving(false);
+        }
+    };
+
+    const handleSaveYcCredentials = async () => {
+        setYcSaving(true);
+        setYcMsg(null);
+        try {
+            const response = await api.put('/users/me/yc-credentials', {
+                appKey: ycAppKey,
+                ...(ycAppSecret === YC_SECRET_MASK ? {} : { appSecret: ycAppSecret }),
+            });
+            const secretConfigured = Boolean(response.data.appSecretConfigured);
+            setYcAppKey(response.data.appKey || '');
+            setYcSecretConfigured(secretConfigured);
+            setYcEnvironmentConfigured(Boolean(response.data.environmentConfigured));
+            setYcAppSecret(secretConfigured ? YC_SECRET_MASK : '');
+            setYcMsg({
+                type: 'success',
+                text: response.data.appKey || secretConfigured
+                    ? '元仓配置已保存'
+                    : '已改用服务器环境变量中的元仓配置',
+            });
+        } catch (error: any) {
+            setYcMsg({ type: 'error', text: error.response?.data?.error || '保存元仓配置失败' });
+        } finally {
+            setYcSaving(false);
         }
     };
 
@@ -238,6 +313,95 @@ export const PersonalCenter: React.FC = () => {
                                 >
                                     <Save size={16} />
                                     {saving ? '保存中...' : '保存修改'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-slate-100">
+                        <div className="flex items-center gap-3 mb-5">
+                            <div className="p-2.5 bg-indigo-50 rounded-xl">
+                                <KeyRound size={20} className="text-indigo-500" />
+                            </div>
+                            <div>
+                                <h3 className="font-semibold text-slate-800">元仓开放平台</h3>
+                                <p className="text-xs text-slate-400">
+                                    个人配置优先；清空并保存后使用服务器环境变量
+                                </p>
+                            </div>
+                        </div>
+
+                        {ycMsg && (
+                            <div className={`mb-5 flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
+                                ycMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            }`}>
+                                {ycMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                                {ycMsg.text}
+                            </div>
+                        )}
+
+                        <div className="space-y-5 max-w-xl">
+                            <div>
+                                <label htmlFor="yc-app-key" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    元仓 appKey
+                                </label>
+                                <input
+                                    id="yc-app-key"
+                                    type="text"
+                                    value={ycAppKey}
+                                    onChange={(e) => setYcAppKey(e.target.value)}
+                                    disabled={ycLoading || ycSaving}
+                                    autoComplete="off"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                    placeholder="留空则使用 YC_APP_KEY"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="yc-app-secret" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    元仓 appSecret
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        id="yc-app-secret"
+                                        type={showYcSecret ? 'text' : 'password'}
+                                        value={ycAppSecret}
+                                        onChange={(e) => setYcAppSecret(e.target.value)}
+                                        onFocus={(e) => {
+                                            if (ycAppSecret === YC_SECRET_MASK) e.currentTarget.select();
+                                        }}
+                                        disabled={ycLoading || ycSaving}
+                                        autoComplete="new-password"
+                                        className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        placeholder="留空则使用 YC_APP_SECRET"
+                                    />
+                                    <button
+                                        type="button"
+                                        aria-label={showYcSecret ? '隐藏元仓 appSecret' : '显示元仓 appSecret'}
+                                        onClick={() => setShowYcSecret(!showYcSecret)}
+                                        disabled={ycLoading || ycSaving}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:text-slate-300"
+                                    >
+                                        {showYcSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                                    </button>
+                                </div>
+                                <p className="mt-1.5 text-xs text-slate-400">
+                                    {ycSecretConfigured
+                                        ? '已保存个人 appSecret；删除圆点后留空保存可恢复环境变量'
+                                        : ycEnvironmentConfigured
+                                            ? '当前服务器环境变量中已有可用凭据'
+                                            : '当前尚未配置个人或服务器 appSecret'}
+                                </p>
+                            </div>
+
+                            <div className="pt-1">
+                                <button
+                                    onClick={handleSaveYcCredentials}
+                                    disabled={ycLoading || ycSaving}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
+                                >
+                                    <Save size={16} />
+                                    {ycSaving ? '保存中...' : '保存元仓配置'}
                                 </button>
                             </div>
                         </div>

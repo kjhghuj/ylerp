@@ -3,10 +3,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductList } from '../modules/ProductList';
 import api from '../src/api';
+import { zh } from '../locales/zh';
 
 vi.mock('../src/api', () => ({
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
 }));
 
@@ -33,6 +35,7 @@ vi.mock('../AuthContext', () => ({
 
 const mockSetActiveTab = vi.fn();
 const mockSetCurrentPage = vi.fn();
+const mockRefreshProducts = vi.fn();
 
 vi.mock('../StoreContext', () => ({
   useStore: () => ({
@@ -59,6 +62,10 @@ vi.mock('../StoreContext', () => ({
         sites: ['MY'],
         cost: 12,
         productWeight: 300,
+        ycLengthCm: 10,
+        ycWidthCm: 20,
+        ycHeightCm: 30,
+        ycVolumeM3: 0.006,
         supplierInvoice: 'no',
         supplierTaxPoint: 0,
         totalRevenue: 100,
@@ -94,6 +101,7 @@ vi.mock('../StoreContext', () => ({
         siteData: { PH: { totalRevenue: 70, adROI: 10 } },
       },
     ],
+    refreshProducts: mockRefreshProducts,
     deleteProduct: vi.fn(),
     addProduct: vi.fn(),
     setCalculatorImport: vi.fn(),
@@ -102,55 +110,7 @@ vi.mock('../StoreContext', () => ({
     setProductListActiveTab: mockSetActiveTab,
     productListCurrentPage: 1,
     setProductListCurrentPage: mockSetCurrentPage,
-    strings: {
-      profit: {
-        matrix: {
-          sites: {
-            MY: 'Malaysia',
-            PH: 'Philippines',
-            SG: 'Singapore',
-            ID: 'Indonesia',
-            TH: 'Thailand',
-          },
-        },
-      },
-      productList: {
-        title: '商品明细列表',
-        searchPlaceholder: '搜索商品名称或SKU...',
-        exportExcel: '导出 Excel',
-        importJson: '导入 JSON',
-        exportJson: '导出 JSON',
-        loading: '加载中...',
-        noProducts: '暂无商品数据',
-        tabs: {
-          ph: '菲律宾',
-          my: '马来西亚',
-          sg: '新加坡',
-          id: '印尼',
-          th: '泰国',
-        },
-        table: {
-          name: '商品名称',
-          sku: 'SKU',
-          cost: '成本',
-          weight: '重量',
-          priceCNY: '价格(CNY)',
-          priceLocal: '价格(本土)',
-          adROI: '广告ROI',
-          action: '操作',
-        },
-        pagination: {
-          showing: '显示',
-          to: '至',
-          of: '共',
-          items: '项',
-        },
-        modals: {
-          tabProduct: '商品',
-        },
-        errors: {},
-      },
-    },
+    strings: zh,
   }),
 }));
 
@@ -242,5 +202,83 @@ describe('ProductList YC stock column', () => {
       'No YC Match',
     ]);
     expect(screen.getByRole('button', { name: '元仓库存排序：低到高' })).toBeInTheDocument();
+  });
+
+  it('shows synchronized YC dimensions in the product detail dialog', async () => {
+    render(<ProductList onNavigate={vi.fn()} />);
+    await screen.findByText('可用 7');
+
+    fireEvent.doubleClick(screen.getByText('Exact Product').closest('tr')!);
+
+    expect(await screen.findByText('元仓商品参数')).toBeInTheDocument();
+    expect(screen.getByText('10.00 cm')).toBeInTheDocument();
+    expect(screen.getByText('20.00 cm')).toBeInTheDocument();
+    expect(screen.getByText('30.00 cm')).toBeInTheDocument();
+    expect(screen.getByText('0.006000 m³')).toBeInTheDocument();
+  });
+
+  it('lets the user select YC products and sync only the selected SKUs', async () => {
+    (api.get as unknown as ReturnType<typeof vi.fn>).mockImplementation((url: string) => {
+      if (url === '/restock-v2/sync-products/preview') {
+        return Promise.resolve({
+          data: {
+            site: 'MY',
+            items: [
+              {
+                sku: 'ERP-SKU-1',
+                name: 'Exact Product',
+                available: 7,
+                inventory: 10,
+                occupy: 2,
+                unshipped: 1,
+                warehouseCodes: ['001'],
+                alreadyInCurrentSite: true,
+              },
+              {
+                sku: 'YC-SKU-NEW',
+                name: 'New YC Product',
+                available: 12,
+                inventory: 12,
+                occupy: 0,
+                unshipped: 0,
+                warehouseCodes: ['001'],
+                alreadyInCurrentSite: false,
+              },
+            ],
+          },
+        });
+      }
+      return Promise.resolve({
+        data: {
+          site: 'MY',
+          remoteFetched: true,
+          items: [],
+        },
+      });
+    });
+    (api.post as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { createdProducts: 1, updatedProducts: 0 },
+    });
+    mockRefreshProducts.mockResolvedValue(undefined);
+
+    render(<ProductList onNavigate={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '同步元仓商品' }));
+    expect(await screen.findByRole('dialog', { name: '同步元仓商品' })).toBeInTheDocument();
+    expect(screen.getByLabelText('选择 ERP-SKU-1')).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText('选择 YC-SKU-NEW'));
+    fireEvent.click(screen.getByRole('button', { name: '同步所选商品' }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/restock-v2/sync-products', {
+        site: 'MY',
+        skus: ['YC-SKU-NEW'],
+      });
+    });
+    expect(mockRefreshProducts).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '同步元仓商品' })).not.toBeInTheDocument();
+    });
   });
 });

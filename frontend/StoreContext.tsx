@@ -31,6 +31,7 @@ interface StoreContextType {
   strings: typeof translations['zh'];
 
   products: ProductCalcData[];
+  refreshProducts: () => Promise<void>;
   addProduct: (p: Omit<ProductCalcData, 'id'>) => Promise<ProductCalcData | null>;
   updateProduct: (p: ProductCalcData) => Promise<void>;
   saveProductWithTemplates: {
@@ -274,6 +275,10 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       : [...previous, saved.product]);
     return saved;
   };
+  const refreshProducts = async () => {
+    const response = await api.get('/products');
+    setProducts(Array.isArray(response.data) ? response.data : []);
+  };
   const deleteProduct = async (id: string, site?: string) => {
     try {
       if (site) {
@@ -432,7 +437,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   return (
     <StoreContext.Provider value={{
       language, setLanguage, strings, loading,
-      products, addProduct, updateProduct, saveProductWithTemplates, deleteProduct,
+      products, refreshProducts, addProduct, updateProduct, saveProductWithTemplates, deleteProduct,
       calculatorImport, setCalculatorImport,
       calculatorImportNodes, setCalculatorImportNodes,
       profitGlobalInputs, setProfitGlobalInputs,

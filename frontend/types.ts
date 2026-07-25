@@ -16,6 +16,11 @@ export interface ProductCalcData {
   sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID')[];
   cost: number;
   productWeight: number;
+  ycLengthCm?: number | null;
+  ycWidthCm?: number | null;
+  ycHeightCm?: number | null;
+  ycVolumeM3?: number | null;
+  ycSpecsSyncedAt?: string | null;
   supplierInvoice: 'yes' | 'no';
   supplierTaxPoint: number;
   vatRate?: number;

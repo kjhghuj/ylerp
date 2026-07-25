@@ -5,7 +5,7 @@ import { hasPermission } from '../components/PermissionTree';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
     ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers,
-    Upload, Download, ArrowUpDown, ArrowDown, ArrowUp
+    Upload, Download, ArrowUpDown, ArrowDown, ArrowUp, RefreshCw
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
@@ -48,6 +48,10 @@ import {
     resolveProfitExchangeRate,
     type ResolvedProfitExchangeRate,
 } from './profit/exchangeRateSnapshot';
+import {
+    YcProductSyncModal,
+    type YcProductSyncItem,
+} from './product-list/YcProductSyncModal';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -89,9 +93,31 @@ const ycStockSortLabels: Record<YcStockSortDirection, string> = {
     asc: '低到高',
 };
 
+const defaultYcSyncLabels = {
+    button: '同步元仓商品',
+    title: '同步元仓商品',
+    subtitle: '选择要同步到 {site} 商品明细表的元仓商品',
+    searchPlaceholder: '搜索元仓商品名称或 SKU...',
+    productName: '商品名称',
+    selectAll: '全选未同步商品',
+    selectedCount: '已选择 {count} 个商品',
+    alreadySynced: '已在当前站点',
+    available: '可用库存',
+    inventory: '总库存',
+    warehouse: '元仓',
+    empty: '没有可显示的元仓商品',
+    loading: '正在读取元仓商品...',
+    cancel: '取消',
+    confirm: '同步所选商品',
+    syncing: '同步中...',
+    success: '同步完成：新增 {created} 个，更新 {updated} 个',
+    previewError: '读取元仓商品失败',
+    syncError: '同步元仓商品失败',
+};
+
 export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const {
-        products, deleteProduct, addProduct, setCalculatorImport, setCalculatorImportNodes, strings,
+        products, refreshProducts, deleteProduct, addProduct, setCalculatorImport, setCalculatorImportNodes, strings,
         productListActiveTab, setProductListActiveTab,
         productListCurrentPage, setProductListCurrentPage,
     } = useStore();
@@ -99,7 +125,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const canEditPrimaryTemplate = user?.role === 'owner' ||
         user?.permissions?.includes('*') ||
         hasPermission(user?.permissions || [], 'product-list.edit');
+    const canSyncYcProducts = user?.role === 'owner' ||
+        user?.permissions?.includes('*') ||
+        hasPermission(user?.permissions || [], 'restock-v2.refresh');
     const t = strings.productList;
+    const ycSyncText = t.ycSync || defaultYcSyncLabels;
     const te = t.errors;
     const siteNames = strings.profit.matrix.sites;
     const { showToast } = useToast();
@@ -124,6 +154,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [ycStockLoading, setYcStockLoading] = useState(false);
     const [ycStockRemoteFetched, setYcStockRemoteFetched] = useState(false);
     const [ycStockSortDirection, setYcStockSortDirection] = useState<YcStockSortDirection>('none');
+    const [showYcSyncModal, setShowYcSyncModal] = useState(false);
+    const [ycSyncItems, setYcSyncItems] = useState<YcProductSyncItem[]>([]);
+    const [ycSyncLoading, setYcSyncLoading] = useState(false);
+    const [ycSyncing, setYcSyncing] = useState(false);
+    const [ycSyncError, setYcSyncError] = useState<string | null>(null);
     const selectedProductSiteViewModel = useMemo(() => (
         selectedProduct ? createProductSiteViewModel(selectedProduct, activeTab) : null
     ), [selectedProduct, activeTab]);
@@ -199,6 +234,52 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const toggleYcStockSort = () => {
         setYcStockSortDirection(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none');
         setCurrentPage(1);
+    };
+
+    const handleOpenYcSync = async () => {
+        setShowYcSyncModal(true);
+        setYcSyncLoading(true);
+        setYcSyncError(null);
+        setYcSyncItems([]);
+        try {
+            const response = await api.get('/restock-v2/sync-products/preview', {
+                params: { site: activeTab },
+            });
+            setYcSyncItems(Array.isArray(response.data?.items) ? response.data.items : []);
+        } catch (error: any) {
+            setYcSyncError(error.response?.data?.error || ycSyncText.previewError);
+        } finally {
+            setYcSyncLoading(false);
+        }
+    };
+
+    const handleSyncYcProducts = async (skus: string[]) => {
+        setYcSyncing(true);
+        setYcSyncError(null);
+        try {
+            const response = await api.post('/restock-v2/sync-products', {
+                site: activeTab,
+                skus,
+            });
+            await refreshProducts();
+            const stockResponse = await api.get('/restock-v2/stock-snapshot', {
+                params: { site: activeTab },
+            });
+            setYcStockItems(Array.isArray(stockResponse.data?.items) ? stockResponse.data.items : []);
+            setYcStockRemoteFetched(Boolean(stockResponse.data?.remoteFetched));
+            setShowYcSyncModal(false);
+            setCurrentPage(1);
+            showToast(
+                ycSyncText.success
+                    .replace('{created}', String(response.data?.createdProducts || 0))
+                    .replace('{updated}', String(response.data?.updatedProducts || 0)),
+                'success',
+            );
+        } catch (error: any) {
+            setYcSyncError(error.response?.data?.error || ycSyncText.syncError);
+        } finally {
+            setYcSyncing(false);
+        }
     };
 
     const handleExport = () => {
@@ -593,6 +674,18 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     return (
         <div className="space-y-6 h-full flex flex-col">
+            {showYcSyncModal && (
+                <YcProductSyncModal
+                    siteName={siteNames[activeTab] || activeTab}
+                    items={ycSyncItems}
+                    labels={ycSyncText}
+                    loading={ycSyncLoading}
+                    syncing={ycSyncing}
+                    error={ycSyncError}
+                    onClose={() => setShowYcSyncModal(false)}
+                    onSync={handleSyncYcProducts}
+                />
+            )}
             {showDetailModal && selectedProduct && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
@@ -669,6 +762,31 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.ycSpecs}</h4>
+                                        {selectedProduct.ycLengthCm != null
+                                            && selectedProduct.ycWidthCm != null
+                                            && selectedProduct.ycHeightCm != null
+                                            && selectedProduct.ycVolumeM3 != null ? (
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                {[
+                                                    { label: t.detail.ycLength, value: `${selectedProduct.ycLengthCm.toFixed(2)} cm` },
+                                                    { label: t.detail.ycWidth, value: `${selectedProduct.ycWidthCm.toFixed(2)} cm` },
+                                                    { label: t.detail.ycHeight, value: `${selectedProduct.ycHeightCm.toFixed(2)} cm` },
+                                                    { label: t.detail.ycVolume, value: `${selectedProduct.ycVolumeM3.toFixed(6)} m³` },
+                                                ].map(item => (
+                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
+                                                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
+                                                        <span className="text-sm font-bold text-slate-700">{item.value}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+                                                {t.detail.missingProductSpecs}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="md:col-span-2">
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.siteParams}</h4>
@@ -814,6 +932,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             />
                             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         </div>
+                        {canSyncYcProducts && (
+                            <button
+                                type="button"
+                                onClick={() => { void handleOpenYcSync(); }}
+                                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                            >
+                                <RefreshCw size={16} /> {ycSyncText.button}
+                            </button>
+                        )}
                         <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition shadow-sm font-medium text-sm">
                             <FileSpreadsheet size={16} /> {t.exportExcel}
                         </button>

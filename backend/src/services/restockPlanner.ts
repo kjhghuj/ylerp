@@ -70,6 +70,8 @@ export interface RemoteInboundOrder {
   destinationWarehouseCode?: string | null;
   warehouseCode?: string | null;
   estimatedArrivalDate?: string | null;
+  shelfTime?: string | null;
+  receiveTime?: string | null;
   details?: RemoteInboundDetail[] | null;
 }
 

@@ -82,6 +82,141 @@ describe('HttpYcOpenPlatformClient inbound details', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('loads completed receipt history independently and uses shelfTime plus actual shiftNum', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token', tokenType: 'Bearer' }))
+      .mockResolvedValueOnce(response({
+        list: [
+          {
+            customerWarehouseOrderNo: 'COMPLETED-1',
+            status: 4,
+            destinationWarehouseCode: '001',
+            shelfTime: '2026-05-01T00:00:00.000Z',
+            receiveTime: '2026-04-30T00:00:00.000Z',
+          },
+          {
+            customerWarehouseOrderNo: 'RECEIVED-2',
+            status: 5,
+            destinationWarehouseCode: '001',
+            shelfTime: null,
+            receiveTime: '2026-06-01T00:00:00.000Z',
+          },
+          {
+            customerWarehouseOrderNo: 'ACTIVE-IGNORED',
+            status: 2,
+            destinationWarehouseCode: '001',
+          },
+        ],
+        total: 3,
+      }))
+      .mockResolvedValueOnce(response({
+        details: [{ detail: [{ customerSku: 'SKU-1', quantity: 99, shiftNum: 7 }] }],
+      }))
+      .mockResolvedValueOnce(response({
+        details: [{ detail: [{ customerSku: 'SKU-2', quantity: 20, shiftNum: 3 }] }],
+      }));
+    global.fetch = fetchMock as typeof fetch;
+    const client = new HttpYcOpenPlatformClient({
+      baseUrl: 'https://yc.example.test',
+      appKey: 'app-key',
+      appSecret: 'app-secret',
+    });
+
+    const receipts = await client.listInboundReceiptHistory({ warehouseCodes: ['001'] });
+
+    expect(receipts).toEqual([
+      {
+        warehouseCode: '001',
+        customerSku: 'SKU-1',
+        productSku: null,
+        receivedAt: '2026-05-01T00:00:00.000Z',
+        quantity: 7,
+      },
+      {
+        warehouseCode: '001',
+        customerSku: 'SKU-2',
+        productSku: null,
+        receivedAt: '2026-06-01T00:00:00.000Z',
+        quantity: 3,
+      },
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('paginates the YC product list and preserves product dimensions', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, index) => ({
+      customerSku: `SKU-${index}`,
+      productSpecs: { length: 10, width: 20, height: 30 },
+    }));
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token', tokenType: 'Bearer' }))
+      .mockResolvedValueOnce(response({ list: firstPage, total: 101 }))
+      .mockResolvedValueOnce(response({
+        list: [{ customerSku: 'SKU-100', productSpecs: { length: 11, width: 21, height: 31 } }],
+        total: 101,
+      }));
+    global.fetch = fetchMock as typeof fetch;
+    const client = new HttpYcOpenPlatformClient({
+      baseUrl: 'https://yc.example.test',
+      appKey: 'app-key',
+      appSecret: 'app-secret',
+    });
+
+    const products = await client.listProducts();
+
+    expect(products).toHaveLength(101);
+    expect(products[100]).toEqual(expect.objectContaining({
+      customerSku: 'SKU-100',
+      productSpecs: { length: 11, width: 21, height: 31 },
+    }));
+    expect(fetchMock.mock.calls.slice(1).map(([, init]) => (
+      JSON.parse(String((init as RequestInit).body)).page
+    ))).toEqual([1, 2]);
+    expect(fetchMock.mock.calls[1][0]).toBe('https://yc.example.test/api/openPlatform/product/list');
+  });
+
+  it('loads stock-age rows by warehouse and SKU scope', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token', tokenType: 'Bearer' }))
+      .mockResolvedValueOnce(response({
+        list: [{
+          warehouseCode: 'WH-1',
+          customerSku: 'SKU-1',
+          stockAgeQuantity: 2,
+          stockAgeDay: 91,
+          stockAgeVolume: 0.25,
+          calculateDate: '2026-07-24',
+          shelveDescription: '采购入库',
+        }],
+        total: 1,
+      }));
+    global.fetch = fetchMock as typeof fetch;
+    const client = new HttpYcOpenPlatformClient({
+      baseUrl: 'https://yc.example.test',
+      appKey: 'app-key',
+      appSecret: 'app-secret',
+    });
+
+    const rows = await client.listStockAge({
+      warehouseCodes: ['WH-1'],
+      customerSkus: ['SKU-1'],
+    });
+
+    expect(rows).toEqual([expect.objectContaining({
+      warehouseCode: 'WH-1',
+      customerSku: 'SKU-1',
+      stockAgeDay: 91,
+      stockAgeVolume: 0.25,
+    })]);
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body));
+    expect(requestBody).toEqual(expect.objectContaining({
+      warehouseCode: 'WH-1',
+      customerSku: ['SKU-1'],
+      page: 1,
+      prePage: 100,
+    }));
+  });
+
   it('aborts requests that exceed the configured timeout', async () => {
     global.fetch = jest.fn((_url, init) => new Promise((_resolve, reject) => {
       (init?.signal as AbortSignal).addEventListener('abort', () => {

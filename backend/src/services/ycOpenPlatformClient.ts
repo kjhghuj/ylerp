@@ -1,4 +1,7 @@
+import { createHash } from 'crypto';
+import type { PrismaClient } from '@prisma/client';
 import type { RemoteInboundDetail, RemoteInboundOrder, RemoteStockRow } from './restockPlanner';
+import { decryptYcAppSecret } from './ycCredentials';
 
 interface YcApiResponse<T> {
   state?: string;
@@ -59,6 +62,46 @@ export interface YcListInboundOrdersParams {
   warehouseCodes?: string[];
 }
 
+export interface YcListStockAgeParams {
+  warehouseCodes?: string[];
+  customerSkus?: string[];
+}
+
+export interface YcProductSpecs {
+  length?: unknown;
+  width?: unknown;
+  height?: unknown;
+  weigh?: unknown;
+}
+
+export interface YcProduct {
+  customerSku?: string | null;
+  customerSkuName?: string | null;
+  productSpecs?: YcProductSpecs | null;
+}
+
+export interface YcStockAgeRow {
+  warehouseCode?: string | null;
+  sectionName?: string | null;
+  customerSku?: string | null;
+  stockAgeQuantity?: unknown;
+  shelveDate?: string | null;
+  stockAgeDay?: unknown;
+  stockAgeVolume?: unknown;
+  calculateDate?: string | null;
+  stockAgeDetailId?: string | number | null;
+  originSn?: string | null;
+  shelveDescription?: string | null;
+}
+
+export interface YcInboundReceipt {
+  warehouseCode: string;
+  customerSku: string | null;
+  productSku: string | null;
+  receivedAt: string;
+  quantity: number;
+}
+
 export interface YcCustomerWarehouse {
   name?: string | null;
   code?: string | null;
@@ -70,10 +113,14 @@ export interface YcCustomerWarehouse {
 }
 
 export interface YcOpenPlatformClient {
+  readonly cacheScope?: string;
   isConfigured(): boolean;
   listCustomerWarehouses(): Promise<YcCustomerWarehouse[]>;
+  listProducts?(): Promise<YcProduct[]>;
   listProductInventory(params: YcListProductInventoryParams): Promise<RemoteStockRow[]>;
+  listStockAge?(params: YcListStockAgeParams): Promise<YcStockAgeRow[]>;
   listInboundOrders(params: YcListInboundOrdersParams): Promise<RemoteInboundOrder[]>;
+  listInboundReceiptHistory?(params: YcListInboundOrdersParams): Promise<YcInboundReceipt[]>;
 }
 
 const DEFAULT_BASE_URL = 'https://yc-client.anestcang.com';
@@ -141,11 +188,20 @@ const flattenInboundDetails = (
   return flattened;
 };
 
+const validReceiptTime = (order: RemoteInboundOrder): string | null => {
+  for (const value of [order.shelfTime, order.receiveTime]) {
+    const text = String(value || '').trim();
+    if (text && Number.isFinite(Date.parse(text))) return text;
+  }
+  return null;
+};
+
 export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
   private readonly baseUrl: string;
   private readonly appKey: string;
   private readonly appSecret: string;
   private readonly requestTimeoutMs: number;
+  readonly cacheScope: string;
   private tokenCache: TokenCache | null = null;
 
   constructor(options: {
@@ -157,6 +213,10 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
     this.baseUrl = compactBaseUrl(options.baseUrl || process.env.YC_API_BASE_URL || DEFAULT_BASE_URL);
     this.appKey = options.appKey || process.env.YC_APP_KEY || '';
     this.appSecret = options.appSecret || process.env.YC_APP_SECRET || '';
+    this.cacheScope = createHash('sha256')
+      .update(`${this.appKey}\0${this.appSecret}`, 'utf8')
+      .digest('hex')
+      .slice(0, 16);
     const requestedTimeout = Number(options.requestTimeoutMs ?? YC_CLIENT_LIMITS.requestTimeoutMs);
     this.requestTimeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout >= 1 && requestedTimeout <= 120000
       ? requestedTimeout
@@ -165,6 +225,10 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
 
   isConfigured(): boolean {
     return Boolean(this.appKey && this.appSecret);
+  }
+
+  async listProducts(): Promise<YcProduct[]> {
+    return this.paginate<YcProduct>('/api/openPlatform/product/list', {});
   }
 
   async listProductInventory({ warehouseCodes = [], customerSkus = [] }: YcListProductInventoryParams): Promise<RemoteStockRow[]> {
@@ -185,6 +249,37 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
         });
         if (rows.length + pageRows.length > YC_CLIENT_LIMITS.maxListRows) {
           throw new YcClientError('YC inventory row limit exceeded', 'ROW_LIMIT', '/api/openPlatform/stock/list');
+        }
+        rows.push(...pageRows);
+      }
+    }
+    return rows;
+  }
+
+  async listStockAge({
+    warehouseCodes = [],
+    customerSkus = [],
+  }: YcListStockAgeParams): Promise<YcStockAgeRow[]> {
+    const rows: YcStockAgeRow[] = [];
+    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
+    const validCustomerSkus = validateScope(customerSkus, YC_CLIENT_LIMITS.maxCustomerSkus);
+    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
+    const skuChunks = chunk(validCustomerSkus, 100);
+    if (warehouseScope.length * skuChunks.length > YC_CLIENT_LIMITS.maxRequestBatches) {
+      throw new YcClientError('YC request batch limit exceeded', 'BATCH_LIMIT');
+    }
+    for (const warehouseCode of warehouseScope) {
+      for (const skuChunk of skuChunks) {
+        const pageRows = await this.paginate<YcStockAgeRow>('/api/openPlatform/stock/ageList', {
+          ...(warehouseCode ? { warehouseCode } : {}),
+          ...(skuChunk.length > 0 ? { customerSku: skuChunk } : {}),
+        });
+        if (rows.length + pageRows.length > YC_CLIENT_LIMITS.maxListRows) {
+          throw new YcClientError(
+            'YC stock age row limit exceeded',
+            'ROW_LIMIT',
+            '/api/openPlatform/stock/ageList',
+          );
         }
         rows.push(...pageRows);
       }
@@ -251,6 +346,75 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
         return { ...order, ...detail, details };
       },
     );
+  }
+
+  async listInboundReceiptHistory({
+    warehouseCodes = [],
+  }: YcListInboundOrdersParams): Promise<YcInboundReceipt[]> {
+    const listedRows: RemoteInboundOrder[] = [];
+    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
+    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
+
+    for (const warehouseCode of warehouseScope) {
+      const listedOrders = await this.paginate<RemoteInboundOrder>('/api/openPlatform/inOrder/list', {
+        ...(warehouseCode ? { destinationWarehouseCode: warehouseCode } : {}),
+      });
+      if (listedRows.length + listedOrders.length > YC_CLIENT_LIMITS.maxListRows) {
+        throw new YcClientError('YC inbound order limit exceeded', 'ROW_LIMIT', '/api/openPlatform/inOrder/list');
+      }
+      listedRows.push(...listedOrders);
+    }
+
+    const completedOrders = listedRows.filter(order => validReceiptTime(order));
+    let totalDetails = 0;
+    const receiptsByOrder = await mapWithConcurrency(
+      completedOrders,
+      YC_CLIENT_LIMITS.inboundDetailConcurrency,
+      async order => {
+        const customerWarehouseOrderNo = String(order.customerWarehouseOrderNo || '').trim();
+        if (!customerWarehouseOrderNo || customerWarehouseOrderNo.length > YC_CLIENT_LIMITS.maxIdentifierLength) {
+          throw new YcClientError(
+            'YC inbound detail identifier is invalid',
+            'INVALID_IDENTIFIER',
+            '/api/openPlatform/inOrder/detail',
+          );
+        }
+
+        const detail = await this.request<YcInboundOrderDetail>('/api/openPlatform/inOrder/detail', {
+          customerWarehouseOrderNo,
+        });
+        const details = flattenInboundDetails(detail?.details);
+        totalDetails += details.length;
+        if (totalDetails > YC_CLIENT_LIMITS.maxInboundDetails) {
+          throw new YcClientError(
+            'YC inbound detail limit exceeded',
+            'DETAIL_LIMIT',
+            '/api/openPlatform/inOrder/detail',
+          );
+        }
+        const receivedAt = validReceiptTime(order);
+        if (!receivedAt) return [];
+        const warehouseCode = String(
+          order.destinationWarehouseCode || order.warehouseCode || '',
+        ).trim();
+
+        return details.flatMap<YcInboundReceipt>(entry => {
+          const quantity = Number(entry.shiftNum);
+          if (!Number.isFinite(quantity) || quantity <= 0) return [];
+          const customerSku = String(entry.customerSku || '').trim() || null;
+          const productSku = String(entry.productSku || '').trim() || null;
+          if (!customerSku && !productSku) return [];
+          return [{
+            warehouseCode,
+            customerSku,
+            productSku,
+            receivedAt,
+            quantity,
+          }];
+        });
+      },
+    );
+    return receiptsByOrder.flat();
   }
 
   private async paginate<T>(path: string, body: Record<string, unknown>): Promise<T[]> {
@@ -359,7 +523,27 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
   }
 }
 
-export const createYcOpenPlatformClient = () => new HttpYcOpenPlatformClient();
+type YcOpenPlatformClientOptions = ConstructorParameters<typeof HttpYcOpenPlatformClient>[0];
+
+export const createYcOpenPlatformClient = (options: YcOpenPlatformClientOptions = {}) => (
+  new HttpYcOpenPlatformClient(options)
+);
+
+export const createUserYcOpenPlatformClient = async (
+  db: Pick<PrismaClient, 'user'>,
+  userId: string,
+): Promise<YcOpenPlatformClient> => {
+  const credentials = await db.user.findUnique({
+    where: { id: userId },
+    select: { ycAppKey: true, ycAppSecret: true },
+  });
+  return createYcOpenPlatformClient({
+    appKey: credentials?.ycAppKey || undefined,
+    appSecret: credentials?.ycAppSecret
+      ? decryptYcAppSecret(credentials.ycAppSecret)
+      : undefined,
+  });
+};
 
 export const getYcWarehouseCodesForSite = (site: string): string[] => {
   const normalizedSite = site.trim().toUpperCase();

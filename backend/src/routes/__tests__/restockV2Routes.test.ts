@@ -43,7 +43,7 @@ jest.mock('../../index', () => ({
   },
 }));
 
-import { createRestockV2Router } from '../restockV2Routes';
+import { createRestockV2Router, parseYcProductDimensions } from '../restockV2Routes';
 import { prisma, safeRedis } from '../../index';
 
 const mockProductFindMany = prisma.product.findMany as jest.Mock;
@@ -80,6 +80,27 @@ function getRouteHandlers(router: ReturnType<typeof createRestockV2Router>, path
 }
 
 describe('restockV2Routes', () => {
+  it('normalizes YC centimeter dimensions and leaves invalid specifications empty', () => {
+    expect(parseYcProductDimensions({ length: '10', width: 20, height: 30 })).toEqual({
+      ycLengthCm: 10,
+      ycWidthCm: 20,
+      ycHeightCm: 30,
+      ycVolumeM3: 0.006,
+    });
+    expect(parseYcProductDimensions({ length: 10, width: 0, height: 'bad' })).toEqual({
+      ycLengthCm: 10,
+      ycWidthCm: null,
+      ycHeightCm: null,
+      ycVolumeM3: null,
+    });
+    expect(parseYcProductDimensions(null)).toEqual({
+      ycLengthCm: null,
+      ycWidthCm: null,
+      ycHeightCm: null,
+      ycVolumeM3: null,
+    });
+  });
+
   beforeEach(() => {
     jest.resetAllMocks();
     mockProductFindMany.mockResolvedValue([]);
@@ -490,6 +511,7 @@ describe('restockV2Routes', () => {
   it.each([
     ['/sites', 'get', 'restock-v2.view'],
     ['/stock-snapshot', 'get', 'restock-v2.view'],
+    ['/sync-products/preview', 'get', 'restock-v2.refresh'],
     ['/recommendations', 'get', 'restock-v2.view'],
     ['/recommendations', 'post', 'restock-v2.view'],
     ['/sync-products', 'post', 'restock-v2.refresh'],
@@ -731,6 +753,16 @@ describe('restockV2Routes', () => {
           inventory: 12,
         },
       ]),
+      listProducts: jest.fn().mockResolvedValue([
+        {
+          customerSku: 'sku-existing',
+          productSpecs: { length: 10, width: 20, height: 30 },
+        },
+        {
+          customerSku: 'SKU-NEW',
+          productSpecs: { length: 40, width: 50, height: 60 },
+        },
+      ]),
       listInboundOrders: jest.fn(),
     };
     const router = createRestockV2Router({ ycClient });
@@ -784,6 +816,11 @@ describe('restockV2Routes', () => {
       data: expect.objectContaining({
         country: 'MY',
         sites: ['MY'],
+        ycLengthCm: 10,
+        ycWidthCm: 20,
+        ycHeightCm: 30,
+        ycVolumeM3: 0.006,
+        ycSpecsSyncedAt: expect.any(Date),
       }),
     });
     expect(mockProductCreate).toHaveBeenCalledWith({
@@ -793,6 +830,11 @@ describe('restockV2Routes', () => {
         sku: 'SKU-NEW',
         country: 'MY',
         sites: ['MY'],
+        ycLengthCm: 40,
+        ycWidthCm: 50,
+        ycHeightCm: 60,
+        ycVolumeM3: 0.12,
+        ycSpecsSyncedAt: expect.any(Date),
       }),
     });
     expect(mockInventoryUpdate).toHaveBeenCalledWith({
@@ -829,6 +871,136 @@ describe('restockV2Routes', () => {
       updatedInventoryItems: 1,
       createdMappings: 2,
     }));
+  });
+
+  it('previews YC products and marks products already present in the current site', async () => {
+    const ycClient = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      listCustomerWarehouses: jest.fn().mockResolvedValue([
+        { code: '001', name: 'Malaysia 1', siteCode: 'MY' },
+      ]),
+      listProductInventory: jest.fn().mockResolvedValue([
+        {
+          warehouseCode: '001',
+          customerSku: 'SKU-EXISTING',
+          customerSkuName: 'Existing Product',
+          available: 5,
+          inventory: 8,
+        },
+        {
+          warehouseCode: '001',
+          customerSku: 'SKU-NEW',
+          customerSkuName: 'New Product',
+          available: 12,
+          inventory: 12,
+        },
+      ]),
+      listInboundOrders: jest.fn(),
+    };
+    mockProductFindMany.mockResolvedValueOnce([
+      { sku: 'SKU-EXISTING', country: 'MY', sites: ['MY'], siteData: null },
+    ]);
+    const handler = getHandler(
+      createRestockV2Router({ ycClient }),
+      '/sync-products/preview',
+      'get',
+    );
+    const req = {
+      query: { site: 'MY' },
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+    } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      site: 'MY',
+      items: [
+        expect.objectContaining({ sku: 'SKU-EXISTING', alreadyInCurrentSite: true }),
+        expect.objectContaining({ sku: 'SKU-NEW', alreadyInCurrentSite: false }),
+      ],
+    }));
+  });
+
+  it('syncs only the YC products selected by the user', async () => {
+    const ycClient = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      listCustomerWarehouses: jest.fn().mockResolvedValue([
+        { code: '001', name: 'Malaysia 1', siteCode: 'MY' },
+      ]),
+      listProductInventory: jest.fn().mockResolvedValue([
+        {
+          warehouseCode: '001',
+          customerSku: 'SKU-A',
+          customerSkuName: 'Product A',
+          available: 5,
+          inventory: 8,
+        },
+        {
+          warehouseCode: '001',
+          customerSku: 'SKU-B',
+          customerSkuName: 'Product B',
+          available: 12,
+          inventory: 12,
+        },
+      ]),
+      listInboundOrders: jest.fn(),
+    };
+    mockProductFindMany.mockResolvedValueOnce([]);
+    mockInventoryFindMany.mockResolvedValueOnce([]);
+    mockWarehouseMappingFindMany.mockResolvedValueOnce([]);
+    const handler = getHandler(createRestockV2Router({ ycClient }), '/sync-products', 'post');
+    const req = {
+      body: { site: 'MY', skus: [' sku-b '] },
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+    } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(mockProductCreate).toHaveBeenCalledTimes(1);
+    expect(mockProductCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({ sku: 'SKU-B', name: 'Product B' }),
+    });
+    expect(mockInventoryCreate).toHaveBeenCalledTimes(1);
+    expect(mockWarehouseMappingCreate).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      syncedSkus: 1,
+      createdProducts: 1,
+    }));
+  });
+
+  it('rejects oversized YC SKU selections before calling the vendor API', async () => {
+    const ycClient = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      listCustomerWarehouses: jest.fn(),
+      listProductInventory: jest.fn(),
+      listInboundOrders: jest.fn(),
+    };
+    const handler = getHandler(createRestockV2Router({ ycClient }), '/sync-products', 'post');
+    const req = {
+      body: {
+        site: 'MY',
+        skus: Array.from({ length: 2001 }, (_, index) => `SKU-${index}`),
+      },
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = {
+      json: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+    } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid YC SKU selection' });
+    expect(ycClient.listProductInventory).not.toHaveBeenCalled();
   });
 
   it('rejects invalid YC stock numbers during sync without writing local data', async () => {

@@ -6,10 +6,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const bcrypt_1 = __importDefault(require("bcrypt"));
+const zod_1 = require("zod");
 const authMiddleware_1 = require("../middleware/authMiddleware");
+const ycCredentials_1 = require("../services/ycCredentials");
 const router = (0, express_1.Router)();
 const prisma = new client_1.PrismaClient();
 router.use(authMiddleware_1.authenticate);
+const ycCredentialsSchema = zod_1.z.object({
+    appKey: zod_1.z.string().max(512),
+    appSecret: zod_1.z.string().max(1024).optional(),
+}).strict();
+const ycCredentialsResponse = (credentials) => ({
+    appKey: credentials.ycAppKey || '',
+    appSecretConfigured: Boolean(credentials.ycAppSecret),
+    environmentConfigured: Boolean(process.env.YC_APP_KEY && process.env.YC_APP_SECRET),
+});
 router.get('/me/profile', async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
@@ -56,6 +67,46 @@ router.put('/me/profile', async (req, res) => {
     }
     catch (error) {
         res.status(500).json({ error: '更新个人信息失败' });
+    }
+});
+router.get('/me/yc-credentials', async (req, res) => {
+    try {
+        const credentials = await prisma.user.findUnique({
+            where: { id: req.user.id },
+            select: { ycAppKey: true, ycAppSecret: true },
+        });
+        if (!credentials) {
+            return res.status(404).json({ error: '用户不存在' });
+        }
+        return res.json(ycCredentialsResponse(credentials));
+    }
+    catch {
+        return res.status(500).json({ error: '获取元仓配置失败' });
+    }
+});
+router.put('/me/yc-credentials', async (req, res) => {
+    const parsed = ycCredentialsSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: '元仓配置格式不正确' });
+    }
+    try {
+        const appKey = parsed.data.appKey.trim();
+        const updateData = {
+            ycAppKey: appKey || null,
+        };
+        if (parsed.data.appSecret !== undefined) {
+            const appSecret = parsed.data.appSecret.trim();
+            updateData.ycAppSecret = appSecret ? (0, ycCredentials_1.encryptYcAppSecret)(appSecret) : null;
+        }
+        const credentials = await prisma.user.update({
+            where: { id: req.user.id },
+            data: updateData,
+            select: { ycAppKey: true, ycAppSecret: true },
+        });
+        return res.json(ycCredentialsResponse(credentials));
+    }
+    catch {
+        return res.status(500).json({ error: '保存元仓配置失败' });
     }
 });
 router.put('/me/password', async (req, res) => {

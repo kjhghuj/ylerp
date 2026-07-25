@@ -14,12 +14,9 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         key: 'dashboard', label: '仪表盘', labelEn: 'Dashboard', icon: LayoutDashboard,
         children: [
             { key: 'dashboard.balance', label: '账户余额', labelEn: 'Balance', icon: DollarSign },
-            { key: 'dashboard.margin', label: '加权利润率', labelEn: 'Weighted Profit Margin', icon: TrendingUp },
-            { key: 'dashboard.alerts', label: '缺货预警', labelEn: 'Alerts', icon: AlertTriangle },
+            { key: 'dashboard.alerts', label: '补货与滞销预警', labelEn: 'Restock & Aging Alerts', icon: AlertTriangle },
             { key: 'dashboard.debt', label: '总负债', labelEn: 'Debt', icon: BarChart3 },
-            { key: 'dashboard.chart', label: '趋势图表', labelEn: 'Chart', icon: BarChart3 },
-            { key: 'dashboard.profitTable', label: '主模板利润概览', labelEn: 'Primary Profit Overview', icon: FileText },
-            { key: 'dashboard.inventoryTable', label: '库存监控表', labelEn: 'Inventory Table', icon: Package },
+            { key: 'dashboard.inventoryTable', label: '元仓库存监控', labelEn: 'YC Warehouse Monitor', icon: Package },
         ]
     },
     {
