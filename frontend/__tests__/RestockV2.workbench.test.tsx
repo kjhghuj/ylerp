@@ -104,6 +104,8 @@ describe("RestockV2 stationized mapping workbench", () => {
         return Promise.resolve({ data: pendingImport });
       if (url === "/restock-v2/sku-rules")
         return Promise.resolve({ data: { rules: [] } });
+      if (url === "/restock-v2/target-skus")
+        return Promise.resolve({ data: { items: [] } });
       if (url === "/restock-v2/sales-imports/import-1")
         return Promise.resolve({ data: pendingImport });
       return Promise.reject(new Error(`unexpected ${url}`));
@@ -156,6 +158,44 @@ describe("RestockV2 stationized mapping workbench", () => {
       .toBeInTheDocument();
   });
 
+  it("loads fresh target SKUs and automatically maps an exact database SKU", async () => {
+    const exactImport = {
+      ...pendingImport,
+      items: [{ ...pendingImport.items[0], platformSku: "FPG_KEYBOARD_BLACK" }],
+      pending: [{ ...pendingImport.pending[0], platformSku: "FPG_KEYBOARD_BLACK" }],
+    };
+    mockedGet.mockImplementation((url: string) => {
+      if (url === "/restock-v2/sites")
+        return Promise.resolve({
+          data: {
+            ycConfigured: true,
+            sites: [{ code: "MY", label: "马来西亚", productCount: 1, warehouseCodes: ["MY-1"] }],
+          },
+        });
+      if (url === "/restock-v2/sales-imports/latest")
+        return Promise.resolve({ data: exactImport });
+      if (url === "/restock-v2/sku-rules")
+        return Promise.resolve({ data: { rules: [] } });
+      if (url === "/restock-v2/target-skus")
+        return Promise.resolve({
+          data: {
+            items: [{ id: "fresh-target", sku: "FPG_KEYBOARD_BLACK", name: "Keyboard" }],
+          },
+        });
+      return Promise.resolve({ data: exactImport });
+    });
+
+    render(<RestockV2 />);
+
+    await waitFor(() =>
+      expect(mockedPut).toHaveBeenCalledWith(
+        "/restock-v2/sales-imports/import-1/items/item-1/mapping",
+        { targetSku: "FPG_KEYBOARD_BLACK" },
+      ),
+    );
+    expect(mockedGet).toHaveBeenCalledWith("/restock-v2/target-skus");
+  });
+
   it("keeps ambiguous 100-percent candidates for manual review", async () => {
     storeInventory.push({ id: "target-3", sku: "X8_BLACK", name: "Alternate black case" });
     const ambiguousImport = {
@@ -180,7 +220,7 @@ describe("RestockV2 stationized mapping workbench", () => {
     try {
       render(<RestockV2 />);
       const trigger = await screen.findByTestId("target-sku-select-item-1");
-      expect(trigger).toHaveTextContent("100%");
+      await waitFor(() => expect(trigger).toHaveTextContent("100%"));
       await act(async () => undefined);
       expect(mockedPut).not.toHaveBeenCalled();
     } finally {
@@ -586,6 +626,101 @@ describe("RestockV2 stationized mapping workbench", () => {
         screen.getByRole("button", { name: /马来西亚/ }),
       ).not.toBeDisabled(),
     );
+  });
+
+  it("quickly creates a target SKU from the platform SKU and saves the mapping", async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: { id: "quick-new", sku: "X8-BLACQ", name: "X8-BLACQ" },
+    });
+    render(<RestockV2 />);
+
+    const trigger = await screen.findByTestId("target-sku-select-item-1");
+    const row = trigger.closest("tr");
+    const cancelButton = screen.getByRole("button", { name: "取消映射" });
+    const quickCreateButton = screen.getByRole("button", {
+      name: "快速新建 SKU",
+    });
+    expect(row).toContainElement(quickCreateButton);
+    expect(cancelButton.nextElementSibling).toBe(quickCreateButton);
+
+    fireEvent.click(quickCreateButton);
+
+    await waitFor(() =>
+      expect(mockedPost).toHaveBeenCalledWith("/restock-v2/target-skus", {
+        site: "PH",
+        sku: "X8-BLACQ",
+        name: "X8-BLACQ",
+      }),
+    );
+    await waitFor(() =>
+      expect(mockedPut).toHaveBeenCalledWith(
+        "/restock-v2/sales-imports/import-1/items/item-1/mapping",
+        { targetSku: "X8-BLACQ" },
+      ),
+    );
+    expect(mockedPost.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedPut.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("keeps a quickly created SKU selected when saving its mapping fails", async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: { id: "quick-new", sku: "X8-BLACQ", name: "X8-BLACQ" },
+    });
+    mockedPut.mockRejectedValueOnce(new Error("mapping failed"));
+    render(<RestockV2 />);
+
+    await screen.findByTestId("target-sku-select-item-1");
+    fireEvent.click(
+      screen.getByRole("button", { name: "快速新建 SKU" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "本地 SKU X8-BLACQ 已创建，但保存映射失败，请直接点击“保存映射”重试。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("target-sku-select-item-1")).toHaveTextContent(
+      "X8-BLACQ",
+    );
+    expect(screen.getByRole("button", { name: "保存映射" })).not.toBeDisabled();
+  });
+
+  it("uses an existing SKU to save the mapping when quick creation returns 409", async () => {
+    mockedPost.mockRejectedValueOnce({ response: { status: 409 } });
+    render(<RestockV2 />);
+
+    await screen.findByTestId("target-sku-select-item-1");
+    fireEvent.click(screen.getByRole("button", { name: "快速新建 SKU" }));
+
+    await waitFor(() =>
+      expect(mockedPut).toHaveBeenCalledWith(
+        "/restock-v2/sales-imports/import-1/items/item-1/mapping",
+        { targetSku: "X8-BLACQ" },
+      ),
+    );
+    expect(
+      await screen.findByText("本地 SKU X8-BLACQ 已存在，已保存映射。"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps an existing SKU selected when 409 fallback mapping fails", async () => {
+    mockedPost.mockRejectedValueOnce({ response: { status: 409 } });
+    mockedPut.mockRejectedValueOnce(new Error("mapping failed"));
+    render(<RestockV2 />);
+
+    await screen.findByTestId("target-sku-select-item-1");
+    fireEvent.click(screen.getByRole("button", { name: "快速新建 SKU" }));
+
+    expect(
+      await screen.findByText(
+        "本地 SKU X8-BLACQ 已存在，但保存映射失败，请直接点击“保存映射”重试。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("target-sku-select-item-1")).toHaveTextContent(
+      "X8-BLACQ",
+    );
+    expect(screen.getByRole("button", { name: "保存映射" })).not.toBeDisabled();
   });
 
   it("uses a synchronous global lock to block duplicate creates and every other write action", async () => {

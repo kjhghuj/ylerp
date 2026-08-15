@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -196,6 +197,158 @@ describe("RestockV2 sales-import planning flow", () => {
       ),
     );
     expect((await screen.findAllByText("62")).length).toBeGreaterThan(0);
+  });
+
+  it("shows the SKUs excluded from calculation because they exceed 50 characters", async () => {
+    const oversizedSku = `SKU-${"X".repeat(47)}`;
+    mockedPost.mockImplementation((url: string) => {
+      if (url === "/restock-v2/sales-imports")
+        return Promise.resolve({ data: importedSales });
+      if (url === "/restock-v2/recommendations")
+        return Promise.resolve({
+          data: {
+            ...recommendation,
+            metadata: { excludedOversizedSkus: [oversizedSku] },
+          },
+        });
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    render(<RestockV2 />);
+    await screen.findByText("菲律宾");
+    fireEvent.change(screen.getByLabelText("销售 Excel 文件"), {
+      target: { files: [new File(["xlsx"], "orders.xlsx")] },
+    });
+    await screen.findByText(/已解析 1 行/);
+    fireEvent.click(screen.getByRole("button", { name: "确认上传" }));
+    await screen.findByText("orders.xlsx");
+    fireEvent.click(screen.getByRole("button", { name: "开始计算补货建议" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "未计入补货计算的 SKU",
+    });
+    expect(dialog).toHaveTextContent("超过 50 个字符");
+    expect(dialog).toHaveTextContent(oversizedSku);
+    fireEvent.click(screen.getByRole("button", { name: "关闭 SKU 排除明细" }));
+    expect(screen.queryByRole("dialog", { name: "未计入补货计算的 SKU" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("sorts replenishment results by a selected column in both directions", async () => {
+    mockedPost.mockImplementation((url: string) => {
+      if (url === "/restock-v2/sales-imports")
+        return Promise.resolve({ data: importedSales });
+      if (url === "/restock-v2/recommendations")
+        return Promise.resolve({
+          data: {
+            ...recommendation,
+            summary: { totalSuggestedQty: 60, restockCount: 3 },
+            items: [
+              { ...recommendation.items[0], productId: "2", sku: "SKU-B", suggestedQty: 10 },
+              { ...recommendation.items[0], productId: "1", sku: "SKU-A", suggestedQty: 30 },
+              { ...recommendation.items[0], productId: "3", sku: "SKU-C", suggestedQty: 20 },
+            ],
+          },
+        });
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    render(<RestockV2 />);
+    await screen.findByText("菲律宾");
+    fireEvent.change(screen.getByLabelText("销售 Excel 文件"), {
+      target: { files: [new File(["xlsx"], "orders.xlsx")] },
+    });
+    await screen.findByText(/已解析 1 行/);
+    fireEvent.click(screen.getByRole("button", { name: "确认上传" }));
+    await screen.findByText("orders.xlsx");
+    fireEvent.click(screen.getByRole("button", { name: "开始计算补货建议" }));
+
+    const table = await screen.findByRole("table", { name: "补货建议明细" });
+    const resultSkus = () =>
+      within(table)
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[0].textContent);
+    expect(resultSkus()).toEqual(["SKU-B", "SKU-A", "SKU-C"]);
+
+    const quantitySort = within(table).getByRole("button", {
+      name: "按最终数量排序",
+    });
+    fireEvent.click(quantitySort);
+    expect(resultSkus()).toEqual(["SKU-B", "SKU-C", "SKU-A"]);
+    expect(quantitySort.closest("th")).toHaveAttribute("aria-sort", "ascending");
+
+    fireEvent.click(quantitySort);
+    expect(resultSkus()).toEqual(["SKU-A", "SKU-C", "SKU-B"]);
+    expect(quantitySort.closest("th")).toHaveAttribute("aria-sort", "descending");
+
+    fireEvent.click(
+      within(table).getByRole("button", { name: /按本地 SKU\s*排序/ }),
+    );
+    expect(resultSkus()).toEqual(["SKU-A", "SKU-B", "SKU-C"]);
+  });
+
+  it("exports every visible replenishment result column as CSV", async () => {
+    mockedPost.mockImplementation((url: string) => {
+      if (url === "/restock-v2/sales-imports")
+        return Promise.resolve({ data: importedSales });
+      if (url === "/restock-v2/recommendations")
+        return Promise.resolve({
+          data: {
+            ...recommendation,
+            items: [{ ...recommendation.items[0], sku: "LOCAL,ONE" }],
+          },
+        });
+      return Promise.reject(new Error(`unexpected ${url}`));
+    });
+    const originalCreateObjectUrl = URL.createObjectURL;
+    const originalRevokeObjectUrl = URL.revokeObjectURL;
+    const createObjectUrl = vi.fn((_blob: Blob) => "blob:restock-results");
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
+
+    try {
+      render(<RestockV2 />);
+      await screen.findByText("菲律宾");
+      fireEvent.change(screen.getByLabelText("销售 Excel 文件"), {
+        target: { files: [new File(["xlsx"], "orders.xlsx")] },
+      });
+      await screen.findByText(/已解析 1 行/);
+      fireEvent.click(screen.getByRole("button", { name: "确认上传" }));
+      await screen.findByText("orders.xlsx");
+      fireEvent.click(screen.getByRole("button", { name: "开始计算补货建议" }));
+      await screen.findByRole("table", { name: "补货建议明细" });
+      fireEvent.click(screen.getByRole("button", { name: "导出" }));
+
+      const blob = createObjectUrl.mock.calls[0][0] as Blob;
+      const csv = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+      expect(csv.replace(/^\uFEFF/, "").split("\n")).toEqual([
+        "本地 SKU,日销,到仓日 / 覆盖天数,元仓可用,在途,最终数量,提示",
+        '"LOCAL,ONE",6.30,2026-07-26 / 67,10,2 / 5,62,ETA 缺失',
+      ]);
+    } finally {
+      clickSpy.mockRestore();
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: originalCreateObjectUrl,
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: originalRevokeObjectUrl,
+      });
+    }
   });
 
   it("creates a local SKU, requires a separate mapping save, then saves an SKU override rule", async () => {

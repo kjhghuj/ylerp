@@ -1038,7 +1038,7 @@ describe('restockV2Routes', () => {
     mockExternalMappingFindMany.mockResolvedValueOnce([
       { externalSku: 'FOO-BAR', targetSku: 'ERP-1' },
     ]);
-    mockInventoryFindMany.mockResolvedValueOnce([{ sku: 'ERP-1' }]);
+    mockInventoryFindMany.mockResolvedValueOnce([{ sku: 'ERP-1' }, { sku: 'FOO-BAR' }]);
     mockSalesImportCreate.mockImplementationOnce(({ data, include }) => Promise.resolve({
       id: 'import-1',
       ...data,
@@ -1079,6 +1079,7 @@ describe('restockV2Routes', () => {
       }),
       include: { items: true },
     }));
+    expect(mockExternalMappingUpsert).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       import: expect.objectContaining({ id: 'import-1', statisticsDays: 30 }),
@@ -1470,6 +1471,7 @@ describe('restockV2Routes', () => {
   });
 
   it('builds POST recommendations from selected mapped effective sales and excludes pending items', async () => {
+    const oversizedSku = `ERP-${'X'.repeat(47)}`;
     const ycClient = {
       isConfigured: jest.fn().mockReturnValue(true),
       listCustomerWarehouses: jest.fn().mockResolvedValue([{ code: '021', name: 'PH', siteCode: 'PH' }]),
@@ -1482,19 +1484,28 @@ describe('restockV2Routes', () => {
       id: 'import-1', userId: 'owner-1', site: 'PH', statisticsDays: 30,
       items: [
         { id: 'item-1', targetSku: 'ERP-1', validSales: 300 },
+        { id: 'item-oversized', targetSku: oversizedSku, validSales: 150 },
         { id: 'item-2', targetSku: null, validSales: 999 },
         { id: 'item-dismissed-mapped', targetSku: 'ERP-1', validSales: 300, dismissedAt: new Date('2026-07-11T00:00:00.000Z') },
         { id: 'item-dismissed-pending', targetSku: null, validSales: 999, dismissedAt: new Date('2026-07-11T00:00:00.000Z') },
       ],
     });
-    mockInventoryFindMany.mockResolvedValueOnce([{
-      id: 'inventory-1', name: 'ERP 1', sku: 'ERP-1', dailySales: 999, leadTime: 25,
-      replenishCycle: 30, costPerUnit: 10, currentStock: 100, stockOfficial: 100,
-      stockThirdParty: 0, inTransit: 0,
-    }]);
-    mockProductFindMany.mockResolvedValueOnce([{
-      id: 'product-1', name: 'ERP 1', sku: 'ERP-1', country: 'PH', sites: ['PH'], cost: 10,
-    }]);
+    mockInventoryFindMany.mockResolvedValueOnce([
+      {
+        id: 'inventory-1', name: 'ERP 1', sku: 'ERP-1', dailySales: 999, leadTime: 25,
+        replenishCycle: 30, costPerUnit: 10, currentStock: 100, stockOfficial: 100,
+        stockThirdParty: 0, inTransit: 0,
+      },
+      {
+        id: 'inventory-oversized', name: 'Oversized', sku: oversizedSku, dailySales: 999, leadTime: 25,
+        replenishCycle: 30, costPerUnit: 10, currentStock: 0, stockOfficial: 0,
+        stockThirdParty: 0, inTransit: 0,
+      },
+    ]);
+    mockProductFindMany.mockResolvedValueOnce([
+      { id: 'product-1', name: 'ERP 1', sku: 'ERP-1', country: 'PH', sites: ['PH'], cost: 10 },
+      { id: 'product-oversized', name: 'Oversized', sku: oversizedSku, country: 'PH', sites: ['PH'], cost: 10 },
+    ]);
     mockWarehouseMappingFindMany.mockResolvedValueOnce([]);
     mockRestockSkuRuleFindMany.mockResolvedValueOnce([{
       sku: 'ERP-1', leadTimeDays: 31, safetyDays: 30, growthPercent: 0,
@@ -1513,9 +1524,92 @@ describe('restockV2Routes', () => {
     expect(mockSalesImportFindFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { id: 'import-1', userId: 'owner-1', site: 'PH' }, include: { items: true },
     }));
+    expect(ycClient.listProductInventory).toHaveBeenCalledWith({
+      warehouseCodes: ['021'], customerSkus: ['ERP-1'],
+    });
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       items: [expect.objectContaining({ sku: 'ERP-1', dailySales: 10, leadTimeDays: 31 })],
-      metadata: expect.objectContaining({ salesImportId: 'import-1', statisticsDays: 30, pendingCount: 1 }),
+      metadata: expect.objectContaining({
+        salesImportId: 'import-1',
+        statisticsDays: 30,
+        pendingCount: 1,
+        excludedMissingInventoryCount: 0,
+        excludedOversizedSkus: [oversizedSku],
+      }),
+    }));
+  });
+
+  it('auto-maps an exact owned SKU for a new site and persists that site mapping', async () => {
+    const router = createRestockV2Router({ ycClient: { isConfigured: jest.fn().mockReturnValue(false) } as any });
+    const handler = getHandler(router, '/sales-imports', 'post');
+    mockExternalMappingFindMany.mockResolvedValueOnce([]);
+    mockInventoryFindMany.mockResolvedValueOnce([{ sku: 'FPG_KEYBOARD_BLACK' }]);
+    mockExternalMappingUpsert.mockResolvedValueOnce({
+      site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK', targetSku: 'FPG_KEYBOARD_BLACK',
+    });
+    mockSalesImportCreate.mockImplementationOnce(({ data }) => Promise.resolve({
+      id: 'import-my', ...data,
+      items: data.items.create.map((item: any, index: number) => ({ id: `item-${index}`, ...item })),
+    }));
+    const req = {
+      body: {
+        site: 'MY', fileName: 'my-sales.xlsx', statisticsDays: 30,
+        rows: [{ platformSku: ' fpg_keyboard_black ', validSales: 4 }],
+      },
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(mockExternalMappingFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 'owner-1', site: 'MY' }),
+    }));
+    expect(mockExternalMappingUpsert).toHaveBeenCalledWith({
+      where: {
+        userId_site_externalSku: {
+          userId: 'owner-1', site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK',
+        },
+      },
+      create: {
+        userId: 'owner-1', site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK',
+        targetSku: 'FPG_KEYBOARD_BLACK',
+      },
+      update: { targetSku: 'FPG_KEYBOARD_BLACK' },
+    });
+    expect(mockSalesImportCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        items: { create: [expect.objectContaining({ targetSku: 'FPG_KEYBOARD_BLACK' })] },
+      }),
+    }));
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ pending: [] }));
+  });
+
+  it('does not auto-map a punctuation variant without a current-site mapping', async () => {
+    const router = createRestockV2Router({ ycClient: { isConfigured: jest.fn().mockReturnValue(false) } as any });
+    const handler = getHandler(router, '/sales-imports', 'post');
+    mockExternalMappingFindMany.mockResolvedValueOnce([]);
+    mockInventoryFindMany.mockResolvedValueOnce([{ sku: 'FPG-KEYBOARD-BLACK' }]);
+    mockSalesImportCreate.mockImplementationOnce(({ data }) => Promise.resolve({
+      id: 'import-my', ...data,
+      items: data.items.create.map((item: any, index: number) => ({ id: `item-${index}`, ...item })),
+    }));
+    const req = {
+      body: {
+        site: 'MY', fileName: 'my-sales.xlsx', statisticsDays: 30,
+        rows: [{ platformSku: 'FPG_KEYBOARD_BLACK', validSales: 4 }],
+      },
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(mockExternalMappingUpsert).not.toHaveBeenCalled();
+    expect(mockSalesImportCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        items: { create: [expect.objectContaining({ targetSku: null })] },
+      }),
     }));
   });
 
@@ -1606,6 +1700,37 @@ describe('restockV2Routes', () => {
     expect(mockWarehouseMappingCreate).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ sku: 'MANUAL-NEW', name: 'Manual product' }));
+  });
+
+  it('lists fresh owned target SKUs with inventory taking precedence over duplicate products', async () => {
+    const router = createRestockV2Router({ ycClient: { isConfigured: jest.fn().mockReturnValue(false) } as any });
+    const handler = getHandler(router, '/target-skus');
+    mockInventoryFindMany.mockResolvedValueOnce([
+      { id: 'inventory-1', sku: 'FPG_KEYBOARD_BLACK', name: 'Inventory name' },
+    ]);
+    mockProductFindMany.mockResolvedValueOnce([
+      { id: 'product-1', sku: 'fpg_keyboard_black', name: 'Product name' },
+      { id: 'product-2', sku: 'PRODUCT-ONLY', name: 'Product only' },
+    ]);
+    const req = {
+      user: { id: 'owner-1', username: 'owner', role: 'owner' },
+    } as Partial<Request>;
+    const res = { json: jest.fn(), status: jest.fn().mockReturnThis() } as Partial<Response>;
+
+    await handler(req as Request, res as Response, jest.fn());
+
+    expect(mockInventoryFindMany).toHaveBeenCalledWith({
+      where: { userId: 'owner-1' }, select: { id: true, sku: true, name: true },
+    });
+    expect(mockProductFindMany).toHaveBeenCalledWith({
+      where: { userId: 'owner-1' }, select: { id: true, sku: true, name: true },
+    });
+    expect(res.json).toHaveBeenCalledWith({
+      items: [
+        { id: 'inventory-1', sku: 'FPG_KEYBOARD_BLACK', name: 'Inventory name' },
+        { id: 'product-2', sku: 'PRODUCT-ONLY', name: 'Product only' },
+      ],
+    });
   });
 
   it('rejects invalid and duplicate local target SKU creation in the authenticated user scope', async () => {

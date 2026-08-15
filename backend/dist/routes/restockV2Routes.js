@@ -22,6 +22,7 @@ const MAX_IMPORT_FILE_NAME_LENGTH = 255;
 const MAX_SITE_LENGTH = 32;
 const MAX_IMPORT_ID_LENGTH = 100;
 const MAX_TARGET_SKU_NAME_LENGTH = 500;
+const YC_STOCK_SKU_MAX_LENGTH = 50;
 const parseOptionalYcSkuSelection = (value) => {
     if (value === undefined)
         return null;
@@ -649,16 +650,30 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                     reusableMappings.set(externalSku, targetSku);
                 }
             }
+            const exactFallbackMappings = [];
+            for (const externalSku of externalSkus) {
+                if (reusableMappings.has(externalSku) || !ownedInventorySkus.has(externalSku))
+                    continue;
+                reusableMappings.set(externalSku, externalSku);
+                exactFallbackMappings.push({ externalSku, targetSku: externalSku });
+            }
             const items = (0, restockSalesImport_1.aggregateSalesImportRows)(req.body.rows, reusableMappings);
-            const created = await index_1.prisma.restockSalesImport.create({
-                data: {
-                    userId,
-                    site,
-                    fileName,
-                    statisticsDays,
-                    items: { create: items },
-                },
-                include: { items: true },
+            const created = await index_1.prisma.$transaction(async (tx) => {
+                await Promise.all(exactFallbackMappings.map(({ externalSku, targetSku }) => tx.externalSkuMapping.upsert({
+                    where: { userId_site_externalSku: { userId, site, externalSku } },
+                    create: { userId, site, externalSku, targetSku },
+                    update: { targetSku },
+                })));
+                return tx.restockSalesImport.create({
+                    data: {
+                        userId,
+                        site,
+                        fileName,
+                        statisticsDays,
+                        items: { create: items },
+                    },
+                    include: { items: true },
+                });
             });
             return res.status(201).json(salesImportResponse(created));
         }
@@ -708,6 +723,36 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             }
             logSafeFailure('Restock sales import lookup failed', error);
             return res.status(500).json({ error: 'Failed to fetch sales import' });
+        }
+    });
+    router.get('/target-skus', requireRestockPermission('restock-v2.view'), async (req, res) => {
+        try {
+            const userId = req.user.id;
+            const [inventoryItems, products] = await Promise.all([
+                index_1.prisma.inventoryItem.findMany({
+                    where: { userId }, select: { id: true, sku: true, name: true },
+                }),
+                index_1.prisma.product.findMany({
+                    where: { userId }, select: { id: true, sku: true, name: true },
+                }),
+            ]);
+            const unique = new Map();
+            [...inventoryItems, ...products].forEach(item => {
+                const sku = (0, restockSalesImport_1.normalizeRestockSku)(item.sku);
+                if (!sku || unique.has(sku))
+                    return;
+                unique.set(sku, {
+                    id: String(item.id),
+                    sku,
+                    name: String(item.name || '').trim() || sku,
+                });
+            });
+            const items = Array.from(unique.values()).sort((left, right) => left.sku.localeCompare(right.sku));
+            return res.json({ items });
+        }
+        catch (error) {
+            logSafeFailure('Restock target SKU lookup failed', error);
+            return res.status(500).json({ error: 'Failed to fetch target SKUs' });
         }
     });
     router.post('/target-skus', requireRestockPermission('restock-v2.refresh'), async (req, res) => {
@@ -1067,7 +1112,11 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             ]);
             const inventoryBySku = new Map(inventoryItems.map(item => [(0, restockSalesImport_1.normalizeRestockSku)(item.sku), item]));
             const productBySku = new Map(products.map(product => [(0, restockSalesImport_1.normalizeRestockSku)(product.sku), product]));
-            const validAggregates = salesAggregates.filter(aggregate => inventoryBySku.has(aggregate.targetSku));
+            const inventoryBackedAggregates = salesAggregates.filter(aggregate => inventoryBySku.has(aggregate.targetSku));
+            const excludedOversizedSkus = inventoryBackedAggregates
+                .filter(aggregate => aggregate.targetSku.length > YC_STOCK_SKU_MAX_LENGTH)
+                .map(aggregate => aggregate.targetSku);
+            const validAggregates = inventoryBackedAggregates.filter(aggregate => aggregate.targetSku.length <= YC_STOCK_SKU_MAX_LENGTH);
             const importedInventoryItems = validAggregates.map(aggregate => {
                 const inventory = inventoryBySku.get(aggregate.targetSku);
                 return {
@@ -1090,7 +1139,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
             const skus = importedInventoryItems.map(item => item.sku);
             const ycSkuAliases = buildYcSkuAliasMap(warehouseMappings, skus);
-            const querySkus = Array.from(new Set([...skus, ...Array.from(ycSkuAliases.keys())]));
+            const querySkus = Array.from(new Set([...skus, ...Array.from(ycSkuAliases.keys())])).filter(sku => sku.length <= YC_STOCK_SKU_MAX_LENGTH);
             const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             if (warehouseCodes.length === 0) {
@@ -1148,7 +1197,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                     salesImportId: salesImport.id,
                     statisticsDays: salesImport.statisticsDays,
                     pendingCount: activeItems.filter(item => !(0, restockSalesImport_1.normalizeRestockSku)(item.targetSku)).length,
-                    excludedMissingInventoryCount: salesAggregates.length - validAggregates.length,
+                    excludedMissingInventoryCount: salesAggregates.length - inventoryBackedAggregates.length,
+                    excludedOversizedSkus,
                 },
                 integration: {
                     ycConfigured: true,

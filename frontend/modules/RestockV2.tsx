@@ -8,6 +8,9 @@ import React, {
 import { createPortal } from "react-dom";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   CheckCircle2,
   ChevronDown,
   CircleHelp,
@@ -86,6 +89,7 @@ interface RestockPlan {
   generatedAt: string;
   summary: { totalSuggestedQty: number; restockCount: number };
   items: RestockPlanItem[];
+  metadata?: { excludedOversizedSkus?: string[] };
   integration?: { warnings?: string[] };
 }
 type EditableSkuRule = Pick<
@@ -94,6 +98,14 @@ type EditableSkuRule = Pick<
 >;
 type TargetSkuDraft = { sku: string; name: string };
 type MappingTab = "pending" | "mapped";
+type RestockResultSortKey =
+  | "sku"
+  | "dailySales"
+  | "arrivalDate"
+  | "availableStock"
+  | "inTransit"
+  | "suggestedQty";
+type SortDirection = "ascending" | "descending";
 
 const MAX_PLANNING_DAYS = 3650;
 const MAX_GROWTH_PERCENT = 1000;
@@ -115,6 +127,13 @@ const formatNumber = (value: number, digits = 0) =>
         minimumFractionDigits: digits,
       })
     : "-";
+const formatCsvRow = (values: Array<string | number>) =>
+  values
+    .map((value) => {
+      const text = String(value);
+      return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    })
+    .join(",");
 const sameSku = (
   left: string | null | undefined,
   right: string | null | undefined,
@@ -127,14 +146,16 @@ const sameSku = (
     .toUpperCase();
 const normalizeTargetSku = (value: string) =>
   value.replace(/\t/g, "").trim().toUpperCase();
+const requestStatus = (error: unknown) =>
+  error && typeof error === "object" && "response" in error
+    ? (error as { response?: { status?: number } }).response?.status
+    : undefined;
 const friendlyError = (error: unknown, fallback: string) => {
-  const status =
-    error && typeof error === "object" && "response" in error
-      ? (error as { response?: { status?: number } }).response?.status
-      : undefined;
+  const status = requestStatus(error);
   if (status === 401) return "登录状态已失效，请重新登录后再试。";
   if (status === 403) return "当前账号没有补货数据权限。";
   if (status === 400) return "提交的数据或日期参数不符合要求，请检查后再试。";
+  if (status === 409) return "该 SKU 已存在，请选择已有 SKU 保存映射。";
   if (status === 503) return "元仓数据暂不可用，请稍后重新计算。";
   return fallback;
 };
@@ -479,6 +500,9 @@ export const RestockV2: React.FC = () => {
   const [createdTargetSkus, setCreatedTargetSkus] = useState<
     RestockTargetSku[]
   >([]);
+  const [remoteTargetSkus, setRemoteTargetSkus] = useState<
+    RestockTargetSku[]
+  >([]);
   const [creatingTargetFor, setCreatingTargetFor] = useState<
     Record<string, boolean>
   >({});
@@ -489,6 +513,7 @@ export const RestockV2: React.FC = () => {
   const [dismissingItemId, setDismissingItemId] = useState("");
   const [dismissedExitItemId, setDismissedExitItemId] = useState("");
   const [creatingItemId, setCreatingItemId] = useState("");
+  const [quickCreatingItemId, setQuickCreatingItemId] = useState("");
   const [savingRuleSku, setSavingRuleSku] = useState("");
   const [planningDate, setPlanningDate] = useState(todayIso);
   const [leadTimeDays, setLeadTimeDays] = useState(25);
@@ -496,6 +521,13 @@ export const RestockV2: React.FC = () => {
   const [safetyDays, setSafetyDays] = useState(30);
   const [growthPercent, setGrowthPercent] = useState(0);
   const [plan, setPlan] = useState<RestockPlan | null>(null);
+  const [resultSort, setResultSort] = useState<{
+    key: RestockResultSortKey | null;
+    direction: SortDirection;
+  }>({ key: null, direction: "ascending" });
+  const [excludedOversizedSkus, setExcludedOversizedSkus] = useState<string[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mutationActive, setMutationActive] = useState(false);
@@ -504,6 +536,7 @@ export const RestockV2: React.FC = () => {
   const [notice, setNotice] = useState("");
   const siteRequestGenerationRef = useRef(0);
   const salesImportLoadTokenRef = useRef(0);
+  const targetSkuLoadTokenRef = useRef(0);
   const fileParseGenerationRef = useRef(0);
   const mutationLockRef = useRef(false);
   const autoMatchAttemptedRef = useRef<Set<string>>(new Set());
@@ -518,7 +551,7 @@ export const RestockV2: React.FC = () => {
   const selectedSiteInfo = sites.find((site) => site.code === selectedSite);
   const targetSkus = useMemo(() => {
     const unique = new Map<string, RestockTargetSku>();
-    [...inventory, ...products].forEach((item) => {
+    [...remoteTargetSkus, ...inventory, ...products].forEach((item) => {
       const sku = normalizeTargetSku(String(item.sku || ""));
       if (sku && !unique.has(sku))
         unique.set(sku, { id: String(item.id || sku), sku, name: item.name });
@@ -529,7 +562,7 @@ export const RestockV2: React.FC = () => {
     return [...unique.values()].sort((left, right) =>
       left.sku.localeCompare(right.sku),
     );
-  }, [createdTargetSkus, inventory, products]);
+  }, [createdTargetSkus, inventory, products, remoteTargetSkus]);
   const exactTargetLookup = useMemo(() => {
     const normalized = new Map<string, RestockTargetSku>();
     const compact = new Map<string, RestockTargetSku | null>();
@@ -595,6 +628,45 @@ export const RestockV2: React.FC = () => {
       isValidIsoDate(planningDate) ? addDays(planningDate, leadTimeDays) : "",
     [leadTimeDays, planningDate],
   );
+  const sortedPlanItems = useMemo(() => {
+    if (!plan || !resultSort.key) return plan?.items || [];
+    const direction = resultSort.direction === "ascending" ? 1 : -1;
+    const compare = (left: RestockPlanItem, right: RestockPlanItem) => {
+      switch (resultSort.key) {
+        case "sku":
+          return left.sku.localeCompare(right.sku, "zh-CN", {
+            numeric: true,
+            sensitivity: "base",
+          });
+        case "dailySales":
+          return left.dailySales - right.dailySales;
+        case "arrivalDate": {
+          const dateComparison = left.arrivalDate.localeCompare(
+            right.arrivalDate,
+          );
+          return dateComparison || left.coverageDays - right.coverageDays;
+        }
+        case "availableStock":
+          return left.availableStock - right.availableStock;
+        case "inTransit":
+          return (
+            left.inTransitBeforeArrival +
+            left.inTransitDuringCoverage -
+            right.inTransitBeforeArrival -
+            right.inTransitDuringCoverage
+          );
+        case "suggestedQty":
+          return left.suggestedQty - right.suggestedQty;
+      }
+    };
+    return plan.items
+      .map((item, index) => ({ item, index }))
+      .sort((left, right) => {
+        const comparison = compare(left.item, right.item);
+        return comparison ? comparison * direction : left.index - right.index;
+      })
+      .map(({ item }) => item);
+  }, [plan, resultSort]);
   const hasUnsavedWork =
     Object.keys(mappingDirty).length > 0 ||
     Object.values(creatingTargetFor).some(Boolean) ||
@@ -631,6 +703,8 @@ export const RestockV2: React.FC = () => {
     setMappingTab("pending");
     setQueuePage(1);
     setPlan(null);
+    setResultSort({ key: null, direction: "ascending" });
+    setExcludedOversizedSkus([]);
   }, [clearDismissalTimers]);
 
   const loadSalesImport = useCallback(
@@ -674,6 +748,24 @@ export const RestockV2: React.FC = () => {
     },
     [],
   );
+  const loadTargetSkus = useCallback(
+    async (generation = siteRequestGenerationRef.current) => {
+      const loadToken = ++targetSkuLoadTokenRef.current;
+      try {
+        const response = await api.get("/restock-v2/target-skus");
+        if (
+          loadToken !== targetSkuLoadTokenRef.current ||
+          generation !== siteRequestGenerationRef.current
+        )
+          return;
+        const data = response.data as { items?: RestockTargetSku[] };
+        setRemoteTargetSkus(data.items || []);
+      } catch {
+        // Keep the existing in-memory candidates when the refresh is unavailable.
+      }
+    },
+    [],
+  );
 
   useEffect(
     () => () => clearDismissalTimers(),
@@ -705,6 +797,7 @@ export const RestockV2: React.FC = () => {
     const generation = ++siteRequestGenerationRef.current;
     clearTransientState();
     void loadSalesImport(selectedSite, undefined, generation);
+    void loadTargetSkus(generation);
     api
       .get("/restock-v2/sku-rules", { params: { site: selectedSite } })
       .then((response) => {
@@ -722,7 +815,7 @@ export const RestockV2: React.FC = () => {
         )
           setRules([]);
       });
-  }, [clearTransientState, loadSalesImport, selectedSite]);
+  }, [clearTransientState, loadSalesImport, loadTargetSkus, selectedSite]);
 
   useEffect(() => {
     if (mappingTab !== "pending" || !visibleQueue.length) return;
@@ -1121,6 +1214,7 @@ export const RestockV2: React.FC = () => {
       setMappingDirty((previous) => ({ ...previous, [item.id]: true }));
       cancelTargetSkuCreation(item.id);
       setNotice("本地 SKU 已创建并选中；请继续保存映射。");
+      void loadTargetSkus(requestGeneration);
     } catch (requestError) {
       if (
         requestGeneration === siteRequestGenerationRef.current &&
@@ -1130,6 +1224,100 @@ export const RestockV2: React.FC = () => {
       }
     } finally {
       setCreatingItemId("");
+      endMutation();
+    }
+  };
+  const quickCreateTargetSkuAndSaveMapping = async (item: SalesImportItem) => {
+    const sku = normalizeTargetSku(item.platformSku || "");
+    if (!salesImport || !selectedSite || !sku) {
+      setError("当前记录缺少平台 SKU，无法快速新建并保存映射。");
+      return;
+    }
+    if (!beginMutation()) return;
+    const requestSite = selectedSite;
+    const requestImportId = salesImport.import.id;
+    const requestGeneration = siteRequestGenerationRef.current;
+    let availableSku =
+      targetSkus.find((candidate) => sameSku(candidate.sku, sku)) || null;
+    let alreadyExisted = Boolean(availableSku);
+    setQuickCreatingItemId(item.id);
+    setError("");
+    try {
+      if (!availableSku) {
+        try {
+          const response = await api.post("/restock-v2/target-skus", {
+            site: requestSite,
+            sku,
+            name: sku,
+          });
+          availableSku = response.data as RestockTargetSku;
+        } catch (requestError) {
+          if (requestStatus(requestError) !== 409) throw requestError;
+          alreadyExisted = true;
+          availableSku = { id: `existing-${sku}`, sku, name: sku };
+        }
+      }
+      if (
+        requestGeneration !== siteRequestGenerationRef.current ||
+        selectedSiteRef.current !== requestSite
+      )
+        return;
+      const targetSku = availableSku;
+      if (!targetSku) return;
+      autoMatchAttemptedRef.current.add(`${requestImportId}:${item.id}`);
+      setCreatedTargetSkus((previous) => [
+        ...previous.filter(
+          (current) => !sameSku(current.sku, targetSku.sku),
+        ),
+        targetSku,
+      ]);
+      setMappingSelection((previous) => ({
+        ...previous,
+        [item.id]: targetSku.sku,
+      }));
+
+      await api.put(
+        `/restock-v2/sales-imports/${requestImportId}/items/${item.id}/mapping`,
+        { targetSku: targetSku.sku },
+      );
+      if (
+        requestGeneration !== siteRequestGenerationRef.current ||
+        selectedSiteRef.current !== requestSite
+      )
+        return;
+      setMappingDirty((previous) => {
+        const next = { ...previous };
+        delete next[item.id];
+        return next;
+      });
+      cancelTargetSkuCreation(item.id);
+      setNotice(
+        alreadyExisted
+          ? `本地 SKU ${sku} 已存在，已保存映射。`
+          : `平台 SKU ${sku} 已新建并保存映射。`,
+      );
+      await Promise.all([
+        loadSalesImport(requestSite, requestImportId, requestGeneration),
+        loadTargetSkus(requestGeneration),
+      ]);
+    } catch (requestError) {
+      if (
+        requestGeneration === siteRequestGenerationRef.current &&
+        selectedSiteRef.current === requestSite
+      ) {
+        if (availableSku) {
+          setMappingDirty((previous) => ({ ...previous, [item.id]: true }));
+          setError(
+            alreadyExisted
+              ? `本地 SKU ${availableSku.sku} 已存在，但保存映射失败，请直接点击“保存映射”重试。`
+              : `本地 SKU ${availableSku.sku} 已创建，但保存映射失败，请直接点击“保存映射”重试。`,
+          );
+        } else {
+          setError(friendlyError(requestError, "快速新建本地 SKU 失败。"));
+        }
+      }
+    } finally {
+      setQuickCreatingItemId("");
       endMutation();
     }
   };
@@ -1232,7 +1420,12 @@ export const RestockV2: React.FC = () => {
         selectedSiteRef.current !== requestSite
       )
         return;
-      setPlan(response.data as RestockPlan);
+      const nextPlan = response.data as RestockPlan;
+      setPlan(nextPlan);
+      setResultSort({ key: null, direction: "ascending" });
+      setExcludedOversizedSkus(
+        nextPlan.metadata?.excludedOversizedSkus?.filter(Boolean) || [],
+      );
     } catch (requestError) {
       if (
         requestGeneration === siteRequestGenerationRef.current &&
@@ -1246,17 +1439,37 @@ export const RestockV2: React.FC = () => {
     }
   };
   const copyPlan = async () => {
-    if (!plan?.items.length || !navigator.clipboard?.writeText) return;
+    if (!sortedPlanItems.length || !navigator.clipboard?.writeText) return;
     await navigator.clipboard.writeText(
-      plan.items.map((item) => `${item.sku}\t${item.suggestedQty}`).join("\n"),
+      sortedPlanItems
+        .map((item) => `${item.sku}\t${item.suggestedQty}`)
+        .join("\n"),
     );
     setNotice("补货建议已复制。");
   };
   const exportPlan = () => {
-    if (!plan?.items.length) return;
+    if (!sortedPlanItems.length) return;
     const lines = [
-      ["目标 SKU", "建议补货数量"].join(","),
-      ...plan.items.map((item) => `${item.sku},${item.suggestedQty}`),
+      formatCsvRow([
+        "本地 SKU",
+        "日销",
+        "到仓日 / 覆盖天数",
+        "元仓可用",
+        "在途",
+        "最终数量",
+        "提示",
+      ]),
+      ...sortedPlanItems.map((item) =>
+        formatCsvRow([
+          item.sku,
+          formatNumber(item.dailySales, 2),
+          `${item.arrivalDate} / ${item.coverageDays}`,
+          formatNumber(item.availableStock),
+          `${formatNumber(item.inTransitBeforeArrival)} / ${formatNumber(item.inTransitDuringCoverage)}`,
+          formatNumber(item.suggestedQty),
+          item.warnings?.join("；") || "",
+        ]),
+      ),
     ];
     const url = URL.createObjectURL(
       new Blob([`\uFEFF${lines.join("\n")}`], {
@@ -1270,6 +1483,41 @@ export const RestockV2: React.FC = () => {
     URL.revokeObjectURL(url);
   };
   const step = !salesImport ? 1 : pendingItems.length ? 2 : plan ? 4 : 3;
+  const sortableResultHeader = (
+    key: RestockResultSortKey,
+    label: string,
+  ) => {
+    const active = resultSort.key === key;
+    const SortIcon = active
+      ? resultSort.direction === "ascending"
+        ? ArrowUp
+        : ArrowDown
+      : ArrowUpDown;
+    return (
+      <th
+        className="p-2"
+        aria-sort={active ? resultSort.direction : undefined}
+      >
+        <button
+          type="button"
+          aria-label={`按${label}排序`}
+          onClick={() =>
+            setResultSort((previous) => ({
+              key,
+              direction:
+                previous.key === key && previous.direction === "ascending"
+                  ? "descending"
+                  : "ascending",
+            }))
+          }
+          className="inline-flex items-center gap-1 rounded-md py-1 font-semibold transition hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          {label}
+          <SortIcon size={14} aria-hidden="true" />
+        </button>
+      </th>
+    );
+  };
 
   return (
     <div className="h-full min-h-0 pb-8 text-slate-800">
@@ -1776,6 +2024,31 @@ export const RestockV2: React.FC = () => {
                                   </button>
                                   <button
                                     type="button"
+                                    data-testid={`target-sku-quick-create-${item.id}`}
+                                    onClick={() =>
+                                      quickCreateTargetSkuAndSaveMapping(item)
+                                    }
+                                    disabled={
+                                      mutationActive ||
+                                      dismissState !== "idle" ||
+                                      !normalizeTargetSku(item.platformSku || "")
+                                    }
+                                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-emerald-300 bg-white px-3 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {quickCreatingItemId === item.id ? (
+                                      <Loader2
+                                        size={13}
+                                        className="animate-spin"
+                                      />
+                                    ) : (
+                                      <Plus size={13} />
+                                    )}
+                                    {quickCreatingItemId === item.id
+                                      ? "创建并映射中"
+                                      : "快速新建 SKU"}
+                                  </button>
+                                  <button
+                                    type="button"
                                     data-testid={`target-sku-create-toggle-${item.id}`}
                                     disabled={dismissState !== "idle"}
                                     onClick={() =>
@@ -2117,17 +2390,20 @@ export const RestockV2: React.FC = () => {
                 >
                   <thead className="border-b text-left text-slate-500">
                     <tr>
-                      <th className="p-2">本地 SKU</th>
-                      <th className="p-2">日销</th>
-                      <th className="p-2">到仓日 / 覆盖天数</th>
-                      <th className="p-2">元仓可用</th>
-                      <th className="p-2">在途</th>
-                      <th className="p-2">最终数量</th>
+                      {sortableResultHeader("sku", "本地 SKU")}
+                      {sortableResultHeader("dailySales", "日销")}
+                      {sortableResultHeader(
+                        "arrivalDate",
+                        "到仓日 / 覆盖天数",
+                      )}
+                      {sortableResultHeader("availableStock", "元仓可用")}
+                      {sortableResultHeader("inTransit", "在途")}
+                      {sortableResultHeader("suggestedQty", "最终数量")}
                       <th className="p-2">提示</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {plan.items.map((item) => (
+                    {sortedPlanItems.map((item) => (
                       <tr
                         key={`${item.productId}-${item.sku}`}
                         className="border-b border-slate-100"
@@ -2165,6 +2441,55 @@ export const RestockV2: React.FC = () => {
           </section>
         </fieldset>
       </div>
+      {excludedOversizedSkus.length ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="未计入补货计算的 SKU"
+          className="fixed inset-0 z-[60] grid place-items-center bg-slate-950/40 p-4"
+        >
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  未计入补货计算的 SKU
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  以下 {excludedOversizedSkus.length} 个 SKU 超过 50
+                  个字符，元仓库存接口无法查询，因此未参与本次补货计算。
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭 SKU 排除明细"
+                onClick={() => setExcludedOversizedSkus([])}
+                className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ul className="mt-4 max-h-[50vh] space-y-2 overflow-y-auto rounded-xl border border-amber-200 bg-amber-50 p-3">
+              {excludedOversizedSkus.map((sku) => (
+                <li
+                  key={sku}
+                  className="break-all rounded-lg bg-white px-3 py-2 font-mono text-xs text-slate-800 shadow-sm"
+                >
+                  {sku}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setExcludedOversizedSkus([])}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {pendingSiteChange ? (
         <div
           ref={siteDialogRef}
