@@ -1,5 +1,9 @@
 node_modules
 dist
+coverage
 .env
 .git
 *.log
+__tests__
+*.test.ts
+*.test.tsx

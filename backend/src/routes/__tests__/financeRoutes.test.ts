@@ -46,18 +46,18 @@ describe('financeRoutes destructive deletes', () => {
     mockDeleteMany.mockResolvedValue({ count: 3 });
   });
 
-  it('deletes only the current user finance records when clearing all records', async () => {
+  it('deletes all shared finance records when clearing all records', async () => {
     const handler = getHandler('/all');
 
     await handler(req as Request, res as Response, jest.fn());
 
-    expect(mockDeleteMany).toHaveBeenCalledWith({ where: { userId: 'owner-1' } });
-    expect(mockCacheDel).toHaveBeenCalledWith('finance:owner-1');
+    expect(mockDeleteMany).toHaveBeenCalledWith({ where: {} });
+    expect(mockCacheDel).toHaveBeenCalledWith('finance:all');
     expect(res.status).toHaveBeenCalledWith(204);
     expect(res.send).toHaveBeenCalled();
   });
 
-  it('deletes only the current user finance records for a month', async () => {
+  it('deletes all shared finance records for a month', async () => {
     req.params = { month: '2026-05' };
     const handler = getHandler('/month/:month');
 
@@ -65,14 +65,13 @@ describe('financeRoutes destructive deletes', () => {
 
     expect(mockDeleteMany).toHaveBeenCalledWith({
       where: {
-        userId: 'owner-1',
         date: {
           gte: new Date(2026, 4, 1),
           lt: new Date(2026, 5, 1),
         },
       },
     });
-    expect(mockCacheDel).toHaveBeenCalledWith('finance:owner-1');
+    expect(mockCacheDel).toHaveBeenCalledWith('finance:all');
     expect(res.json).toHaveBeenCalledWith({ message: 'Deleted records', count: 3 });
   });
 });

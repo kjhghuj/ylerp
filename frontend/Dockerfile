@@ -1,11 +1,12 @@
-FROM node:22-slim AS build
+# syntax=docker/dockerfile:1.7
 
-RUN npm install -g cnpm --registry=https://registry.npmmirror.com
+FROM node:22-slim AS build
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN cnpm install
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --registry=https://registry.npmmirror.com
 
 COPY . .
 ARG VITE_API_URL=/api

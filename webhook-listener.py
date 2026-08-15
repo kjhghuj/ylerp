@@ -9,6 +9,7 @@ PORT = 9000
 SECRET = os.environ.get("WEBHOOK_SECRET", "your-webhook-secret-here")
 DEPLOY_SCRIPT = "/opt/ylerp/deploy.sh"
 LOG_FILE = "/var/log/ylerp-deploy.log"
+DEPLOY_TIMEOUT_SECONDS = int(os.environ.get("DEPLOY_TIMEOUT_SECONDS", "1800"))
 
 
 class WebhookHandler(http.server.BaseHTTPRequestHandler):
@@ -44,17 +45,13 @@ class WebhookHandler(http.server.BaseHTTPRequestHandler):
         try:
             result = subprocess.run(
                 ["bash", DEPLOY_SCRIPT],
-                capture_output=True,
-                text=True,
-                timeout=300,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=DEPLOY_TIMEOUT_SECONDS,
             )
             self.log(f"部署退出码: {result.returncode}")
-            if result.stdout:
-                self.log(result.stdout)
-            if result.returncode != 0 and result.stderr:
-                self.log(f"错误: {result.stderr}")
         except subprocess.TimeoutExpired:
-            self.log("部署超时（5分钟）")
+            self.log(f"部署超时（{DEPLOY_TIMEOUT_SECONDS}秒）")
         except Exception as e:
             self.log(f"部署异常: {e}")
 

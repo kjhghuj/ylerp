@@ -9,6 +9,13 @@ const path_1 = __importDefault(require("path"));
 const index_1 = require("../index");
 const BACKUP_PATH = path_1.default.join(__dirname, '../../backups/finance-backup.json');
 const INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_STARTUP_DELAY_MS = 5 * 60 * 1000;
+function getStartupDelayMs() {
+    const configured = Number(process.env.FINANCE_BACKUP_STARTUP_DELAY_MS);
+    return Number.isFinite(configured) && configured >= 0
+        ? configured
+        : DEFAULT_STARTUP_DELAY_MS;
+}
 function startFinanceBackup() {
     const run = async () => {
         try {
@@ -23,6 +30,6 @@ function startFinanceBackup() {
             console.error('[备份] 财务数据备份失败:', err);
         }
     };
-    run();
+    setTimeout(run, getStartupDelayMs());
     setInterval(run, INTERVAL_MS);
 }

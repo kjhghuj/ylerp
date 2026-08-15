@@ -4,6 +4,14 @@ import { prisma } from '../index';
 
 const BACKUP_PATH = path.join(__dirname, '../../backups/finance-backup.json');
 const INTERVAL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_STARTUP_DELAY_MS = 5 * 60 * 1000;
+
+function getStartupDelayMs(): number {
+    const configured = Number(process.env.FINANCE_BACKUP_STARTUP_DELAY_MS);
+    return Number.isFinite(configured) && configured >= 0
+        ? configured
+        : DEFAULT_STARTUP_DELAY_MS;
+}
 
 export function startFinanceBackup() {
     const run = async () => {
@@ -18,6 +26,6 @@ export function startFinanceBackup() {
         }
     };
 
-    run();
+    setTimeout(run, getStartupDelayMs());
     setInterval(run, INTERVAL_MS);
 }

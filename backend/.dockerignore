@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+backups
+.env
+.git
+*.log
+api_logs.txt
+build_out.txt
+src/**/__tests__
