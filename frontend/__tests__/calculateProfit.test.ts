@@ -32,9 +32,9 @@ describe('calculateProfit', () => {
             expect(result.sellerCouponSellerContribution).toBe(5);
             expect(result.sellerCouponPlatformContribution).toBe(15);
             expect(result.buyerPaidRevenue).toBe(75);
-            expect(result.corporateIncomeTax).toBe(7.5);
+            expect(result.corporateIncomeTax).toBe(0);
             expect(result.costTaxAmount).toBe(65);
-            expect(result.totalTax).toBe(7.5);
+            expect(result.totalTax).toBe(0);
         });
 
         it('never creates negative corporate income tax when coupons exceed buyer revenue', () => {
@@ -252,7 +252,7 @@ describe('calculateProfit', () => {
                 seller: 15,
                 platform: 5,
             },
-        ])('derives $label coupon contributions with the approved buyer-payment tax base', ({ site, gross, seller, platform }) => {
+        ])('derives $label coupon contributions with the invoice-aware profit tax base', ({ site, gross, seller, platform }) => {
             const result = calculateProfit(
                 { ...defaultData, platformCommissionRate: 10, platformCoupon: 2 },
                 { ...defaultGlobal, purchaseCost: 30, vatRate: 6, corporateIncomeTaxRate: 10 },
@@ -270,14 +270,14 @@ describe('calculateProfit', () => {
                 revenueAfterSellerCoupon: 85,
                 commission: 8.5,
                 platformCouponCNY: 2,
-                corporateIncomeTax: 7.8,
-                totalTax: 12.48,
+                corporateIncomeTax: 6.38,
+                totalTax: 11.06,
                 adFee: 8,
             }));
             expect(result.vat).toBe(4.68);
-            expect(result.finalRevenueCNY).toBe(26.02);
-            expect(result.roi).toBeCloseTo(86.73333333333333, 12);
-            expect(result.margin).toBeCloseTo(30.611764705882354, 12);
+            expect(result.finalRevenueCNY).toBe(27.44);
+            expect(result.roi).toBeCloseTo(91.46666666666667, 12);
+            expect(result.margin).toBeCloseTo(32.28235294117647, 12);
         });
     });
 
@@ -314,27 +314,32 @@ describe('calculateProfit', () => {
             expect(result.vat).toBe(6);
         });
 
-        it('should calculate corporate income tax without invoice', () => {
+        it('adds purchase cost back to pre-tax net profit when the supplier does not issue an invoice', () => {
             const result = calculateProfit(
                 defaultData,
                 { ...defaultGlobal, supplierInvoice: 'no', corporateIncomeTaxRate: 10 },
                 { ...defaultSiteInputs, totalRevenue: 100 },
                 1, 'MYR',
             );
-            expect(result.corporateIncomeTax).toBe(10);
+            // Pre-tax net profit: 100 - 50 purchase cost - 6.67 advertising = 43.33.
+            // No invoice tax base: 43.33 + 50 purchase cost = 93.33.
+            expect(result.corporateIncomeTax).toBe(9.33);
+            expect(result.finalRevenueCNY).toBe(34);
         });
 
-        it('should calculate corporate income tax from buyer payment even when an invoice exists', () => {
+        it('uses pre-tax net profit as the corporate income tax base when the supplier issues an invoice', () => {
             const result = calculateProfit(
                 defaultData,
                 { ...defaultGlobal, supplierInvoice: 'yes', purchaseCost: 50, corporateIncomeTaxRate: 10 },
                 { ...defaultSiteInputs, totalRevenue: 100 },
                 1, 'MYR',
             );
-            expect(result.corporateIncomeTax).toBe(10);
+            // With an invoice, the 50 purchase cost remains deductible.
+            expect(result.corporateIncomeTax).toBe(4.33);
+            expect(result.finalRevenueCNY).toBe(39);
         });
 
-        it('should report supplier cost tax separately without adding it to corporate income tax', () => {
+        it('reports supplier cost tax separately while taxing only pre-tax net profit with an invoice', () => {
             const result = calculateProfit(
                 defaultData,
                 { ...defaultGlobal, supplierInvoice: 'yes', purchaseCost: 100, supplierTaxPoint: 5, corporateIncomeTaxRate: 10 },
@@ -342,8 +347,34 @@ describe('calculateProfit', () => {
                 1, 'MYR',
             );
             expect(result.costTaxAmount).toBe(5);
-            expect(result.corporateIncomeTax).toBe(20);
-            expect(result.totalTax).toBe(20);
+            // Pre-tax net profit: 200 - 100 purchase cost - 13.33 advertising = 86.67.
+            expect(result.corporateIncomeTax).toBe(8.67);
+            expect(result.totalTax).toBe(8.67);
+        });
+
+        it('does not charge corporate income tax when pre-tax net profit is negative and an invoice exists', () => {
+            const result = calculateProfit(
+                defaultData,
+                { ...defaultGlobal, supplierInvoice: 'yes', purchaseCost: 120, corporateIncomeTaxRate: 10 },
+                { ...defaultSiteInputs, totalRevenue: 100, adROI: 0 },
+                1,
+                'MYR',
+            );
+
+            expect(result.corporateIncomeTax).toBe(0);
+            expect(result.finalRevenueCNY).toBe(-20);
+        });
+
+        it('does not turn a negative rate and a loss into positive corporate income tax', () => {
+            const result = calculateProfit(
+                defaultData,
+                { ...defaultGlobal, supplierInvoice: 'yes', purchaseCost: 120, corporateIncomeTaxRate: -10 },
+                { ...defaultSiteInputs, totalRevenue: 100, adROI: 0 },
+                1,
+                'MYR',
+            );
+
+            expect(result.corporateIncomeTax).toBe(0);
         });
 
         it('does not report supplier cost tax without an invoice', () => {
@@ -634,7 +665,8 @@ describe('calculateProfit', () => {
             expect(result.transactionFee).toBeCloseTo(revenueAfterCouponCNY * 0.02, 4);
 
             expect(result.vat).toBeCloseTo(result.taxableRevenue * 0.06, 4);
-            expect(result.corporateIncomeTax).toBeCloseTo(result.taxableRevenue * 0.10, 4);
+            // No invoice: the purchase cost is added back to the pre-tax profit base.
+            expect(result.corporateIncomeTax).toBe(5.95);
 
             const baseShippingCNY = 6.5 / rate;
             const crossBorderCNY = 0.65 / rate;

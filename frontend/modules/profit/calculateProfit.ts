@@ -153,11 +153,6 @@ export const calculateProfit = (
     const taxableRevenue = buyerPaidRevenue;
 
     const vat = roundCNY(taxableRevenue * (vatRate / 100));
-    const corporateIncomeTax = Math.max(
-        0,
-        roundCNY((corporateIncomeTaxRate / 100) * buyerPaidRevenue),
-    );
-    const totalTax = roundCNY(vat + corporateIncomeTax);
 
     const revenueAfterSellerCoupon = roundCNY(totalRevenue - actualSellerCoupon);
     const commission = settleCNY(revenueAfterSellerCoupon * (safeData.platformCommissionRate / 100));
@@ -189,7 +184,18 @@ export const calculateProfit = (
     const damage = settleCNY(totalRevenue * (safeData.damageReturnRate / 100));
     const platformFee = roundCNY(commission + transactionFee + serviceFee + adFee + warehouseOperationFeeCNY + damage);
 
-    const finalRevenueCNY = roundCNY(totalRevenue - actualSellerCoupon - platformFee - shippingFee - totalTax - purchaseCost);
+    const profitBeforeCorporateIncomeTax = roundCNY(
+        totalRevenue - actualSellerCoupon - platformFee - shippingFee - vat - purchaseCost,
+    );
+    const corporateIncomeTaxBase = roundCNY(
+        profitBeforeCorporateIncomeTax + (g.supplierInvoice === 'no' ? purchaseCost : 0),
+    );
+    const corporateIncomeTax = Math.max(
+        0,
+        roundCNY((corporateIncomeTaxRate / 100) * Math.max(0, corporateIncomeTaxBase)),
+    );
+    const totalTax = roundCNY(vat + corporateIncomeTax);
+    const finalRevenueCNY = roundCNY(profitBeforeCorporateIncomeTax - corporateIncomeTax);
     const finalRevenueLocal = roundLocal(finalRevenueCNY * safeRate);
 
     const result: ProfitResult = {

@@ -89,6 +89,7 @@ export const en = {
       name: 'Product Name',
       sku: 'SKU',
       totalRevenue: 'Total Revenue (Price)',
+      buyerPaidPrice: 'Buyer-Paid Price',
       weight: 'Weight (g)',
       sellerCoupon: 'Seller Coupon',
       couponFixed: 'Fixed',

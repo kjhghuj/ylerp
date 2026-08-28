@@ -1,28 +1,70 @@
 import React from 'react';
 import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
-import { ProfitGlobalInputs } from './types';
+import { formatCurrencyAmount } from './currencyRounding';
+import { normalizeCurrencyCode, ProfitGlobalInputs, type CurrencyCode } from './types';
 import { translations } from '../../translations';
 import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profitInputNormalization';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 
+const formatCNYAndLocalAmount = (
+    amountCNY: number,
+    rateToLocal: unknown,
+    siteCountry: string,
+): string | null => {
+    if (!Number.isFinite(amountCNY)) return null;
+    const formattedCNY = formatCurrencyAmount(amountCNY, 'CNY');
+    const parsedRate = parseCanonicalPositiveRate(rateToLocal, 'dualCurrencyRate');
+    const currency = normalizeCurrencyCode(siteCountry) as CurrencyCode;
+    if (!parsedRate.ok || !currency) return `${formattedCNY} CNY / — ${siteCountry}`;
+
+    const amountLocal = amountCNY * parsedRate.value;
+    if (!Number.isFinite(amountLocal)) return `${formattedCNY} CNY / — ${currency}`;
+    return `${formattedCNY} CNY / ${formatCurrencyAmount(amountLocal, currency)} ${currency}`;
+};
+
 const renderPercentCouponAmount = (
     totalRevenue: unknown,
     sellerCoupon: unknown,
-    currency: string,
+    rateToLocal: unknown,
+    siteCountry: string,
 ): React.ReactNode => {
     const revenue = parseCanonicalProfitNumber(totalRevenue, { field: 'totalRevenue', min: 0 });
     const coupon = parseCanonicalProfitNumber(sellerCoupon, { field: 'sellerCoupon', min: 0, max: 100 });
     if (!revenue.ok || !coupon.ok) return null;
     const amount = revenue.value * (coupon.value / 100);
-    if (!Number.isFinite(amount)) return null;
-    return <span>≈ {amount.toFixed(2)} {currency}</span>;
+    const formattedAmount = formatCNYAndLocalAmount(amount, rateToLocal, siteCountry);
+    return formattedAmount ? <span>≈ {formattedAmount}</span> : null;
 };
 
 const formatCurrentRate = (value: unknown): string => {
     const parsed = parseCanonicalPositiveRate(value, 'currentRate');
     return parsed.ok ? parsed.value.toFixed(4) : '-';
+};
+
+const renderBuyerPaidPrice = (
+    totalRevenue: unknown,
+    sellerCoupon: unknown,
+    sellerCouponType: 'fixed' | 'percent',
+    rateToLocal: unknown,
+    siteCountry: string,
+    label: string,
+): React.ReactNode => {
+    const revenue = parseCanonicalProfitNumber(totalRevenue, { field: 'totalRevenue', min: 0 });
+    const coupon = parseCanonicalProfitNumber(sellerCoupon, {
+        field: 'sellerCoupon',
+        min: 0,
+        ...(sellerCouponType === 'percent' ? { max: 100 } : {}),
+    });
+    if (!revenue.ok || !coupon.ok) return <span title={label}>{label}：—</span>;
+
+    const grossCoupon = sellerCouponType === 'percent'
+        ? revenue.value * (coupon.value / 100)
+        : coupon.value;
+    const buyerPaidCNY = Math.max(0, revenue.value - grossCoupon);
+    const formattedAmount = formatCNYAndLocalAmount(buyerPaidCNY, rateToLocal, siteCountry);
+    return <span title={label}>{label}：{formattedAmount ?? '—'}</span>;
 };
 
 interface GlobalInputsPanelProps {
@@ -146,6 +188,14 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
             <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 <NumberInput
                     label={`${t.inputs.totalRevenue} (${useLocalCurrency ? siteCountry : 'CNY'})`}
+                    labelAside={renderBuyerPaidPrice(
+                        siteInputs.totalRevenue,
+                        siteInputs.sellerCoupon,
+                        siteInputs.sellerCouponType,
+                        rates[siteCountry],
+                        siteCountry,
+                        t.inputs.buyerPaidPrice,
+                    )}
                     name="totalRevenue"
                     value={siteInputs.totalRevenue}
                     onChange={(e) => onSiteInputChange('totalRevenue', e.target.value)}
@@ -169,7 +219,8 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                         ? renderPercentCouponAmount(
                             siteInputs.totalRevenue,
                             siteInputs.sellerCoupon,
-                            useLocalCurrency ? siteCountry : 'CNY',
+                            rates[siteCountry],
+                            siteCountry,
                         )
                         : null}
                     min={0}

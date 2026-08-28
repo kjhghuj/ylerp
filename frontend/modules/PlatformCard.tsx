@@ -52,6 +52,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const [templateName, setTemplateName] = useState('');
     const [editingCNY, setEditingCNY] = useState<Record<string, string>>({});
+    const [editingLocal, setEditingLocal] = useState<Record<string, string>>({});
     const [editingPlatformCouponRate, setEditingPlatformCouponRate] = useState<string | null>(null);
     const parsedRate = parseCanonicalPositiveRate(rateToCNY);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
@@ -167,6 +168,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             const cnyEquiv = calculatedCnyEquiv !== null && Number.isFinite(calculatedCnyEquiv)
                 ? calculatedCnyEquiv
                 : null;
+            const displayValue = editingLocal[key] !== undefined
+                ? editingLocal[key]
+                : localValue !== null ? localValue.toFixed(2) : String(data[key] ?? '');
             return (
                 <div key={key} className="col-span-1">
                     <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{t.inputs[key] || key} ({country})</label>
@@ -176,16 +180,22 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             type="text"
                             inputMode="decimal"
                             name={key}
-                            value={data[key] ?? ''}
+                            value={displayValue}
                             step="any"
                             aria-invalid={Boolean(resolvedInputErrors[key])}
                             aria-describedby={resolvedInputErrors[key] ? `${nodeId}-${key}-error` : undefined}
                             onChange={(e) => {
                                 if (key === 'platformCoupon') setEditingPlatformCouponRate(null);
+                                setEditingLocal(prev => ({ ...prev, [key]: e.target.value }));
                                 onUpdate(nodeId, { [key]: e.target.value });
                             }}
                             onBlur={(e) => {
                                 const parsed = parseCanonicalProfitNumber(e.target.value, { field: key });
+                                setEditingLocal(prev => {
+                                    const next = { ...prev };
+                                    delete next[key];
+                                    return next;
+                                });
                                 onUpdate(nodeId, { [key]: parsed.ok ? parsed.value : e.target.value });
                             }}
                             onFocus={(e) => e.target.select()}

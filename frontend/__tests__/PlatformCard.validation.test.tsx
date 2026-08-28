@@ -137,6 +137,16 @@ describe('PlatformCard strict preview', () => {
     expect(document.querySelector('input[name="platformCouponRate"]')).toHaveValue('10.00');
   });
 
+  it('shows local-currency money inputs with exactly two decimals while idle', () => {
+    render(<PlatformCard
+      {...defaultProps}
+      useLocalCurrency
+      data={{ ...DEFAULT_NODE_DATA, platformCoupon: 20 }}
+    />);
+
+    expect(document.querySelector('input[name="platformCoupon"]')).toHaveValue('20.00');
+  });
+
   it('writes only the canonical local-currency amount when the derived percentage changes', () => {
     const onUpdate = vi.fn();
     render(<PlatformCard {...defaultProps} onUpdate={onUpdate} />);

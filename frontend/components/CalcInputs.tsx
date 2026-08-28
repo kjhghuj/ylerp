@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Info, ChevronRight } from 'lucide-react';
 import {
     parseCanonicalPositiveRate,
@@ -11,6 +11,17 @@ const readCanonicalNumber = (value: unknown, field: string): number | null => {
     const parsed = parseCanonicalProfitNumber(value, { field });
     return parsed.ok ? parsed.value : null;
 };
+
+const InputLabel = ({ label, labelAside }: { label: string; labelAside?: React.ReactNode }) => (
+    <div className="mb-0.5 flex items-center justify-between gap-1">
+        <label className="min-w-0 flex-1 truncate text-xs font-bold text-slate-500" title={label}>{label}</label>
+        {labelAside && (
+            <div className="max-w-[70%] shrink-0 whitespace-normal text-right text-[10px] font-bold leading-tight text-blue-600">
+                {labelAside}
+            </div>
+        )}
+    </div>
+);
 
 export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildren<{ title: string, icon: any }>) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl flex flex-col h-full">
@@ -26,11 +37,14 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
     </div>
 );
 
-function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
+function InvertedCurrencyInput({ label, labelAside, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
     const normalizedCurrency = normalizeCurrencyCode(currencyCode) as CurrencyCode;
-    const formatLocalAmount = (amount: number) => normalizedCurrency
-        ? formatCurrencyAmount(amount, normalizedCurrency)
-        : amount.toFixed(2);
+    const formatLocalAmount = (amount: number) => {
+        const roundedAmount = normalizedCurrency
+            ? roundCurrencyAmount(amount, normalizedCurrency)
+            : roundCurrencyAmount(amount, 'CNY');
+        return roundedAmount.toFixed(2);
+    };
     const safeValue = readCanonicalNumber(value, name);
     const parsedRate = parseCanonicalPositiveRate(exchangeRate);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
@@ -41,16 +55,16 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
         ? formatLocalAmount(calculatedLocalDisplay)
         : String(value ?? '');
     const [localDisplay, setLocalDisplay] = useState(formattedLocalDisplay);
-    const [isFocused, setIsFocused] = useState(false);
+    const isFocusedRef = useRef(false);
 
     useEffect(() => {
-        if (!isFocused) {
+        if (!isFocusedRef.current) {
             setLocalDisplay(formattedLocalDisplay);
         }
-    }, [formattedLocalDisplay, isFocused]);
+    }, [formattedLocalDisplay]);
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-        setIsFocused(false);
+        isFocusedRef.current = false;
         if (safeRate === null) {
             setLocalDisplay(formattedLocalDisplay);
             return;
@@ -90,7 +104,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
 
     return (
         <div className={colSpan}>
-            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
+            <InputLabel label={label} labelAside={labelAside} />
             <div className="relative">
                 <input
                     key={`${name}-inverted`}
@@ -106,7 +120,7 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
                     aria-describedby={error ? `${name}-error` : undefined}
                     onChange={handleChange}
                     onBlur={handleBlur}
-                    onFocus={(e) => { setIsFocused(true); e.target.select(); }}
+                    onFocus={(e) => { isFocusedRef.current = true; e.target.select(); }}
                     className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
                         ${error
                             ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
@@ -130,31 +144,37 @@ function InvertedCurrencyInput({ label, name, value, onChange, highlight, suffix
     );
 }
 
-export const NumberInput = ({ label, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null, min, max, step = 'any', error }: any) => {
+function StandardNumberInput({ label, labelAside, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, customDisplay, min, max, step, error }: any) {
     const safeValue = readCanonicalNumber(value, name);
+    const formattedValue = safeValue === null
+        ? String(value ?? '')
+        : roundCurrencyAmount(safeValue, 'CNY').toFixed(2);
+    const [displayValue, setDisplayValue] = useState(formattedValue);
+    const isFocusedRef = useRef(false);
     const parsedRate = parseCanonicalPositiveRate(exchangeRate);
     const safeRate = parsedRate.ok ? parsedRate.value : null;
     const normalizedCurrency = normalizeCurrencyCode(currencyCode) as CurrencyCode;
 
-    if (invertCurrency && currencyCode) {
-        return (
-            <InvertedCurrencyInput
-                label={label}
-                name={name}
-                value={value}
-                onChange={onChange}
-                highlight={highlight}
-                suffix={suffix}
-                colSpan={colSpan}
-                exchangeRate={exchangeRate}
-                currencyCode={currencyCode}
-                min={min}
-                max={max}
-                step={step}
-                error={error}
-            />
-        );
-    }
+    useEffect(() => {
+        if (!isFocusedRef.current) setDisplayValue(formattedValue);
+    }, [formattedValue]);
+
+    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setDisplayValue(event.target.value);
+        onChange(event);
+    };
+
+    const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
+        isFocusedRef.current = false;
+        const parsedValue = readCanonicalNumber(event.target.value, name);
+        if (parsedValue === null) {
+            setDisplayValue(event.target.value);
+            return;
+        }
+        const nextValue = roundCurrencyAmount(parsedValue, 'CNY').toFixed(2);
+        setDisplayValue(nextValue);
+        onChange({ target: { name, value: nextValue } });
+    };
 
     const calculatedConvertedValue = safeValue !== null && safeRate !== null && currencyCode
         ? safeValue * safeRate
@@ -167,21 +187,22 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
 
     return (
         <div className={colSpan}>
-            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={label}>{label}</label>
+            <InputLabel label={label} labelAside={labelAside} />
             <div className="relative">
                 <input
                     key={`${name}-normal`}
                     type="text"
                     inputMode="decimal"
                     name={name}
-                    value={value ?? ''}
+                    value={displayValue}
                     min={min}
                     max={max}
                     step={step}
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? `${name}-error` : undefined}
-                    onChange={onChange}
-                    onFocus={(e) => e.target.select()}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    onFocus={(event) => { isFocusedRef.current = true; event.target.select(); }}
                     className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all
                         ${error
                             ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
@@ -206,6 +227,48 @@ export const NumberInput = ({ label, name, value, onChange, highlight = false, s
                 </div>
             ) : null}
         </div>
+    );
+}
+
+export const NumberInput = ({ label, labelAside = null, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null, min, max, step = 'any', error }: any) => {
+    if (invertCurrency && currencyCode) {
+        return (
+            <InvertedCurrencyInput
+                label={label}
+                labelAside={labelAside}
+                name={name}
+                value={value}
+                onChange={onChange}
+                highlight={highlight}
+                suffix={suffix}
+                colSpan={colSpan}
+                exchangeRate={exchangeRate}
+                currencyCode={currencyCode}
+                min={min}
+                max={max}
+                step={step}
+                error={error}
+            />
+        );
+    }
+    return (
+        <StandardNumberInput
+            label={label}
+            labelAside={labelAside}
+            name={name}
+            value={value}
+            onChange={onChange}
+            highlight={highlight}
+            suffix={suffix}
+            colSpan={colSpan}
+            exchangeRate={exchangeRate}
+            currencyCode={currencyCode}
+            customDisplay={customDisplay}
+            min={min}
+            max={max}
+            step={step}
+            error={error}
+        />
     );
 };
 

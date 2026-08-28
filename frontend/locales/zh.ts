@@ -89,6 +89,7 @@ export const zh = {
       name: '商品名称',
       sku: 'SKU',
       totalRevenue: '总收入 (销售价)',
+      buyerPaidPrice: '买家实付价格',
       weight: '商品重量 (g)',
       sellerCoupon: '卖家优惠券',
       couponFixed: '固定',

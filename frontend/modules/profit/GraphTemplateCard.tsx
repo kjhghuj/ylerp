@@ -37,7 +37,12 @@ const createInputDrafts = (
         const value = hasStoredValue
             ? storedInputValues?.[input.id]
             : (storedInputValues === undefined ? defaults[input.id] : '');
-        return [input.id, value === '' || value === undefined ? '' : String(value)];
+        if (value === '' || value === undefined) return [input.id, ''];
+        const numericValue = Number(value);
+        return [
+            input.id,
+            Number.isFinite(numericValue) ? numericValue.toFixed(2) : String(value),
+        ];
     }));
 };
 
@@ -117,6 +122,13 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
         );
     };
 
+    const handleInputBlur = (inputId: string, value: string) => {
+        if (value.trim() === '') return;
+        const numericValue = Number(value);
+        if (!Number.isFinite(numericValue)) return;
+        handleInputChange(inputId, numericValue.toFixed(2));
+    };
+
     return (
         <div className="min-w-[340px] w-[340px] border-2 border-emerald-200 rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center">
             <div className="bg-emerald-50/70 px-4 py-3 flex items-center justify-between border-b border-emerald-100">
@@ -151,6 +163,7 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
                                 type="number"
                                 value={inputDrafts[input.id] ?? ''}
                                 onChange={(event) => handleInputChange(input.id, event.target.value)}
+                                onBlur={(event) => handleInputBlur(input.id, event.target.value)}
                                 aria-invalid={result.ok === false && result.errors.some(error => error.inputId === input.id)}
                                 min={input.min}
                                 max={input.max}

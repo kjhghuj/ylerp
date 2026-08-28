@@ -70,6 +70,20 @@ const errorLabels = {
 };
 
 describe('GraphTemplateCard strict execution', () => {
+  it('shows numeric input drafts with exactly two decimals while idle', () => {
+    render(
+      <GraphTemplateCard
+        node={node}
+        onUpdateInputs={vi.fn()}
+        onValidationChange={vi.fn()}
+        onDelete={vi.fn()}
+        errorLabels={errorLabels}
+      />,
+    );
+
+    expect((screen.getByLabelText('售价') as HTMLInputElement).value).toBe('100.00');
+  });
+
   it('keeps zero as valid input and saves only successful outputs', () => {
     const onUpdateInputs = vi.fn();
     const onValidationChange = vi.fn();

@@ -6,6 +6,38 @@ import { resolve } from 'node:path';
 import { NumberInput } from '../components/CalcInputs';
 
 describe('CalcInputs canonical numeric conversion', () => {
+  it('shows a valid numeric value with exactly two decimals while idle', () => {
+    render(<NumberInput
+      label="Weight"
+      name="productWeight"
+      value="100"
+      onChange={() => undefined}
+    />);
+
+    expect(screen.getByRole('textbox')).toHaveValue('100.00');
+  });
+
+  it('keeps the editing draft and commits a two-decimal value on blur', () => {
+    const onChange = vi.fn();
+    render(<NumberInput
+      label="Tax rate"
+      name="vatRate"
+      value="1"
+      onChange={onChange}
+    />);
+    const input = screen.getByRole('textbox');
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: '12.345' } });
+    expect(input).toHaveValue('12.345');
+    fireEvent.blur(input);
+
+    expect(input).toHaveValue('12.35');
+    expect(onChange).toHaveBeenLastCalledWith({
+      target: { name: 'vatRate', value: '12.35' },
+    });
+  });
+
   it('does not partially convert trailing-junk input', () => {
     render(<NumberInput
       label="Cost"
@@ -73,10 +105,12 @@ describe('CalcInputs canonical numeric conversion', () => {
     />);
     const input = container.querySelector('input[name="baseShippingFee"]')!;
 
+    expect(input).toHaveValue('0.00');
+
     fireEvent.change(input, { target: { value: '12.5' } });
     fireEvent.blur(input);
 
-    expect(input).toHaveValue('13');
+    expect(input).toHaveValue('13.00');
     expect(onChange).toHaveBeenLastCalledWith({
       target: { name: 'baseShippingFee', value: String(13 / 2150) },
     });
