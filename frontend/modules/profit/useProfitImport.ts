@@ -59,7 +59,7 @@ export const useProfitImport = (
                     ),
                 ),
             }));
-            if (calculatorImport.id) setEditingProductId(calculatorImport.id);
+            setEditingProductId(calculatorImport.id || null);
 
             const { currency, groupedNodes } = importState;
             setSiteCurrency(currency);

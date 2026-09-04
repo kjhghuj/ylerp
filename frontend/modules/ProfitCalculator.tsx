@@ -14,6 +14,7 @@ import { AddNodeMenu } from './profit/AddNodeMenu';
 import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
 import { GraphTemplateCard } from './profit/GraphTemplateCard';
 import { InvalidTemplateCard } from './profit/InvalidTemplateCard';
+import { ProductIdentityDialog } from './profit/ProductIdentityDialog';
 import { PlatformType } from '../platformConfig';
 
 export const ProfitCalculator: React.FC = () => {
@@ -23,8 +24,6 @@ export const ProfitCalculator: React.FC = () => {
         setProfitGlobalInputs: setGlobalInputs,
         profitSiteCurrency: siteCountry,
         setProfitSiteCurrency: setSiteCountry,
-        profitNodes,
-        setProfitNodes,
         profitEditingProductId: editingProductId,
         profitGlobalInputs,
         profitSiteInputsMap,
@@ -81,6 +80,8 @@ export const ProfitCalculator: React.FC = () => {
         handleAddNodeFromTemplate, handleAddNodeFromGraphTemplate, handleAddBlankNode,
         handleUpdateGraphNodeInputs, handleGraphNodeValidationChange, handleSaveTemplate,
         handleNodeInputValidationChange, handleDeleteTemplate, handleSaveProduct, inputErrors, clearInputError,
+        handleSaveAsNew, handleConfirmIdentityUpdate, handleCancelIdentityUpdate,
+        handleReset, editingProduct, pendingIdentityConfirmation, isSaving,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
     const formatInputError = (error: (typeof inputErrors)[number]): string => {
@@ -96,34 +97,10 @@ export const ProfitCalculator: React.FC = () => {
         inputErrors.map(error => [error.field, formatInputError(error)]),
     );
 
-    const handleReset = () => {
-        setGlobalInputs(prev => ({
-            ...prev,
-            name: '',
-            sku: '',
-            purchaseCost: 0,
-            productWeight: 0,
-        }));
-        setProfitSiteInputsMap({
-            'MYR': { ...DEFAULT_SITE_INPUTS },
-            'SGD': { ...DEFAULT_SITE_INPUTS },
-            'PHP': { ...DEFAULT_SITE_INPUTS },
-            'THB': { ...DEFAULT_SITE_INPUTS },
-            'IDR': { ...DEFAULT_SITE_INPUTS },
-        });
-        setProfitNodes(prev => {
-            const updated = { ...prev };
-            for (const country of Object.keys(updated)) {
-                updated[country] = [];
-            }
-            return updated;
-        });
-    };
-
     return (
         <div className="flex flex-col min-h-[calc(100vh-140px)] pb-6">
             {/* Header Bar */}
-            <div className="px-4 py-3 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-3 flex justify-between items-center shrink-0 z-20">
+            <div className="px-4 py-3 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-3 flex flex-wrap gap-3 justify-between items-center shrink-0 z-20">
                 <div className="flex items-center gap-3 text-slate-800">
                     <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg text-white shadow-lg"><Calculator size={18} /></div>
                     <div>
@@ -132,7 +109,7 @@ export const ProfitCalculator: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <AddNodeMenu
                         showAddMenu={showAddMenu}
                         setShowAddMenu={setShowAddMenu}
@@ -148,11 +125,34 @@ export const ProfitCalculator: React.FC = () => {
                         t={t}
                     />
 
-                    <button onClick={handleSaveProduct} className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition shadow-sm">
-                        <Save size={14} /> <span className="hidden sm:inline">{editingProductId ? t.matrix.updateLibrary : t.matrix.saveToLibrary}</span>
+                    {editingProductId && (
+                        <button type="button" onClick={() => { void handleSaveAsNew(); }} disabled={isSaving}
+                            className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 disabled:opacity-50">
+                            {t.saveIdentity.saveAsNew}
+                        </button>
+                    )}
+                    <button type="button" onClick={() => { void handleSaveProduct(); }} disabled={isSaving}
+                        aria-busy={isSaving}
+                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition shadow-sm disabled:opacity-50">
+                        <Save size={14} /> <span>{editingProductId ? t.matrix.updateLibrary : t.matrix.saveToLibrary}</span>
                     </button>
                 </div>
             </div>
+
+            <p className="mb-3 text-xs text-slate-600" role="status">
+                {editingProductId
+                    ? editingProduct
+                        ? `${t.saveIdentity.editing} ${editingProduct.name} · ${editingProduct.sku}`
+                        : t.errors.editingProductMissing
+                    : t.saveIdentity.creating}
+                {isSaving && <span className="ml-2">{t.saveIdentity.saving}</span>}
+            </p>
+            {pendingIdentityConfirmation && (
+                <ProductIdentityDialog confirmation={pendingIdentityConfirmation} strings={t.saveIdentity}
+                    onUpdate={() => { void handleConfirmIdentityUpdate(); }}
+                    onSaveAsNew={() => { void handleSaveAsNew(); }}
+                    onCancel={handleCancelIdentityUpdate} />
+            )}
 
             {inputErrors.length > 0 && (
                 <div role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">

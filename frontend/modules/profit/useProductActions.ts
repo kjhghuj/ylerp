@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../StoreContext';
 import api from '../../src/api';
 import { ProductCalcData } from '../../types';
@@ -27,7 +27,9 @@ import {
     buildProductTemplateMutations,
     type AtomicProductTemplateCreateRequest,
     type AtomicProductTemplateUpdateRequest,
+    type AtomicProductTemplateSaveResponse,
 } from './productTemplateAtomic';
+import { detachProductTemplateLinks } from './productTemplateSync';
 import {
     normalizeProfitGlobalInputs,
     normalizeSiteInputs,
@@ -41,12 +43,21 @@ import {
     type ExchangeRateSnapshot,
 } from './exchangeRateSnapshot';
 
+export interface ProductIdentityConfirmation {
+    version: number;
+    productId: string;
+    originalName: string;
+    originalSku: string;
+    name: string;
+    sku: string;
+}
+
 export const useProductActions = (
     allTemplates: ProfitTemplate[],
     setAllTemplates: React.Dispatch<React.SetStateAction<ProfitTemplate[]>>,
     rates: Record<string, number>,
     siteInputsMap: Record<string, SiteLevelInputs>,
-    _setSiteInputsMap: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
+    setSiteInputsMap: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
 ) => {
     const {
         saveProductWithTemplates, products,
@@ -69,6 +80,23 @@ export const useProductActions = (
     >({});
     const [inputErrors, setInputErrors] = useState<ProfitInputError[]>([]);
     const [draftInputErrors, setDraftInputErrors] = useState<ProfitInputError[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const savingRef = useRef(false);
+    const [identityConfirmation, setIdentityConfirmation] = useState<ProductIdentityConfirmation | null>(null);
+    const editingProduct = products.find(product => product.id === editingProductId) || null;
+    // A completed request must not restore a form that was reset, edited or replaced.
+    const siteInputsKey = JSON.stringify(siteInputsMap);
+    const draftRef = useRef({ globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey, version: 0 });
+    const previousDraft = draftRef.current;
+    if (previousDraft.globalInputs !== globalInputs || previousDraft.profitNodes !== profitNodes
+        || previousDraft.editingProductId !== editingProductId || previousDraft.siteCountry !== siteCountry
+        || previousDraft.siteInputsKey !== siteInputsKey) {
+        draftRef.current = { globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey,
+            version: previousDraft.version + 1 };
+    }
+    useEffect(() => () => { draftRef.current.version += 1; }, []);
+    const pendingIdentityConfirmation = identityConfirmation?.version === draftRef.current.version
+        ? identityConfirmation : null;
     const clearInputError = useCallback((field: string) => {
         setInputErrors(previous => previous.filter(error => error.field !== field));
     }, []);
@@ -111,6 +139,20 @@ export const useProductActions = (
         const { name, value } = e.target;
         setInputErrors(previous => previous.filter(error => error.field !== name));
         setGlobalInputs(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleReset = () => {
+        draftRef.current.version += 1;
+        setEditingProductId(null);
+        setIdentityConfirmation(null);
+        setInputErrors([]);
+        setDraftInputErrors([]);
+        setGraphNodeValidation({});
+        setGlobalInputs(previous => ({ ...previous, name: '', sku: '', purchaseCost: 0, productWeight: 0 }));
+        setSiteInputsMap(Object.fromEntries(
+            ['MYR', 'SGD', 'PHP', 'THB', 'IDR'].map(currency => [currency, { ...DEFAULT_SITE_INPUTS }]),
+        ));
+        setProfitNodes(previous => Object.fromEntries(Object.keys(previous).map(currency => [currency, []])));
     };
 
     const handleUpdateNode = (id: string, partialData: Partial<NodeData>) => {
@@ -324,14 +366,11 @@ export const useProductActions = (
         }
     };
 
-    const findExistingProduct = (name: string, sku: string) => {
-        if (editingProductId) {
-            return products.find(p => p.id === editingProductId) || null;
-        }
-        return products.find(p => p.name.trim() === name && p.sku.trim() === sku) || null;
-    };
-
-    const handleSaveProduct = async () => {
+    const executeProductSave = async (
+        mode: 'create' | 'update',
+        confirmation?: ProductIdentityConfirmation,
+    ) => {
+        const saveVersion = draftRef.current.version;
         if (!globalInputs.name?.trim() || !globalInputs.sku?.trim()) {
             showToast(t.errors.nameAndSkuRequired, 'error');
             return;
@@ -369,12 +408,38 @@ export const useProductActions = (
         }
         if (blockSaveWithInputErrors(validationErrors)) return;
         if (normalizedGlobal.ok === false || normalizedSite.ok === false || normalizedNodes.ok === false) return;
-        const preparedNodes = normalizedNodes.value;
+        const preparedNodes = mode === 'create'
+            ? normalizedNodes.value.map(node => detachProductTemplateLinks(node, allTemplates))
+            : normalizedNodes.value;
         const normalizedGlobalInputs = normalizedGlobal.value;
         const siteSpecificData = normalizedSite.value;
         setInputErrors([]);
-        setGlobalInputs(normalizedGlobalInputs);
-        setNodes(preparedNodes);
+
+        const existingProduct = mode === 'update' ? editingProduct : null;
+        if (mode === 'update' && !existingProduct) {
+            showToast(t.errors.editingProductMissing, 'error');
+            return;
+        }
+        if (products.some(product => product.sku.trim() === normalizedGlobalInputs.sku
+            && product.id !== existingProduct?.id)) {
+            showToast(t.errors.duplicateSku, 'error');
+            return;
+        }
+        if (existingProduct && (existingProduct.name.trim() !== normalizedGlobalInputs.name
+            || existingProduct.sku.trim() !== normalizedGlobalInputs.sku)) {
+            const expectedConfirmation: ProductIdentityConfirmation = {
+                version: saveVersion, productId: existingProduct.id,
+                originalName: existingProduct.name, originalSku: existingProduct.sku,
+                name: normalizedGlobalInputs.name, sku: normalizedGlobalInputs.sku,
+            };
+            if (!confirmation || Object.entries(expectedConfirmation).some(
+                ([key, value]) => confirmation[key as keyof ProductIdentityConfirmation] !== value,
+            )) {
+                setIdentityConfirmation(expectedConfirmation);
+                return;
+            }
+        }
+        setIdentityConfirmation(null);
 
         const countryCode: NonNullable<ProductCalcData['country']> =
             CURRENCY_TO_COUNTRY[siteCountry as CurrencyCode] || 'MY';
@@ -398,10 +463,6 @@ export const useProductActions = (
             siteData: { [countryCode]: siteSpecificData },
         };
 
-        const existingProduct = findExistingProduct(
-            normalizedGlobalInputs.name,
-            normalizedGlobalInputs.sku,
-        );
         const isUpdate = !!existingProduct;
         let existingLinks: ProductProfitTemplate[] = [];
         if (existingProduct && preparedNodes.length > 0) {
@@ -461,6 +522,7 @@ export const useProductActions = (
             return;
         }
 
+        let saved: AtomicProductTemplateSaveResponse;
         try {
             if (existingProduct) {
                 const request: AtomicProductTemplateUpdateRequest = {
@@ -469,23 +531,52 @@ export const useProductActions = (
                     sitePatch: buildAtomicProductSitePatch(countryCode, siteSpecificData),
                     ...(ensureDefaultTemplate ? { ensureDefaultTemplate } : {}),
                 };
-                await saveProductWithTemplates(request, existingProduct.id);
+                saved = await saveProductWithTemplates(request, existingProduct.id);
             } else {
                 const request: AtomicProductTemplateCreateRequest = {
                     product: productData,
                     templateMutations,
                     ...(ensureDefaultTemplate ? { ensureDefaultTemplate } : {}),
                 };
-                await saveProductWithTemplates(request);
+                saved = await saveProductWithTemplates(request);
             }
-        } catch {
-            showToast(t.errors.saveFailed, 'error');
+        } catch (error) {
+            const status = (error as { response?: { status?: number } })?.response?.status;
+            showToast(status === 409 ? t.errors.productSaveConflict : t.errors.saveFailed, 'error');
             return;
         }
 
-        setEditingProductId(null);
+        if (draftRef.current.version === saveVersion) {
+            setGlobalInputs(normalizedGlobalInputs);
+            setProfitNodes(previous => {
+                const next = mode === 'create'
+                    ? Object.fromEntries(Object.entries(previous).map(([currency, nodeList]) => [
+                        currency, nodeList.map(node => detachProductTemplateLinks(node, allTemplates)),
+                    ]))
+                    : { ...previous };
+                return { ...next, [siteCountry]: preparedNodes };
+            });
+            setEditingProductId(saved.product.id);
+        }
         showToast(isUpdate ? t.actions.updated : t.actions.saved);
     };
+
+    const saveProduct = async (mode: 'create' | 'update', confirmation?: ProductIdentityConfirmation) => {
+        if (savingRef.current) return;
+        savingRef.current = true;
+        setIsSaving(true);
+        try {
+            await executeProductSave(mode, confirmation);
+        } finally {
+            savingRef.current = false;
+            setIsSaving(false);
+        }
+    };
+    const handleSaveProduct = () => saveProduct(editingProductId ? 'update' : 'create');
+    const handleSaveAsNew = () => saveProduct('create');
+    const handleConfirmIdentityUpdate = () => pendingIdentityConfirmation
+        ? saveProduct('update', pendingIdentityConfirmation) : Promise.resolve();
+    const handleCancelIdentityUpdate = () => setIdentityConfirmation(null);
 
     return {
         nodes,
@@ -503,5 +594,12 @@ export const useProductActions = (
         handleSaveTemplate,
         handleDeleteTemplate,
         handleSaveProduct,
+        handleSaveAsNew,
+        handleConfirmIdentityUpdate,
+        handleCancelIdentityUpdate,
+        handleReset,
+        editingProduct,
+        pendingIdentityConfirmation,
+        isSaving,
     };
 };

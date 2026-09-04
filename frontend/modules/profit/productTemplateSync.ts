@@ -5,6 +5,14 @@ import {
     type ProfitTemplate,
 } from './types';
 
+/** A copy may share a reusable template, but never another product's template link. */
+export const detachProductTemplateLinks = (node: PlatformNode, templates: ProfitTemplate[]): PlatformNode => {
+    const { productId: _productId, productTemplateLinkId: _linkId, templateId, ...copy } = node;
+    return templateId && templates.some(template => template.id === templateId)
+        ? { ...copy, templateId }
+        : copy;
+};
+
 const matchesTemplateCountry = (left: string, right: string): boolean => {
     const normalizedLeft = normalizeCurrencyCode(left);
     const normalizedRight = normalizeCurrencyCode(right);
