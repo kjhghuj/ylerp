@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../StoreContext';
 import { Save, Calculator, Building } from 'lucide-react';
 import api from '../src/api';
@@ -15,6 +15,7 @@ import { GlobalInputsPanel } from './profit/GlobalInputsPanel';
 import { GraphTemplateCard } from './profit/GraphTemplateCard';
 import { InvalidTemplateCard } from './profit/InvalidTemplateCard';
 import { ProductIdentityDialog } from './profit/ProductIdentityDialog';
+import { TargetPricingPanel } from './profit/TargetPricingPanel';
 import { PlatformType } from '../platformConfig';
 
 export const ProfitCalculator: React.FC = () => {
@@ -38,8 +39,14 @@ export const ProfitCalculator: React.FC = () => {
     const [selectedPlatform, setSelectedPlatform] = useState<PlatformType>('shopee');
     const [templatesLoaded, setTemplatesLoaded] = useState(false);
     const [useLocalCurrency, setUseLocalCurrency] = useState(false);
+    const [pricingSession, setPricingSession] = useState(0);
+    const [pricingBasisId, setPricingBasisId] = useState<string | null>(null);
+    const resetPricing = useCallback(() => {
+        setPricingSession(value => value + 1);
+        setPricingBasisId(null);
+    }, []);
 
-    useProfitImport(profitSiteInputsMap, setProfitSiteInputsMap);
+    useProfitImport(profitSiteInputsMap, setProfitSiteInputsMap, resetPricing);
 
     const { rates, isLoading, lastUpdated, fetchRates: refreshRates, isStale } = useExchangeRates();
 
@@ -82,6 +89,7 @@ export const ProfitCalculator: React.FC = () => {
         handleNodeInputValidationChange, handleDeleteTemplate, handleSaveProduct, inputErrors, clearInputError,
         handleSaveAsNew, handleConfirmIdentityUpdate, handleCancelIdentityUpdate,
         handleReset, editingProduct, pendingIdentityConfirmation, isSaving,
+        nodeDraftErrors,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
     const formatInputError = (error: (typeof inputErrors)[number]): string => {
@@ -96,11 +104,18 @@ export const ProfitCalculator: React.FC = () => {
     const inputErrorMessages = Object.fromEntries(
         inputErrors.map(error => [error.field, formatInputError(error)]),
     );
+    const handleSiteInputChange = (field: string, value: string | number) => {
+        clearInputError(field);
+        setProfitSiteInputsMap(previous => ({
+            ...previous,
+            [siteCountry]: { ...(previous[siteCountry] || DEFAULT_SITE_INPUTS), [field]: value },
+        }));
+    };
 
     return (
-        <div className="flex flex-col min-h-[calc(100vh-140px)] pb-6">
+        <div className="profit-workspace flex min-h-full min-w-0 flex-col">
             {/* Header Bar */}
-            <div className="px-4 py-3 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-3 flex flex-wrap gap-3 justify-between items-center shrink-0 z-20">
+            <div className="px-3 py-2 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-2 flex flex-wrap gap-2 justify-between items-center shrink-0 z-20">
                 <div className="flex items-center gap-3 text-slate-800">
                     <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg text-white shadow-lg"><Calculator size={18} /></div>
                     <div>
@@ -139,7 +154,7 @@ export const ProfitCalculator: React.FC = () => {
                 </div>
             </div>
 
-            <p className="mb-3 text-xs text-slate-600" role="status">
+            <p className="mb-2 break-words text-xs text-slate-600" role="status">
                 {editingProductId
                     ? editingProduct
                         ? `${t.saveIdentity.editing} ${editingProduct.name} · ${editingProduct.sku}`
@@ -180,25 +195,25 @@ export const ProfitCalculator: React.FC = () => {
                 isLoadingRate={isLoading}
                 lastUpdated={lastUpdated}
                 onRefreshRates={refreshRates}
-                onReset={handleReset}
+                onReset={() => { resetPricing(); handleReset(); }}
                 siteInputs={profitSiteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
                 inputErrors={inputErrorMessages}
-                onSiteInputChange={(field, value) => {
-                    clearInputError(field);
-                    setProfitSiteInputsMap(prev => ({
-                        ...prev,
-                        [siteCountry]: {
-                            ...prev[siteCountry],
-                            [field]: value,
-                        }
-                    }));
-                }}
+                onSiteInputChange={handleSiteInputChange}
+                pricingPanel={<TargetPricingPanel key={pricingSession} nodes={nodes}
+                    globalInputs={profitGlobalInputs} siteInputs={profitSiteInputsMap[siteCountry] || DEFAULT_SITE_INPUTS}
+                    currency={siteCountry} exchangeRate={rates[siteCountry]} rateReady={Boolean(lastUpdated) && !isStale && !isLoading}
+                    draftErrors={nodeDraftErrors} t={t} onBasisChange={setPricingBasisId}
+                    onApply={revenue => {
+                        handleSiteInputChange('totalRevenue', revenue);
+                        showToast(t.targetPricing.applied);
+                    }} />}
             />
 
-            {/* Matrix Scroll Area */}
-            <div className="flex-1 min-h-0 relative rounded-xl bg-slate-50/50 border border-slate-100 p-4 overflow-x-auto flex gap-4 items-start snap-x">
+            {/* Responsive node comparison: every card stays in the page flow. */}
+            <div className="grid min-w-0 items-start gap-3"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))' }}>
                 {nodes.length === 0 ? (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                    <div className="col-span-full flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-center text-slate-400">
                         <Building size={48} className="mb-4 opacity-20" />
                         <p className="font-bold">{t.matrix.nodeEmpty}</p>
                         <p className="text-sm mt-1">{t.matrix.nodeEmptyDesc}</p>
@@ -226,6 +241,7 @@ export const ProfitCalculator: React.FC = () => {
                             platform={node.platform}
                             country={node.currency}
                             nodeName={node.name}
+                            isPricingBasis={node.id === pricingBasisId}
                             data={node.data}
                             globalInputs={profitGlobalInputs}
                             siteInputs={profitSiteInputsMap[node.currency] || DEFAULT_SITE_INPUTS}

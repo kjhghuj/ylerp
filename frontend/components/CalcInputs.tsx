@@ -23,6 +23,15 @@ const InputLabel = ({ label, labelAside }: { label: string; labelAside?: React.R
     </div>
 );
 
+const InputHelper = ({ left, right }: { left?: React.ReactNode; right?: React.ReactNode }) => (
+    left || right ? (
+        <div className="mt-0.5 flex items-start justify-between gap-1 px-1 text-[10px] font-bold">
+            {left && <div className="min-w-0 flex-1 text-left">{left}</div>}
+            {right && <div className="ml-auto text-right text-emerald-600">{right}</div>}
+        </div>
+    ) : null
+);
+
 export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildren<{ title: string, icon: any }>) => (
     <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl flex flex-col h-full">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-white/20 bg-white/30 rounded-t-xl">
@@ -37,7 +46,7 @@ export const InputCard = ({ title, icon: Icon, children }: React.PropsWithChildr
     </div>
 );
 
-function InvertedCurrencyInput({ label, labelAside, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
+function InvertedCurrencyInput({ label, labelAside, helperLeft, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, min, max, step, error }: any) {
     const normalizedCurrency = normalizeCurrencyCode(currencyCode) as CurrencyCode;
     const formatLocalAmount = (amount: number) => {
         const roundedAmount = normalizedCurrency
@@ -135,16 +144,13 @@ function InvertedCurrencyInput({ label, labelAside, name, value, onChange, highl
                 )}
             </div>
             {error && <div id={`${name}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{error}</div>}
-            {safeValue !== null && (
-                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                    <span>≈ {safeValue.toFixed(2)} CNY</span>
-                </div>
-            )}
+            <InputHelper left={helperLeft} right={safeValue !== null
+                ? <span>≈ {safeValue.toFixed(2)} CNY</span> : null} />
         </div>
     );
 }
 
-function StandardNumberInput({ label, labelAside, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, customDisplay, min, max, step, error }: any) {
+function StandardNumberInput({ label, labelAside, helperLeft, name, value, onChange, highlight, suffix, colSpan, exchangeRate, currencyCode, customDisplay, min, max, step, error }: any) {
     const safeValue = readCanonicalNumber(value, name);
     const formattedValue = safeValue === null
         ? String(value ?? '')
@@ -217,25 +223,19 @@ function StandardNumberInput({ label, labelAside, name, value, onChange, highlig
                 )}
             </div>
             {error && <div id={`${name}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{error}</div>}
-            {customDisplay ? (
-                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                    {customDisplay}
-                </div>
-            ) : convertedValue ? (
-                <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
-                    <span>≈ {convertedValue} {currencyCode}</span>
-                </div>
-            ) : null}
+            <InputHelper left={helperLeft} right={customDisplay || (convertedValue
+                ? <span>≈ {convertedValue} {currencyCode}</span> : null)} />
         </div>
     );
 }
 
-export const NumberInput = ({ label, labelAside = null, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null, min, max, step = 'any', error }: any) => {
+export const NumberInput = ({ label, labelAside = null, helperLeft = null, name, value, onChange, highlight = false, suffix, colSpan = "col-span-1", exchangeRate = 0, currencyCode = '', invertCurrency = false, customDisplay = null, min, max, step = 'any', error }: any) => {
     if (invertCurrency && currencyCode) {
         return (
             <InvertedCurrencyInput
                 label={label}
                 labelAside={labelAside}
+                helperLeft={helperLeft}
                 name={name}
                 value={value}
                 onChange={onChange}
@@ -255,6 +255,7 @@ export const NumberInput = ({ label, labelAside = null, name, value, onChange, h
         <StandardNumberInput
             label={label}
             labelAside={labelAside}
+            helperLeft={helperLeft}
             name={name}
             value={value}
             onChange={onChange}

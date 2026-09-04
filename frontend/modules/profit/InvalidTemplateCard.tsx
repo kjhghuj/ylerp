@@ -18,7 +18,7 @@ export const InvalidTemplateCard: React.FC<InvalidTemplateCardProps> = ({
     return (
         <div
             role="status"
-            className="min-w-[340px] w-[340px] border-2 border-amber-300 rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center"
+            className="min-w-0 w-full border-2 border-amber-300 rounded-xl bg-white shadow-sm flex flex-col overflow-hidden"
         >
             <div className="bg-amber-50 px-4 py-3 flex items-center justify-between border-b border-amber-200">
                 <div className="min-w-0">

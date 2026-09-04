@@ -1,28 +1,12 @@
 import React from 'react';
 import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
-import { formatCurrencyAmount } from './currencyRounding';
-import { normalizeCurrencyCode, ProfitGlobalInputs, type CurrencyCode } from './types';
+import { BuyerPaidPrices, formatCNYAndLocalAmount } from './priceDisplay';
+import { ProfitGlobalInputs } from './types';
 import { translations } from '../../translations';
 import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profitInputNormalization';
 
 type ProfitStrings = typeof translations['zh']['profit'];
-
-const formatCNYAndLocalAmount = (
-    amountCNY: number,
-    rateToLocal: unknown,
-    siteCountry: string,
-): string | null => {
-    if (!Number.isFinite(amountCNY)) return null;
-    const formattedCNY = formatCurrencyAmount(amountCNY, 'CNY');
-    const parsedRate = parseCanonicalPositiveRate(rateToLocal, 'dualCurrencyRate');
-    const currency = normalizeCurrencyCode(siteCountry) as CurrencyCode;
-    if (!parsedRate.ok || !currency) return `${formattedCNY} CNY / — ${siteCountry}`;
-
-    const amountLocal = amountCNY * parsedRate.value;
-    if (!Number.isFinite(amountLocal)) return `${formattedCNY} CNY / — ${currency}`;
-    return `${formattedCNY} CNY / ${formatCurrencyAmount(amountLocal, currency)} ${currency}`;
-};
 
 const renderPercentCouponAmount = (
     totalRevenue: unknown,
@@ -41,30 +25,6 @@ const renderPercentCouponAmount = (
 const formatCurrentRate = (value: unknown): string => {
     const parsed = parseCanonicalPositiveRate(value, 'currentRate');
     return parsed.ok ? parsed.value.toFixed(4) : '-';
-};
-
-const renderBuyerPaidPrice = (
-    totalRevenue: unknown,
-    sellerCoupon: unknown,
-    sellerCouponType: 'fixed' | 'percent',
-    rateToLocal: unknown,
-    siteCountry: string,
-    label: string,
-): React.ReactNode => {
-    const revenue = parseCanonicalProfitNumber(totalRevenue, { field: 'totalRevenue', min: 0 });
-    const coupon = parseCanonicalProfitNumber(sellerCoupon, {
-        field: 'sellerCoupon',
-        min: 0,
-        ...(sellerCouponType === 'percent' ? { max: 100 } : {}),
-    });
-    if (!revenue.ok || !coupon.ok) return <span title={label}>{label}：—</span>;
-
-    const grossCoupon = sellerCouponType === 'percent'
-        ? revenue.value * (coupon.value / 100)
-        : coupon.value;
-    const buyerPaidCNY = Math.max(0, revenue.value - grossCoupon);
-    const formattedAmount = formatCNYAndLocalAmount(buyerPaidCNY, rateToLocal, siteCountry);
-    return <span title={label}>{label}：{formattedAmount ?? '—'}</span>;
 };
 
 interface GlobalInputsPanelProps {
@@ -92,24 +52,25 @@ interface GlobalInputsPanelProps {
     };
     onSiteInputChange: (field: string, value: string | number) => void;
     inputErrors?: Record<string, string>;
+    pricingPanel?: React.ReactNode;
 }
 
 export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
     globalInputs, siteCountry, useLocalCurrency, rates,
     onGlobalChange, onSetGlobalInputs, onSetUseLocalCurrency, onSetSiteCountry, t,
     currentRate, isLoadingRate, lastUpdated, onRefreshRates, onReset,
-    siteInputs, onSiteInputChange, inputErrors = {},
+    siteInputs, onSiteInputChange, inputErrors = {}, pricingPanel,
 }) => (
-    <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-4 mb-4 flex-shrink-0">
-        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-            <div className="flex items-center gap-2">
+    <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-xl p-3 mb-3 flex-shrink-0">
+        <div className="mb-3 flex flex-col gap-2 border-b border-slate-100 pb-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
                 <div className="p-1.5 bg-slate-100 rounded text-slate-600"><Box size={16} /></div>
                 <div>
                     <h3 className="text-sm font-extrabold text-slate-700 uppercase tracking-wide">{t.matrix.globalBase}</h3>
                     <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.globalBaseDesc}</div>
                 </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
                 <button
                     onClick={onReset}
                     className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
@@ -153,7 +114,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 </select>
             </div>
         </div>
-        <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
             <TextInput label={t.inputs.name} name="name" value={globalInputs.name} onChange={onGlobalChange} />
             <TextInput label={t.inputs.sku} name="sku" value={globalInputs.sku} onChange={onGlobalChange} />
             <NumberInput
@@ -175,28 +136,25 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
             <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={onGlobalChange} suffix="%" error={inputErrors.corporateIncomeTaxRate} />
         </div>
 
-        <div className="mt-4 pt-4 border-t border-slate-100">
-            <div className="flex items-center gap-2 mb-3">
+        <div className="mt-3 pt-3 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-2">
                 <div className="p-1.5 bg-indigo-100 rounded text-indigo-600"><Globe size={14} /></div>
-                <div>
-                    <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
-                        {t.matrix.siteParams} ({siteCountry})
-                    </h3>
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-xs font-extrabold text-slate-700 uppercase tracking-wide">
+                            {t.matrix.siteParams} ({siteCountry})
+                        </h3>
+                        {pricingPanel}
+                    </div>
                     <div className="text-[10px] text-slate-400 font-bold tracking-widest">{t.matrix.siteParamsDesc}</div>
                 </div>
             </div>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 <NumberInput
                     label={`${t.inputs.totalRevenue} (${useLocalCurrency ? siteCountry : 'CNY'})`}
-                    labelAside={renderBuyerPaidPrice(
-                        siteInputs.totalRevenue,
-                        siteInputs.sellerCoupon,
-                        siteInputs.sellerCouponType,
-                        rates[siteCountry],
-                        siteCountry,
-                        t.inputs.buyerPaidPrice,
-                    )}
                     name="totalRevenue"
+                    helperLeft={<BuyerPaidPrices siteInputs={siteInputs} siteCountry={siteCountry}
+                        exchangeRate={rates[siteCountry]} t={t} />}
                     value={siteInputs.totalRevenue}
                     onChange={(e) => onSiteInputChange('totalRevenue', e.target.value)}
                     highlight

@@ -325,7 +325,7 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
 
   const drawer = drawerOpen && typeof document !== 'undefined'
     ? createPortal(
-      <div className="fixed inset-0 z-[130] flex items-end sm:items-stretch sm:justify-end">
+      <div className="profit-dialog fixed inset-0 z-[130] flex items-end sm:items-stretch sm:justify-end">
         <div
           data-testid="profit-breakdown-backdrop"
           className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px]"

@@ -3,7 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreProvider, useStore } from '../StoreContext';
 import { ProfitCalculator } from '../modules/ProfitCalculator';
-import { DEFAULT_NODE_DATA } from '../modules/profit/types';
+import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
+import { calculateProfit } from '../modules/profit/calculateProfit';
 import type { ProductCalcData } from '../types';
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../src/api', () => ({ default: mocks.api }));
 vi.mock('../components/Toast', () => ({ useToast: () => ({ showToast: mocks.showToast }) }));
 vi.mock('../hooks/useExchangeRates', () => ({
-  useExchangeRates: () => ({ rates: { MYR: 0.65, SGD: 4.8 }, isLoading: false, isStale: false }),
+  useExchangeRates: () => ({ rates: { MYR: 0.65, SGD: 4.8 }, isLoading: false, isStale: false, lastUpdated: '2026-09-04' }),
 }));
 
 const productA: ProductCalcData = {
@@ -57,6 +58,53 @@ describe('ProfitCalculator product save safety with the real store', () => {
     }));
   });
   afterEach(cleanup);
+
+  it('applies reverse pricing only to the current site in either currency mode, then saves via the existing API', async () => {
+    await mount();
+    const node = { id: 'reference', name: 'Reference', currency: 'MYR', platform: 'shopee' as const, data: { ...DEFAULT_NODE_DATA } };
+    act(() => {
+      store.setProfitNodes({ MYR: [node, { ...node, id: 'other', name: 'Other', data: { ...DEFAULT_NODE_DATA, platformCommissionRate: 40 } }] });
+      store.setProfitSiteInputsMap({ MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 20 }, SGD: { ...DEFAULT_SITE_INPUTS, totalRevenue: 80 } });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    fireEvent.click(screen.getByRole('button', { name: '20%' }));
+    fireEvent.change(screen.getByLabelText('基准计算节点'), { target: { value: 'reference' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: '应用此售价' })).toBeEnabled());
+    expect(screen.getByText('定价基准')).toBeInTheDocument();
+    const suggestion = screen.getByTestId('suggested-revenue').textContent;
+    expect(store.profitSiteInputsMap.MYR.totalRevenue).toBe(20);
+    fireEvent.click(screen.getByRole('button', { name: '关闭定价弹窗' }));
+    fireEvent.click(screen.getByRole('button', { name: '切换本土货币计算' }));
+    fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '应用此售价' })).toBeEnabled());
+    expect(screen.getByTestId('suggested-revenue')).toHaveTextContent(suggestion!);
+    fireEvent.click(screen.getByRole('button', { name: '应用此售价' }));
+    const revenue = store.profitSiteInputsMap.MYR.totalRevenue;
+    expect(calculateProfit(node.data, store.profitGlobalInputs, store.profitSiteInputsMap.MYR, 0.65, 'MYR').margin).toBeGreaterThanOrEqual(20);
+    expect(store.profitSiteInputsMap.SGD.totalRevenue).toBe(80);
+    expect(mocks.api.put).not.toHaveBeenCalled();
+    expect(mocks.api.post).not.toHaveBeenCalled();
+    expect(mocks.showToast).toHaveBeenCalledWith('已更新当前站点总收入');
+    update();
+    await waitFor(() => expect(mocks.api.put).toHaveBeenCalledTimes(1));
+    expect(mocks.api.put.mock.calls[0][1].sitePatch.siteData.MY.totalRevenue).toBe(revenue);
+  });
+
+  it('clears target-pricing preferences when resetting or importing a product', async () => {
+    await mount();
+    fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    fireEvent.click(screen.getByRole('button', { name: '25%' }));
+    fireEvent.click(screen.getByRole('button', { name: '关闭定价弹窗' }));
+    fireEvent.click(screen.getByTitle('重置'));
+    expect(screen.queryByLabelText('目标收入利润率')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    expect(screen.getByLabelText('目标收入利润率')).toHaveValue('');
+    fireEvent.click(screen.getByRole('button', { name: '30%' }));
+    act(() => store.setCalculatorImport(productA));
+    await waitFor(() => expect(screen.queryByLabelText('目标收入利润率')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    expect(screen.getByLabelText('目标收入利润率')).toHaveValue('');
+  });
 
   it('requires a decision when A is changed to B, and cancel does not write', async () => {
     await mount();

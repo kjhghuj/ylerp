@@ -142,7 +142,7 @@ const MainContent: React.FC = () => {
           </div>
         </div>
 
-        <div ref={contentRef} className="flex-1 overflow-auto p-4 lg:p-6">
+        <div ref={contentRef} className={`flex-1 min-h-0 overflow-auto ${currentView === 'profit' ? 'profit-scroll-surface p-3 lg:p-4' : 'p-4 lg:p-6'}`}>
           <div className="h-full">
             {renderView()}
           </div>

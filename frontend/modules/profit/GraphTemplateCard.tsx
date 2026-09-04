@@ -130,7 +130,7 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
     };
 
     return (
-        <div className="min-w-[340px] w-[340px] border-2 border-emerald-200 rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center">
+        <div className="min-w-0 w-full border-2 border-emerald-200 rounded-xl bg-white shadow-sm flex flex-col overflow-hidden">
             <div className="bg-emerald-50/70 px-4 py-3 flex items-center justify-between border-b border-emerald-100">
                 <div>
                     <div className="flex items-center gap-2">

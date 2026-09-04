@@ -581,6 +581,7 @@ export const useProductActions = (
     return {
         nodes,
         inputErrors: [...inputErrors, ...draftInputErrors],
+        nodeDraftErrors: draftInputErrors,
         clearInputError,
         handleGlobalChange,
         handleUpdateNode,

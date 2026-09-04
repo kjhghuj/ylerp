@@ -128,6 +128,22 @@ input, select, textarea, button, [role="button"] {
   transition-timing-function: ease;
 }
 
+/* Profit tools retain wheel, touch and keyboard scrolling without visible rails. */
+.profit-scroll-surface,
+.profit-scroll-surface *,
+.profit-dialog,
+.profit-dialog * {
+  scrollbar-width: none;
+}
+.profit-scroll-surface::-webkit-scrollbar,
+.profit-scroll-surface *::-webkit-scrollbar,
+.profit-dialog::-webkit-scrollbar,
+.profit-dialog *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

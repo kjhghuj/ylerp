@@ -29,6 +29,7 @@ interface PlatformCardProps {
     platform: PlatformType;
     country: string;
     nodeName?: string;
+    isPricingBasis?: boolean;
     data: NodeData;
     globalInputs: GlobalInput;
     siteInputs: SiteLevelInputs;
@@ -43,7 +44,7 @@ interface PlatformCardProps {
 }
 
 export const PlatformCard: React.FC<PlatformCardProps> = ({
-    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, onInputValidationChange, useLocalCurrency = false, inputErrors = {}
+    nodeId, platform, country, nodeName, data, globalInputs, siteInputs, rateToCNY, strings, onUpdate, onDelete, onSaveTemplate, onInputValidationChange, useLocalCurrency = false, inputErrors = {}, isPricingBasis = false
 }) => {
     const t = strings;
     const config = PLATFORMS[platform] || PLATFORMS.other;
@@ -386,10 +387,10 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     );
 
     return (
-        <div className={`min-w-[340px] w-[340px] border-2 ${config.colors.border} rounded-2xl bg-white shadow-sm flex flex-col overflow-hidden shrink-0 snap-center transition-all hover:shadow-md`}>
+        <div className={`min-w-0 w-full border-2 ${config.colors.border} rounded-xl bg-white shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
             {/* Header */}
-            <div className={`${config.colors.bg} px-4 py-3 flex items-center justify-between border-b ${config.colors.border}`}>
-                <div className="flex flex-col">
+            <div className={`${config.colors.bg} px-3 py-2 flex items-center justify-between gap-2 border-b ${config.colors.border}`}>
+                <div className="min-w-0 flex flex-col">
                     <div className="flex items-center gap-2">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white bg-gradient-to-r ${config.colors.gradient}`}>
                             {t.matrix.platforms[platform] || config.name}
@@ -397,20 +398,38 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         <span className="text-sm font-black text-slate-800 tracking-tight">{siteName}</span>
                     </div>
                     {nodeName && (
-                        <div className="text-[11px] text-slate-500 font-bold mt-1 bg-slate-100/50 px-1.5 py-0.5 rounded border border-slate-200/50 inline-block w-fit">
+                        <div className="max-w-full break-words text-[11px] text-slate-500 font-bold mt-1 bg-slate-100/50 px-1.5 py-0.5 rounded border border-slate-200/50 inline-block w-fit">
                             {nodeName}
                         </div>
                     )}
+                    {isPricingBasis && <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                        {t.targetPricing.basisBadge}
+                    </span>}
                 </div>
                 <button onClick={() => onDelete(nodeId)} className="p-2 -mr-2 text-slate-400 hover:text-red-500 transition-colors">
                     <Trash2 size={16} />
                 </button>
             </div>
 
+            {results && (
+                <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
+                    <ProfitBreakdown
+                        result={results}
+                        currency={currencyCode}
+                        rateToCNY={rateToCNY}
+                        useLocalCurrency={useLocalCurrency}
+                        platformName={t.matrix.platforms[platform] || config.name}
+                        siteName={siteName}
+                        nodeName={nodeName}
+                        strings={t}
+                    />
+                </div>
+            )}
+
             {/* Configurable Inputs Block */}
-            <div className="flex-1 overflow-y-auto outline-none" style={{ maxHeight: '400px' }}>
-                <div className="p-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+                <div className="p-3">
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
                         {config.fields.base.includes('transactionFeeRate') && renderInput('transactionFeeRate')}
                         {config.fields.base.includes('damageReturnRate') && renderInput('damageReturnRate')}
@@ -440,16 +459,6 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             {/* Results Block */}
             {results && (
                 <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50 to-white pb-3 rounded-b-2xl">
-                    <ProfitBreakdown
-                        result={results}
-                        currency={currencyCode}
-                        rateToCNY={rateToCNY}
-                        useLocalCurrency={useLocalCurrency}
-                        platformName={t.matrix.platforms[platform] || config.name}
-                        siteName={siteName}
-                        nodeName={nodeName}
-                        strings={t}
-                    />
                     {/* Save Template Action */}
                     <div className="px-4 pt-3 pb-1 flex gap-2">
                         <input
@@ -457,7 +466,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             placeholder={t.matrix.templateName}
                             value={templateName}
                             onChange={(e) => setTemplateName(e.target.value)}
-                            className="flex-1 text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition-colors"
+                            className="min-w-0 flex-1 text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition-colors"
                         />
                         <button
                             onClick={() => { onSaveTemplate(nodeId, templateName); setTemplateName(''); }}

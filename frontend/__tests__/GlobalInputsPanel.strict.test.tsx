@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { GlobalInputsPanel } from '../modules/profit/GlobalInputsPanel';
 import { zh } from '../locales/zh';
+import { DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 
 const baseProps = {
   globalInputs: {
@@ -33,9 +34,81 @@ const baseProps = {
 
 describe('GlobalInputsPanel strict percent-coupon helper', () => {
   it.each([
+    ['fixed', 20, '200.00', '300.00'],
+    ['percent', 20, '180.00', '270.00'],
+  ] as const)('shows buyer-paid prices below the input and hides storefront price for a %s coupon', (type, coupon, cny, local) => {
+    const { container } = render(<GlobalInputsPanel {...baseProps} siteInputs={{ ...DEFAULT_SITE_INPUTS,
+      totalRevenue: 200, sellerCouponType: type, sellerCoupon: coupon, sellerCouponPlatformRatio: 75,
+    }} />);
+    const ordinaryBuyerPaid = screen.getByText(type === 'fixed'
+      ? '买家实付价格：180.00 CNY / 270.00 MYR' : '买家实付价格：160.00 CNY / 240.00 MYR');
+    const buyerPaid = screen.getByText(`跨境买家实付价格：${cny} CNY / ${local} MYR`);
+    const input = container.querySelector('input[name="totalRevenue"]')!;
+    expect(input.compareDocumentPosition(ordinaryBuyerPaid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ordinaryBuyerPaid.parentElement!.nextElementSibling).toContainElement(buyerPaid);
+    expect(screen.queryByText(/跨境前台价格/)).not.toBeInTheDocument();
+  });
+
+  it('updates cross-border buyer-paid price with country and coupon changes in local input mode', () => {
+    const { rerender } = render(<GlobalInputsPanel {...baseProps} useLocalCurrency
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100, sellerCoupon: 20 }} />);
+    expect(screen.getByText('跨境买家实付价格：90.00 CNY / 135.00 MYR')).toBeInTheDocument();
+    rerender(<GlobalInputsPanel {...baseProps} useLocalCurrency siteCountry="THB" rates={{ THB: 5 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100, sellerCoupon: 10 }} />);
+    expect(screen.getByText('跨境买家实付价格：106.00 CNY / 530.00 THB')).toBeInTheDocument();
+  });
+
+  it('retains CNY cross-border buyer-paid price without an exchange rate', () => {
+    render(<GlobalInputsPanel {...baseProps} rates={{ MYR: 0 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100, sellerCoupon: 20 }} />);
+    expect(screen.getByText('跨境买家实付价格：90.00 CNY / — MYR')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['MYR', '110.00', '165.00'], ['SGD', '109.00', '163.50'], ['PHP', '100.00', '150.00'],
+    ['THB', '116.00', '174.00'], ['IDR', '100.00', '150'],
+  ])('shows the configured cross-border buyer-paid price for %s without replacing the currency conversion', (currency, price, localPrice) => {
+    const { container } = render(<GlobalInputsPanel {...baseProps}
+      siteCountry={currency} rates={{ [currency]: 1.5 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
+    const field = container.querySelector('input[name="totalRevenue"]')!.parentElement!.parentElement!;
+    const storefront = screen.getByText(`跨境买家实付价格：${price} CNY / ${localPrice} ${currency}`);
+    expect(field).toContainElement(storefront);
+    expect(storefront.parentElement).toHaveClass('text-orange-600');
+    expect(field).toHaveTextContent(`≈ ${currency === 'IDR' ? '150' : '150.00'} ${currency}`);
+  });
+
+  it('updates cross-border buyer-paid price when revenue, site or input currency changes', () => {
+    const { rerender } = render(<GlobalInputsPanel {...baseProps}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
+    expect(screen.getByText('跨境买家实付价格：110.00 CNY / 165.00 MYR')).toBeInTheDocument();
+    rerender(<GlobalInputsPanel {...baseProps} useLocalCurrency
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
+    expect(screen.getByText('跨境买家实付价格：110.00 CNY / 165.00 MYR')).toBeInTheDocument();
+    rerender(<GlobalInputsPanel {...baseProps} useLocalCurrency
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 200 }} />);
+    expect(screen.getByText('跨境买家实付价格：220.00 CNY / 330.00 MYR')).toBeInTheDocument();
+    rerender(<GlobalInputsPanel {...baseProps} useLocalCurrency siteCountry="THB" rates={{ THB: 5 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 200 }} />);
+    expect(screen.getByText('跨境买家实付价格：232.00 CNY / 1160.00 THB')).toBeInTheDocument();
+  });
+
+  it('keeps the CNY cross-border buyer-paid price when the local exchange rate is unavailable', () => {
+    render(<GlobalInputsPanel {...baseProps} rates={{ MYR: 0 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
+    expect(screen.getByText('跨境买家实付价格：110.00 CNY / — MYR')).toBeInTheDocument();
+  });
+
+  it('shows a placeholder instead of a misleading cross-border buyer-paid price for invalid revenue', () => {
+    render(<GlobalInputsPanel {...baseProps}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 'invalid' as unknown as number }} />);
+    expect(screen.getByText('跨境买家实付价格：—')).toBeInTheDocument();
+  });
+
+  it.each([
     { sellerCoupon: 20, sellerCouponType: 'fixed' as const },
     { sellerCoupon: 20, sellerCouponType: 'percent' as const },
-  ])('shows buyer-paid price beside total revenue for a $sellerCouponType store coupon', (coupon) => {
+  ])('shows buyer-paid price below total revenue for a $sellerCouponType store coupon', (coupon) => {
     render(<GlobalInputsPanel
       {...baseProps}
       siteInputs={{

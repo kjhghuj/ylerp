@@ -12,6 +12,7 @@ import {
 export const useProfitImport = (
     siteInputsMap?: Record<string, SiteLevelInputs>,
     setSiteInputsMap?: React.Dispatch<React.SetStateAction<Record<string, SiteLevelInputs>>>,
+    onImport?: () => void,
 ) => {
     const {
         calculatorImport, setCalculatorImport,
@@ -26,6 +27,8 @@ export const useProfitImport = (
     const { showToast } = useToast();
 
     const processingRef = useRef(false);
+    const onImportRef = useRef(onImport);
+    onImportRef.current = onImport;
     const siteInputsMapRef = useRef(siteInputsMap);
     siteInputsMapRef.current = siteInputsMap;
 
@@ -49,6 +52,7 @@ export const useProfitImport = (
                 supplierTaxPoint: readHistoricalProfitNumber(calculatorImport.supplierTaxPoint, 0),
                 supplierInvoice: calculatorImport.supplierInvoice || 'no',
             };
+            onImportRef.current?.();
             setGlobalInputs(prev => ({
                 ...prev,
                 ...globalData,
