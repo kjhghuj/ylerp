@@ -272,6 +272,22 @@ model NodeGraphTemplate {
   user      User     @relation(fields: [userId], references: [id])
 }
 
+model ProductAnalysisReport {
+  id          String   @id @default(uuid())
+  fileName    String
+  periodStart String?
+  periodEnd   String?
+  currency    String   @default("MYR")
+  platform    String   @default("shopee")
+  itemCount   Int      @default(0)
+  data        Json
+  createdAt   DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
 model User {
   id                  String                   @id @default(uuid())
   username            String                   @unique
@@ -295,6 +311,7 @@ model User {
   nodeGraphTemplates  NodeGraphTemplate[]
   products            Product[]
   profitTemplates     ProfitTemplate[]
+  productAnalysisReports ProductAnalysisReport[]
   restockRecords      RestockRecord[]
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]

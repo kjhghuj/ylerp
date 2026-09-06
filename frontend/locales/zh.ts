@@ -18,6 +18,7 @@ export const zh = {
     personalCenter: '个人中心',
     schedule: '日程管理',
     nodeDesigner: '节点设计',
+    productAnalysis: '商品分析',
     usageStats: '使用统计',
     version: 'v1.5.4 正式版',
   },

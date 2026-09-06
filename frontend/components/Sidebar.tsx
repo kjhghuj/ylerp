@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, Users, Image, ClipboardList, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, GitBranch } from 'lucide-react';
+import { LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, Users, Image, ClipboardList, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, GitBranch, BarChart3 } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
@@ -30,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
     { id: 'chroma-adapt', label: strings.sidebar.chromaAdapt || '图片制作', icon: Image },
     { id: 'schedule', label: strings.sidebar.schedule || '日程管理', icon: Calendar },
     { id: 'node-designer', label: strings.sidebar.nodeDesigner || '节点设计', icon: GitBranch },
+    { id: 'product-analysis', label: strings.sidebar.productAnalysis || '商品分析', icon: BarChart3 },
     ...(user?.role === 'owner' || user?.role === 'admin' ? [{ id: 'usage-stats', label: strings.sidebar.usageStats || '使用统计', icon: Activity }] : []),
     ...(user?.role === 'owner' ? [{ id: 'user-management', label: '用户管理', icon: Users }] : []),
   ];

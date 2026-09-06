@@ -18,6 +18,7 @@ export const en = {
     personalCenter: 'Profile',
     schedule: 'Schedule',
     nodeDesigner: 'Node Designer',
+    productAnalysis: 'Product Analysis',
     usageStats: 'Usage Stats',
     version: 'v1.5.4 Stable',
   },

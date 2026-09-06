@@ -85,6 +85,14 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         ]
     },
     {
+        key: 'product-analysis', label: '商品分析', labelEn: 'Product Analysis', icon: BarChart3,
+        children: [
+            { key: 'product-analysis.view', label: '查看报告', labelEn: 'View Reports', icon: Search },
+            { key: 'product-analysis.upload', label: '上传文件', labelEn: 'Upload', icon: Upload },
+            { key: 'product-analysis.aiChat', label: 'AI 对话分析', labelEn: 'AI Chat', icon: BarChart3 },
+        ]
+    },
+    {
         key: 'usage-stats', label: '使用统计', labelEn: 'Usage Stats', icon: Activity,
         children: [
             { key: 'usage-stats.view', label: '查看统计', labelEn: 'View Stats', icon: BarChart3 },

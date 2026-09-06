@@ -71,6 +71,7 @@ import scheduleRoutes from './routes/scheduleRoutes';
 import chromaRecordRoutes from './routes/chromaRecordRoutes';
 import usageRoutes from './routes/usageRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import productAnalysisRoutes from './routes/productAnalysisRoutes';
 import { startFinanceBackup } from './services/financeBackup';
 
 // Public routes (no auth required)
@@ -94,6 +95,7 @@ app.use('/api/chroma-adapt', authenticate, chromaAdaptRoutes);
 app.use('/api/chroma-data', authenticate, chromaRecordRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
+app.use('/api/product-analysis', authenticate, productAnalysisRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
