@@ -3,7 +3,7 @@ import {
   evaluateNodeGraphProfitTemplate,
   GRAPH_EXECUTION_LIMITS,
 } from '../modules/profit/nodeGraphProfitAdapter';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 import executableFixture from '../../test-fixtures/profit-graph-executable.json';
 import formulaPolicyFixture from '../../test-fixtures/profit-graph-formula-policy.json';
 

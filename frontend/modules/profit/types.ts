@@ -1,5 +1,5 @@
 import { PlatformType } from '../../platformConfig';
-import type { NodeGraphTemplate } from '../node-designer/types';
+import type { NodeGraphTemplate } from './nodeGraphTypes';
 
 export interface ProfitTemplate {
     id?: string;

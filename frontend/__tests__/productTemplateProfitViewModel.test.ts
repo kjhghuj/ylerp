@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createProductTemplateProfitViewModel } from '../modules/productTemplateProfitViewModel';
 import type { GraphProductTemplateData, InvalidProductTemplateData, StandardProductTemplateData } from '../modules/profit/types';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 
 const graphSnapshot: NodeGraphTemplate = {
   id: 'graph-1',

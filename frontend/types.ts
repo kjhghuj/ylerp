@@ -47,51 +47,7 @@ export interface FinanceRecord {
   user?: { id: string; displayName: string };
 }
 
-export interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string; 
-  currentStock: number; 
-  stockOfficial: number; 
-  stockThirdParty: number; 
-  inTransit: number;
-  dailySales: number; 
-  leadTime: number; 
-  replenishCycle: number; 
-  costPerUnit: number; 
-}
-
-export interface WarehouseMapping {
-  id: string;
-  officialWarehouseId?: string;
-  thirdPartyWarehouseId?: string;
-  sku: string; 
-  type: 'official' | 'third';
-}
-
-export interface SkuGroupMapping {
-    id: string;
-    groupName: string; // The unified Product Name
-    skus: string[]; // List of SKUs belonging to this group
-}
-
-export interface RestockRecord {
-  id: string;
-  name: string;
-  createdAt: string;
-  items: {
-    sku: string;
-    productName: string;
-    currentStock: number;
-    avgDailySales: number;
-    suggestedQty: number;
-    estimatedDays: number;
-    supplier?: string;
-    note?: string;
-  }[];
-}
-
 export interface AppState {
-  currentView: 'dashboard' | 'profit' | 'finance' | 'inventory' | 'restock-v2' | 'restock-records'
-    | 'product-list' | 'user-management' | 'chroma-adapt' | 'personal-center' | 'schedule' | 'usage-stats' | 'node-designer' | 'product-analysis';
+  currentView: 'dashboard' | 'profit' | 'finance' | 'restock-v2'
+    | 'product-list' | 'user-management' | 'chroma-adapt' | 'personal-center' | 'schedule' | 'usage-stats' | 'product-analysis';
 }

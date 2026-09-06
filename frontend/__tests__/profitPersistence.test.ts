@@ -6,7 +6,7 @@ import {
 } from '../modules/profit/profitPersistence';
 import { DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 import { serializePlatformNodeTemplateData } from '../modules/profit/templateDataSerializer';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 
 const reloadGraph: NodeGraphTemplate = {
   id: 'reload-graph',

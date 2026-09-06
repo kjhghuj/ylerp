@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { evaluateGraph, type EvalNode, type EvalResult } from '../modules/node-designer/formulaEngine';
+import { evaluateGraph, type EvalNode, type EvalResult } from '../modules/profit/formulaEngine';
 
 interface TestEdge {
   source: string;

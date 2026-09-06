@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo } from 'react';
-import { ProductCalcData, FinanceRecord, InventoryItem, WarehouseMapping, SkuGroupMapping, RestockRecord } from './types';
+import { ProductCalcData, FinanceRecord } from './types';
 import { translations } from './translations';
 import { SiteLevelInputs, ProfitGlobalInputs, PlatformNode, type ProductTemplateData } from './modules/profit/types';
 import { normalizeStoredProfitNodes, normalizeStoredProfitSiteCurrency, normalizeStoredProfitSiteInputs } from './modules/profit/profitPersistence';
@@ -74,24 +74,6 @@ interface StoreContextType {
   accountBalance: number;
   totalDebt: number;
 
-  inventory: InventoryItem[];
-  addInventoryItem: (i: InventoryItem) => Promise<void>;
-  updateInventoryItem: (i: Partial<InventoryItem> & { id: string }) => Promise<void>;
-  deleteInventoryItem: (id: string) => Promise<void>;
-
-  warehouseMappings: WarehouseMapping[];
-  addMapping: (m: WarehouseMapping) => Promise<void>;
-  deleteMapping: (id: string) => Promise<void>;
-
-  skuGroupMappings: SkuGroupMapping[];
-  addSkuGroup: (m: SkuGroupMapping) => Promise<void>;
-  updateSkuGroup: (m: SkuGroupMapping) => Promise<void>;
-  deleteSkuGroup: (id: string) => Promise<void>;
-
-  restockRecords: RestockRecord[];
-  addRestockRecord: (name: string, items: RestockRecord['items']) => Promise<void>;
-  deleteRestockRecord: (id: string) => Promise<void>;
-
   loading: boolean;
 }
 
@@ -104,10 +86,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [loading, setLoading] = useState<boolean>(true);
   const [products, setProducts] = useState<ProductCalcData[]>([]);
   const [financeRecords, setFinanceRecords] = useState<FinanceRecord[]>([]);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [warehouseMappings, setWarehouseMappings] = useState<WarehouseMapping[]>([]);
-  const [skuGroupMappings, setSkuGroupMappings] = useState<SkuGroupMapping[]>([]);
-  const [restockRecords, setRestockRecords] = useState<RestockRecord[]>([]);
   const [calculatorImport, setCalculatorImport] = useState<ProductCalcData | null>(null);
   const [calculatorImportNodes, setCalculatorImportNodes] = useState<ImportedNode[]>([]);
 
@@ -210,11 +188,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       try {
         const requests = [
           api.get('/products'),
-          api.get('/finance'),
-          api.get('/inventory'),
-          api.get('/warehouse-mappings'),
-          api.get('/sku-groups'),
-          api.get('/restock-records')
+          api.get('/finance')
         ];
 
         // Attach dummy catch handlers to prevent unhandled rejection warnings
@@ -223,19 +197,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
         const [
           prodRes,
-          finRes,
-          invRes,
-          wmRes,
-          sgRes,
-          rrRes
+          finRes
         ] = await Promise.all(requests);
 
         setProducts(Array.isArray(prodRes.data) ? prodRes.data : []);
         setFinanceRecords(Array.isArray(finRes.data) ? finRes.data : []);
-        setInventory(Array.isArray(invRes.data) ? invRes.data : []);
-        setWarehouseMappings(Array.isArray(wmRes.data) ? wmRes.data : []);
-        setSkuGroupMappings(Array.isArray(sgRes.data) ? sgRes.data : []);
-        setRestockRecords(Array.isArray(rrRes.data) ? rrRes.data : []);
       } catch (error) {
         console.error('Failed to fetch initial data', error);
       } finally {
@@ -342,78 +308,6 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (e) { console.error('Error clearing finance records', e); }
   };
 
-  const addInventoryItem = async (i: InventoryItem) => {
-    try {
-      const res = await api.post('/inventory', i);
-      setInventory(prev => [...prev, res.data]);
-    } catch (e) { console.error('Error adding inventory item', e); }
-  };
-
-  const updateInventoryItem = async (i: Partial<InventoryItem> & { id: string }) => {
-    try {
-      // Find existing to merge before sending
-      const existing = inventory.find(item => item.id === i.id);
-      if (!existing) return;
-      const merged = { ...existing, ...i };
-      merged.currentStock = merged.stockOfficial + merged.stockThirdParty;
-
-      const res = await api.put(`/inventory/${i.id}`, merged);
-      setInventory(prev => prev.map(item => item.id === i.id ? res.data : item));
-    } catch (e) { console.error('Error updating inventory item', e); }
-  };
-
-  const deleteInventoryItem = async (id: string) => {
-    try {
-      await api.delete(`/inventory/${id}`);
-      setInventory(prev => prev.filter(i => i.id !== id));
-    } catch (e) { console.error('Error deleting inventory item', e); }
-  };
-
-  const addMapping = async (m: WarehouseMapping) => {
-    try {
-      const res = await api.post('/warehouse-mappings', m);
-      setWarehouseMappings(prev => [...prev, res.data]);
-    } catch (e) { console.error('Error adding warehouse mapping', e); }
-  };
-  const deleteMapping = async (id: string) => {
-    try {
-      await api.delete(`/warehouse-mappings/${id}`);
-      setWarehouseMappings(prev => prev.filter(m => m.id !== id));
-    } catch (e) { console.error('Error deleting warehouse mapping', e); }
-  };
-
-  const addSkuGroup = async (m: SkuGroupMapping) => {
-    try {
-      const res = await api.post('/sku-groups', m);
-      setSkuGroupMappings(prev => [...prev, res.data]);
-    } catch (e) { console.error('Error adding sku group', e); }
-  };
-  const updateSkuGroup = async (m: SkuGroupMapping) => {
-    try {
-      const res = await api.put(`/sku-groups/${m.id}`, m);
-      setSkuGroupMappings(prev => prev.map(group => group.id === m.id ? res.data : group));
-    } catch (e) { console.error('Error updating sku group', e); }
-  };
-  const deleteSkuGroup = async (id: string) => {
-    try {
-      await api.delete(`/sku-groups/${id}`);
-      setSkuGroupMappings(prev => prev.filter(m => m.id !== id));
-    } catch (e) { console.error('Error deleting sku group', e); }
-  };
-
-  const addRestockRecord = async (name: string, items: RestockRecord['items']) => {
-    try {
-      const res = await api.post('/restock-records', { name, items });
-      setRestockRecords(prev => [res.data, ...prev]);
-    } catch (e) { console.error('Error adding restock record', e); }
-  };
-  const deleteRestockRecord = async (id: string) => {
-    try {
-      await api.delete(`/restock-records/${id}`);
-      setRestockRecords(prev => prev.filter(r => r.id !== id));
-    } catch (e) { console.error('Error deleting restock record', e); }
-  };
-
   // Derived Financial State
   const accountBalance = useMemo(() => {
     return financeRecords.reduce((acc, curr) => {
@@ -447,11 +341,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       profitSiteInputsMap, setProfitSiteInputsMap,
       productListActiveTab, setProductListActiveTab,
       productListCurrentPage, setProductListCurrentPage,
-      financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt,
-      inventory, addInventoryItem, updateInventoryItem, deleteInventoryItem,
-      warehouseMappings, addMapping, deleteMapping,
-      skuGroupMappings, addSkuGroup, updateSkuGroup, deleteSkuGroup,
-      restockRecords, addRestockRecord, deleteRestockRecord
+      financeRecords, addTransaction, updateTransaction, deleteTransaction, deleteTransactionsByMonth, clearAllTransactions, importTransactions, accountBalance, totalDebt
     }}>
       {children}
     </StoreContext.Provider>

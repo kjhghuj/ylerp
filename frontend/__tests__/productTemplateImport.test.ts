@@ -9,7 +9,7 @@ import {
 } from '../modules/productTemplateImport';
 import { groupImportedPlatformNodes, toImportedPlatformNode } from '../modules/profit/importCompatibility';
 import { normalizeCurrencyCode } from '../modules/profit/types';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 
 describe('loadProductTemplateImportNodes', () => {
   it('loads every template saved for the active product and site', async () => {

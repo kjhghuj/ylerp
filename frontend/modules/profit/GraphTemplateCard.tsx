@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react';
 import type { PlatformType } from '../../platformConfig';
 import type { PlatformNode } from './types';
 import { normalizeCurrencyCode } from './types';
-import type { NodeGraphTemplate } from '../node-designer/types';
+import type { NodeGraphTemplate } from './nodeGraphTypes';
 import {
     createDefaultInputValues,
     evaluateNodeGraphProfitTemplate,

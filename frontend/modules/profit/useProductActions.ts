@@ -5,7 +5,7 @@ import { ProductCalcData } from '../../types';
 import { PlatformType } from '../../platformConfig';
 import { genId, DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS, ProfitTemplate, ProductProfitTemplate, PlatformNode, SiteLevelInputs, CURRENCY_TO_COUNTRY, type CurrencyCode, type NodeData } from './types';
 import { useToast } from '../../components/Toast';
-import type { NodeGraphTemplate } from '../node-designer/types';
+import type { NodeGraphTemplate } from './nodeGraphTypes';
 
 import {
     createDefaultInputValues,

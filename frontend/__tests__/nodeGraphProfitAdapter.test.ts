@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluateNodeGraphProfitTemplate, getNodeGraphInputNodes } from '../modules/profit/nodeGraphProfitAdapter';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 
 const template: NodeGraphTemplate = {
   id: 'graph-1',

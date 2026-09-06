@@ -6,7 +6,7 @@ import { useProductActions } from '../modules/profit/useProductActions';
 import { GraphTemplateCard } from '../modules/profit/GraphTemplateCard';
 import { toProductTemplateImportNode } from '../modules/productTemplateImport';
 import { DEFAULT_PRODUCT_TAX_RATES } from '../modules/productTaxRates';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 import { prepareGraphNodeForSave } from '../modules/profit/graphNodeSavePreparation';
 import { serializePlatformNodeTemplateData } from '../modules/profit/templateDataSerializer';
 import {

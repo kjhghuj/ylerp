@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateExpression, validateExpression, hasCycle, topologicalSort } from '../../modules/node-designer/formulaEngine';
+import { evaluateExpression, validateExpression, hasCycle, topologicalSort } from '../modules/profit/formulaEngine';
 
 describe('evaluateExpression', () => {
   it('evaluates basic arithmetic', () => {

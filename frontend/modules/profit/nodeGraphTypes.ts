@@ -1,4 +1,6 @@
-import type { Node, Edge } from '@xyflow/react';
+/** 利润节点图模板的共享类型。
+ *  原属 node-designer 模块（依赖 @xyflow/react），模块删除后内联 flow 节点/边的最小结构形状，
+ *  与后端 NodeGraphTemplate.data JSON 存储的字段保持兼容。 */
 
 export type NodeValueType = 'number' | 'percentage';
 
@@ -23,8 +25,25 @@ export interface OutputNodeData extends Record<string, unknown> {
 }
 
 export type DesignerNodeData = ParameterNodeData | FormulaNodeData | OutputNodeData;
-export type DesignerNode = Node<DesignerNodeData>;
-export type DesignerEdge = Edge;
+
+/** @xyflow/react Node 的最小结构形状（含透传的任意额外字段） */
+export interface DesignerNode {
+  id: string;
+  type?: string;
+  position: { x: number; y: number };
+  data: DesignerNodeData;
+  [key: string]: unknown;
+}
+
+/** @xyflow/react Edge 的最小结构形状（含透传的任意额外字段） */
+export interface DesignerEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  [key: string]: unknown;
+}
 
 export interface NodeGraphTemplate {
   id: string;

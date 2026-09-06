@@ -47,26 +47,10 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         ]
     },
     {
-        key: 'inventory', label: '智能补货', labelEn: 'Smart Restock', icon: PackageCheck,
-        children: [
-            { key: 'inventory.view', label: '查看库存', labelEn: 'View Stock', icon: Search },
-            { key: 'inventory.import', label: '数据导入', labelEn: 'Import Data', icon: Upload },
-            { key: 'inventory.mapping', label: '映射管理', labelEn: 'Mappings', icon: Settings },
-            { key: 'inventory.restock', label: '补货操作', labelEn: 'Restock', icon: Truck },
-        ]
-    },
-    {
         key: 'restock-v2', label: '补货V2', labelEn: 'Restock V2', icon: PackagePlus,
         children: [
             { key: 'restock-v2.view', label: '查看建议', labelEn: 'View Suggestions', icon: Search },
             { key: 'restock-v2.refresh', label: '刷新建议', labelEn: 'Refresh Suggestions', icon: Truck },
-        ]
-    },
-    {
-        key: 'restock-records', label: '补货记录', labelEn: 'Restock Records', icon: ClipboardList,
-        children: [
-            { key: 'restock-records.view', label: '查看记录', labelEn: 'View Records', icon: Search },
-            { key: 'restock-records.edit', label: '编辑记录', labelEn: 'Edit Records', icon: Edit3 },
         ]
     },
     {

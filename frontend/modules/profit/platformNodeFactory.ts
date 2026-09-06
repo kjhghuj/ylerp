@@ -1,5 +1,5 @@
 import type { PlatformType } from '../../platformConfig';
-import type { NodeGraphTemplate } from '../node-designer/types';
+import type { NodeGraphTemplate } from './nodeGraphTypes';
 import {
     DEFAULT_NODE_DATA,
     genId,

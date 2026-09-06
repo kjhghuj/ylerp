@@ -5,7 +5,7 @@ import {
     type NodeData,
     type ProductTemplateData,
 } from './profit/types';
-import type { NodeGraphTemplate } from './node-designer/types';
+import type { NodeGraphTemplate } from './profit/nodeGraphTypes';
 import {
     extractLegacyProductTaxRateCandidate,
     type LegacyProductTaxRateCandidate,

@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast';
 
 import { PlatformCard } from './PlatformCard';
 import { ProfitTemplate, SiteLevelInputs, DEFAULT_SITE_INPUTS } from './profit/types';
-import type { NodeGraphTemplate } from './node-designer/types';
+import type { NodeGraphTemplate } from './profit/nodeGraphTypes';
 import { useProfitImport } from './profit/useProfitImport';
 import { useProductActions } from './profit/useProductActions';
 import { useExchangeRates } from '../hooks/useExchangeRates';

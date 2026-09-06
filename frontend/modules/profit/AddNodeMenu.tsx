@@ -2,7 +2,7 @@ import React from 'react';
 import { Plus, Trash2, ChevronDown } from 'lucide-react';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
-import type { NodeGraphTemplate } from '../node-designer/types';
+import type { NodeGraphTemplate } from './nodeGraphTypes';
 import { matchesActiveSite } from '../productTemplateImport';
 import { translations } from '../../translations';
 

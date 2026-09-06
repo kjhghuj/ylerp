@@ -471,7 +471,7 @@ const CandidatePicker: React.FC<CandidatePickerProps> = ({
 };
 
 export const RestockV2: React.FC = () => {
-  const { inventory, products } = useStore();
+  const { products } = useStore();
   const [sites, setSites] = useState<RestockSite[]>([]);
   const [ycConfigured, setYcConfigured] = useState(false);
   const [selectedSite, setSelectedSite] = useState("");
@@ -551,7 +551,8 @@ export const RestockV2: React.FC = () => {
   const selectedSiteInfo = sites.find((site) => site.code === selectedSite);
   const targetSkus = useMemo(() => {
     const unique = new Map<string, RestockTargetSku>();
-    [...remoteTargetSkus, ...inventory, ...products].forEach((item) => {
+    // 远端 target-skus 端点已合并库存表与商品表的 SKU，这里无需再叠本地数据
+    [...remoteTargetSkus, ...products].forEach((item) => {
       const sku = normalizeTargetSku(String(item.sku || ""));
       if (sku && !unique.has(sku))
         unique.set(sku, { id: String(item.id || sku), sku, name: item.name });
@@ -562,7 +563,7 @@ export const RestockV2: React.FC = () => {
     return [...unique.values()].sort((left, right) =>
       left.sku.localeCompare(right.sku),
     );
-  }, [createdTargetSkus, inventory, products, remoteTargetSkus]);
+  }, [createdTargetSkus, products, remoteTargetSkus]);
   const exactTargetLookup = useMemo(() => {
     const normalized = new Map<string, RestockTargetSku>();
     const compact = new Map<string, RestockTargetSku | null>();

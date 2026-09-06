@@ -24,10 +24,12 @@ const storeProducts = vi.hoisted(
 
 vi.mock("../StoreContext", () => ({
   useStore: () => ({
-    inventory: storeInventory,
     products: storeProducts,
   }),
 }));
+
+/** 模拟 /restock-v2/target-skus 响应：真实端点会合并库存表与商品表，这里对齐该行为 */
+const targetSkuResponse = () => ({ data: { items: storeInventory } });
 
 const mockedGet = api.get as unknown as ReturnType<typeof vi.fn>;
 const mockedPost = api.post as unknown as ReturnType<typeof vi.fn>;
@@ -105,7 +107,7 @@ describe("RestockV2 stationized mapping workbench", () => {
       if (url === "/restock-v2/sku-rules")
         return Promise.resolve({ data: { rules: [] } });
       if (url === "/restock-v2/target-skus")
-        return Promise.resolve({ data: { items: [] } });
+        return Promise.resolve(targetSkuResponse());
       if (url === "/restock-v2/sales-imports/import-1")
         return Promise.resolve({ data: pendingImport });
       return Promise.reject(new Error(`unexpected ${url}`));
@@ -143,6 +145,8 @@ describe("RestockV2 stationized mapping workbench", () => {
         return Promise.resolve({ data: exactImport });
       if (url === "/restock-v2/sku-rules")
         return Promise.resolve({ data: { rules: [] } });
+      if (url === "/restock-v2/target-skus")
+        return Promise.resolve(targetSkuResponse());
       return Promise.resolve({ data: exactImport });
     });
 
@@ -215,6 +219,8 @@ describe("RestockV2 stationized mapping workbench", () => {
         return Promise.resolve({ data: ambiguousImport });
       if (url === "/restock-v2/sku-rules")
         return Promise.resolve({ data: { rules: [] } });
+      if (url === "/restock-v2/target-skus")
+        return Promise.resolve(targetSkuResponse());
       return Promise.resolve({ data: ambiguousImport });
     });
     try {
@@ -267,6 +273,8 @@ describe("RestockV2 stationized mapping workbench", () => {
         });
       if (url === "/restock-v2/sku-rules")
         return Promise.resolve({ data: { rules: [] } });
+      if (url === "/restock-v2/target-skus")
+        return Promise.resolve(targetSkuResponse());
       return Promise.resolve({ data: pendingImport });
     });
 

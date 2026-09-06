@@ -1,5 +1,5 @@
 import { all, create } from 'mathjs';
-import { topologicalSort } from '../node-designer/formulaEngine';
+import { topologicalSort } from './formulaEngine';
 import type {
     DesignerEdge,
     DesignerNode,
@@ -7,7 +7,7 @@ import type {
     NodeGraphTemplate,
     OutputNodeData,
     ParameterNodeData,
-} from '../node-designer/types';
+} from './nodeGraphTypes';
 
 export const GRAPH_EXECUTION_LIMITS = Object.freeze({
     maxNodes: 500,

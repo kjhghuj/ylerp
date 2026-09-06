@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { GraphTemplateCard } from '../modules/profit/GraphTemplateCard';
-import type { NodeGraphTemplate } from '../modules/node-designer/types';
+import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 import { DEFAULT_NODE_DATA, type PlatformNode } from '../modules/profit/types';
 
 const graphTemplate: NodeGraphTemplate = {
