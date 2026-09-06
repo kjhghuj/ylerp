@@ -272,37 +272,36 @@ function emptyParent(itemId: string): ParentProduct {
   };
 }
 
-/** 不可变合并：一行数据填入 parent 的空值字段 */
-function mergeRowIntoParent(parent: ParentProduct, cells: unknown[], mapping: ColumnMapping): ParentProduct {
-  const next: ParentProduct = { ...parent };
+/** 就地填充 parent 的空值字段。
+ *  解析热路径：省去每父行一次 45+ 字段的对象展开拷贝；每个 parent 都来自 emptyParent 的全新对象，改写安全 */
+function fillParentFromRow(parent: ParentProduct, cells: unknown[], mapping: ColumnMapping): void {
   for (const field of Object.keys(mapping.fieldIndex) as ColumnField[]) {
     const index = mapping.fieldIndex[field];
     if (index === undefined) continue;
     if (field === 'itemId' || field === 'variationSku' || field === 'variationName') continue;
     if (field === 'itemName') {
       const text = textAt(cells, index);
-      if (text && text !== MISSING_CELL_TEXT) next.itemName = text;
+      if (text && text !== MISSING_CELL_TEXT) parent.itemName = text;
       continue;
     }
     if (field === 'status' || field === 'modelId' || field === 'priceFlag') {
       const text = textAt(cells, index);
-      if (!isMissingText(text) && next[field] === undefined) next[field] = text;
+      if (!isMissingText(text) && parent[field] === undefined) parent[field] = text;
       continue;
     }
     if (field === 'createdAt') {
       const text = textAt(cells, index);
-      if (!isMissingText(text) && next.createdAt === undefined) next.createdAt = toIsoDate(text) ?? text;
+      if (!isMissingText(text) && parent.createdAt === undefined) parent.createdAt = toIsoDate(text) ?? text;
       continue;
     }
     if (field === 'variationStatus' || field === 'modelCode') continue;
-    const current = next[field] as number | null | undefined;
+    const current = parent[field] as number | null | undefined;
     if (current !== null && current !== undefined) continue;
     const parsed = parseMetricCell(cells[index], RATE_FIELDS.has(field));
     if (parsed !== null) {
-      (next as unknown as Record<string, number | null>)[field] = parsed;
+      (parent as unknown as Record<string, number | null>)[field] = parsed;
     }
   }
-  return next;
 }
 
 /** 变体行：仅序列化非空字段，减小存库体积 */
@@ -360,12 +359,12 @@ function buildItemsFromGroups(
   const items: ParentProduct[] = [];
   for (const [itemId, group] of grouped) {
     if (group.parentCells.length === 0) continue;
-    const merged = group.parentCells.reduce(
-      (parent, cells) => mergeRowIntoParent(parent, cells, mapping),
-      emptyParent(itemId)
-    );
-    const variations = group.variationCells.map((cells) => buildVariation(cells, mapping));
-    items.push({ ...merged, variations });
+    const merged = emptyParent(itemId);
+    for (const cells of group.parentCells) {
+      fillParentFromRow(merged, cells, mapping);
+    }
+    merged.variations = group.variationCells.map((cells) => buildVariation(cells, mapping));
+    items.push(merged);
   }
   return items;
 }
@@ -422,13 +421,24 @@ export function parseProductAnalysisWorkbook(
   }
   const warnings: string[] = [];
   const sheets: SheetGroup[] = [];
+  // 同类别（sheetKey）只保留第一个有效工作表，避免出现重复 key 导致前端切换/渲染异常
+  const usedSheetNames = new Map<SheetKey, string>();
   let currency: string | null = null;
   let rowCount = 0;
   for (const sheetName of workbook.SheetNames) {
-    if (resolveSheetKey(sheetName) === null) continue;
+    const sheetKey = resolveSheetKey(sheetName);
+    if (sheetKey === null) continue;
+    const existingName = usedSheetNames.get(sheetKey);
+    if (existingName !== undefined) {
+      warnings.push(`工作表「${sheetName}」与「${existingName}」属于同一类别，已跳过`);
+      continue;
+    }
     const result = parseSheet(sheetName, workbook.Sheets[sheetName], warnings, rowCount);
     rowCount = result.rowCount;
-    if (result.group) sheets.push(result.group);
+    if (result.group) {
+      sheets.push(result.group);
+      usedSheetNames.set(sheetKey, sheetName);
+    }
     if (!currency && result.currency) currency = result.currency;
   }
   if (sheets.length === 0) {

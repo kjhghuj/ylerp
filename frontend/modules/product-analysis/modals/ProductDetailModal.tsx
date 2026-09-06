@@ -1,33 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { ConversionFunnelChart } from '../components/charts/ConversionFunnelChart';
+import { DailyTrendChart } from '../components/charts/DailyTrendChart';
 import { VariationUnitsChart } from '../components/charts/VariationUnitsChart';
 import { OrderStatusCompareChart } from '../components/charts/OrderStatusCompareChart';
 import { KeyRatioBars } from '../components/KeyRatioBars';
 import { VariationTable } from '../components/VariationTable';
 import { AiChatPanel } from './AiChatPanel';
 import { formatCount, formatMoney, formatPercent } from '../utils/format';
+import { fetchShopItem, getApiErrorDetail } from '../services/productAnalysisApi';
 import { useProductAnalysisStrings } from '../i18n';
-import type { ParentProduct, ReportDetail, SheetKey } from '../types';
+import type { AggregatedItem, ItemDetailResponse, ParentProduct, ProductVariation } from '../types';
 
-type ModalTab = 'overview' | 'charts' | 'variations' | 'ai';
-const MODAL_TABS: { key: ModalTab; labelKey: 'tabOverview' | 'tabCharts' | 'tabVariations' | 'tabAi' }[] = [
+type ModalTab = 'overview' | 'trend' | 'charts' | 'variations' | 'ai';
+const MODAL_TABS: { key: ModalTab; labelKey: 'tabOverview' | 'tabTrend' | 'tabCharts' | 'tabVariations' | 'tabAi' }[] = [
   { key: 'overview', labelKey: 'tabOverview' },
+  { key: 'trend', labelKey: 'tabTrend' },
   { key: 'charts', labelKey: 'tabCharts' },
   { key: 'variations', labelKey: 'tabVariations' },
   { key: 'ai', labelKey: 'tabAi' },
 ];
 
 interface ProductDetailModalProps {
-  item: ParentProduct;
-  report: ReportDetail;
-  sheetKey: SheetKey;
+  shopId: string;
+  /** 点击行对应的聚合商品（作为头部与加载前兜底） */
+  item: AggregatedItem;
+  from: string;
+  to: string;
   onClose: () => void;
 }
 
-export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ item, report, sheetKey, onClose }) => {
+/** 详情弹窗：区间聚合单品。overview 用 聚合指标 + extra（最新日的率类/属性）合并展示 */
+export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, item, from, to, onClose }) => {
   const strings = useProductAnalysisStrings();
   const [activeTab, setActiveTab] = useState<ModalTab>('overview');
+  const [detail, setDetail] = useState<ItemDetailResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -36,6 +44,44 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ item, re
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetchShopItem(shopId, item.itemId, from, to);
+        if (!cancelled) setDetail(response);
+      } catch (err) {
+        if (!cancelled) setError(getApiErrorDetail(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [shopId, item.itemId, from, to]);
+
+  const currency = detail?.currency ?? '';
+  const displayItem: ParentProduct = React.useMemo(() => {
+    const base = detail?.item ?? item;
+    const extra = detail?.extra;
+    if (!extra) return { ...base, variations: detail?.variations ?? [] };
+    return {
+      ...base,
+      // 区间不可推导的率类与商品属性，用最新日的 extra 补齐
+      repeatOrderRate: pickNumber(extra.repeatOrderRate),
+      repurchaseRateConfirmed: pickNumber(extra.repurchaseRateConfirmed),
+      avgReorderDays: pickNumber(extra.avgReorderDays),
+      avgRepurchaseDays: pickNumber(extra.avgRepurchaseDays),
+      modelId: typeof extra.modelId === 'string' ? extra.modelId : undefined,
+      createdAt: typeof extra.createdAt === 'string' ? extra.createdAt : undefined,
+      createdDays: pickNumber(extra.createdDays),
+      currentPrice: pickNumber(extra.currentPrice),
+      priceFlag: typeof extra.priceFlag === 'string' ? extra.priceFlag : undefined,
+      variations: detail?.variations ?? [],
+    };
+  }, [detail, item]);
+
+  const variations: ProductVariation[] = detail?.variations ?? [];
 
   return (
     <div
@@ -58,7 +104,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ item, re
               <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-tertiary)' }}>
                 #{item.itemId}
                 {item.status ? ` · ${item.status}` : ''}
-                {` · ${report.currency}`}
+                {currency ? ` · ${currency}` : ''}
+                {` · ${from} ~ ${to}`}
               </p>
             </div>
             <button
@@ -71,7 +118,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ item, re
               <X size={18} />
             </button>
           </div>
-          <div className="flex gap-1 mt-3">
+          <div className="flex gap-1 mt-3 flex-wrap">
             {MODAL_TABS.map(({ key, labelKey }) => (
               <button
                 key={key}
@@ -91,35 +138,52 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ item, re
 
         {/* 内容 */}
         <div className="flex-1 min-h-0 overflow-y-auto p-5">
-          {activeTab === 'overview' && <OverviewTab item={item} currency={report.currency} />}
-          {activeTab === 'charts' && (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ConversionFunnelChart item={item} />
-                <OrderStatusCompareChart item={item} />
-              </div>
-              <KeyRatioBars item={item} />
+          {error ? (
+            <div className="py-10 text-center text-sm" style={{ color: '#dc2626' }}>{error}</div>
+          ) : !detail ? (
+            <div className="h-60 flex items-center justify-center">
+              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--primary)' }} />
             </div>
+          ) : (
+            <>
+              {activeTab === 'overview' && <OverviewTab item={displayItem} currency={currency} days={detail.item.days} />}
+              {activeTab === 'trend' && <DailyTrendChart series={detail.series} />}
+              {activeTab === 'charts' && (
+                <div className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <ConversionFunnelChart item={displayItem} />
+                    <OrderStatusCompareChart item={displayItem} />
+                  </div>
+                  <KeyRatioBars item={displayItem} />
+                </div>
+              )}
+              {activeTab === 'variations' && (
+                <div className="flex flex-col gap-4">
+                  <VariationUnitsChart variations={variations} />
+                  <VariationTable variations={variations} />
+                </div>
+              )}
+              {activeTab === 'ai' && (
+                <AiChatPanel shopId={shopId} itemId={item.itemId} itemTitle={item.itemName} />
+              )}
+            </>
           )}
-          {activeTab === 'variations' && (
-            <div className="flex flex-col gap-4">
-              <VariationUnitsChart variations={item.variations} />
-              <VariationTable variations={item.variations} />
-            </div>
-          )}
-          {activeTab === 'ai' && <AiChatPanel reportId={report.id} sheetKey={sheetKey} item={item} />}
         </div>
       </div>
     </div>
   );
 };
 
+function pickNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 interface MetricEntry {
   label: string;
   value: string;
 }
 
-function OverviewTab({ item, currency }: { item: ParentProduct; currency: string }) {
+function OverviewTab({ item, currency, days }: { item: ParentProduct; currency: string; days: number }) {
   const strings = useProductAnalysisStrings();
   const percent = (label: string, value: number | null): MetricEntry => ({ label, value: formatPercent(value) });
   const count = (label: string, value: number | null): MetricEntry => ({ label, value: formatCount(value) });
@@ -195,6 +259,7 @@ function OverviewTab({ item, currency }: { item: ParentProduct; currency: string
       ? [{ label: metrics.createdDays, value: formatCount(item.createdDays) }]
       : []),
     ...(item.priceFlag ? [{ label: metrics.priceFlag, value: item.priceFlag }] : []),
+    { label: metrics.days, value: formatCount(days) },
   ];
 
   return (

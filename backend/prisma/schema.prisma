@@ -288,6 +288,79 @@ model ProductAnalysisReport {
   @@index([userId, createdAt])
 }
 
+/// 商品分析店铺（一店一站，可多店）
+model ProductAnalysisShop {
+  id        String                    @id @default(uuid())
+  name      String
+  site      String
+  platform  String                    @default("shopee")
+  currency  String                    @default("MYR")
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  userId    String
+  user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  days      ProductAnalysisDailyUpload[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+/// 店铺单日上传（同日重传整体替换）
+model ProductAnalysisDailyUpload {
+  id        String             @id @default(uuid())
+  shopId    String
+  shop      ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  date      DateTime           @db.Date
+  fileName  String
+  currency  String             @default("MYR")
+  itemCount Int                @default(0)
+  warnings  Json?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     ProductDailyItem[]
+
+  @@unique([shopId, date])
+  @@index([shopId, date])
+  @@index([userId])
+}
+
+/// 商品×天 一行；结构化列参与区间聚合，extra 存率类/商品属性，variations 存当日变体
+model ProductDailyItem {
+  id                String                    @id @default(uuid())
+  uploadId          String
+  upload            ProductAnalysisDailyUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  itemId            String
+  itemName          String
+  sheetKey          String
+  status            String?
+  salesOrdered      Float?
+  salesConfirmed    Float?
+  ordersOrdered     Float?
+  ordersConfirmed   Float?
+  unitsOrdered      Float?
+  unitsConfirmed    Float?
+  buyersOrdered     Float?
+  buyersConfirmed   Float?
+  impressions       Float?
+  clicks            Float?
+  uniqueImpressions Float?
+  uniqueClicks      Float?
+  visitors          Float?
+  pageViews         Float?
+  bounceVisitors    Float?
+  searchClicks      Float?
+  likes             Float?
+  cartVisitors      Float?
+  cartUnits         Float?
+  extra             Json?
+  variations        Json?
+
+  @@unique([uploadId, itemId])
+  @@index([uploadId, sheetKey])
+}
+
 model User {
   id                  String                   @id @default(uuid())
   username            String                   @unique
@@ -312,6 +385,8 @@ model User {
   products            Product[]
   profitTemplates     ProfitTemplate[]
   productAnalysisReports ProductAnalysisReport[]
+  productAnalysisShops   ProductAnalysisShop[]
+  productAnalysisDailyUploads ProductAnalysisDailyUpload[]
   restockRecords      RestockRecord[]
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]

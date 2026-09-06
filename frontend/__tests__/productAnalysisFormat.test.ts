@@ -3,6 +3,8 @@ import {
   summarizeSheet,
   compareByMetric,
   matchesSearch,
+  buildSearchHaystacks,
+  filterAndSortItems,
   formatMoney,
   formatCount,
   formatPercent,
@@ -115,6 +117,17 @@ describe('compareByMetric', () => {
     const sorted = [...items].sort(compareByMetric('salesOrdered'));
     expect(sorted.map((item) => item.itemId)).toEqual(['a', 'b', 'c', 'd']);
   });
+
+  test('asc direction sorts values ascending while nulls stay last', () => {
+    const items = [
+      makeItem({ itemId: 'c', salesOrdered: null }),
+      makeItem({ itemId: 'b', salesOrdered: 50 }),
+      makeItem({ itemId: 'a', salesOrdered: 300 }),
+      makeItem({ itemId: 'd', salesOrdered: null }),
+    ];
+    const sorted = [...items].sort(compareByMetric('salesOrdered', 'asc'));
+    expect(sorted.map((item) => item.itemId)).toEqual(['b', 'a', 'c', 'd']);
+  });
 });
 
 describe('matchesSearch', () => {
@@ -131,6 +144,36 @@ describe('matchesSearch', () => {
   test('empty query matches everything; unknown query does not', () => {
     expect(matchesSearch(item, '   ')).toBe(true);
     expect(matchesSearch(item, 'nonexistent')).toBe(false);
+  });
+});
+
+describe('search haystack index', () => {
+  const items = [
+    makeItem({ itemId: '1', itemName: 'Alpha Keyboard', variations: [{ variationName: 'Black' }] }),
+    makeItem({ itemId: '2', itemName: 'Gaming Mouse', salesOrdered: 99999 }),
+  ];
+  const haystacks = buildSearchHaystacks(items);
+
+  test('filterAndSortItems matches per-item matchesSearch results', () => {
+    for (const query of ['alpha', 'BLACK', 'mouse', '1', 'nope', '   ']) {
+      const expected = items.filter((item) => matchesSearch(item, query));
+      expect(filterAndSortItems(items, haystacks, query, 'itemId')).toEqual(expected);
+    }
+  });
+
+  test('filterAndSortItems sorts by metric descending without mutating input', () => {
+    const sorted = filterAndSortItems(items, haystacks, '', 'salesOrdered');
+    expect(sorted.map((item) => item.itemId)).toEqual(['2', '1']);
+    expect(items.map((item) => item.itemId)).toEqual(['1', '2']);
+  });
+
+  test('haystack tolerates aggregated items without variations field', () => {
+    // 后端聚合端点的商品不携带 variations（详情端点才有），不得因此抛错
+    const bare = { ...items[0] } as Partial<ParentProduct>;
+    delete bare.variations;
+    const item = bare as ParentProduct;
+    expect(() => buildSearchHaystacks([item])).not.toThrow();
+    expect(matchesSearch(item, 'alpha')).toBe(true);
   });
 });
 

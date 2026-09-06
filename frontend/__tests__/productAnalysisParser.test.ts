@@ -7,6 +7,7 @@ import {
   ProductAnalysisParseError,
   MAX_PRODUCT_ANALYSIS_FILE_BYTES,
 } from '../modules/product-analysis/utils/excelParser';
+import { parseProductAnalysisWorkbookAsync } from '../modules/product-analysis/utils/excelWorkerClient';
 import type { ParentProduct } from '../modules/product-analysis/types';
 
 const REAL_FILE_PATH = '/Users/sg/Downloads/parentskudetail.20260807_20260905.xlsx';
@@ -205,6 +206,32 @@ describe('parseProductAnalysisWorkbook', () => {
     expect(() => parseProductAnalysisWorkbook(onlyAds, 'x.xlsx')).toThrow(ProductAnalysisParseError);
   });
 
+  test('skips later sheets resolving to the same sheetKey and records a warning', () => {
+    const buffer = buildWorkbookBuffer([
+      { name: '热销商品', rows: [HOT_HEADERS, hotRow({ 0: '1', 1: 'A', 3: '-', 4: '-' })] },
+      { name: '热销商品-副本', rows: [HOT_HEADERS, hotRow({ 0: '9', 1: 'Dup', 3: '-', 4: '-' })] },
+    ]);
+
+    const report = parseProductAnalysisWorkbook(buffer, 'x.xlsx');
+
+    expect(report.sheets).toHaveLength(1);
+    expect(report.sheets[0].sheetKey).toBe('hot');
+    expect(report.sheets[0].items.map((item) => item.itemId)).toEqual(['1']);
+    expect(report.warnings.some((warning) => warning.includes('热销商品-副本'))).toBe(true);
+  });
+
+  test('uses the later same-category sheet when the earlier one has no valid items', () => {
+    const buffer = buildWorkbookBuffer([
+      { name: '热销商品', rows: [HOT_HEADERS, HOT_HEADERS.map(() => '')] },
+      { name: '热销商品2', rows: [HOT_HEADERS, hotRow({ 0: '5', 1: 'B', 3: '-', 4: '-' })] },
+    ]);
+
+    const report = parseProductAnalysisWorkbook(buffer, 'x.xlsx');
+
+    expect(report.sheets).toHaveLength(1);
+    expect(report.sheets[0].items.map((item) => item.itemId)).toEqual(['5']);
+  });
+
   test('skips blank rows between data rows', () => {
     const buffer = buildWorkbookBuffer([
       {
@@ -255,6 +282,23 @@ describe('validateProductAnalysisFile', () => {
   test('accepts valid file', () => {
     const file = new File([new Uint8Array(8)], 'report.xlsx');
     expect(() => validateProductAnalysisFile(file)).not.toThrow();
+  });
+});
+
+describe('parseProductAnalysisWorkbookAsync', () => {
+  // jsdom 无 Worker，走同步回退分支；浏览器端 Worker 路径由构建产物保障
+  test('resolves parsed report via sync fallback', async () => {
+    const buffer = buildWorkbookBuffer([
+      { name: '热销商品', rows: [HOT_HEADERS, hotRow({ 0: '1', 1: 'A', 3: '-', 4: '-' })] },
+    ]);
+    const report = await parseProductAnalysisWorkbookAsync(buffer, 'x.xlsx');
+    expect(report.sheets[0].items).toHaveLength(1);
+  });
+
+  test('rejects with ProductAnalysisParseError for unreadable input', async () => {
+    await expect(parseProductAnalysisWorkbookAsync(new ArrayBuffer(8), 'bad.xlsx')).rejects.toThrow(
+      ProductAnalysisParseError
+    );
   });
 });
 

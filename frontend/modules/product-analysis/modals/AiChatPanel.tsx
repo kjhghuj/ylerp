@@ -4,19 +4,19 @@ import { useAuth } from '../../../AuthContext';
 import { hasPermission } from '../../../components/PermissionTree';
 import { getApiErrorDetail, sendProductAnalysisChat } from '../services/productAnalysisApi';
 import { useProductAnalysisStrings } from '../i18n';
-import type { ChatMessage, ParentProduct, SheetKey } from '../types';
+import type { ChatMessage } from '../types';
 
 interface AiChatPanelProps {
-  reportId: string;
-  sheetKey: SheetKey;
-  /** 传入则以单品上下文对话；省略为整店报告模式 */
-  item?: ParentProduct;
+  shopId: string;
+  /** 传入则以单品上下文对话；省略为整店汇总模式。from/to 缺省时后端默认近 7 天 */
+  itemId?: string;
+  itemTitle?: string;
 }
 
 const ITEM_NAME_SNIPPET_LENGTH = 40;
 
-/** GLM AI 对话面板：非流式，120s 超时，聊天记录仅存前端 state */
-export const AiChatPanel: React.FC<AiChatPanelProps> = ({ reportId, sheetKey, item }) => {
+/** GLM AI 对话面板：非流式，130s 超时，聊天记录仅存前端 state */
+export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTitle }) => {
   const { user } = useAuth();
   const strings = useProductAnalysisStrings();
   const hasAiPermission =
@@ -43,9 +43,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ reportId, sheetKey, it
     setIsSending(true);
     try {
       const result = await sendProductAnalysisChat({
-        reportId,
-        sheetKey,
-        ...(item ? { itemId: item.itemId } : {}),
+        shopId,
+        ...(itemId ? { itemId } : {}),
         messages: nextMessages,
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: result.content }]);
@@ -75,8 +74,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ reportId, sheetKey, it
       <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}>
         <Sparkles size={13} style={{ color: 'var(--primary)' }} />
         <span className="truncate">
-          {item
-            ? `${strings.ai.contextItem}：${item.itemName.slice(0, ITEM_NAME_SNIPPET_LENGTH)}`
+          {itemId
+            ? `${strings.ai.contextItem}：${(itemTitle ?? '').slice(0, ITEM_NAME_SNIPPET_LENGTH)}`
             : strings.ai.contextReport}
         </span>
       </div>
@@ -153,7 +152,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ reportId, sheetKey, it
           value={input}
           onChange={(event) => setInput(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
+            // isComposing：中文输入法候选词确认的 Enter 不发送
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
               sendMessage(input);
             }

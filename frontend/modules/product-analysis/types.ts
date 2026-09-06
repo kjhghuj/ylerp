@@ -2,6 +2,9 @@
 
 export type SheetKey = 'hot' | 'new' | 'uncompetitive' | 'competitive';
 
+export const SITE_OPTIONS = ['PH', 'MY', 'SG', 'ID', 'TH'] as const;
+export type SiteCode = (typeof SITE_OPTIONS)[number];
+
 /** 变体行（子行）：仅序列化非空字段，减小存库体积 */
 export interface ProductVariation {
   variationSku?: string;
@@ -61,11 +64,12 @@ export interface ParentProduct {
   variations: ProductVariation[];
 }
 
-export interface SheetGroup {
+/** 区间聚合商品：键名对齐 ParentProduct（率类为区间推导值或 null） */
+export interface AggregatedItem extends ParentProduct {
   sheetKey: SheetKey;
-  sheetName: string;
-  columns: string[];
-  items: ParentProduct[];
+  days: number;
+  firstDate: string;
+  lastDate: string;
 }
 
 export interface ParsedProductAnalysisReport {
@@ -77,19 +81,93 @@ export interface ParsedProductAnalysisReport {
   warnings: string[];
 }
 
-export interface ReportMeta {
+export interface SheetGroup {
+  sheetKey: SheetKey;
+  sheetName: string;
+  columns: string[];
+  items: ParentProduct[];
+}
+
+export interface ShopMeta {
   id: string;
-  fileName: string;
-  periodStart: string | null;
-  periodEnd: string | null;
+  name: string;
+  site: SiteCode;
+  platform: string;
   currency: string;
+  dayCount: number;
+  latestUploadDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShopDraft {
+  name: string;
+  site: SiteCode;
+}
+
+export interface DayMeta {
+  date: string;
+  fileName: string;
   itemCount: number;
+  currency: string;
   createdAt: string;
 }
 
-export interface ReportDetail extends ReportMeta {
-  platform?: string;
-  data: ParsedProductAnalysisReport;
+export interface AggResponse {
+  from: string;
+  to: string;
+  days: number;
+  itemCount: number;
+  currency: string;
+  sheets: { sheetKey: SheetKey; items: AggregatedItem[] }[];
+}
+
+export interface DailySeriesPoint {
+  date: string;
+  ordersOrdered: number;
+  ordersConfirmed: number;
+  visitors: number;
+  clicks: number;
+  unitsOrdered: number;
+  cvrConfirmed: number | null;
+}
+
+export interface ItemDetailResponse {
+  from: string;
+  to: string;
+  currency: string;
+  item: AggregatedItem;
+  series: DailySeriesPoint[];
+  variations: ProductVariation[];
+  extra: Record<string, unknown> | null;
+}
+
+export interface PotentialMetrics {
+  ordersOrdered: number;
+  visitors: number;
+  clicks: number;
+  impressions: number;
+  cartVisitors: number;
+  ctr: number | null;
+  cvrConfirmed: number | null;
+  cartRate: number | null;
+  growthPercent: number | null;
+}
+
+export interface PotentialItem {
+  rank: number;
+  itemId: string;
+  itemName: string;
+  sheetKey: SheetKey;
+  score: number;
+  reasons: string[];
+  metrics: PotentialMetrics;
+}
+
+export interface PotentialResponse {
+  from: string;
+  to: string;
+  items: PotentialItem[];
 }
 
 export interface ChatMessage {
@@ -97,19 +175,13 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface ChatContext {
-  reportId: string;
-  sheetKey: SheetKey;
-  itemId?: string;
+export interface FunnelStage {
+  key: 'impressions' | 'clicks' | 'visitors' | 'cartUnits' | 'orders';
+  value: number;
+  rateFromPrev: number | null;
 }
 
 export interface ChatResult {
   content: string;
   model: string;
-}
-
-export interface FunnelStage {
-  key: 'impressions' | 'clicks' | 'visitors' | 'cartUnits' | 'orders';
-  value: number;
-  rateFromPrev: number | null;
 }
