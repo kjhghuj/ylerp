@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const usageEvents_1 = require("../services/usageEvents");
 const express_1 = require("express");
 const index_1 = require("../index");
-const activityLogger_1 = require("../services/activityLogger");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
     try {
@@ -35,7 +35,7 @@ router.post('/', async (req, res) => {
         if (!type || !title) {
             return res.status(400).json({ error: 'Missing required fields: type, title' });
         }
-        const item = await index_1.prisma.scheduleItem.create({
+        const item = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'schedule', action: 'schedule_create', objectType: 'ScheduleItem' }, tx => tx.scheduleItem.create({
             data: {
                 type,
                 title,
@@ -45,8 +45,7 @@ router.post('/', async (req, res) => {
                 sortKey: sortKey || 0,
                 userId,
             },
-        });
-        (0, activityLogger_1.logActivity)(userId, 'schedule_create', 'schedule', { type, title }).catch(err => console.error("活动记录失败:", err));
+        }));
         res.status(201).json(item);
     }
     catch (error) {
@@ -62,7 +61,7 @@ router.put('/:id', async (req, res) => {
         const existing = await index_1.prisma.scheduleItem.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Item not found' });
-        const item = await index_1.prisma.scheduleItem.update({
+        const item = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'schedule', action: req.body.completed === true ? 'schedule_complete' : 'schedule_update', objectType: 'ScheduleItem' }, tx => tx.scheduleItem.update({
             where: { id },
             data: {
                 ...(title !== undefined && { title }),
@@ -77,7 +76,7 @@ router.put('/:id', async (req, res) => {
                 ...(feedback !== undefined && { feedback }),
                 ...(sortKey !== undefined && { sortKey }),
             },
-        });
+        }));
         res.json(item);
     }
     catch (error) {
@@ -92,7 +91,7 @@ router.delete('/:id', async (req, res) => {
         const existing = await index_1.prisma.scheduleItem.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Item not found' });
-        await index_1.prisma.scheduleItem.delete({ where: { id } });
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'schedule', action: 'schedule_delete', objectType: 'ScheduleItem' }, tx => tx.scheduleItem.delete({ where: { id } }));
         res.json({ success: true });
     }
     catch (error) {
@@ -106,10 +105,12 @@ router.post('/reorder', async (req, res) => {
         const { orders } = req.body;
         if (!Array.isArray(orders))
             return res.status(400).json({ error: 'orders must be an array' });
-        await Promise.all(orders.map(({ id, sortKey }) => index_1.prisma.scheduleItem.updateMany({
-            where: { id, userId },
-            data: { sortKey },
-        })));
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, {
+            module: 'schedule', action: 'schedule_reorder', objectType: 'ScheduleItem',
+            affectedCount: (results) => results.reduce((total, result) => total + result.count, 0),
+        }, tx => Promise.all(orders.map(({ id, sortKey }) => tx.scheduleItem.updateMany({
+            where: { id, userId }, data: { sortKey },
+        }))));
         res.json({ success: true });
     }
     catch (error) {
@@ -120,7 +121,7 @@ router.post('/reorder', async (req, res) => {
 router.post('/reset-daily', async (req, res) => {
     try {
         const userId = req.user.id;
-        const result = await index_1.prisma.scheduleItem.updateMany({
+        const result = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'schedule', action: 'schedule_reset', objectType: 'ScheduleItem' }, tx => tx.scheduleItem.updateMany({
             where: {
                 userId,
                 type: 'routine',
@@ -130,7 +131,7 @@ router.post('/reset-daily', async (req, res) => {
                 completed: false,
                 completedAt: null,
             },
-        });
+        }));
         res.json({ reset: result.count });
     }
     catch (error) {

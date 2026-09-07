@@ -8,12 +8,14 @@ export const ARK_ANALYSIS_ENDPOINT_ID_SEED_2_PRO = process.env.ARK_ANALYSIS_ENDP
 export class ApiError extends Error {
   status_code: number;
   detail: string;
+  notSubmitted: boolean;
 
-  constructor(status_code: number, detail: string) {
+  constructor(status_code: number, detail: string, notSubmitted = false) {
     super(detail);
     this.name = 'ApiError';
     this.status_code = status_code;
     this.detail = detail;
+    this.notSubmitted = notSubmitted;
   }
 }
 

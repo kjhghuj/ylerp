@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
+import { parseTrustedProxyCidrs } from './services/trustedProxy';
+import shopeeRoutes from './routes/shopeeRoutes';
 import {
   configureJsonBodyParsing,
   productAtomicRouteErrorHandler,
@@ -11,10 +13,13 @@ import {
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', parseTrustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS));
 const port = process.env.PORT || 4002;
 
 // Middlewares
 app.use(cors());
+// Shopee verifies signatures over the raw body, before general JSON parsing.
+app.use('/api/shopee', shopeeRoutes);
 configureJsonBodyParsing(app);
 
 export const prisma = new PrismaClient();
@@ -51,11 +56,12 @@ export const safeRedis = {
 };
 
 // Import middleware
-import { authenticate } from './middleware/authMiddleware';
+import { authenticate, authorize } from './middleware/authMiddleware';
+import { ShopeeAuthorizationService, startShopeeTokenRefresh } from './services/shopeeAuthorization';
+import { configureShopeeAuthorization, createShopeeManagementRoutes } from './routes/shopeeAuthorizationRoutes';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
-import shopeeRoutes from './routes/shopeeRoutes';
 import userRoutes from './routes/userRoutes';
 import productRoutes from './routes/productRoutes';
 import financeRoutes from './routes/financeRoutes';
@@ -72,9 +78,11 @@ import { startFinanceBackup } from './services/financeBackup';
 
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes);
-app.use('/api/shopee', shopeeRoutes);
 
 // Protected routes (auth required)
+const shopeeAuthorization = new ShopeeAuthorizationService(prisma);
+configureShopeeAuthorization(shopeeAuthorization);
+app.use('/api/shopee/manage', authenticate, authorize('owner'), createShopeeManagementRoutes(shopeeAuthorization));
 app.use('/api/users', userRoutes);
 app.use('/api/products', authenticate, productRoutes);
 app.use(productAtomicRouteErrorHandler);
@@ -94,6 +102,7 @@ app.get('/health', (req, res) => {
 });
 
 startFinanceBackup();
+startShopeeTokenRefresh(shopeeAuthorization);
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

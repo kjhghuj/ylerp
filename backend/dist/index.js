@@ -9,12 +9,17 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const client_1 = require("@prisma/client");
 const ioredis_1 = __importDefault(require("ioredis"));
+const trustedProxy_1 = require("./services/trustedProxy");
+const shopeeRoutes_1 = __importDefault(require("./routes/shopeeRoutes"));
 const productAtomicJsonMiddleware_1 = require("./middleware/productAtomicJsonMiddleware");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
+app.set('trust proxy', (0, trustedProxy_1.parseTrustedProxyCidrs)(process.env.TRUSTED_PROXY_CIDRS));
 const port = process.env.PORT || 4002;
 // Middlewares
 app.use((0, cors_1.default)());
+// Shopee verifies signatures over the raw body, before general JSON parsing.
+app.use('/api/shopee', shopeeRoutes_1.default);
 (0, productAtomicJsonMiddleware_1.configureJsonBodyParsing)(app);
 exports.prisma = new client_1.PrismaClient();
 exports.redis = new ioredis_1.default(process.env.REDIS_URL || 'redis://localhost:6379', {
@@ -61,38 +66,34 @@ exports.safeRedis = {
 };
 // Import middleware
 const authMiddleware_1 = require("./middleware/authMiddleware");
+const shopeeAuthorization_1 = require("./services/shopeeAuthorization");
+const shopeeAuthorizationRoutes_1 = require("./routes/shopeeAuthorizationRoutes");
 // Import routes
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
-const shopeeRoutes_1 = __importDefault(require("./routes/shopeeRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const productRoutes_1 = __importDefault(require("./routes/productRoutes"));
 const financeRoutes_1 = __importDefault(require("./routes/financeRoutes"));
-const inventoryRoutes_1 = __importDefault(require("./routes/inventoryRoutes"));
-const mappingRoutes_1 = __importDefault(require("./routes/mappingRoutes"));
-const skuGroupRoutes_1 = __importDefault(require("./routes/skuGroupRoutes"));
 const nodeGraphRoutes_1 = __importDefault(require("./routes/nodeGraphRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
 const chromaAdaptRoutes_1 = __importDefault(require("./routes/chromaAdaptRoutes"));
-const restockRecordRoutes_1 = __importDefault(require("./routes/restockRecordRoutes"));
 const restockV2Routes_1 = __importDefault(require("./routes/restockV2Routes"));
 const scheduleRoutes_1 = __importDefault(require("./routes/scheduleRoutes"));
 const chromaRecordRoutes_1 = __importDefault(require("./routes/chromaRecordRoutes"));
 const usageRoutes_1 = __importDefault(require("./routes/usageRoutes"));
 const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
+const productAnalysisRoutes_1 = __importDefault(require("./routes/productAnalysisRoutes"));
 const financeBackup_1 = require("./services/financeBackup");
 // Public routes (no auth required)
 app.use('/api/auth', authRoutes_1.default);
-app.use('/api/shopee', shopeeRoutes_1.default);
 // Protected routes (auth required)
+const shopeeAuthorization = new shopeeAuthorization_1.ShopeeAuthorizationService(exports.prisma);
+(0, shopeeAuthorizationRoutes_1.configureShopeeAuthorization)(shopeeAuthorization);
+app.use('/api/shopee/manage', authMiddleware_1.authenticate, (0, authMiddleware_1.authorize)('owner'), (0, shopeeAuthorizationRoutes_1.createShopeeManagementRoutes)(shopeeAuthorization));
 app.use('/api/users', userRoutes_1.default);
 app.use('/api/products', authMiddleware_1.authenticate, productRoutes_1.default);
 app.use(productAtomicJsonMiddleware_1.productAtomicRouteErrorHandler);
 app.use('/api/finance', authMiddleware_1.authenticate, financeRoutes_1.default);
-app.use('/api/inventory', authMiddleware_1.authenticate, inventoryRoutes_1.default);
-app.use('/api/warehouse-mappings', authMiddleware_1.authenticate, mappingRoutes_1.default);
-app.use('/api/sku-groups', authMiddleware_1.authenticate, skuGroupRoutes_1.default);
 app.use('/api/templates', authMiddleware_1.authenticate, templateRoutes_1.default);
-app.use('/api/restock-records', authMiddleware_1.authenticate, restockRecordRoutes_1.default);
 app.use('/api/restock-v2', authMiddleware_1.authenticate, restockV2Routes_1.default);
 app.use('/api/schedule', authMiddleware_1.authenticate, scheduleRoutes_1.default);
 app.use('/api/node-graphs', authMiddleware_1.authenticate, nodeGraphRoutes_1.default);
@@ -100,10 +101,12 @@ app.use('/api/chroma-adapt', authMiddleware_1.authenticate, chromaAdaptRoutes_1.
 app.use('/api/chroma-data', authMiddleware_1.authenticate, chromaRecordRoutes_1.default);
 app.use('/api/usage', usageRoutes_1.default);
 app.use('/api/dashboard', authMiddleware_1.authenticate, dashboardRoutes_1.default);
+app.use('/api/product-analysis', authMiddleware_1.authenticate, productAnalysisRoutes_1.default);
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
 });
 (0, financeBackup_1.startFinanceBackup)();
+(0, shopeeAuthorization_1.startShopeeTokenRefresh)(shopeeAuthorization);
 app.listen(port, () => {
     console.log(`Server running at http://localhost:${port}`);
 });

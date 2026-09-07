@@ -7,7 +7,7 @@ const express_1 = require("express");
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
-const activityLogger_1 = require("../services/activityLogger");
+const usageEvents_1 = require("../services/usageEvents");
 const index_1 = require("../index");
 const router = (0, express_1.Router)();
 const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
@@ -30,8 +30,11 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: '用户名或密码错误' });
         }
         const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-        const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-        (0, activityLogger_1.logActivity)(user.id, 'login', 'auth', { username: user.username }, ip).catch(err => console.error('登录活动记录失败:', err));
+        await (0, usageEvents_1.recordUsageEvent)(index_1.prisma, {
+            actorId: user.id, actorName: user.displayName || user.username,
+            action: 'login', module: 'auth', objectType: 'User', objectId: user.id,
+            metadata: { ip: req.ip || req.socket.remoteAddress || '' },
+        });
         res.json({
             token,
             user: {

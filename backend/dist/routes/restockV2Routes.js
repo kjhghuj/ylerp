@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createRestockV2Router = exports.parseYcProductDimensions = void 0;
+const usageEvents_1 = require("../services/usageEvents");
 const express_1 = require("express");
 const index_1 = require("../index");
 const productCache_1 = require("../services/productCache");
@@ -481,7 +482,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let createdInventoryItems = 0;
             let updatedInventoryItems = 0;
             let createdMappings = 0;
-            await index_1.prisma.$transaction(async (tx) => {
+            await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_sync', objectType: 'SKU', affectedCount: syncItems.length, metadata: { site } }, async (tx) => {
                 for (const item of syncItems) {
                     const skuKey = normalizeSku(item.sku);
                     const dimensions = dimensionsBySku.get(skuKey)
@@ -658,7 +659,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 exactFallbackMappings.push({ externalSku, targetSku: externalSku });
             }
             const items = (0, restockSalesImport_1.aggregateSalesImportRows)(req.body.rows, reusableMappings);
-            const created = await index_1.prisma.$transaction(async (tx) => {
+            const created = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async (tx) => {
                 await Promise.all(exactFallbackMappings.map(({ externalSku, targetSku }) => tx.externalSkuMapping.upsert({
                     where: { userId_site_externalSku: { userId, site, externalSku } },
                     create: { userId, site, externalSku, targetSku },
@@ -783,7 +784,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             if ([...products, ...inventoryItems].some(item => (0, restockSalesImport_1.normalizeRestockSku)(item.sku) === sku)) {
                 return res.status(409).json({ error: 'Target SKU already exists' });
             }
-            const inventory = await index_1.prisma.$transaction(async (tx) => {
+            const inventory = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_target_create', objectType: 'InventoryItem' }, async (tx) => {
                 await tx.product.create({
                     data: {
                         name,
@@ -865,7 +866,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 return res.status(400).json({ error: 'Target SKU not found' });
             const normalizedTargetSku = (0, restockSalesImport_1.normalizeRestockSku)(matchedInventory?.sku || matchedProduct.sku);
             const externalSku = (0, restockSalesImport_1.normalizeRestockSku)(item.platformSku);
-            const updatedItem = await index_1.prisma.$transaction(async (tx) => {
+            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_mapping_save', objectType: 'RestockSalesItem' }, async (tx) => {
                 if (!matchedInventory) {
                     await tx.inventoryItem.create({
                         data: {
@@ -926,10 +927,10 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const item = await index_1.prisma.restockSalesItem.findFirst({ where: { id: itemId, importId } });
             if (!item)
                 return res.status(404).json({ error: 'Sales import item not found' });
-            const updatedItem = await index_1.prisma.restockSalesItem.update({
+            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_item_dismiss', objectType: 'RestockSalesItem' }, tx => tx.restockSalesItem.update({
                 where: { id: item.id },
                 data: { dismissedAt: new Date() },
-            });
+            }));
             return res.json(updatedItem);
         }
         catch (error) {
@@ -982,11 +983,11 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 return res.status(400).json({ error: 'Inventory SKU not found' });
             }
             const data = { leadTimeDays, safetyDays, growthPercent };
-            const rule = await index_1.prisma.restockSkuRule.upsert({
+            const rule = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_rule_save', objectType: 'RestockSkuRule' }, tx => tx.restockSkuRule.upsert({
                 where: { userId_site_sku: { userId, site, sku } },
                 create: { userId, site, sku, ...data },
                 update: data,
-            });
+            }));
             return res.json(rule);
         }
         catch (error) {

@@ -102,7 +102,11 @@ export interface ChromaRecord {
   id: string;
   mode: string;
   model: string;
-  cost: number;
+  cost: number | null;
+  provenance?: string;
+  kind?: string;
+  deliveryStatus?: string;
+  storageStatus?: string;
   prompt?: string;
   parameters?: any;
   status: string;
@@ -122,6 +126,9 @@ export interface ChromaImageInfo {
 }
 
 export interface CostSummary {
+  unpriced?: number;
+  unknown?: number;
+  legacy?: { total: number; reportedCost: number | null; provenance: string };
   today: number;
   month: number;
   total: number;

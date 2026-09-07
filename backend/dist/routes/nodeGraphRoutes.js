@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const usageEvents_1 = require("../services/usageEvents");
 const express_1 = require("express");
 const index_1 = require("../index");
 const zod_1 = require("zod");
@@ -55,7 +56,7 @@ router.post('/', async (req, res) => {
     try {
         const userId = req.user.id;
         const parsed = templateSchema.parse(req.body);
-        const template = await index_1.prisma.nodeGraphTemplate.create({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'node_template_create', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.create({
             data: {
                 name: parsed.name,
                 type: parsed.type || 'profit',
@@ -66,7 +67,7 @@ router.post('/', async (req, res) => {
                 productId: parsed.productId ?? undefined,
                 userId,
             },
-        });
+        }));
         res.status(201).json(template);
     }
     catch (error) {
@@ -101,10 +102,10 @@ router.put('/:id', async (req, res) => {
             data.edges = castJson(parsed.edges);
         if (parsed.productId !== undefined)
             data.productId = parsed.productId;
-        const template = await index_1.prisma.nodeGraphTemplate.update({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'node_template_update', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.update({
             where: { id: req.params.id },
             data,
-        });
+        }));
         res.json(template);
     }
     catch (error) {
@@ -123,7 +124,7 @@ router.delete('/:id', async (req, res) => {
         });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
-        await index_1.prisma.nodeGraphTemplate.delete({ where: { id: req.params.id } });
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'node_template_delete', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.delete({ where: { id: req.params.id } }));
         res.status(204).send();
     }
     catch (error) {

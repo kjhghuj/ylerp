@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 
 jest.mock('../../index', () => ({
   prisma: {
+    $transaction: jest.fn(async function (this: any, callback: any) { return callback(this); }),
+    usageEvent: { create: jest.fn().mockResolvedValue({}) },
     profitTemplate: {
       findFirst: jest.fn(),
       create: jest.fn(),

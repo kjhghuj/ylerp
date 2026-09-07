@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { ApiError, MODEL_COSTS } from '../services/chroma/config';
+import { ApiError } from '../services/chroma/config';
 import { chatWithImages, generateImage } from '../services/chroma/arkClient';
 import {
   cleanBase64Image,
@@ -14,9 +14,26 @@ import {
   buildColorAdaptationPrompt,
   buildTranslationPrompt,
 } from '../services/chroma/prompts';
-import { logActivity } from '../services/activityLogger';
+import { runAiCall, setAiDelivery } from '../services/aiUsage';
 
 const router = Router();
+
+async function tracked(req: Request, kind: 'analysis' | 'generation', model: string, provider: () => Promise<any>) {
+  const { requestKey, operationId, ...payload } = req.body;
+  const { call, result } = await runAiCall({ userId: req.user!.id, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
+  return { ...result, callId: call.id, cost: call.estimatedCost == null ? null : Number(call.estimatedCost), currency: 'CNY', pricingVersion: call.pricingVersion };
+}
+async function deliver(result: any) {
+  try {
+    const data = await Promise.all(result.data.map(async (item: any) => ({ url: await downloadImageAsDataUrl(item.url) })));
+    await setAiDelivery(result.callId, 'ready');
+    return { ...result, data };
+  } catch {
+    await setAiDelivery(result.callId, 'failed');
+    throw new ApiError(502, '图片已经生成但下载失败，用量已记录；可使用同一请求标识重试下载，调用编号：' + result.callId);
+  }
+}
+
 
 function errorResponse(error: unknown, res: Response): void {
   if (error instanceof ApiError) {
@@ -26,13 +43,13 @@ function errorResponse(error: unknown, res: Response): void {
   }
 }
 
-function analyzeSingleImage(image: string, prompt: string, model: string): Promise<any> {
+function analyzeSingleImage(req: Request, image: string, prompt: string, model: string): Promise<any> {
   const base64Data = cleanBase64Image(image);
   const content = [
     { type: 'text', text: prompt },
     { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
   ];
-  return chatWithImages(model, content);
+  return tracked(req, 'analysis', model, () => chatWithImages(model, content));
 }
 
 router.post('/analyze', async (req: Request, res: Response) => {
@@ -41,11 +58,11 @@ router.post('/analyze', async (req: Request, res: Response) => {
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
     const usedModel = model || 'doubao-seed-2-0-lite';
     const result = await analyzeSingleImage(
-      image,
+      req, image,
       prompt || '分析这张图片的色彩、构图和主要内容，并以JSON格式返回色盘（包含一个名为 \'palette\' 的数组，内含5个十六进制颜色）。',
       usedModel
     );
-    res.json({ ...result, cost: MODEL_COSTS[usedModel] || 0 });
+    res.json(result);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -58,8 +75,8 @@ router.post('/analyze-edit', async (req: Request, res: Response) => {
     if (!user_instruction) return res.status(400).json({ detail: 'Missing required field: user_instruction' });
     const usedModel = model || 'doubao-seed-2-0-lite';
     const prompt = buildEditAnalysisPrompt(user_instruction);
-    const result = await analyzeSingleImage(image, prompt, usedModel);
-    res.json({ ...result, cost: MODEL_COSTS[usedModel] || 0 });
+    const result = await analyzeSingleImage(req, image, prompt, usedModel);
+    res.json(result);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -70,8 +87,8 @@ router.post('/secondary-plan', async (req: Request, res: Response) => {
     const { image, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
     const usedModel = model || 'doubao-seed-2-0-lite';
-    const result = await analyzeSingleImage(image, SECONDARY_PLAN_PROMPT, usedModel);
-    res.json({ ...result, cost: MODEL_COSTS[usedModel] || 0 });
+    const result = await analyzeSingleImage(req, image, SECONDARY_PLAN_PROMPT, usedModel);
+    res.json(result);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -91,8 +108,8 @@ router.post('/color-mapping', async (req: Request, res: Response) => {
       { type: 'text', text: '\n\n下面是参考图片：' },
       { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${refClean}` } },
     ];
-    const result = await chatWithImages(usedModel, content);
-    res.json({ ...result, cost: MODEL_COSTS[usedModel] || 0 });
+    const result = await tracked(req, 'analysis', usedModel, () => chatWithImages(usedModel, content));
+    res.json(result);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -102,17 +119,16 @@ router.post('/generate', async (req: Request, res: Response) => {
   try {
     const { prompt, image_urls, size, model } = req.body;
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
-    const result = await generateImage(
+    const result = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size || '2048x2048',
       image_urls || undefined
-    );
-    const imageUrl = result?.data?.[0]?.url || '';
-    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, '');
+    ));
+    const delivered = await deliver(result);
+    const imageDataUrl = delivered.data[0].url;
     const usedModel = model || 'doubao-seedream-4.5';
-    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'generate', model: usedModel }).catch(err => console.error("活动记录失败:", err));
-    res.json({ ...result, data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
+    res.json(delivered);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -125,17 +141,16 @@ router.post('/edit', async (req: Request, res: Response) => {
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
     const { width, height } = getImageDimensionsFromBase64(image);
     const size = calculateSizeForAspectRatio(width, height);
-    const generated = await generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
       [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
-    );
-    const imageUrl = generated?.data?.[0]?.url || '';
-    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, image);
+    ));
+    const delivered = await deliver(generated);
+    const imageDataUrl = delivered.data[0].url;
     const usedModel = model || 'doubao-seedream-4.5';
-    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'edit', model: usedModel }).catch(err => console.error("活动记录失败:", err));
-    res.json({ ...generated, data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
+    res.json(delivered);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -149,7 +164,7 @@ router.post('/color-adaptation', async (req: Request, res: Response) => {
     const { width, height } = getImageDimensionsFromBase64(poster_image);
     const size = calculateSizeForAspectRatio(width, height);
     const prompt = buildColorAdaptationPrompt(palette || [], style_config || null, color_mapping_plan || null);
-    const generated = await generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
@@ -157,12 +172,11 @@ router.post('/color-adaptation', async (req: Request, res: Response) => {
         `data:image/jpeg;base64,${cleanBase64Image(poster_image)}`,
         `data:image/jpeg;base64,${cleanBase64Image(reference_image)}`,
       ]
-    );
-    const imageUrl = generated?.data?.[0]?.url || '';
-    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, poster_image);
+    ));
+    const delivered = await deliver(generated);
+    const imageDataUrl = delivered.data[0].url;
     const usedModel = model || 'doubao-seedream-4.5';
-    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'color-adaptation', model: usedModel }).catch(err => console.error("活动记录失败:", err));
-    res.json({ data: [{ url: imageDataUrl }], cost: MODEL_COSTS[usedModel] || 0 });
+    res.json(delivered);
   } catch (error) {
     errorResponse(error, res);
   }
@@ -176,16 +190,15 @@ router.post('/translate', async (req: Request, res: Response) => {
     const { width, height } = getImageDimensionsFromBase64(image);
     const size = calculateSizeForAspectRatio(width, height);
     const prompt = buildTranslationPrompt(target_lang, target_font || 'original');
-    const generated = await generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
       [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
-    );
-    const imageUrl = generated?.data?.[0]?.url || '';
-    const imageDataUrl = await downloadImageAsDataUrl(imageUrl, image);
+    ));
+    const delivered = await deliver(generated);
+    const imageDataUrl = delivered.data[0].url;
     const usedModel = model || 'doubao-seedream-4.5';
-    logActivity(req.user!.id, 'image_generate', 'chroma', { mode: 'translate', model: usedModel, target_lang }).catch(err => console.error("活动记录失败:", err));
     res.json({
       translation_instructions: {
         translations: [],
@@ -195,7 +208,10 @@ router.post('/translate', async (req: Request, res: Response) => {
         original_dimensions: { width, height },
       },
       result: { data: [{ url: imageDataUrl }] },
-      cost: MODEL_COSTS[usedModel] || 0,
+      callId: delivered.callId,
+      cost: delivered.cost,
+      currency: 'CNY',
+      pricingVersion: delivered.pricingVersion,
     });
   } catch (error) {
     errorResponse(error, res);

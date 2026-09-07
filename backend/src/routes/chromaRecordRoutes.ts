@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { prisma } from '../index';
-import { logActivity } from '../services/activityLogger';
+import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
 
@@ -44,26 +45,26 @@ async function cleanupOldImages(userId: string): Promise<void> {
   });
 }
 
-// ── Generation Records ──
-
+// Authoritative server calls and explicitly separate unverified legacy history.
 router.get('/records', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
-    const skip = (page - 1) * limit;
-
-    const [records, total] = await Promise.all([
-      prisma.chromaGenerationRecord.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.chromaGenerationRecord.count({ where: { userId } }),
+    const legacy = req.query.source === 'legacy';
+    if (legacy) {
+      const [records, total] = await prisma.$transaction([
+        prisma.chromaGenerationRecord.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+        prisma.chromaGenerationRecord.count({ where: { userId } }),
+      ]);
+      return res.json({ records: records.map(r => ({ ...r, provenance: 'legacy_unverified', costLabel: '历史上报估算' })), total, page, limit });
+    }
+    const where = { userId, provenance: 'native' };
+    const [calls, total, legacyTotal] = await prisma.$transaction([
+      prisma.aiUsageCall.findMany({ where, orderBy: { startedAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+      prisma.aiUsageCall.count({ where }), prisma.chromaGenerationRecord.count({ where: { userId } }),
     ]);
-
-    res.json({ records, total, page, limit });
+    res.json({ records: calls.map(c => ({ id: c.id, mode: c.mode, model: c.model, kind: c.kind, cost: c.estimatedCost == null ? null : Number(c.estimatedCost), status: c.status, imageId: c.imageIds[0], createdAt: c.startedAt, errorMessage: c.errorMessage, deliveryStatus: c.deliveryStatus, storageStatus: c.storageStatus, pricingVersion: c.pricingVersion, provenance: c.provenance, currency: c.currency })), total, legacyTotal, page, limit });
   } catch (error) {
     console.error('Error fetching chroma records:', error);
     res.status(500).json({ error: 'Failed to fetch records' });
@@ -74,31 +75,20 @@ router.get('/records/cost-summary', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
     const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const [todayCost, monthCost, totalCost, totalRecords] = await Promise.all([
-      prisma.chromaGenerationRecord.aggregate({
-        where: { userId, createdAt: { gte: startOfDay }, status: 'success' },
-        _sum: { cost: true },
-      }),
-      prisma.chromaGenerationRecord.aggregate({
-        where: { userId, createdAt: { gte: startOfMonth }, status: 'success' },
-        _sum: { cost: true },
-      }),
-      prisma.chromaGenerationRecord.aggregate({
-        where: { userId, status: 'success' },
-        _sum: { cost: true },
-      }),
-      prisma.chromaGenerationRecord.count({ where: { userId } }),
+    const chinaDate = new Date(now.getTime() + 8 * 3600_000).toISOString().slice(0, 10);
+    const startOfDay = new Date(chinaDate + 'T00:00:00+08:00');
+    const startOfMonth = new Date(chinaDate.slice(0, 7) + '-01T00:00:00+08:00');
+    const where = { userId, provenance: 'native', status: 'success' };
+    const [today, month, total, totalRecords, unpriced, unknown, legacy] = await prisma.$transaction([
+      prisma.aiUsageCall.aggregate({ where: { ...where, startedAt: { gte: startOfDay, lte: now } }, _sum: { estimatedCost: true } }),
+      prisma.aiUsageCall.aggregate({ where: { ...where, startedAt: { gte: startOfMonth, lte: now } }, _sum: { estimatedCost: true } }),
+      prisma.aiUsageCall.aggregate({ where, _sum: { estimatedCost: true } }),
+      prisma.aiUsageCall.count({ where: { userId, provenance: 'native' } }),
+      prisma.aiUsageCall.count({ where: { ...where, estimatedCost: null } }),
+      prisma.aiUsageCall.count({ where: { userId, provenance: 'native', status: { in: ['unknown', 'pending'] } } }),
+      prisma.chromaGenerationRecord.aggregate({ where: { userId }, _sum: { cost: true }, _count: true }),
     ]);
-
-    res.json({
-      today: todayCost._sum.cost || 0,
-      month: monthCost._sum.cost || 0,
-      total: totalCost._sum.cost || 0,
-      totalRecords,
-    });
+    res.json({ today: Number(today._sum.estimatedCost || 0), month: Number(month._sum.estimatedCost || 0), total: Number(total._sum.estimatedCost || 0), totalRecords, unpriced, unknown, currency: 'CNY', timezone: 'Asia/Shanghai', costLabel: '人民币预估费用', legacy: { total: legacy._count, reportedCost: legacy._sum.cost, provenance: 'legacy_unverified' } });
   } catch (error) {
     console.error('Error fetching cost summary:', error);
     res.status(500).json({ error: 'Failed to fetch cost summary' });
@@ -108,31 +98,22 @@ router.get('/records/cost-summary', async (req: Request, res: Response) => {
 router.post('/records', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { mode, model, cost, prompt, parameters, status, errorMessage, imageId } = req.body;
-
-    if (!mode || !model || cost === undefined || !status) {
-      return res.status(400).json({ error: 'Missing required fields: mode, model, cost, status' });
-    }
-
-    const record = await prisma.chromaGenerationRecord.create({
-      data: {
-        mode,
-        model,
-        cost: Number(cost) || 0,
-        prompt: prompt || null,
-        parameters: parameters || null,
-        status,
-        errorMessage: errorMessage || null,
-        imageId: imageId || null,
-        userId,
-      },
-    });
-
-    logActivity(userId, 'image_generate', 'chroma', { mode, model, cost: Number(cost) || 0, status }).catch(err => console.error("活动记录失败:", err));
-    res.status(201).json(record);
+    const { callId, imageId } = req.body;
+    if (typeof callId !== 'string' || typeof imageId !== 'string') return res.status(400).json({ error: '请升级客户端：仅支持使用 callId 和 imageId 关联已有调用，不能提交次数或费用' });
+    if (Object.keys(req.body).some(k => !['callId', 'imageId'].includes(k))) return res.status(400).json({ error: '仅允许 callId 和 imageId，费用由服务端记录' });
+    const record = await prisma.$transaction(async tx => {
+      const call = await tx.aiUsageCall.findFirst({ where: { id: callId, userId, kind: 'generation', status: 'success', provenance: 'native' } });
+      const image = await tx.chromaImage.findFirst({ where: { id: imageId, userId } });
+      if (!call || !image) return null;
+      const imageIds = [...new Set([...call.imageIds, imageId])];
+      if (imageIds.length > call.outputCount) return null;
+      return tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: 'saved' } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    if (!record) return res.status(404).json({ error: '未找到本人可关联的成功调用或图片' });
+    res.json({ id: record.id, imageIds: record.imageIds, storageStatus: record.storageStatus });
   } catch (error) {
-    console.error('Error creating chroma record:', error);
-    res.status(500).json({ error: 'Failed to create record' });
+    console.error('Error associating chroma record:', error);
+    res.status(500).json({ error: 'Failed to associate image with call; generation usage remains recorded' });
   }
 });
 
@@ -210,7 +191,14 @@ router.delete('/images/:id', async (req: Request, res: Response) => {
 router.post('/images', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { image, mode, model, originalName } = req.body;
+    const { image, mode, model, originalName, callId } = req.body;
+    if (typeof callId !== 'string') return res.status(400).json({ error: 'callId is required for generated images' });
+    const call = await prisma.aiUsageCall.findFirst({ where: { id: callId, userId, kind: 'generation', status: 'success', provenance: 'native' } });
+    if (!call) return res.status(404).json({ error: 'Successful call not found' });
+    if (call.imageIds.length) {
+      const existing = await prisma.chromaImage.findFirst({ where: { id: call.imageIds[0], userId } });
+      if (existing) return res.json(existing);
+    }
 
     if (!image) return res.status(400).json({ error: 'Missing required field: image' });
 
@@ -230,27 +218,38 @@ router.post('/images', async (req: Request, res: Response) => {
     let base64Data = rawBase64.replace(/\n/g, '').replace(/\r/g, '');
 
     const buffer = Buffer.from(base64Data, 'base64');
-    const filename = `${Date.now()}-${mode || 'unknown'}-${Math.random().toString(36).substr(2, 6)}.png`;
+    const filename = `${Date.now()}-${crypto.randomUUID()}.png`;
     const filePath = path.join(userDir, filename);
 
     await fs.writeFile(filePath, buffer);
 
-    const chromaImage = await prisma.chromaImage.create({
+    const chromaImage = await prisma.$transaction(async tx => {
+      const latest = await tx.aiUsageCall.findUniqueOrThrow({ where: { id: callId } });
+      if (latest.imageIds.length) {
+        const existing = await tx.chromaImage.findFirst({ where: { id: latest.imageIds[0], userId } });
+        if (existing) return existing;
+      }
+      const saved = await tx.chromaImage.create({
       data: {
         filename,
         originalName: originalName || null,
         size: buffer.length,
-        mode: mode || 'unknown',
-        model: model || 'unknown',
+        mode: call.mode,
+        model: call.model,
         userId,
       },
     });
+
+      await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds: [saved.id], storageStatus: 'saved' } });
+      return saved;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     await cleanupOldImages(userId);
 
     res.status(201).json(chromaImage);
   } catch (error) {
     console.error('Error uploading image:', error);
+    if (typeof req.body.callId === 'string') await prisma.aiUsageCall.updateMany({ where: { id: req.body.callId, userId: req.user!.id, storageStatus: { not: 'saved' } }, data: { storageStatus: 'failed' } }).catch(err => console.error('Storage status persistence failed:', err));
     res.status(500).json({ error: 'Failed to upload image' });
   }
 });

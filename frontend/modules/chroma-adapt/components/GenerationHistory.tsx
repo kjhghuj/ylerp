@@ -14,7 +14,7 @@ interface GenerationHistoryProps {
   onDeleteImage: (id: string) => void;
   records: ChromaRecord[];
   recordsTotal: number;
-  onLoadRecords: (page: number) => void;
+  onLoadRecords: (page: number, source?: 'native' | 'legacy') => void;
 }
 
 const MODE_LABELS: Record<string, { zh: string; en: string }> = {
@@ -24,10 +24,10 @@ const MODE_LABELS: Record<string, { zh: string; en: string }> = {
   COLOR_ADAPT: { zh: '色彩', en: 'Color' },
 };
 
-const formatCost = (cost: number) => `¥${cost.toFixed(3)}`;
+const formatCost = (cost: number | null) => cost == null ? '未计价' : `¥${cost.toFixed(3)}`;
 
 const formatDate = (dateStr: string) => {
-  const d = new Date(dateStr);
+  const d = new Date(new Date(dateStr).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
   const month = (d.getMonth() + 1).toString().padStart(2, '0');
   const day = d.getDate().toString().padStart(2, '0');
   const hour = d.getHours().toString().padStart(2, '0');
@@ -48,6 +48,7 @@ const GenerationHistory: React.FC<GenerationHistoryProps> = ({
   recordsTotal,
   onLoadRecords,
 }) => {
+  const [historySource, setHistorySource] = useState<'native' | 'legacy'>('native');
   const [activeTab, setActiveTab] = useState<'records' | 'images'>('records');
   const [recordsPage, setRecordsPage] = useState(1);
   const [imagesPage, setImagesPage] = useState(1);
@@ -63,7 +64,7 @@ const GenerationHistory: React.FC<GenerationHistoryProps> = ({
 
   const handleRecordsPage = (page: number) => {
     setRecordsPage(page);
-    onLoadRecords(page);
+    onLoadRecords(page, historySource);
   };
 
   const handleImagesPage = (page: number) => {
@@ -105,13 +106,15 @@ const GenerationHistory: React.FC<GenerationHistoryProps> = ({
           <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
             <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2">
               <BarChart3 size={18} className="text-brand-500" />
-              {language === 'zh' ? '生成记录' : 'History'}
+              {language === 'zh' ? 'AI 调用记录 · 人民币预估费用' : 'AI calls · CNY estimates'}
             </h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition-colors">
               <X size={18} />
             </button>
           </div>
 
+          <div className="px-5 py-2 text-xs text-slate-500">北京时间；费用包含分析与生成。未计价 {costSummary.unpriced || 0} 次，待核实 {costSummary.unknown || 0} 次。历史未核验 {costSummary.legacy?.total || 0} 条，未并入当前合计。</div>
+          <div className="px-5 py-2"><button className="text-xs text-brand-600" onClick={() => { const source = historySource === 'native' ? 'legacy' : 'native'; setHistorySource(source); setRecordsPage(1); onLoadRecords(1, source); }}>{historySource === 'native' ? '查看未核验历史（历史上报估算）' : '返回新口径调用'}</button></div>
           {/* Cost Summary */}
           <div className="px-5 py-3 bg-slate-50 border-b border-slate-100">
             <div className="grid grid-cols-3 gap-3">
@@ -190,7 +193,7 @@ const GenerationHistory: React.FC<GenerationHistoryProps> = ({
                           <div className="text-[10px] text-slate-400 mt-0.5">{formatDate(record.createdAt)}</div>
                         </div>
                         <div className={`text-xs font-bold flex-none ${isSuccess ? 'text-slate-600' : 'text-red-400'}`}>
-                          {isSuccess ? formatCost(record.cost) : (language === 'zh' ? '失败' : 'Error')}
+                          {isSuccess ? formatCost(record.cost) : (({ failed: '失败', pending: '处理中', unknown: '待核实', error: '历史失败' } as Record<string, string>)[record.status] || record.status)}
                         </div>
                       </div>
                     );

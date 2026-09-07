@@ -1,3 +1,4 @@
+import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
@@ -58,7 +59,7 @@ router.post('/', async (req, res) => {
   try {
     const userId = req.user!.id;
     const parsed = templateSchema.parse(req.body);
-    const template = await prisma.nodeGraphTemplate.create({
+    const template = await withUsageEvent(prisma, req, { module: 'template', action: 'node_template_create', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.create({
       data: {
         name: parsed.name,
         type: parsed.type || 'profit',
@@ -69,7 +70,7 @@ router.post('/', async (req, res) => {
         productId: parsed.productId ?? undefined,
         userId,
       },
-    });
+    }));
     res.status(201).json(template);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -99,10 +100,10 @@ router.put('/:id', async (req, res) => {
     if (parsed.edges !== undefined) data.edges = castJson(parsed.edges);
     if (parsed.productId !== undefined) data.productId = parsed.productId;
 
-    const template = await prisma.nodeGraphTemplate.update({
+    const template = await withUsageEvent(prisma, req, { module: 'template', action: 'node_template_update', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.update({
       where: { id: req.params.id },
       data,
-    });
+    }));
     res.json(template);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -122,7 +123,7 @@ router.delete('/:id', async (req, res) => {
     });
     if (!existing) return res.status(404).json({ error: 'Template not found' });
 
-    await prisma.nodeGraphTemplate.delete({ where: { id: req.params.id } });
+    await withUsageEvent(prisma, req, { module: 'template', action: 'node_template_delete', objectType: 'NodeGraphTemplate' }, tx => tx.nodeGraphTemplate.delete({ where: { id: req.params.id } }));
     res.status(204).send();
   } catch (error) {
     console.error('Failed to delete template:', error);

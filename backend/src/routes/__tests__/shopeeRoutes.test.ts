@@ -24,6 +24,7 @@ describe('shopeeRoutes', () => {
     const handler = getHandler('/callback');
     const req = { query: {} } as Partial<Request>;
     const res = {
+      set: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
@@ -37,13 +38,14 @@ describe('shopeeRoutes', () => {
     expect(res.send).toHaveBeenCalledWith(expect.stringContaining('Shopee callback is reachable'));
   });
 
-  it('reports missing Partner credentials when Shopee redirects back with an authorization code', async () => {
+  it('fails closed when the authorization service is not initialized', async () => {
     delete process.env.SHOPEE_PARTNER_ID;
     delete process.env.SHOPEE_PARTNER_KEY;
 
     const handler = getHandler('/callback');
     const req = { query: { code: 'auth-code', shop_id: '123456' } } as Partial<Request>;
     const res = {
+      set: jest.fn().mockReturnThis(),
       status: jest.fn().mockReturnThis(),
       type: jest.fn().mockReturnThis(),
       send: jest.fn(),
@@ -54,9 +56,7 @@ describe('shopeeRoutes', () => {
 
     expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({
-      error: 'Shopee credentials are not configured',
-      codeReceived: true,
-      shopId: '123456',
+      error: '授权服务尚未就绪。',
     });
   });
 });

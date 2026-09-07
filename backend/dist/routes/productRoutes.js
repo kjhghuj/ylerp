@@ -1,9 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const usageEvents_1 = require("../services/usageEvents");
+const node_crypto_1 = require("node:crypto");
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
 const index_1 = require("../index");
-const activityLogger_1 = require("../services/activityLogger");
 const productCache_1 = require("../services/productCache");
 const productTaxRates_1 = require("../services/productTaxRates");
 const profitTemplateData_1 = require("../services/profitTemplateData");
@@ -52,13 +53,12 @@ router.post('/', async (req, res) => {
         const userId = req.user.id;
         const { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice, sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue, platformInfrastructureFee, sites, siteData } = req.body;
         const productTaxRates = (0, productTaxRates_1.parseOptionalProductTaxRates)(req.body);
-        const product = await index_1.prisma.product.create({
+        const product = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product', action: 'product_create', objectType: 'Product' }, tx => tx.product.create({
             data: { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice,
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
                 platformInfrastructureFee, sites, siteData, ...productTaxRates, userId }
-        });
+        }));
         await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
-        (0, activityLogger_1.logActivity)(userId, 'product_create', 'product', { name, sku, country }).catch(err => console.error("活动记录失败:", err));
         res.status(201).json(product);
     }
     catch (error) {
@@ -81,19 +81,11 @@ const saveProductWithTemplatesHandler = (mode) => async (req, res) => {
         const result = await (0, productWithTemplates_1.saveProductWithTemplates)({
             prisma: index_1.prisma,
             userId,
+            actorName: req.user.username,
             ...(productId ? { productId } : {}),
             request,
         });
-        await Promise.allSettled([
-            index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId)),
-            (0, activityLogger_1.logActivity)(userId, mode === 'create' ? 'product_create' : 'product_update', 'product', {
-                name: String(request.product.name),
-                sku: String(request.product.sku),
-                country: request.product.country === null || request.product.country === undefined
-                    ? null
-                    : String(request.product.country),
-            }),
-        ]);
+        await Promise.allSettled([index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId))]);
         return res.status(mode === 'create' ? 201 : 200).json(result);
     }
     catch (error) {
@@ -198,7 +190,7 @@ router.post('/:id/templates', async (req, res) => {
             if (!template)
                 return res.status(404).json({ error: 'Template not found' });
         }
-        const template = await index_1.prisma.productProfitTemplate.create({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'product_template_create', objectType: 'ProductProfitTemplate' }, tx => tx.productProfitTemplate.create({
             data: {
                 productId: req.params.id,
                 templateId: templateId || null,
@@ -207,7 +199,7 @@ router.post('/:id/templates', async (req, res) => {
                 platform,
                 data: validatedData,
             },
-        });
+        }));
         res.status(201).json(template);
     }
     catch (error) {
@@ -244,7 +236,7 @@ router.put('/:id/templates/:linkId', async (req, res) => {
             if (!template)
                 return res.status(404).json({ error: 'Template not found' });
         }
-        const template = await index_1.prisma.productProfitTemplate.update({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'product_template_update', objectType: 'ProductProfitTemplate' }, tx => tx.productProfitTemplate.update({
             where: { id: req.params.linkId },
             data: {
                 ...(templateId !== undefined ? { templateId: templateId || null } : {}),
@@ -253,7 +245,7 @@ router.put('/:id/templates/:linkId', async (req, res) => {
                 ...(platform !== undefined ? { platform } : {}),
                 ...(validatedData !== undefined ? { data: validatedData } : {}),
             },
-        });
+        }));
         res.json(template);
     }
     catch (error) {
@@ -287,9 +279,10 @@ router.put('/:id/templates/:linkId/primary', async (req, res) => {
             }
         }
         let updated;
+        const eventKey = (0, node_crypto_1.randomUUID)();
         for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
-                updated = await index_1.prisma.$transaction(async (tx) => {
+                updated = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { eventKey, module: 'template', action: 'product_template_primary', objectType: 'ProductProfitTemplate' }, async (tx) => {
                     const product = await tx.product.findFirst({
                         where: { id: req.params.id, userId },
                     });
@@ -355,7 +348,7 @@ router.delete('/:id/templates/:linkId', async (req, res) => {
         });
         if (!existing)
             return res.status(404).json({ error: 'Product template not found' });
-        await index_1.prisma.productProfitTemplate.delete({ where: { id: req.params.linkId } });
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'product_template_delete', objectType: 'ProductProfitTemplate' }, tx => tx.productProfitTemplate.delete({ where: { id: req.params.linkId } }));
         res.status(204).send();
     }
     catch (error) {
@@ -371,12 +364,12 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         const { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice, sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue, platformInfrastructureFee, sites, siteData } = req.body;
         const productTaxRates = (0, productTaxRates_1.parseOptionalProductTaxRates)(req.body);
-        const product = await index_1.prisma.product.update({
+        const product = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product', action: 'product_update', objectType: 'Product' }, tx => tx.product.update({
             where: { id: req.params.id },
             data: { name, sku, country, cost, productWeight, supplierTaxPoint, supplierInvoice,
                 sellerCouponType, sellerCoupon, sellerCouponPlatformRatio, adROI, totalRevenue,
                 platformInfrastructureFee, sites, siteData, ...productTaxRates },
-        });
+        }));
         await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
         res.json(product);
     }
@@ -394,31 +387,33 @@ router.delete('/:id', async (req, res) => {
         if (!existing)
             return res.status(404).json({ error: 'Product not found' });
         const site = req.query.site;
-        if (site) {
-            const remainingSites = (existing.sites || []).filter(s => s !== site);
-            const siteCurrency = countryToCurrency[site] || site;
-            if (remainingSites.length === 0) {
-                await index_1.prisma.productProfitTemplate.deleteMany({ where: { productId: req.params.id } });
-                await index_1.prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
-                await index_1.prisma.product.delete({ where: { id: req.params.id } });
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product', action: site ? 'product_site_delete' : 'product_delete', objectType: 'Product', objectId: String(req.params.id) }, async (tx) => {
+            if (site) {
+                const remainingSites = (existing.sites || []).filter(s => s !== site);
+                const siteCurrency = countryToCurrency[site] || site;
+                if (remainingSites.length === 0) {
+                    await tx.productProfitTemplate.deleteMany({ where: { productId: req.params.id } });
+                    await tx.profitTemplate.deleteMany({ where: { productId: req.params.id } });
+                    await tx.product.delete({ where: { id: req.params.id } });
+                }
+                else {
+                    await tx.productProfitTemplate.deleteMany({
+                        where: { productId: req.params.id, country: { in: [site, siteCurrency] } },
+                    });
+                    await tx.profitTemplate.deleteMany({
+                        where: { productId: req.params.id, country: { in: [site, siteCurrency] } },
+                    });
+                    await tx.product.update({
+                        where: { id: req.params.id },
+                        data: { sites: remainingSites },
+                    });
+                }
             }
             else {
-                await index_1.prisma.productProfitTemplate.deleteMany({
-                    where: { productId: req.params.id, country: { in: [site, siteCurrency] } },
-                });
-                await index_1.prisma.profitTemplate.deleteMany({
-                    where: { productId: req.params.id, country: { in: [site, siteCurrency] } },
-                });
-                await index_1.prisma.product.update({
-                    where: { id: req.params.id },
-                    data: { sites: remainingSites },
-                });
+                await tx.profitTemplate.deleteMany({ where: { productId: req.params.id } });
+                await tx.product.delete({ where: { id: req.params.id } });
             }
-        }
-        else {
-            await index_1.prisma.profitTemplate.deleteMany({ where: { productId: req.params.id } });
-            await index_1.prisma.product.delete({ where: { id: req.params.id } });
-        }
+        });
         await index_1.safeRedis.del((0, productCache_1.getProductListCacheKey)(userId));
         res.status(204).send();
     }

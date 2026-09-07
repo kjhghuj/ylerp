@@ -397,4 +397,112 @@ model User {
   children            User[]                   @relation("SubAccounts")
   userActivities      UserActivity[]
   warehouseMappings   WarehouseMapping[]
+  shopeeConnections   ShopeeConnection[]
+  shopeeAuthSessions  ShopeeAuthSession[]
+}
+
+model ShopeeAuthSession {
+  id                   String   @id @default(uuid())
+  userId               String
+  stateHash            String   @unique
+  appBinding           String
+  status               String   @default("pending")
+  expiresAt            DateTime
+  shopId               String?
+  pendingCredentials   String?
+  confirmationHash     String?
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([userId, status])
+}
+
+model ShopeeConnection {
+  id                   String   @id @default(uuid())
+  userId               String
+  environment          String
+  partnerId            String
+  shopId               String
+  shopName             String?
+  region               String?
+  encryptedCredentials String
+  expiresAt            DateTime
+  status               String   @default("active")
+  lastError            String?
+  refreshLeaseUntil    DateTime?
+  nextRefreshAt        DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([environment, partnerId, shopId])
+  @@index([userId])
+  @@index([status, nextRefreshAt])
+}
+
+// Append-only operation ledger. Plain actor identifiers intentionally survive account deletion.
+model UsageEvent {
+  id             String   @id @default(uuid())
+  actorId        String
+  actorName      String?
+  module         String
+  action         String
+  status         String   @default("success")
+  source         String   @default("user")
+  objectType     String?
+  objectId       String?
+  affectedCount  Int      @default(1)
+  occurredAt     DateTime @default(now())
+  eventKey       String   @unique
+  metadata       Json?
+  provenance     String   @default("native")
+  legacySource   String?
+  legacyId       String?
+  migrationBatch String?
+  ruleVersion    String?
+
+  @@unique([legacySource, legacyId])
+  @@index([actorId, occurredAt])
+  @@index([module, status, occurredAt])
+  @@index([provenance, occurredAt])
+}
+
+model AiUsageCall {
+  id                String   @id @default(uuid())
+  userId            String
+  actorName         String?
+  requestKey        String
+  operationId       String
+  requestHash       String
+  kind              String
+  module            String   @default("chroma")
+  mode              String
+  model             String
+  status            String   @default("pending")
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  outputCount       Int      @default(0)
+  estimatedCost     Decimal? @db.Decimal(18, 6)
+  currency          String   @default("CNY")
+  pricingVersion    String?
+  providerRequestId String?
+  deliveryStatus    String   @default("pending")
+  storageStatus     String   @default("pending")
+  imageIds          String[] @default([])
+  result            Json?
+  errorCode         String?
+  errorMessage      String?
+  provenance        String   @default("native")
+  legacySource      String?
+  legacyId          String?
+  migrationBatch    String?
+  ruleVersion       String?
+
+  @@unique([userId, requestKey])
+  @@unique([legacySource, legacyId])
+  @@index([userId, startedAt])
+  @@index([module, status, startedAt])
+  @@index([provenance, startedAt])
+  @@index([operationId])
 }

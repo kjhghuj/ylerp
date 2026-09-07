@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 
 jest.mock('../../index', () => ({
   prisma: {
+    usageEvent: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(),
     product: {
       findMany: jest.fn(),

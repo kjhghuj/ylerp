@@ -31,7 +31,7 @@ interface ChatContentItem {
 export async function chatWithImages(model: string, content: ChatContentItem[]): Promise<any> {
   const endpoint_id = resolveAnalysisEndpoint(model);
   if (!ARK_API_KEY || !endpoint_id) {
-    throw new ApiError(500, 'ARK_API_KEY or ARK_ANALYSIS_ENDPOINT_ID not configured');
+    throw new ApiError(500, 'ARK_API_KEY or ARK_ANALYSIS_ENDPOINT_ID not configured', true);
   }
   const payload = { model: endpoint_id, messages: [{ role: 'user', content }] };
   const headers: Record<string, string> = {
@@ -64,7 +64,7 @@ export async function generateImage(
 ): Promise<any> {
   const endpoint_id = resolveGenerationEndpoint(model);
   if (!ARK_API_KEY || !endpoint_id) {
-    throw new ApiError(500, 'Ark API Key or Endpoint ID not configured');
+    throw new ApiError(500, 'Ark API Key or Endpoint ID not configured', true);
   }
   const payload: any = { model: endpoint_id, prompt, size, watermark: false };
   if (imageUrls && imageUrls.length > 0) {

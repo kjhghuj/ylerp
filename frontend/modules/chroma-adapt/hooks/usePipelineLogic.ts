@@ -1,7 +1,7 @@
 
 import React, { useCallback } from 'react';
 import { ChromaAppState, ProcessingState, PipelineItem, PipelineStatus } from '../chromaTypes';
-import { generateImageTranslation } from '../services/apiService';
+import { generateImageTranslation, newAiOperationId } from '../services/apiService';
 
 interface UsePipelineLogicProps {
   state: ChromaAppState;
@@ -19,6 +19,7 @@ export const usePipelineLogic = ({ state, setState }: UsePipelineLogicProps) => 
 
 
   const handleBatchTranslateStart = useCallback(async () => {
+    const operationId = newAiOperationId();
     setState(prev => {
       if (prev.pipelineQueue.length === 0) return prev;
       return {
@@ -50,7 +51,8 @@ export const usePipelineLogic = ({ state, setState }: UsePipelineLogicProps) => 
             item.original,
             state.translationTarget,
             state.targetFont,
-            state.generationModel
+            state.generationModel,
+            operationId
           );
           const final = translationResult.url;
 
@@ -65,10 +67,10 @@ export const usePipelineLogic = ({ state, setState }: UsePipelineLogicProps) => 
             };
           });
 
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error processing item ${item.id}`, error);
           setState(prev => {
-            const newQueue = prev.pipelineQueue.map(i => i.id === item.id ? { ...i, status: 'ERROR' as PipelineStatus, error: 'Failed' } : i);
+            const newQueue = prev.pipelineQueue.map(i => i.id === item.id ? { ...i, status: 'ERROR' as PipelineStatus, final: error.generatedUrl, error: error.message || 'Failed' } : i);
             const prog = updateProgress(newQueue);
             return {
               ...prev,
@@ -106,7 +108,7 @@ export const usePipelineLogic = ({ state, setState }: UsePipelineLogicProps) => 
       setState(prev => ({ ...prev, status: ProcessingState.ERROR, errorMessage: "Batch Translation Failed", progress: 0 }));
     }
 
-  }, [state.translationTarget, state.targetFont, state.generationModel, setState]);
+  }, [state.pipelineQueue, state.translationTarget, state.targetFont, state.generationModel, setState]);
 
   return {
     handleBatchTranslateStart,

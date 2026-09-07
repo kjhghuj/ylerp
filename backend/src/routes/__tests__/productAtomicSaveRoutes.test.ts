@@ -27,8 +27,7 @@ jest.mock('../../index', () => ({
   safeRedis: { del: redisDel },
 }));
 
-const logActivity = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../services/activityLogger', () => ({ logActivity }));
+const createUsageEvent = jest.fn().mockResolvedValue({});
 
 import router from '../productRoutes';
 import {
@@ -164,6 +163,7 @@ const createResponse = (): Partial<Response> => ({
 });
 
 const makeTx = () => ({
+  usageEvent: { create: createUsageEvent },
   product: {
     findFirst: jest.fn(),
     create: jest.fn().mockResolvedValue({ id: 'product-1', ...baseProduct }),
@@ -208,7 +208,7 @@ describe('atomic product and template routes', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     transaction.mockReset();
-    logActivity.mockResolvedValue(undefined);
+    createUsageEvent.mockResolvedValue(undefined);
     redisDel.mockResolvedValue(undefined);
   });
 
@@ -247,12 +247,10 @@ describe('atomic product and template routes', () => {
       productTemplates: [{ id: 'link-created', productId: 'product-1' }],
     });
     expect(redisDel).toHaveBeenCalledWith('products:v2:owner-1');
-    expect(logActivity).toHaveBeenCalledWith(
-      'owner-1',
-      'product_create',
-      'product',
-      expect.objectContaining({ sku: 'ATOMIC-1' }),
-    );
+    expect(createUsageEvent).toHaveBeenCalledWith({ data: expect.objectContaining({
+      actorId: 'owner-1', action: 'product_create', module: 'product', affectedCount: 1,
+      metadata: expect.objectContaining({ sku: 'ATOMIC-1' }),
+    }) });
   });
 
   it.each([
@@ -273,7 +271,7 @@ describe('atomic product and template routes', () => {
       code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
     }));
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -457,7 +455,7 @@ describe('atomic product and template routes', () => {
     expect(rootProductCreate).not.toHaveBeenCalled();
     expect(rootLinkCreate).not.toHaveBeenCalled();
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
       error: 'Invalid product with templates request',
@@ -772,7 +770,7 @@ describe('atomic product and template routes', () => {
       code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
     });
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -822,7 +820,7 @@ describe('atomic product and template routes', () => {
       code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
     });
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -947,7 +945,8 @@ describe('atomic product and template routes', () => {
       code: INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE,
     });
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    // The first attempt appended inside the transaction that PostgreSQL rolled back.
+    expect(createUsageEvent).toHaveBeenCalledTimes(1);
   });
 
   it('returns 404 without writes when the update product is missing or foreign', async () => {
@@ -960,7 +959,7 @@ describe('atomic product and template routes', () => {
     expect(tx.productProfitTemplate.update).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 
   it('returns the same 409 for stale and foreign update link ids', async () => {
@@ -1221,7 +1220,7 @@ describe('atomic product and template routes', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 
   it('maps a Prisma unique constraint conflict to 409', async () => {
@@ -1238,10 +1237,10 @@ describe('atomic product and template routes', () => {
     expect(redisDel).not.toHaveBeenCalled();
   });
 
-  it('reports the committed save even when post-commit cache and activity side effects fail', async () => {
+  it('reports the committed save even when post-commit cache invalidation fails', async () => {
     const tx = makeTx();
     redisDel.mockRejectedValueOnce(new Error('redis failed'));
-    logActivity.mockRejectedValueOnce(new Error('activity failed'));
+
 
     const { res } = await invoke('post', {
       product: baseProduct,
@@ -1281,7 +1280,7 @@ describe('atomic product and template routes', () => {
     );
     expect(res.status).toHaveBeenCalledWith(201);
     expect(redisDel).toHaveBeenCalledTimes(1);
-    expect(logActivity).toHaveBeenCalledTimes(1);
+    expect(createUsageEvent).toHaveBeenCalledTimes(1);
   });
 
   it('retries P2034 serializable conflicts at most twice and then returns 409', async () => {
@@ -1297,6 +1296,6 @@ describe('atomic product and template routes', () => {
     expect(transaction).toHaveBeenCalledTimes(3);
     expect(res.status).toHaveBeenCalledWith(409);
     expect(redisDel).not.toHaveBeenCalled();
-    expect(logActivity).not.toHaveBeenCalled();
+    expect(createUsageEvent).not.toHaveBeenCalled();
   });
 });

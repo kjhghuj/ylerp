@@ -1,38 +1,75 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
-  prisma: {
-    user: { findMany: jest.fn() },
-    userActivity: {
-      findMany: jest.fn(),
-      groupBy: jest.fn(),
-    },
-    chromaImage: { groupBy: jest.fn() },
-    chromaGenerationRecord: { groupBy: jest.fn() },
-  },
-}));
-
+jest.mock('../../index', () => ({ prisma: {} }));
 jest.mock('../../middleware/authMiddleware', () => ({
-  authenticate: (_req: any, _res: any, next: any) => next(),
-  authorize: () => (_req: any, _res: any, next: any) => next(),
+  authenticate: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+jest.mock('../../services/usageReport', () => ({ getUsageReport: jest.fn() }));
 
 import router from '../usageRoutes';
-import { prisma } from '../../index';
+import { getUsageReport } from '../../services/usageReport';
 
-const mockUserFindMany = prisma.user.findMany as jest.Mock;
-const mockActivityFindMany = prisma.userActivity.findMany as jest.Mock;
-const mockActivityGroupBy = prisma.userActivity.groupBy as jest.Mock;
-const mockImageGroupBy = prisma.chromaImage.groupBy as jest.Mock;
-const mockGenerationGroupBy = prisma.chromaGenerationRecord.groupBy as jest.Mock;
+const mockGetUsageReport = getUsageReport as jest.Mock;
 
-function getHandler(path: string, method: string = 'get') {
-  const stack = (router as any).stack;
-  const layer = stack.find((l: any) => l.route?.path === path && l.route?.methods[method]);
+const meta = {
+  timezone: 'Asia/Shanghai',
+  currency: 'CNY',
+  version: 'usage-v2',
+  asOf: '2026-05-03T00:00:00.000Z',
+  startDate: '2026-05-01',
+  endDate: '2026-05-02',
+  startAt: '2026-04-30T16:00:00.000Z',
+  endAt: '2026-05-02T16:00:00.000Z',
+};
+
+const quality = {
+  legacyEventCount: 0,
+  legacyGenerationCount: 0,
+  legacyEstimatedCost: '0.000000',
+  unpricedCalls: 0,
+  stalePendingCalls: 0,
+  unknownCalls: 0,
+  nativeRecordingSince: null,
+  notes: [],
+};
+
+const emptyMetrics = {
+  activeUsers: 0,
+  activeDays: 0,
+  loginCount: 0,
+  operationCount: 0,
+  affectedCount: 0,
+  generationCount: 0,
+  imageCount: 0,
+  analysisCount: 0,
+  currentGalleryCount: 0,
+  estimatedCost: '0.000000',
+  analysisCost: '0.000000',
+  generationCost: '0.000000',
+  pendingCount: 0,
+  failedCount: 0,
+  unknownCount: 0,
+  unpricedCount: 0,
+};
+
+function report(overrides: Record<string, unknown> = {}) {
+  return {
+    meta,
+    quality,
+    summary: emptyMetrics,
+    users: [],
+    timeline: [],
+    modules: [],
+    ...overrides,
+  };
+}
+
+function getHandler(path: string) {
+  const layer = (router as any).stack.find((entry: any) => entry.route?.path === path && entry.route?.methods.get);
   return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-describe('usageRoutes', () => {
+describe('usageRoutes compatibility endpoints', () => {
   let req: Partial<Request>;
   let res: Partial<Response>;
 
@@ -45,106 +82,73 @@ describe('usageRoutes', () => {
     };
   });
 
-  describe('GET /stats', () => {
-    it('should return aggregated stats for users', async () => {
-      req.query = { days: '30' };
+  it('maps the v2 report to the legacy stats response', async () => {
+    mockGetUsageReport.mockResolvedValueOnce(report({
+      users: [{
+        ...emptyMetrics,
+        userId: 'u1',
+        username: 'alice',
+        displayName: 'Alice',
+        role: 'owner',
+        isActive: true,
+        loginCount: 5,
+        generationCount: 7,
+        imageCount: 10,
+        generationCost: '1.500000',
+        lastLogin: '2026-05-02T00:00:00.000Z',
+        lastActivity: '2026-05-02T01:00:00.000Z',
+      }],
+    }));
 
-      const users = [
-        { id: 'u1', username: 'alice', displayName: 'Alice', role: 'owner', createdAt: new Date() },
-        { id: 'u2', username: 'bob', displayName: 'Bob', role: 'viewer', createdAt: new Date() },
-      ];
+    await getHandler('/stats')(req as Request, res as Response);
 
-      mockUserFindMany.mockResolvedValueOnce(users);
-      mockActivityFindMany.mockResolvedValueOnce([
-        { userId: 'u1', createdAt: new Date('2026-05-01'), ip: '127.0.0.1' },
-        { userId: 'u2', createdAt: new Date('2026-05-02'), ip: '10.0.0.1' },
-      ]);
-      mockActivityGroupBy.mockResolvedValueOnce([
-        { userId: 'u1', action: 'login', _count: { id: 5 } },
-        { userId: 'u1', action: 'image_generate', _count: { id: 3 } },
-        { userId: 'u2', action: 'login', _count: { id: 2 } },
-      ]);
-      mockImageGroupBy.mockResolvedValueOnce([
-        { userId: 'u1', _count: { id: 10 } },
-      ]);
-      mockGenerationGroupBy.mockResolvedValueOnce([
-        { userId: 'u1', _count: { id: 7 }, _sum: { cost: 1.5 } },
-      ]);
-
-      const handler = getHandler('/stats');
-      await handler(req as Request, res as Response, jest.fn());
-
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          users: expect.arrayContaining([
-            expect.objectContaining({
-              userId: 'u1',
-              username: 'alice',
-              loginCount: 5,
-              imageCount: 10,
-              generationCount: 7,
-              generationCost: 1.5,
-            }),
-            expect.objectContaining({
-              userId: 'u2',
-              username: 'bob',
-              loginCount: 2,
-              imageCount: 0,
-              generationCount: 0,
-              generationCost: 0,
-            }),
-          ]),
-        })
-      );
-    });
-
-    it('should handle empty results', async () => {
-      req.query = {};
-
-      mockUserFindMany.mockResolvedValueOnce([]);
-      mockActivityFindMany.mockResolvedValueOnce([]);
-      mockActivityGroupBy.mockResolvedValueOnce([]);
-      mockImageGroupBy.mockResolvedValueOnce([]);
-      mockGenerationGroupBy.mockResolvedValueOnce([]);
-
-      const handler = getHandler('/stats');
-      await handler(req as Request, res as Response, jest.fn());
-
-      expect(res.json).toHaveBeenCalledWith({ users: [] });
-    });
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      users: [expect.objectContaining({
+        userId: 'u1',
+        loginCount: 5,
+        generationCount: 7,
+        imageCount: 10,
+        generationCost: 1.5,
+        actions: { login: 5, image_generate: 7 },
+      })],
+      meta,
+      quality,
+    }));
   });
 
-  describe('GET /timeline', () => {
-    it('should return daily activity timeline', async () => {
-      req.query = { days: '7' };
+  it('returns an empty legacy stats collection', async () => {
+    mockGetUsageReport.mockResolvedValueOnce(report());
 
-      mockActivityFindMany.mockResolvedValueOnce([
-        { action: 'login', createdAt: new Date('2026-05-01T10:00:00Z') },
-        { action: 'login', createdAt: new Date('2026-05-01T14:00:00Z') },
-        { action: 'image_generate', createdAt: new Date('2026-05-02T09:00:00Z') },
-      ]);
+    await getHandler('/stats')(req as Request, res as Response);
 
-      const handler = getHandler('/timeline');
-      await handler(req as Request, res as Response, jest.fn());
+    expect(res.json).toHaveBeenCalledWith({ users: [], meta, quality });
+  });
 
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          timeline: expect.arrayContaining([
-            expect.objectContaining({ date: '2026-05-01', login: 2 }),
-            expect.objectContaining({ date: '2026-05-02', image_generate: 1 }),
-          ]),
-        })
-      );
-    });
+  it('maps the v2 report to the legacy timeline response', async () => {
+    mockGetUsageReport.mockResolvedValueOnce(report({
+      timeline: [
+        { ...emptyMetrics, date: '2026-05-01', loginCount: 2 },
+        { ...emptyMetrics, date: '2026-05-02', generationCount: 1 },
+      ],
+    }));
 
-    it('should handle empty timeline', async () => {
-      req.query = { days: '30' };
-      mockActivityFindMany.mockResolvedValueOnce([]);
+    await getHandler('/timeline')(req as Request, res as Response);
 
-      const handler = getHandler('/timeline');
-      await handler(req as Request, res as Response, jest.fn());
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      timeline: [
+        expect.objectContaining({ date: '2026-05-01', login: 2 }),
+        expect.objectContaining({ date: '2026-05-02', image_generate: 1 }),
+      ],
+      meta,
+      quality,
+    }));
+  });
 
-      expect(res.json).toHaveBeenCalledWith({ timeline: [] });
-    });
+  it('returns an empty legacy timeline collection', async () => {
+    mockGetUsageReport.mockResolvedValueOnce(report());
+
+    await getHandler('/timeline')(req as Request, res as Response);
+
+    expect(res.json).toHaveBeenCalledWith({ timeline: [], meta, quality });
   });
 });

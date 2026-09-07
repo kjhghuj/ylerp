@@ -20,7 +20,7 @@ function resolveGenerationEndpoint(model) {
 async function chatWithImages(model, content) {
     const endpoint_id = resolveAnalysisEndpoint(model);
     if (!config_1.ARK_API_KEY || !endpoint_id) {
-        throw new config_1.ApiError(500, 'ARK_API_KEY or ARK_ANALYSIS_ENDPOINT_ID not configured');
+        throw new config_1.ApiError(500, 'ARK_API_KEY or ARK_ANALYSIS_ENDPOINT_ID not configured', true);
     }
     const payload = { model: endpoint_id, messages: [{ role: 'user', content }] };
     const headers = {
@@ -49,7 +49,7 @@ async function chatWithImages(model, content) {
 async function generateImage(model, prompt, size = '2048x2048', imageUrls) {
     const endpoint_id = resolveGenerationEndpoint(model);
     if (!config_1.ARK_API_KEY || !endpoint_id) {
-        throw new config_1.ApiError(500, 'Ark API Key or Endpoint ID not configured');
+        throw new config_1.ApiError(500, 'Ark API Key or Endpoint ID not configured', true);
     }
     const payload = { model: endpoint_id, prompt, size, watermark: false };
     if (imageUrls && imageUrls.length > 0) {

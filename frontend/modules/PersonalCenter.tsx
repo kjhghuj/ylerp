@@ -14,13 +14,14 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
+import { ShopeeConnections } from './ShopeeConnections';
 
-type TabType = 'profile' | 'password';
+type TabType = 'profile' | 'password' | 'shopee';
 const YC_SECRET_MASK = '••••••••';
 
 export const PersonalCenter: React.FC = () => {
     const { user, refreshUser } = useAuth();
-    const [activeTab, setActiveTab] = useState<TabType>('profile');
+    const [activeTab, setActiveTab] = useState<TabType>(() => window.location.hash.startsWith('#shopee') ? 'shopee' : 'profile');
 
     const [displayName, setDisplayName] = useState(user?.displayName || '');
     const [phone, setPhone] = useState(user?.phone || '');
@@ -195,7 +196,7 @@ export const PersonalCenter: React.FC = () => {
             </div>
 
             <div className="flex gap-2 mb-6 border-b border-slate-200">
-                {(['profile', 'password'] as TabType[]).map((tab) => (
+                {(['profile', 'password', ...(user?.role === 'owner' ? ['shopee'] : [])] as TabType[]).map((tab) => (
                     <button
                         key={tab}
                         onClick={() => { setActiveTab(tab); setProfileMsg(null); setPwdMsg(null); }}
@@ -205,11 +206,12 @@ export const PersonalCenter: React.FC = () => {
                                 : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                         }`}
                     >
-                        {tab === 'profile' ? '基本信息' : '修改密码'}
+                        {tab === 'profile' ? '基本信息' : tab === 'password' ? '修改密码' : 'Shopee 店铺授权'}
                     </button>
                 ))}
             </div>
 
+            {activeTab === 'shopee' && user?.role === 'owner' && <ShopeeConnections />}
             {activeTab === 'profile' && (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
                     {profileMsg && (

@@ -94,15 +94,13 @@ export function calculateSizeForAspectRatio(width: number, height: number): stri
   return `${targetWidth}x${targetHeight}`;
 }
 
-export async function downloadImageAsDataUrl(imageUrl: string, fallbackDataUrl: string): Promise<string> {
-  if (!imageUrl) return fallbackDataUrl;
-  try {
-    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) return fallbackDataUrl;
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
-    return `data:image/png;base64,${base64}`;
-  } catch {
-    return fallbackDataUrl;
-  }
+export async function downloadImageAsDataUrl(imageUrl: string): Promise<string> {
+  if (!imageUrl || !imageUrl.startsWith('https://')) throw new Error('Missing valid generated image URL');
+  const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) throw new Error('Generated image download failed');
+  const contentType = response.headers.get('content-type')?.split(';')[0] || '';
+  if (!contentType.startsWith('image/')) throw new Error('Generated output is not an image');
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length || buffer.length > 10 * 1024 * 1024) throw new Error('Invalid generated image size');
+  return 'data:' + contentType + ';base64,' + buffer.toString('base64');
 }

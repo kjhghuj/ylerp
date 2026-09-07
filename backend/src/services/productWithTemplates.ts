@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { recordUsageEvent } from './usageEvents';
 import { Prisma, PrismaClient, Product } from '@prisma/client';
 import {
   parseOptionalProductTaxRates,
@@ -106,6 +108,7 @@ export interface ParsedProductWithTemplatesRequest {
 export interface SaveProductWithTemplatesOptions {
   prisma: Pick<PrismaClient, '$transaction'>;
   userId: string;
+  actorName?: string;
   productId?: string;
   request: ParsedProductWithTemplatesRequest;
 }
@@ -731,13 +734,23 @@ const executeTransaction = async (
 export const saveProductWithTemplates = async (
   options: SaveProductWithTemplatesOptions,
 ) => {
+  const eventKey = randomUUID();
   const transactionOptions = {
     isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   } as const;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await options.prisma.$transaction(
-        tx => executeTransaction(tx, options),
+        async tx => {
+          const result = await executeTransaction(tx, options);
+          await recordUsageEvent(tx, {
+            actorId: options.userId, actorName: options.actorName, eventKey,
+            module: 'product', action: options.productId ? 'product_update' : 'product_create',
+            objectType: 'Product', objectId: result.product.id, affectedCount: 1,
+            metadata: { sku: String(options.request.product.sku), templateCount: result.productTemplates.length },
+          });
+          return result;
+        },
         transactionOptions,
       );
     } catch (error) {

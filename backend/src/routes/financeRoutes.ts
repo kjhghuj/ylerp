@@ -1,7 +1,8 @@
+import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
 import { prisma, safeRedis } from '../index';
 import { authorize } from '../middleware/authMiddleware';
-import { logActivity } from '../services/activityLogger';
+
 
 const router = Router();
 
@@ -38,12 +39,12 @@ router.post('/batch', async (req, res) => {
             date: new Date(record.date)
         }));
 
-        const result = await prisma.financeRecord.createMany({
+        const result = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_import', objectType: 'FinanceRecord' }, tx => tx.financeRecord.createMany({
             data: formattedRecords
-        });
+        }));
 
         await safeRedis.del('finance:all');
-        logActivity(userId, 'finance_import', 'finance', { count: result.count }).catch(err => console.error("活动记录失败:", err));
+
         res.status(201).json({ count: result.count });
     } catch (error) {
         console.error('Batch import failed:', error);
@@ -55,7 +56,7 @@ router.post('/', async (req, res) => {
     try {
         const userId = req.user!.id;
         const recordData = { ...req.body, userId, date: new Date(req.body.date) };
-        const record = await prisma.financeRecord.create({ data: recordData });
+        const record = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_create', objectType: 'FinanceRecord' }, tx => tx.financeRecord.create({ data: recordData }));
         await safeRedis.del('finance:all');
         res.status(201).json(record);
     } catch (error) {
@@ -75,10 +76,10 @@ router.put('/:id', async (req, res) => {
         delete recordData.userId;
         recordData.updatedBy = req.user!.username;
 
-        const record = await prisma.financeRecord.update({
+        const record = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_update', objectType: 'FinanceRecord' }, tx => tx.financeRecord.update({
             where: { id: req.params.id },
             data: recordData,
-        });
+        }));
         await safeRedis.del('finance:all');
         res.json(record);
     } catch (error) {
@@ -89,7 +90,7 @@ router.put('/:id', async (req, res) => {
 
 router.delete('/all', authorize('owner'), async (req, res) => {
     try {
-        await prisma.financeRecord.deleteMany({ where: {} });
+        await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_delete', objectType: 'FinanceRecord' }, tx => tx.financeRecord.deleteMany({ where: {} }));
         await safeRedis.del('finance:all');
         res.status(204).send();
     } catch (error) {
@@ -112,14 +113,14 @@ router.delete('/month/:month', authorize('owner'), async (req, res) => {
         const startDate = new Date(year, month - 1, 1);
         const endDate = new Date(year, month, 1);
 
-        const result = await prisma.financeRecord.deleteMany({
+        const result = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_delete', objectType: 'FinanceRecord' }, tx => tx.financeRecord.deleteMany({
             where: {
                 date: {
                     gte: startDate,
                     lt: endDate
                 }
             }
-        });
+        }));
 
         await safeRedis.del('finance:all');
         res.json({ message: 'Deleted records', count: result.count });
@@ -134,7 +135,7 @@ router.delete('/:id', async (req, res) => {
         const existing = await prisma.financeRecord.findFirst({ where: { id: req.params.id } });
         if (!existing) return res.status(404).json({ error: 'Record not found' });
 
-        await prisma.financeRecord.delete({ where: { id: req.params.id } });
+        await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_delete', objectType: 'FinanceRecord' }, tx => tx.financeRecord.delete({ where: { id: req.params.id } }));
         await safeRedis.del('finance:all');
         res.status(204).send();
     } catch (error) {

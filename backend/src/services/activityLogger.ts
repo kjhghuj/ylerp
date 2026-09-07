@@ -1,5 +1,7 @@
 import { prisma } from '../index';
+import { recordUsageEvent } from './usageEvents';
 
+/** Compatibility only. Business mutations must use withUsageEvent with their transaction. */
 export async function logActivity(
   userId: string,
   action: string,
@@ -7,17 +9,9 @@ export async function logActivity(
   metadata?: Record<string, string | number | boolean | null>,
   ip?: string
 ): Promise<void> {
-  try {
-    await prisma.userActivity.create({
-      data: {
-        userId,
-        action,
-        module,
-        metadata: metadata || undefined,
-        ip: ip || undefined,
-      },
-    });
-  } catch (error) {
-    console.error('Failed to log activity:', error);
-  }
+  await recordUsageEvent(prisma, {
+    actorId: userId, action, module,
+    actorName: typeof metadata?.username === 'string' ? metadata.username : undefined,
+    metadata: metadata || ip ? { ...metadata, ...(ip ? { ip } : {}) } : undefined,
+  });
 }

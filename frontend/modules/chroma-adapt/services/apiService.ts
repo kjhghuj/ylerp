@@ -5,24 +5,42 @@ import api from '../../../src/api';
 const CHROMA_ADAPT = '/chroma-adapt';
 const DATA_URL = '/chroma-data';
 
-export const MODEL_COSTS: Record<string, number> = {
-  'doubao-seed-2-0-lite': 0.01,
-  'doubao-seed-2-0-mini': 0.02,
-  'doubao-seed-2-0-pro': 0.05,
-  'doubao-seedream-4.5': 0.08,
-  'doubao-seedream-5.0-lite': 0.05,
-};
+export const newAiOperationId = () => crypto.randomUUID();
+// Network retries reuse the exact body; a new UI action creates a new key.
+async function postAi(url: string, payload: Record<string, unknown>, operationId: string = newAiOperationId()) {
+  const body = { ...payload, operationId, requestKey: crypto.randomUUID() };
+  let response;
+  try { response = await api.post(url, body); }
+  catch (error: any) {
+    if (error.response) throw new Error(error.response.data?.detail || 'AI 请求失败');
+    response = await api.post(url, body);
+  }
+  window.dispatchEvent(new Event('chroma-usage-updated'));
+  return response;
+}
+async function saveGeneratedResult(data: any, mode: string, model: string, url: unknown): Promise<string> {
+  if (typeof url !== 'string' || !url.startsWith('data:image/') || !data.callId) throw new Error('供应商未返回有效图片，请核对调用记录');
+  try {
+    await uploadChromaImage(url, mode, model, data.callId);
+    window.dispatchEvent(new Event('chroma-usage-updated'));
+  } catch {
+    throw Object.assign(new Error('图片已生成，用量已记录，但图库保存失败。请下载当前图片后再尝试保存。'), { generatedUrl: url });
+  }
+  return url;
+}
+
+
 
 const cleanBase64 = (base64: string) => base64.replace(/^data:image\/[a-z]+;base64,/, '');
 
-export const analyzeImageColors = async (imageData: string, language: string, model: string) => {
+export const analyzeImageColors = async (imageData: string, language: string, model: string, operationId?: string) => {
   const resizedImage = await resizeImage(imageData, 800, 800);
 
-  const { data } = await api.post(`${CHROMA_ADAPT}/analyze`, {
+  const { data } = await postAi(`${CHROMA_ADAPT}/analyze`, {
     image: cleanBase64(resizedImage),
     prompt: `分析这张图片的色彩、构图和主要内容。请以JSON格式返回色盘，包含一个名为 "palette" 的数组，数组中包含5个十六进制颜色代码。`,
     model: model
-  });
+  }, operationId);
   // Expecting { palette: ["#...", "#...", ...] }
   const content = data.choices[0].message.content;
   
@@ -48,40 +66,40 @@ export const COLOR_ADAPT_SINGLE_MODEL_PROMPT = `你是一名顶级商业视觉�
 4) 元素控制：严格按“元素迁移配置”执行，仅迁移被允许的元素。
 输出：高质量色彩适配图。`;
 
-export const generateImageTranslation = async (imageData: string, targetLang: string, targetFont: TargetFont, model: string): Promise<{ url: string; instructions?: any }> => {
+export const generateImageTranslation = async (imageData: string, targetLang: string, targetFont: TargetFont, model: string, operationId?: string): Promise<{ url: string; instructions?: any }> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const { data } = await api.post(`${CHROMA_ADAPT}/translate`, {
+  const { data } = await postAi(`${CHROMA_ADAPT}/translate`, {
     image: cleanBase64(resizedImage),
     target_lang: targetLang,
     target_font: targetFont,
     model: model
-  });
+  }, operationId);
 
-  const imageUrl = data.result?.data?.[0]?.url || imageData;
+  const imageUrl = await saveGeneratedResult(data, 'TRANSLATION', model, data.result?.data?.[0]?.url);
   return {
     url: imageUrl,
     instructions: data.translation_instructions
   };
 };
 
-export const generateImageEdit = async (imageData: string, editPrompt: string, model: string) => {
-  const { data } = await api.post(`${CHROMA_ADAPT}/edit`, {
+export const generateImageEdit = async (imageData: string, editPrompt: string, model: string, operationId?: string) => {
+  const { data } = await postAi(`${CHROMA_ADAPT}/edit`, {
     image: cleanBase64(imageData),
     prompt: editPrompt,
     model: model
-  });
-  return data.data[0]?.url || imageData;
+  }, operationId);
+  return saveGeneratedResult(data, 'IMAGE_EDIT', model, data.data?.[0]?.url);
 };
 
-export const analyzeAndCreateEditPrompt = async (imageData: string, userInstruction: string, model: string): Promise<string> => {
+export const analyzeAndCreateEditPrompt = async (imageData: string, userInstruction: string, model: string, operationId?: string): Promise<string> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const { data } = await api.post(`${CHROMA_ADAPT}/analyze-edit`, {
+  const { data } = await postAi(`${CHROMA_ADAPT}/analyze-edit`, {
     image: cleanBase64(resizedImage),
     user_instruction: userInstruction,
     model: model
-  });
+  }, operationId);
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
@@ -95,10 +113,10 @@ export const SECONDARY_SINGLE_MODEL_PROMPT = `你是一名顶级商业视觉设�
 6. 画质要求：高清、边缘干净、细节清晰、无伪影、无拉伸失真。
 输出目标：一张高质量 1:1 方图，视觉上与原图同系列同风格，但版式适配方图场景。`;
 
-export const analyzeAndCreateSecondaryPrompt = async (imageData: string, model: string): Promise<string> => {
+export const analyzeAndCreateSecondaryPrompt = async (imageData: string, model: string, operationId?: string): Promise<string> => {
   const resizedImage = await resizeImage(imageData, 1024, 1024);
 
-  const { data } = await api.post(`${CHROMA_ADAPT}/analyze`, {
+  const { data } = await postAi(`${CHROMA_ADAPT}/analyze`, {
     image: cleanBase64(resizedImage),
     prompt: `你是一名资深电商视觉总监。请分析输入图片，并输出一段可直接用于图像生成模型的专业提示词，用于把该图改造为1:1方图。目标是：不丢失任何关键信息，100%保留产品，保持原始风格与品牌调性。
 要求：
@@ -106,29 +124,29 @@ export const analyzeAndCreateSecondaryPrompt = async (imageData: string, model: 
 - 提示词中必须明确：完整保留全部信息、禁止裁切主体、产品100%保真、构图改为1:1、风格一致、高清无伪影。
 - 提示词要可执行、具体、专业，长度控制在200-450字。`,
     model: model
-  });
+  }, operationId);
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
 
-export const generateSecondaryImage = async (imageData: string, prompt: string, model: string): Promise<string> => {
-  const { data } = await api.post(`${CHROMA_ADAPT}/generate`, {
+export const generateSecondaryImage = async (imageData: string, prompt: string, model: string, operationId?: string): Promise<string> => {
+  const { data } = await postAi(`${CHROMA_ADAPT}/generate`, {
     prompt,
     image_urls: [`data:image/jpeg;base64,${cleanBase64(imageData)}`],
     size: '2048x2048',
     model
-  });
-  return data.data?.[0]?.url || imageData;
+  }, operationId);
+  return saveGeneratedResult(data, 'SECONDARY_GENERATION', model, data.data?.[0]?.url);
 };
 
-export const analyzeAndCreateTranslationPrompt = async (imageData: string, targetLang: string, model: string) => "Translation prompt";
+export const analyzeAndCreateTranslationPrompt = async (imageData: string, targetLang: string, model: string, operationId?: string) => "Translation prompt";
 
-export const createColorMappingPlan = async (posterData: string, referenceData: string, model: string): Promise<string> => {
-  const { data } = await api.post(`${CHROMA_ADAPT}/color-mapping`, {
+export const createColorMappingPlan = async (posterData: string, referenceData: string, model: string, operationId?: string): Promise<string> => {
+  const { data } = await postAi(`${CHROMA_ADAPT}/color-mapping`, {
     poster_image: cleanBase64(posterData),
     reference_image: cleanBase64(referenceData),
     model: model
-  });
+  }, operationId);
   const content = data.choices?.[0]?.message?.content || '';
   return content.trim();
 };
@@ -137,9 +155,10 @@ export const analyzeAndCreateColorAdaptPrompt = async (
   posterData: string,
   referenceData: string,
   styleConfig: StyleConfig,
-  model: string
+  model: string,
+  operationId?: string
 ): Promise<string> => {
-  const mappingPlan = await createColorMappingPlan(posterData, referenceData, model);
+  const mappingPlan = await createColorMappingPlan(posterData, referenceData, model, operationId);
   const options = [
     `产品迁移: ${styleConfig.replaceProduct ? '开启' : '关闭'}`,
     `布局结构迁移: ${styleConfig.keepLayout ? '开启' : '关闭'}`,
@@ -160,17 +179,18 @@ export const generateColorAdaptation = async (
   palette: string[] | null,
   styleConfig: StyleConfig,
   prompt: string,
-  model: string
+  model: string,
+  operationId?: string
 ): Promise<string> => {
-  const { data } = await api.post(`${CHROMA_ADAPT}/color-adaptation`, {
+  const { data } = await postAi(`${CHROMA_ADAPT}/color-adaptation`, {
     poster_image: cleanBase64(posterData),
     reference_image: cleanBase64(referenceData),
     palette: palette || [],
     style_config: styleConfig,
     color_mapping_plan: prompt,
     model: model
-  });
-  return data.data?.[0]?.url || posterData;
+  }, operationId);
+  return saveGeneratedResult(data, 'COLOR_ADAPT', model, data.data?.[0]?.url);
 };
 
 export const generatePosterAdaptation = async (
@@ -179,7 +199,8 @@ export const generatePosterAdaptation = async (
   palette: string[] | null,
   styleConfig: StyleConfig,
   language: string,
-  model: string
+  model: string,
+  operationId?: string
 ) => generateColorAdaptation(posterData, referenceData, palette, styleConfig, COLOR_ADAPT_SINGLE_MODEL_PROMPT, model);
 
 export const generatePreciseAdaptation = async (
@@ -188,7 +209,8 @@ export const generatePreciseAdaptation = async (
   palette: string[] | null,
   styleConfig: StyleConfig,
   colorMappingPlan: string | null,
-  model: string
+  model: string,
+  operationId?: string
 ) => generateColorAdaptation(
   posterData,
   referenceData,
@@ -200,16 +222,12 @@ export const generatePreciseAdaptation = async (
 
 // ── Record & Image Management API ──
 
-export const saveChromaRecord = async (record: {
-  mode: string; model: string; cost: number; prompt?: string;
-  parameters?: any; status: string; errorMessage?: string; imageId?: string;
-}): Promise<ChromaRecord> => {
-  const { data } = await api.post(`${DATA_URL}/records`, record);
-  return data;
+export const saveChromaRecord = async (record: { callId: string; imageId: string }): Promise<void> => {
+  await api.post(DATA_URL + '/records', record);
 };
 
-export const getChromaRecords = async (page = 1, limit = 20): Promise<{ records: ChromaRecord[]; total: number }> => {
-  const { data } = await api.get(`${DATA_URL}/records`, { params: { page, limit } });
+export const getChromaRecords = async (page = 1, limit = 20, source: 'native' | 'legacy' = 'native'): Promise<{ records: ChromaRecord[]; total: number }> => {
+  const { data } = await api.get(`${DATA_URL}/records`, { params: { page, limit, source } });
   return data;
 };
 
@@ -218,8 +236,8 @@ export const getCostSummary = async (): Promise<CostSummary> => {
   return data;
 };
 
-export const uploadChromaImage = async (image: string, mode: string, model: string): Promise<ChromaImageInfo> => {
-  const { data } = await api.post(`${DATA_URL}/images`, { image, mode, model });
+export const uploadChromaImage = async (image: string, mode: string, model: string, callId: string): Promise<ChromaImageInfo> => {
+  const { data } = await api.post(`${DATA_URL}/images`, { image, mode, model, callId });
   return data;
 };
 

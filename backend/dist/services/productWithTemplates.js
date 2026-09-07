@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.isProductWithTemplatesValidationError = exports.isProductWithTemplatesPrismaConflict = exports.saveProductWithTemplates = exports.parseProductWithTemplatesRequest = exports.parseProductTemplateCountry = exports.canonicalizeProductTemplateCountry = exports.ProductWithTemplatesError = exports.INVALID_PRODUCT_WITH_TEMPLATES_REQUEST_CODE = exports.PRODUCT_WITH_TEMPLATES_LIMITS = void 0;
+const node_crypto_1 = require("node:crypto");
+const usageEvents_1 = require("./usageEvents");
 const client_1 = require("@prisma/client");
 const productTaxRates_1 = require("./productTaxRates");
 const profitTemplateData_1 = require("./profitTemplateData");
@@ -539,12 +541,22 @@ const executeTransaction = async (tx, options) => {
     return { product, productTemplates };
 };
 const saveProductWithTemplates = async (options) => {
+    const eventKey = (0, node_crypto_1.randomUUID)();
     const transactionOptions = {
         isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable,
     };
     for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-            return await options.prisma.$transaction(tx => executeTransaction(tx, options), transactionOptions);
+            return await options.prisma.$transaction(async (tx) => {
+                const result = await executeTransaction(tx, options);
+                await (0, usageEvents_1.recordUsageEvent)(tx, {
+                    actorId: options.userId, actorName: options.actorName, eventKey,
+                    module: 'product', action: options.productId ? 'product_update' : 'product_create',
+                    objectType: 'Product', objectId: result.product.id, affectedCount: 1,
+                    metadata: { sku: String(options.request.product.sku), templateCount: result.productTemplates.length },
+                });
+                return result;
+            }, transactionOptions);
         }
         catch (error) {
             if (hasPrismaCode(error, 'P2034')) {

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/authMiddleware';
-import { logActivity } from '../services/activityLogger';
+import { recordUsageEvent } from '../services/usageEvents';
 import { prisma } from '../index';
 
 const router = Router();
@@ -39,8 +39,11 @@ router.post('/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
-        const ip = req.ip || req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || '';
-        logActivity(user.id, 'login', 'auth', { username: user.username }, ip).catch(err => console.error('登录活动记录失败:', err));
+        await recordUsageEvent(prisma, {
+            actorId: user.id, actorName: user.displayName || user.username,
+            action: 'login', module: 'auth', objectType: 'User', objectId: user.id,
+            metadata: { ip: req.ip || req.socket.remoteAddress || '' },
+        });
 
         res.json({
             token,

@@ -1,8 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const usageEvents_1 = require("../services/usageEvents");
 const express_1 = require("express");
 const index_1 = require("../index");
-const activityLogger_1 = require("../services/activityLogger");
 const profitTemplateData_1 = require("../services/profitTemplateData");
 const router = (0, express_1.Router)();
 router.get('/', async (req, res) => {
@@ -48,7 +48,7 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         const validatedData = (0, profitTemplateData_1.validateSharedProfitTemplateData)(data);
-        const template = await index_1.prisma.profitTemplate.create({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'template_create', objectType: 'ProfitTemplate' }, tx => tx.profitTemplate.create({
             data: {
                 name,
                 country,
@@ -57,8 +57,7 @@ router.post('/', async (req, res) => {
                 platform,
                 userId,
             }
-        });
-        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name, country, type: type || 'profit' }).catch(err => console.error("活动记录失败:", err));
+        }));
         res.status(201).json(template);
     }
     catch (error) {
@@ -76,9 +75,9 @@ router.delete('/:id', async (req, res) => {
         const existing = await index_1.prisma.profitTemplate.findFirst({ where: { id, userId } });
         if (!existing)
             return res.status(404).json({ error: 'Template not found' });
-        await index_1.prisma.profitTemplate.delete({
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'template_delete', objectType: 'ProfitTemplate' }, tx => tx.profitTemplate.delete({
             where: { id }
-        });
+        }));
         res.json({ success: true });
     }
     catch (error) {
@@ -97,7 +96,7 @@ router.put('/:id', async (req, res) => {
         const validatedData = data !== undefined
             ? (0, profitTemplateData_1.validateSharedProfitTemplateData)(data)
             : undefined;
-        const template = await index_1.prisma.profitTemplate.update({
+        const template = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'template', action: 'template_update', objectType: 'ProfitTemplate' }, tx => tx.profitTemplate.update({
             where: { id },
             data: {
                 ...(name ? { name } : {}),
@@ -106,8 +105,7 @@ router.put('/:id', async (req, res) => {
                 ...(type ? { type } : {}),
                 ...(platform !== undefined ? { platform } : {}),
             }
-        });
-        (0, activityLogger_1.logActivity)(userId, 'template_save', 'template', { name: name || existing.name, action: 'update' }).catch(err => console.error("活动记录失败:", err));
+        }));
         res.json(template);
     }
     catch (error) {

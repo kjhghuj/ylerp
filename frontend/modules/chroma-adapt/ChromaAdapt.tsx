@@ -4,7 +4,7 @@ import { Languages, Palette, ImagePlus, Copy, Globe, ChevronDown, RotateCcw, Cpu
 import { AppMode, AnalysisModel, GenerationModel } from './chromaTypes';
 import { getTranslation } from './utils/translations';
 import { useChromaApp } from './hooks/useChromaApp';
-import { MODEL_COSTS } from './services/apiService';
+
 import ControlPanel from './components/ControlPanel';
 import PreviewPanel from './components/PreviewPanel';
 import GenerationHistory from './components/GenerationHistory';
@@ -170,7 +170,7 @@ export const ChromaAdapt: React.FC = () => {
                 <span className="hidden sm:inline">{state.language === 'zh' ? '记录' : 'History'}</span>
                 {costSummary.total > 0 && (
                   <span className="text-[10px] bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-full font-bold">
-                    ¥{costSummary.total.toFixed(2)}
+                    预估 ¥{costSummary.total.toFixed(2)}
                   </span>
                 )}
               </button>

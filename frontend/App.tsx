@@ -21,7 +21,7 @@ import { Globe, Lock, Sun, Moon } from 'lucide-react';
 import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
-  const [currentView, setCurrentView] = React.useState<AppState['currentView']>('dashboard');
+  const [currentView, setCurrentView] = React.useState<AppState['currentView']>(() => window.location.hash.startsWith('#shopee') ? 'personal-center' : 'dashboard');
   const contentRef = React.useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
