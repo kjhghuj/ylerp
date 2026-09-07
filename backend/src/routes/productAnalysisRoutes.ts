@@ -23,6 +23,7 @@ import { rankPotentialItems } from '../services/productAnalysisPotential';
 const router = Router();
 
 const MAX_UPLOAD_JSON_LENGTH = 20 * 1024 * 1024; // 20MB
+const MAX_BATCH_DELETE_DATES = 500;
 const MAX_CHAT_HISTORY_MESSAGES = 8;
 const SITES = ['PH', 'MY', 'SG', 'ID', 'TH'] as const;
 const SITE_CURRENCY: Record<string, string> = { PH: 'PHP', MY: 'MYR', SG: 'SGD', ID: 'IDR', TH: 'THB' };
@@ -398,6 +399,34 @@ router.delete('/shops/:id/daily-uploads/:date', requireProductAnalysisPermission
   }
 });
 
+router.post('/shops/:id/daily-uploads/batch-delete', requireProductAnalysisPermission('product-analysis.upload'), async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const dates = (req.body as Record<string, unknown>)?.dates;
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ detail: 'dates 需为非空的 YYYY-MM-DD 数组' });
+    }
+    if (dates.length > MAX_BATCH_DELETE_DATES) {
+      return res.status(400).json({ detail: `dates 数量超过上限 ${MAX_BATCH_DELETE_DATES}` });
+    }
+    if (!dates.every(isValidDateString)) {
+      return res.status(400).json({ detail: 'dates 需为非空的 YYYY-MM-DD 数组' });
+    }
+    const uniqueDates = [...new Set(dates as string[])];
+    const result = await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_batch_delete', objectType: 'ProductAnalysisDailyUpload', metadata: { shopId: shop.id, dates: uniqueDates } }, async tx => {
+      const deleted = await tx.productAnalysisDailyUpload.deleteMany({
+        where: { shopId: shop.id, date: { in: uniqueDates.map(parseDateUtc) } },
+      });
+      if (deleted.count === 0) throw new ProductAnalysisNotFoundError('Day not found');
+      return deleted;
+    });
+    return res.json({ ok: true, deletedCount: result.count });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
 // ---- 区间聚合 ----
 
 router.get('/shops/:id/agg', async (req: Request, res: Response) => {
@@ -439,8 +468,18 @@ router.get('/shops/:id/potential', async (req: Request, res: Response) => {
     if (!shop) return res.status(404).json({ detail: 'Shop not found' });
     const range = parseRange(req.query as Record<string, unknown>);
     if (!range) return res.status(400).json({ detail: 'from/to 需为合法的 YYYY-MM-DD 且 from ≤ to' });
-    const { rows } = await fetchRangeRows(shop.id, range.from, range.to);
-    const byItem = new Map<string, { itemId: string; itemName: string; sheetKey: string; status?: string | null; daily: { date: string; ordersOrdered: number; visitors: number; clicks: number; impressions: number; cartVisitors: number }[] }>();
+    // 需要 extra 中的上架天数/日期做潜力入围判断
+    const { rows } = await fetchRangeRows(shop.id, range.from, range.to, { includeDetailFields: true });
+    const byItem = new Map<string, {
+      itemId: string;
+      itemName: string;
+      sheetKey: string;
+      status?: string | null;
+      createdAt: string | null;
+      createdDays: number | null;
+      lastExtraDate: string;
+      daily: { date: string; ordersOrdered: number; visitors: number; clicks: number; impressions: number; cartVisitors: number }[];
+    }>();
     for (const row of rows) {
       let candidate = byItem.get(row.itemId);
       if (!candidate) {
@@ -449,9 +488,21 @@ router.get('/shops/:id/potential', async (req: Request, res: Response) => {
           itemName: row.itemName,
           sheetKey: row.sheetKey,
           status: row.status ?? null,
+          createdAt: null,
+          createdDays: null,
+          lastExtraDate: '',
           daily: [],
         };
         byItem.set(row.itemId, candidate);
+      }
+      // 上架天数/日期取自区间内最后一天行的 extra（商品属性不随日聚合）
+      if (row.date >= candidate.lastExtraDate) {
+        candidate.lastExtraDate = row.date;
+        const extra = row.extra as Record<string, unknown> | null | undefined;
+        const createdAt = extra?.createdAt;
+        const createdDays = extra?.createdDays;
+        candidate.createdAt = typeof createdAt === 'string' ? createdAt : null;
+        candidate.createdDays = typeof createdDays === 'number' && Number.isFinite(createdDays) ? createdDays : null;
       }
       candidate.daily.push({
         date: row.date,

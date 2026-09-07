@@ -56,12 +56,12 @@ const ITEMS = [
 
 const PROPS = {
   currency: 'MYR',
-  visibleCount: 48,
+  page: 1,
+  onPageChange: vi.fn(),
   sortKey: 'salesOrdered' as const,
   sortDirection: 'desc' as const,
   onSortChange: vi.fn(),
   onSelect: vi.fn(),
-  onLoadMore: vi.fn(),
 };
 
 function countRows(container: HTMLElement): number {
@@ -69,17 +69,43 @@ function countRows(container: HTMLElement): number {
 }
 
 describe('ProductList', () => {
-  it('renders one clickable row per item with load-more hidden when all visible', () => {
+  it('renders one clickable row per item with pagination hidden when all fit one page', () => {
     const { container } = render(<ProductList {...PROPS} items={ITEMS} />);
     expect(countRows(container)).toBe(3);
-    expect(screen.queryByRole('button', { name: /加载更多/ })).toBeNull();
+    expect(screen.getByText('第 1 / 1 页')).toBeTruthy();
+    expect((screen.getByRole('button', { name: '上一页' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: '下一页' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('truncates rows to visibleCount and shows remaining count on load-more', () => {
-    const many = Array.from({ length: 60 }, (_, index) => makeItem({ itemId: `i-${index}` }));
-    const { container } = render(<ProductList {...PROPS} items={many} visibleCount={48} />);
-    expect(countRows(container)).toBe(48);
-    expect(screen.getByRole('button', { name: /加载更多（12）/ })).toBeTruthy();
+  it('shows 10 rows per page and paginates forward and backward', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const many = Array.from({ length: 25 }, (_, index) => makeItem({ itemId: `i-${index}` }));
+    const first = render(<ProductList {...PROPS} items={many} page={1} onPageChange={onPageChange} />);
+    expect(countRows(first.container)).toBe(10);
+    expect(first.getByText('第 1 / 3 页')).toBeTruthy();
+
+    await user.click(first.getByRole('button', { name: '下一页' }));
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    first.unmount();
+
+    const second = render(<ProductList {...PROPS} items={many} page={2} onPageChange={onPageChange} />);
+    expect(countRows(second.container)).toBe(10);
+    expect(second.getByText('第 2 / 3 页')).toBeTruthy();
+    await user.click(second.getByRole('button', { name: '上一页' }));
+    expect(onPageChange).toHaveBeenCalledWith(1);
+    second.unmount();
+
+    const third = render(<ProductList {...PROPS} items={many} page={3} onPageChange={onPageChange} />);
+    expect(countRows(third.container)).toBe(5);
+    expect((third.getByRole('button', { name: '下一页' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('clamps an out-of-range page to the last page', () => {
+    const many = Array.from({ length: 12 }, (_, index) => makeItem({ itemId: `i-${index}` }));
+    const { container } = render(<ProductList {...PROPS} items={many} page={9} />);
+    expect(screen.getByText('第 2 / 2 页')).toBeTruthy();
+    expect(countRows(container)).toBe(2);
   });
 
   it('calls onSelect with the clicked item and supports Enter on focused row', async () => {

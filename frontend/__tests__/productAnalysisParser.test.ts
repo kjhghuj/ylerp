@@ -4,6 +4,7 @@ import {
   parseProductAnalysisWorkbook,
   validateProductAnalysisFile,
   extractPeriodFromFileName,
+  detectDailyDateFromFileName,
   ProductAnalysisParseError,
   MAX_PRODUCT_ANALYSIS_FILE_BYTES,
 } from '../modules/product-analysis/utils/excelParser';
@@ -260,6 +261,29 @@ describe('extractPeriodFromFileName', () => {
 
   test('returns nulls when no period found', () => {
     expect(extractPeriodFromFileName('no-date.xlsx')).toEqual({ periodStart: null, periodEnd: null });
+  });
+});
+
+describe('detectDailyDateFromFileName', () => {
+  test('range filenames resolve to the end date', () => {
+    expect(detectDailyDateFromFileName('parentskudetail.20260807_20260905.xlsx')).toBe('2026-09-05');
+    expect(detectDailyDateFromFileName('parentskudetail-20260101-20260131.xlsx')).toBe('2026-01-31');
+  });
+
+  test('single-date filenames resolve to that date', () => {
+    expect(detectDailyDateFromFileName('parentskudetail.20260906.xlsx')).toBe('2026-09-06');
+    expect(detectDailyDateFromFileName('20260905.xls')).toBe('2026-09-05');
+  });
+
+  test('returns null when no standalone 8-digit date exists', () => {
+    expect(detectDailyDateFromFileName('no-date.xlsx')).toBeNull();
+    // 9 位数字不是独立 8 位日期，不应截前 8 位误判
+    expect(detectDailyDateFromFileName('a.202609060.xlsx')).toBeNull();
+    expect(detectDailyDateFromFileName('order-1234-5678.xlsx')).toBeNull();
+  });
+
+  test('returns null for implausible dates that only look like dates', () => {
+    expect(detectDailyDateFromFileName('a.20261399.xlsx')).toBeNull();
   });
 });
 

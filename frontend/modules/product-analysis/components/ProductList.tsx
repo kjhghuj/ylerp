@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, PackageX } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, PackageX } from 'lucide-react';
 import { formatCount, formatMoney, formatPercent, type SortDirection } from '../utils/format';
 import { useProductAnalysisStrings } from '../i18n';
 import type { ParentProduct } from '../types';
@@ -7,15 +7,17 @@ import type { ParentProduct } from '../types';
 /** 可排序列 = 标准列中的数值列（原下拉排序去掉无对应列的 clicks） */
 export type ProductSortKey = 'salesOrdered' | 'ordersOrdered' | 'cvrConfirmed' | 'visitors';
 
+export const PRODUCT_PAGE_SIZE = 10;
+
 interface ProductListProps {
   items: ParentProduct[];
   currency: string;
-  visibleCount: number;
+  page: number;
+  onPageChange: (page: number) => void;
   sortKey: ProductSortKey;
   sortDirection: SortDirection;
   onSortChange: (key: ProductSortKey) => void;
   onSelect: (item: ParentProduct) => void;
-  onLoadMore: () => void;
 }
 
 /** 状态徽章颜色映射：Normal 绿 / Banned·Deleted 红 / 其余黄（自 ProductCard 平移） */
@@ -25,19 +27,22 @@ function statusStyle(status: string | undefined): { background: string; color: s
   return { background: 'rgba(245,158,11,0.14)', color: '#d97706' };
 }
 
-/** 商品列表：整行点击打开详情，列头点击排序（降/升切换），分批渲染（visibleCount） */
+/** 商品列表：整行点击打开详情，列头点击排序（降/升切换），每页 10 条，左下角分页器 */
 export const ProductList: React.FC<ProductListProps> = ({
   items,
   currency,
-  visibleCount,
+  page,
+  onPageChange,
   sortKey,
   sortDirection,
   onSortChange,
   onSelect,
-  onLoadMore,
 }) => {
   const strings = useProductAnalysisStrings();
-  const visibleItems = items.slice(0, visibleCount);
+  const totalPages = Math.max(1, Math.ceil(items.length / PRODUCT_PAGE_SIZE));
+  // 筛选收窄后页码可能越界，渲染前收敛到最后一页
+  const safePage = Math.min(page, totalPages);
+  const visibleItems = items.slice((safePage - 1) * PRODUCT_PAGE_SIZE, safePage * PRODUCT_PAGE_SIZE);
 
   if (items.length === 0) {
     return (
@@ -52,11 +57,16 @@ export const ProductList: React.FC<ProductListProps> = ({
   }
 
   const headerCellStyle = { color: 'var(--text-tertiary)' };
+  const navButtonStyle = (disabled: boolean): React.CSSProperties => ({
+    color: 'var(--text-secondary)',
+    opacity: disabled ? 0.35 : 1,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+  });
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div
-        className="rounded-2xl border overflow-auto max-h-[70vh]"
+        className="rounded-2xl border overflow-auto"
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
       >
         <table className="w-full min-w-[720px] text-sm">
@@ -84,26 +94,34 @@ export const ProductList: React.FC<ProductListProps> = ({
           </tbody>
         </table>
       </div>
-      {visibleCount < items.length && (
+      {/* 分页器：列表左下方 */}
+      <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={onLoadMore}
-          className="mx-auto px-6 py-2 rounded-xl text-sm font-medium border transition-colors duration-200"
-          style={{
-            backgroundColor: 'var(--bg-card)',
-            borderColor: 'var(--border-light)',
-            color: 'var(--text-secondary)',
-          }}
-          onMouseEnter={(event) => {
-            event.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-          }}
-          onMouseLeave={(event) => {
-            event.currentTarget.style.backgroundColor = 'var(--bg-card)';
-          }}
+          aria-label={strings.prevPage}
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(Math.max(1, safePage - 1))}
+          className="p-1 rounded-lg transition-colors duration-200"
+          style={navButtonStyle(safePage <= 1)}
         >
-          {strings.loadMore}（{items.length - visibleCount}）
+          <ChevronLeft size={15} />
         </button>
-      )}
+        <span className="text-xs tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+          {strings.pageIndicator
+            .replace('{page}', String(safePage))
+            .replace('{totalPages}', String(totalPages))}
+        </span>
+        <button
+          type="button"
+          aria-label={strings.nextPage}
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
+          className="p-1 rounded-lg transition-colors duration-200"
+          style={navButtonStyle(safePage >= totalPages)}
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
     </div>
   );
 };
@@ -141,7 +159,7 @@ function SortableHeader({
   );
 }
 
-/** 行组件 memo：加载更多追加时，已渲染行不重复执行渲染（对齐原 ProductCard.memo） */
+/** 行组件 memo：翻页/排序时未变化的行不重复执行渲染（对齐原 ProductCard.memo） */
 const ProductRow = React.memo<{
   item: ParentProduct;
   currency: string;

@@ -69,6 +69,14 @@ export async function deleteDailyUpload(shopId: string, date: string): Promise<v
   await api.delete(`/product-analysis/shops/${shopId}/daily-uploads/${date}`);
 }
 
+export async function batchDeleteDailyUploads(shopId: string, dates: string[]): Promise<number> {
+  const response = await api.post<{ ok: true; deletedCount: number }>(
+    `/product-analysis/shops/${shopId}/daily-uploads/batch-delete`,
+    { dates }
+  );
+  return response.data.deletedCount;
+}
+
 // ---- 区间聚合 ----
 
 export async function fetchShopAgg(shopId: string, from: string, to: string): Promise<AggResponse> {

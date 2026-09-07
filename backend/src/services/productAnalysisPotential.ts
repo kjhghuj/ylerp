@@ -1,11 +1,14 @@
 /**
  * 潜力商品评分（纯函数）。
- * 已确认的默认算法：score = 0.35×环比增长 + 0.25×加购率 + 0.25×优化空间 + 0.15×流量基数，
- * 排除封禁/删除商品与区间总访客不足 MIN_TOTAL_VISITORS 的商品，附中文理由。
+ * 筛选规则：上架 ≤ 60 天、区间点击率 > 4%、区间点击数 > 5、区间加购率 > 1%，且未被封禁/删除。
+ * 入围后按已确认算法排序：score = 0.35×环比增长 + 0.25×加购率 + 0.25×优化空间 + 0.15×流量基数，附中文理由。
  * 转化率统一访客口径（orders/visitors）。
  */
 
-export const MIN_TOTAL_VISITORS = 50;
+export const MAX_LISTED_DAYS = 60;
+export const MIN_CTR_PERCENT = 4;
+export const MIN_CLICKS = 5;
+export const MIN_CART_RATE_PERCENT = 1;
 const EXCLUDED_STATUS = new Set(['Banned', 'Deleted']);
 
 export interface PotentialDailyRow {
@@ -22,6 +25,10 @@ export interface PotentialCandidate {
   itemName: string;
   sheetKey: string;
   status?: string | null;
+  /** extra.createdDays：导出当天的上架天数 */
+  createdDays?: number | null;
+  /** extra.createdAt：上架日期（YYYY-MM-DD 或原文本） */
+  createdAt?: string | null;
   daily: PotentialDailyRow[];
 }
 
@@ -56,7 +63,7 @@ function pct(values: number[], value: number): number {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-function computeMetrics(candidate: PotentialCandidate): PotentialMetrics & { recentOrders: number; previousOrders: number } {
+function computeMetrics(candidate: PotentialCandidate): PotentialMetrics & { recentOrders: number; previousOrders: number; lastDate: string | null } {
   const sorted = [...candidate.daily].sort((a, b) => a.date.localeCompare(b.date));
   const totals = sorted.reduce(
     (acc, row) => ({
@@ -87,7 +94,24 @@ function computeMetrics(candidate: PotentialCandidate): PotentialMetrics & { rec
     growthPercent,
     recentOrders,
     previousOrders,
+    lastDate: sorted.length > 0 ? sorted[sorted.length - 1].date : null,
   };
+}
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 上架天数：优先用导出的创建天数，其次按上架日期与区间最后一天的差值推算；两者皆缺返回 null（不具备入围资格） */
+function resolveListedDays(candidate: PotentialCandidate, referenceDate: string | null): number | null {
+  if (typeof candidate.createdDays === 'number' && Number.isFinite(candidate.createdDays)) {
+    return candidate.createdDays;
+  }
+  if (typeof candidate.createdAt === 'string' && referenceDate !== null && ISO_DATE_PATTERN.test(candidate.createdAt)) {
+    const diff = Math.floor(
+      (Date.parse(`${referenceDate}T00:00:00.000Z`) - Date.parse(`${candidate.createdAt}T00:00:00.000Z`)) / 86_400_000
+    );
+    return diff >= 0 ? diff : null;
+  }
+  return null;
 }
 
 function formatPercent(value: number | null): string {
@@ -96,29 +120,29 @@ function formatPercent(value: number | null): string {
 
 /** 评分并排序，返回前 limit 名（rank 从 1 开始） */
 export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10): PotentialResult[] {
-  const eligible = candidates.filter(
-    (candidate) =>
-      !EXCLUDED_STATUS.has(String(candidate.status ?? '')) &&
-      candidate.daily.reduce((total, row) => total + (row.visitors || 0), 0) >= MIN_TOTAL_VISITORS
-  );
-  const metricsById = new Map(eligible.map((candidate) => [candidate.itemId, computeMetrics(candidate)]));
-
-  const growthValues = eligible
-    .map((candidate) => metricsById.get(candidate.itemId)!.growthPercent ?? -100);
-  const cartValues = eligible
-    .map((candidate) => metricsById.get(candidate.itemId)!.cartRate ?? 0);
-  const ctrValues = eligible
-    .map((candidate) => metricsById.get(candidate.itemId)!.ctr ?? 0);
-  const cvrValues = eligible
-    .map((candidate) => metricsById.get(candidate.itemId)!.cvrConfirmed ?? 0);
-  const trafficValues = eligible.map((candidate) => {
-    const metrics = metricsById.get(candidate.itemId)!;
-    return metrics.visitors / Math.max(1, candidate.daily.length);
+  const computed = candidates.map((candidate) => ({ candidate, metrics: computeMetrics(candidate) }));
+  // 入围条件：未封禁/删除 + 上架 ≤ 60 天 + 点击率 > 4% + 点击数 > 5 + 加购率 > 1%
+  const eligible = computed.filter(({ candidate, metrics }) => {
+    if (EXCLUDED_STATUS.has(String(candidate.status ?? ''))) return false;
+    const listedDays = resolveListedDays(candidate, metrics.lastDate);
+    if (listedDays === null || listedDays > MAX_LISTED_DAYS) return false;
+    if (metrics.ctr === null || metrics.ctr <= MIN_CTR_PERCENT) return false;
+    if (metrics.clicks <= MIN_CLICKS) return false;
+    if (metrics.cartRate === null || metrics.cartRate <= MIN_CART_RATE_PERCENT) return false;
+    return true;
   });
+  const metricsById = new Map(eligible.map(({ candidate, metrics }) => [candidate.itemId, metrics]));
+  const listedDaysById = new Map(eligible.map(({ candidate, metrics }) => [candidate.itemId, resolveListedDays(candidate, metrics.lastDate)!]));
+
+  const growthValues = eligible.map(({ metrics }) => metrics.growthPercent ?? -100);
+  const cartValues = eligible.map(({ metrics }) => metrics.cartRate ?? 0);
+  const ctrValues = eligible.map(({ metrics }) => metrics.ctr ?? 0);
+  const cvrValues = eligible.map(({ metrics }) => metrics.cvrConfirmed ?? 0);
+  const trafficValues = eligible.map(({ candidate, metrics }) => metrics.visitors / Math.max(1, candidate.daily.length));
 
   const avgCartRate = cartValues.length > 0 ? cartValues.reduce((a, b) => a + b, 0) / cartValues.length : 0;
 
-  const scored = eligible.map((candidate) => {
+  const scored = eligible.map(({ candidate }) => {
     const metrics = metricsById.get(candidate.itemId)!;
     // 环比 [-100%, +200%] 线性映射到 [0, 100]
     const growthScore = ((clamp(metrics.growthPercent ?? -100, -100, 200) + 100) / 3);
@@ -129,7 +153,7 @@ export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10)
     const trafficScore = pct(trafficValues, metrics.visitors / Math.max(1, candidate.daily.length));
     const score = Number((0.35 * growthScore + 0.25 * cartScore + 0.25 * gapScore + 0.15 * trafficScore).toFixed(1));
 
-    const reasons: string[] = [];
+    const reasons: string[] = [`上架 ${listedDaysById.get(candidate.itemId)} 天`];
     if (metrics.growthPercent !== null && metrics.growthPercent >= 30) {
       reasons.push(`后半程销量环比 ${metrics.growthPercent >= 0 ? '+' : ''}${metrics.growthPercent.toFixed(0)}%`);
     }
@@ -144,11 +168,11 @@ export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10)
     if (trafficScore >= 70) {
       reasons.push(`访客基数居前 30%（日均 ${Math.round(metrics.visitors / Math.max(1, candidate.daily.length))}）`);
     }
-    if (reasons.length === 0) {
+    if (reasons.length === 1) {
       reasons.push('综合流量与转化表现均衡，具备提升空间');
     }
 
-    const { recentOrders: _recent, previousOrders: _prev, ...publicMetrics } = metrics;
+    const { recentOrders: _recent, previousOrders: _prev, lastDate: _last, ...publicMetrics } = metrics;
     return {
       rank: 0,
       itemId: candidate.itemId,

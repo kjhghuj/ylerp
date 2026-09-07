@@ -4,6 +4,7 @@
  * 范式参照 restock/utils/restockSalesImportParser.ts。
  */
 import * as XLSX from 'xlsx';
+import { isValidDateString } from './range';
 import type {
   ParsedProductAnalysisReport,
   ParentProduct,
@@ -156,6 +157,13 @@ export function extractPeriodFromFileName(fileName: string): {
   const match = fileName.match(/(\d{8})[_-](\d{8})/);
   if (!match) return { periodStart: null, periodEnd: null };
   return { periodStart: toIsoDate(match[1]), periodEnd: toIsoDate(match[2]) };
+}
+
+/** 上传日期定位：区间文件名取结束日期（截至该日的数据），单日期文件名取该日期；无法识别或日期非法返回 null */
+export function detectDailyDateFromFileName(fileName: string): string | null {
+  const rangeMatch = fileName.match(/(\d{8})[_-](\d{8})/);
+  const candidate = toIsoDate(rangeMatch ? rangeMatch[2] : fileName.match(/(?<!\d)(\d{8})(?!\d)/)?.[1] ?? '');
+  return candidate !== null && isValidDateString(candidate) ? candidate : null;
 }
 
 function toIsoDate(yyyymmdd: string): string | null {

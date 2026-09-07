@@ -272,6 +272,58 @@ describe('DELETE /shops/:id/daily-uploads/:date', () => {
   });
 });
 
+describe('POST /shops/:id/daily-uploads/batch-delete', () => {
+  test('deletes the listed days atomically with dedupe and returns deletedCount', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadDeleteMany.mockResolvedValueOnce({ count: 2 });
+    const { res, json, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads/batch-delete', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { dates: ['2026-09-05', '2026-09-06', '2026-09-05'] },
+    }) as Request, res as Response);
+    expect(mockUploadDeleteMany).toHaveBeenCalledWith({
+      where: { shopId: SHOP.id, date: { in: [new Date('2026-09-05T00:00:00.000Z'), new Date('2026-09-06T00:00:00.000Z')] } },
+    });
+    expect(status).not.toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ ok: true, deletedCount: 2 });
+    expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        action: 'product_analysis_daily_batch_delete',
+        affectedCount: 2,
+        metadata: { shopId: SHOP.id, dates: ['2026-09-05', '2026-09-06'] },
+      }),
+    }));
+  });
+
+  test('404 when none of the listed days exist', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadDeleteMany.mockResolvedValueOnce({ count: 0 });
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads/batch-delete', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { dates: ['2026-01-01'] },
+    }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(404);
+  });
+
+  test('400 for missing, empty or invalid dates', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    for (const body of [{}, { dates: [] }, { dates: ['2026-9-5'] }, { dates: ['not-a-date'] }, { dates: ['2026-13-99'] }]) {
+      const { res, status } = makeRes();
+      await runRoute('/shops/:id/daily-uploads/batch-delete', 'post', makeReq({ params: { id: SHOP.id }, body }) as Request, res as Response);
+      expect(status).toHaveBeenCalledWith(400);
+    }
+    expect(mockUploadDeleteMany).not.toHaveBeenCalled();
+  });
+
+  test('404 for unknown shop', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(null);
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads/batch-delete', 'post', makeReq({ params: { id: 'nope' }, body: { dates: ['2026-09-06'] } }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(404);
+  });
+});
+
 describe('GET /shops/:id/agg', () => {
   test('rejects invalid range', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
@@ -321,8 +373,8 @@ describe('GET /shops/:id/potential', () => {
       { id: 'u-1', date: day('2026-09-02') },
     ]);
     mockItemFindMany.mockResolvedValue([
-      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 0, visitors: 100, clicks: 10, impressions: 200, cartVisitors: 20 },
-      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-02') }, ordersOrdered: 10, visitors: 120, clicks: 10, impressions: 200, cartVisitors: 30 },
+      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 0, visitors: 100, clicks: 10, impressions: 200, cartVisitors: 20, extra: { createdDays: 30 } },
+      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-02') }, ordersOrdered: 10, visitors: 120, clicks: 10, impressions: 200, cartVisitors: 30, extra: { createdDays: 30 } },
     ]);
     const req = makeReq({ params: { id: 'shop-1' }, query: { from: '2026-09-01', to: '2026-09-02' } });
     const { res, json } = makeRes();
