@@ -13,7 +13,7 @@ describe('Chroma caller-owned request identity and server-owned statistics', () 
     post.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(result).mockResolvedValueOnce({ data: { id: 'image1' } });
     await generateImageEdit('original', 'edit', 'doubao-seedream-4.5', 'batch');
     expect(post.mock.calls[0][1]).toEqual(post.mock.calls[1][1]);
-    expect(post.mock.calls[2]).toEqual(['/chroma-data/images', { image: output, mode: 'IMAGE_EDIT', model: 'doubao-seedream-4.5', callId: 'server-call' }]);
+    expect(post.mock.calls[2]).toEqual(['/chroma-data/images', { image: output, mode: 'IMAGE_EDIT', model: 'doubao-seedream-4.5', callId: 'server-call', outputIndex: 0 }]);
     post.mockResolvedValueOnce(result).mockResolvedValueOnce({ data: { id: 'image2' } });
     await generateImageEdit('original', 'edit', 'doubao-seedream-4.5', 'batch');
     expect((post.mock.calls[0][1] as any).requestKey).not.toBe((post.mock.calls[3][1] as any).requestKey);

@@ -27,7 +27,7 @@ export function parseUsageFilter(query: Record<string, unknown>, now = new Date(
   if (startDate > endDate || startDate > today || (endExclusive.getTime() - startAt.getTime()) / DAY > 365) throw new Error('日期范围无效或超过 365 天');
   const endAt = new Date(Math.min(endExclusive.getTime(), now.getTime()));
   const dates: string[] = [];
-  for (let t = startAt.getTime(); t < endAt.getTime(); t += DAY) dates.push(shanghaiDay(new Date(t)));
+  for (let t = startAt.getTime(); t < endExclusive.getTime(); t += DAY) dates.push(shanghaiDay(new Date(t)));
   const result: UsageFilter = { startAt, endAt, startDate, endDate: endDate > today ? today : endDate, asOf: now, dates };
   for (const key of ['userId', 'module', 'status'] as const) {
     const value = query[key];

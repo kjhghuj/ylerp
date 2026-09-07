@@ -611,7 +611,7 @@ export const createRestockV2Router = ({
       let updatedInventoryItems = 0;
       let createdMappings = 0;
 
-      await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_sync', objectType: 'SKU', affectedCount: syncItems.length, metadata: { site } }, async tx => {
+      await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_sync', objectType: 'SKU', affectedCount: syncItems.length, metadata: { site } }, async tx => {
         for (const item of syncItems) {
           const skuKey = normalizeSku(item.sku);
           const dimensions = dimensionsBySku.get(skuKey)
@@ -797,7 +797,7 @@ export const createRestockV2Router = ({
         exactFallbackMappings.push({ externalSku, targetSku: externalSku });
       }
       const items = aggregateSalesImportRows(req.body.rows, reusableMappings);
-      const created = await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async tx => {
+      const created = await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async tx => {
         await Promise.all(exactFallbackMappings.map(({ externalSku, targetSku }) =>
           tx.externalSkuMapping.upsert({
             where: { userId_site_externalSku: { userId, site, externalSku } },
@@ -921,7 +921,7 @@ export const createRestockV2Router = ({
         return res.status(409).json({ error: 'Target SKU already exists' });
       }
 
-      const inventory = await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_target_create', objectType: 'InventoryItem' }, async tx => {
+      const inventory = await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_target_create', objectType: 'InventoryItem' }, async tx => {
         await tx.product.create({
           data: {
             name,
@@ -1003,7 +1003,7 @@ export const createRestockV2Router = ({
         if (!matchedInventory && !matchedProduct) return res.status(400).json({ error: 'Target SKU not found' });
         const normalizedTargetSku = normalizeRestockSku(matchedInventory?.sku || matchedProduct!.sku);
         const externalSku = normalizeRestockSku(item.platformSku);
-        const updatedItem = await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_mapping_save', objectType: 'RestockSalesItem' }, async tx => {
+        const updatedItem = await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_mapping_save', objectType: 'RestockSalesItem' }, async tx => {
           if (!matchedInventory) {
             await tx.inventoryItem.create({
               data: {
@@ -1065,7 +1065,7 @@ export const createRestockV2Router = ({
         const item = await prisma.restockSalesItem.findFirst({ where: { id: itemId, importId } });
         if (!item) return res.status(404).json({ error: 'Sales import item not found' });
 
-        const updatedItem = await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_item_dismiss', objectType: 'RestockSalesItem' }, tx => tx.restockSalesItem.update({
+        const updatedItem = await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_item_dismiss', objectType: 'RestockSalesItem' }, tx => tx.restockSalesItem.update({
           where: { id: item.id },
           data: { dismissedAt: new Date() },
         }));
@@ -1125,7 +1125,7 @@ export const createRestockV2Router = ({
         return res.status(400).json({ error: 'Inventory SKU not found' });
       }
       const data = { leadTimeDays, safetyDays, growthPercent };
-      const rule = await withUsageEvent(prisma, req, { module: 'restock', action: 'restock_rule_save', objectType: 'RestockSkuRule' }, tx => tx.restockSkuRule.upsert({
+      const rule = await withUsageEvent(prisma, req, { module: 'restock-v2', action: 'restock_rule_save', objectType: 'RestockSkuRule' }, tx => tx.restockSkuRule.upsert({
         where: { userId_site_sku: { userId, site, sku } },
         create: { userId, site, sku, ...data },
         update: data,

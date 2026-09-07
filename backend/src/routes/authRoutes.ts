@@ -4,9 +4,9 @@ import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/authMiddleware';
 import { recordUsageEvent } from '../services/usageEvents';
 import { prisma } from '../index';
+import { getJwtSecret } from '../services/jwtSecret';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
@@ -35,7 +35,7 @@ router.post('/login', async (req, res) => {
 
         const token = jwt.sign(
             { id: user.id, username: user.username, role: user.role },
-            JWT_SECRET,
+            getJwtSecret(),
             { expiresIn: '7d' }
         );
 

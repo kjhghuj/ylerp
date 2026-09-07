@@ -266,13 +266,13 @@ describe('atomic product raw JSON body limits', () => {
     expect(atomicTransactionCalls).toBe(1);
   });
 
-  it('keeps the existing 100 MiB parser compatibility for non-atomic endpoints', async () => {
+  it('rejects oversized JSON on ordinary endpoints', async () => {
     const body = '{}'.padEnd(ATOMIC_BODY_LIMIT + 1024, ' ');
 
     const result = await sendRaw(port, 'POST', '/api/ordinary', [body], true);
 
-    expect(result.status).toBe(200);
-    expect(ordinaryHandlerCalls).toBe(1);
+    expect(result.status).toBe(413);
+    expect(ordinaryHandlerCalls).toBe(0);
     expect(atomicHandlerCalls).toBe(0);
     expect(atomicTransactionCalls).toBe(0);
   });

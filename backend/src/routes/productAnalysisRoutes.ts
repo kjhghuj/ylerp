@@ -1,14 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
-import { GlmApiError } from '../services/glm/glmConfig';
+import { GLM_MODEL, GlmApiError } from '../services/glm/glmConfig';
 import { glmChat, GlmChatMessage } from '../services/glm/glmClient';
+import { ApiError } from '../services/chroma/config';
 import {
   buildShopAnalysisSystemPrompt,
   serializeAggregatedItem,
   serializeAggregatedOverview,
 } from '../services/glm/prompts';
-import { logActivity } from '../services/activityLogger';
+import { withUsageEvent } from '../services/usageEvents';
+import { runAiCall } from '../services/aiUsage';
 import {
   SUMMABLE_FIELDS,
   aggregateItems,
@@ -25,12 +27,16 @@ const MAX_CHAT_HISTORY_MESSAGES = 8;
 const SITES = ['PH', 'MY', 'SG', 'ID', 'TH'] as const;
 const SITE_CURRENCY: Record<string, string> = { PH: 'PHP', MY: 'MYR', SG: 'SGD', ID: 'IDR', TH: 'THB' };
 const SHEET_ORDER = ['hot', 'new', 'uncompetitive', 'competitive'] as const;
+class ProductAnalysisNotFoundError extends Error {}
 
 function errorResponse(error: unknown, res: Response): void {
-  if (error instanceof GlmApiError) {
+  if (error instanceof ProductAnalysisNotFoundError) {
+    res.status(404).json({ detail: error.message });
+  } else if (error instanceof GlmApiError || error instanceof ApiError) {
     res.status(error.status_code).json({ detail: error.detail });
   } else {
-    res.status(500).json({ detail: String(error) });
+    console.error('Unexpected product analysis error:', error instanceof Error ? error.name : typeof error);
+    res.status(500).json({ detail: 'Internal server error' });
   }
 }
 
@@ -172,7 +178,7 @@ router.post('/shops', requireProductAnalysisPermission('product-analysis.upload'
       return res.status(400).json({ detail: `站点必须是 ${SITES.join(' / ')} 之一` });
     }
     try {
-      const shop = await prisma.productAnalysisShop.create({
+      const shop = await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_create', objectType: 'ProductAnalysisShop' }, tx => tx.productAnalysisShop.create({
         data: {
           name,
           site,
@@ -180,7 +186,7 @@ router.post('/shops', requireProductAnalysisPermission('product-analysis.upload'
           userId: req.user!.id,
         },
         select: { id: true, name: true, site: true, platform: true, currency: true, createdAt: true, updatedAt: true },
-      });
+      }));
       return res.status(201).json(shop);
     } catch (error) {
       if (isRecord(error) && (error as { code?: string }).code === 'P2002') {
@@ -246,11 +252,11 @@ router.patch('/shops/:id', requireProductAnalysisPermission('product-analysis.up
       data.currency = SITE_CURRENCY[site] ?? 'MYR';
     }
     try {
-      const updated = await prisma.productAnalysisShop.update({
+      const updated = await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_update', objectType: 'ProductAnalysisShop', objectId: shop.id }, tx => tx.productAnalysisShop.update({
         where: { id: shop.id },
         data,
         select: { id: true, name: true, site: true, platform: true, currency: true, createdAt: true, updatedAt: true },
-      });
+      }));
       return res.json(updated);
     } catch (error) {
       if (isRecord(error) && (error as { code?: string }).code === 'P2002') {
@@ -265,10 +271,12 @@ router.patch('/shops/:id', requireProductAnalysisPermission('product-analysis.up
 
 router.delete('/shops/:id', requireProductAnalysisPermission('product-analysis.upload'), async (req: Request, res: Response) => {
   try {
-    const result = await prisma.productAnalysisShop.deleteMany({
-      where: { id: String(req.params.id ?? ''), userId: req.user!.id },
+    const shopId = String(req.params.id ?? '');
+    await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_delete', objectType: 'ProductAnalysisShop', objectId: shopId }, async tx => {
+      const result = await tx.productAnalysisShop.deleteMany({ where: { id: shopId, userId: req.user!.id } });
+      if (result.count === 0) throw new ProductAnalysisNotFoundError('Shop not found');
+      return result;
     });
-    if (result.count === 0) return res.status(404).json({ detail: 'Shop not found' });
     return res.json({ ok: true });
   } catch (error) {
     return errorResponse(error, res);
@@ -349,9 +357,9 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
     };
 
     // 同日重传整体替换（删除级联清理旧 items）
-    await prisma.$transaction([
-      prisma.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: uploadDate } }),
-      prisma.productAnalysisDailyUpload.create({
+    await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_upload', objectType: 'ProductAnalysisDailyUpload', affectedCount: rows.length, metadata: { shopId: shop.id, date } }, async tx => {
+      await tx.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: uploadDate } });
+      return tx.productAnalysisDailyUpload.create({
         data: {
           shopId: shop.id,
           date: uploadDate,
@@ -363,13 +371,8 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
           items: { create: rows.map(toDailyItemCreate) },
         },
         select: { date: true, fileName: true, itemCount: true },
-      }),
-    ]);
-    logActivity(req.user!.id, 'product_analysis_daily_upload', 'product-analysis', {
-      shopId: shop.id,
-      date,
-      itemCount: rows.length,
-    }).catch((err: unknown) => console.error('活动记录失败:', err));
+      });
+    });
     return res.status(201).json({ date, fileName, itemCount: rows.length });
   } catch (error) {
     return errorResponse(error, res);
@@ -384,10 +387,11 @@ router.delete('/shops/:id/daily-uploads/:date', requireProductAnalysisPermission
     if (!isValidDateString(date)) {
       return res.status(400).json({ detail: 'date 需为 YYYY-MM-DD' });
     }
-    const result = await prisma.productAnalysisDailyUpload.deleteMany({
-      where: { shopId: shop.id, date: parseDateUtc(date) },
+    await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_delete', objectType: 'ProductAnalysisDailyUpload', metadata: { shopId: shop.id, date } }, async tx => {
+      const result = await tx.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: parseDateUtc(date) } });
+      if (result.count === 0) throw new ProductAnalysisNotFoundError('Day not found');
+      return result;
     });
-    if (result.count === 0) return res.status(404).json({ detail: 'Day not found' });
     return res.json({ ok: true });
   } catch (error) {
     return errorResponse(error, res);
@@ -552,14 +556,17 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
         '===== 分析数据 =====',
         context || '（该区间无可用数据）',
       ].join('\n\n');
-      const result = await glmChat([{ role: 'system', content: systemPrompt }, ...history]);
-      logActivity(req.user!.id, 'product_analysis_chat', 'product-analysis', {
-        shopId,
-        itemId,
-        mode,
-        from,
-        to,
-      }).catch((err: unknown) => console.error('活动记录失败:', err));
+      const { result } = await runAiCall({
+        userId: req.user!.id,
+        actorName: req.user!.username,
+        requestKey: body.requestKey as string,
+        operationId: body.operationId as string,
+        kind: 'analysis',
+        module: 'product-analysis',
+        mode: 'product_analysis_chat_item',
+        model: GLM_MODEL,
+        payload: { shopId, itemId, from, to, history },
+      }, () => glmChat([{ role: 'system', content: systemPrompt }, ...history]));
       return res.json(result);
     }
 
@@ -591,13 +598,17 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       '===== 分析数据 =====',
       context || '（该区间无可用数据）',
     ].join('\n\n');
-    const result = await glmChat([{ role: 'system', content: systemPrompt }, ...history]);
-    logActivity(req.user!.id, 'product_analysis_chat', 'product-analysis', {
-      shopId,
-      mode,
-      from,
-      to,
-    }).catch((err: unknown) => console.error('活动记录失败:', err));
+    const { result } = await runAiCall({
+      userId: req.user!.id,
+      actorName: req.user!.username,
+      requestKey: body.requestKey as string,
+      operationId: body.operationId as string,
+      kind: 'analysis',
+      module: 'product-analysis',
+      mode: 'product_analysis_chat_overview',
+      model: GLM_MODEL,
+      payload: { shopId, from, to, history },
+    }, () => glmChat([{ role: 'system', content: systemPrompt }, ...history]));
     return res.json(result);
   } catch (error) {
     return errorResponse(error, res);

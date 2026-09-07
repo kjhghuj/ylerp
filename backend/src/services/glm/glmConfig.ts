@@ -7,11 +7,13 @@ export const GLM_TIMEOUT_MS = Number(process.env.GLM_TIMEOUT_MS) || 120_000;
 export class GlmApiError extends Error {
   status_code: number;
   detail: string;
+  notSubmitted: boolean;
 
-  constructor(status_code: number, detail: string) {
+  constructor(status_code: number, detail: string, notSubmitted = false) {
     super(detail);
     this.name = 'GlmApiError';
     this.status_code = status_code;
     this.detail = detail;
+    this.notSubmitted = notSubmitted;
   }
 }

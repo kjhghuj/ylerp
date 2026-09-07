@@ -34,7 +34,7 @@ function parseUsageFilter(query, now = new Date()) {
         throw new Error('日期范围无效或超过 365 天');
     const endAt = new Date(Math.min(endExclusive.getTime(), now.getTime()));
     const dates = [];
-    for (let t = startAt.getTime(); t < endAt.getTime(); t += DAY)
+    for (let t = startAt.getTime(); t < endExclusive.getTime(); t += DAY)
         dates.push((0, exports.shanghaiDay)(new Date(t)));
     const result = { startAt, endAt, startDate, endDate: endDate > today ? today : endDate, asOf: now, dates };
     for (const key of ['userId', 'module', 'status']) {

@@ -106,10 +106,16 @@ export interface ChatRequest {
   to?: string;
   itemId?: string;
   messages: ChatMessage[];
+  requestKey?: string;
+  operationId?: string;
 }
 
 export async function sendProductAnalysisChat(request: ChatRequest): Promise<ChatResult> {
-  const response = await api.post<ChatResult>('/product-analysis/chat', request, {
+  const response = await api.post<ChatResult>('/product-analysis/chat', {
+    ...request,
+    requestKey: request.requestKey || crypto.randomUUID(),
+    operationId: request.operationId || crypto.randomUUID(),
+  }, {
     timeout: CHAT_TIMEOUT_MS,
   });
   return response.data;

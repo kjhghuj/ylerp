@@ -15,12 +15,13 @@ import {
   buildTranslationPrompt,
 } from '../services/chroma/prompts';
 import { runAiCall, setAiDelivery } from '../services/aiUsage';
+import { authorizeAnyPermission } from '../middleware/authMiddleware';
 
 const router = Router();
 
 async function tracked(req: Request, kind: 'analysis' | 'generation', model: string, provider: () => Promise<any>) {
   const { requestKey, operationId, ...payload } = req.body;
-  const { call, result } = await runAiCall({ userId: req.user!.id, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
+  const { call, result } = await runAiCall({ userId: req.user!.id, actorName: req.user!.username, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
   return { ...result, callId: call.id, cost: call.estimatedCost == null ? null : Number(call.estimatedCost), currency: 'CNY', pricingVersion: call.pricingVersion };
 }
 async function deliver(result: any) {
@@ -39,7 +40,8 @@ function errorResponse(error: unknown, res: Response): void {
   if (error instanceof ApiError) {
     res.status(error.status_code).json({ detail: error.detail });
   } else {
-    res.status(500).json({ detail: String(error) });
+    console.error('Unexpected Chroma route error:', error instanceof Error ? error.name : typeof error);
+    res.status(500).json({ detail: 'Internal server error' });
   }
 }
 
@@ -52,7 +54,7 @@ function analyzeSingleImage(req: Request, image: string, prompt: string, model: 
   return tracked(req, 'analysis', model, () => chatWithImages(model, content));
 }
 
-router.post('/analyze', async (req: Request, res: Response) => {
+router.post('/analyze', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { image, prompt, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
@@ -68,7 +70,7 @@ router.post('/analyze', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/analyze-edit', async (req: Request, res: Response) => {
+router.post('/analyze-edit', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { image, user_instruction, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
@@ -82,7 +84,7 @@ router.post('/analyze-edit', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/secondary-plan', async (req: Request, res: Response) => {
+router.post('/secondary-plan', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { image, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
@@ -94,7 +96,7 @@ router.post('/secondary-plan', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/color-mapping', async (req: Request, res: Response) => {
+router.post('/color-mapping', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { poster_image, reference_image, model } = req.body;
     if (!poster_image) return res.status(400).json({ detail: 'Missing required field: poster_image' });
@@ -115,7 +117,7 @@ router.post('/color-mapping', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/generate', async (req: Request, res: Response) => {
+router.post('/generate', authorizeAnyPermission('chroma-adapt.generate'), async (req: Request, res: Response) => {
   try {
     const { prompt, image_urls, size, model } = req.body;
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
@@ -134,7 +136,7 @@ router.post('/generate', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/edit', async (req: Request, res: Response) => {
+router.post('/edit', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { image, prompt, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
@@ -156,7 +158,7 @@ router.post('/edit', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/color-adaptation', async (req: Request, res: Response) => {
+router.post('/color-adaptation', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
   try {
     const { poster_image, reference_image, palette, style_config, color_mapping_plan, model } = req.body;
     if (!poster_image) return res.status(400).json({ detail: 'Missing required field: poster_image' });
@@ -182,7 +184,7 @@ router.post('/color-adaptation', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/translate', async (req: Request, res: Response) => {
+router.post('/translate', authorizeAnyPermission('chroma-adapt.translate'), async (req: Request, res: Response) => {
   try {
     const { image, target_lang, target_font, model } = req.body;
     if (!image) return res.status(400).json({ detail: 'Missing required field: image' });
@@ -207,7 +209,7 @@ router.post('/translate', async (req: Request, res: Response) => {
         size,
         original_dimensions: { width, height },
       },
-      result: { data: [{ url: imageDataUrl }] },
+      result: { data: delivered.data },
       callId: delivered.callId,
       cost: delivered.cost,
       currency: 'CNY',

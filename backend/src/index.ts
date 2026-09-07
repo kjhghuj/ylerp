@@ -4,13 +4,19 @@ import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import { parseTrustedProxyCidrs } from './services/trustedProxy';
+import { assertJwtSecretConfigured } from './services/jwtSecret';
+import { guardAiRequest } from './middleware/aiRequestGuard';
 import shopeeRoutes from './routes/shopeeRoutes';
 import {
   configureJsonBodyParsing,
+  chromaJsonErrorHandler,
+  chromaJsonParser,
+  productAnalysisUploadJsonParser,
   productAtomicRouteErrorHandler,
 } from './middleware/productAtomicJsonMiddleware';
 
 dotenv.config();
+assertJwtSecretConfigured();
 
 const app = express();
 app.set('trust proxy', parseTrustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS));
@@ -56,7 +62,7 @@ export const safeRedis = {
 };
 
 // Import middleware
-import { authenticate, authorize } from './middleware/authMiddleware';
+import { authenticate, authorize, authorizeAnyPermission } from './middleware/authMiddleware';
 import { ShopeeAuthorizationService, startShopeeTokenRefresh } from './services/shopeeAuthorization';
 import { configureShopeeAuthorization, createShopeeManagementRoutes } from './routes/shopeeAuthorizationRoutes';
 
@@ -91,11 +97,11 @@ app.use('/api/templates', authenticate, templateRoutes);
 app.use('/api/restock-v2', authenticate, restockV2Routes);
 app.use('/api/schedule', authenticate, scheduleRoutes);
 app.use('/api/node-graphs', authenticate, nodeGraphRoutes);
-app.use('/api/chroma-adapt', authenticate, chromaAdaptRoutes);
-app.use('/api/chroma-data', authenticate, chromaRecordRoutes);
+app.use('/api/chroma-adapt', authenticate, chromaJsonParser, chromaJsonErrorHandler, guardAiRequest, chromaAdaptRoutes);
+app.use('/api/chroma-data', authenticate, authorizeAnyPermission('chroma-adapt.translate', 'chroma-adapt.edit', 'chroma-adapt.generate'), chromaJsonParser, chromaJsonErrorHandler, chromaRecordRoutes);
 app.use('/api/usage', usageRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
-app.use('/api/product-analysis', authenticate, productAnalysisRoutes);
+app.use('/api/product-analysis', authenticate, productAnalysisUploadJsonParser, chromaJsonErrorHandler, guardAiRequest, productAnalysisRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });

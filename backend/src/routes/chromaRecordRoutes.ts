@@ -10,6 +10,29 @@ const router = Router();
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'chroma');
 const MAX_IMAGES_PER_USER = 500;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_STORAGE_BYTES_PER_USER = 500 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 40_000_000;
+
+function decodeUploadedImage(value: unknown): { buffer: Buffer; extension: 'png' | 'jpg' | 'webp' } | null {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);
+  if (!match) return null;
+  const encoded = match[2].replace(/[\r\n]/g, '');
+  if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) return null;
+  const estimatedSize = Math.floor(encoded.length * 3 / 4);
+  if (estimatedSize <= 0 || estimatedSize > MAX_IMAGE_SIZE) return null;
+  const buffer = Buffer.from(encoded, 'base64');
+  const mime = match[1].toLowerCase();
+  const png = mime === 'image/png' && buffer.length >= 24
+    && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const jpeg = mime === 'image/jpeg' && buffer.length >= 3
+    && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const webp = mime === 'image/webp' && buffer.length >= 12
+    && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
+  if (!png && !jpeg && !webp) return null;
+  if (png && buffer.readUInt32BE(16) * buffer.readUInt32BE(20) > MAX_IMAGE_PIXELS) return null;
+  return { buffer, extension: png ? 'png' : jpeg ? 'jpg' : 'webp' };
+}
 
 async function ensureUserDir(userId: string): Promise<string> {
   const userDir = path.join(UPLOAD_DIR, userId);
@@ -18,15 +41,21 @@ async function ensureUserDir(userId: string): Promise<string> {
 }
 
 async function cleanupOldImages(userId: string): Promise<void> {
-  const count = await prisma.chromaImage.count({ where: { userId } });
-  if (count <= MAX_IMAGES_PER_USER) return;
-
-  const toDelete = count - MAX_IMAGES_PER_USER;
-  const oldImages = await prisma.chromaImage.findMany({
+  const images = await prisma.chromaImage.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },
-    take: toDelete,
+    select: { id: true, filename: true, size: true },
   });
+  let totalBytes = images.reduce((sum, image) => sum + image.size, 0);
+  let remainingCount = images.length;
+  const oldImages = [] as typeof images;
+  for (const image of images) {
+    if (remainingCount <= MAX_IMAGES_PER_USER && totalBytes <= MAX_STORAGE_BYTES_PER_USER) break;
+    oldImages.push(image);
+    remainingCount -= 1;
+    totalBytes -= image.size;
+  }
+  if (!oldImages.length) return;
 
   for (const img of oldImages) {
     try {
@@ -39,10 +68,7 @@ async function cleanupOldImages(userId: string): Promise<void> {
     where: { id: { in: oldImages.map(i => i.id) } },
   });
 
-  await prisma.chromaGenerationRecord.updateMany({
-    where: { imageId: { in: oldImages.map(i => i.id) } },
-    data: { imageId: null },
-  });
+
 }
 
 // Authoritative server calls and explicitly separate unverified legacy history.
@@ -107,7 +133,8 @@ router.post('/records', async (req: Request, res: Response) => {
       if (!call || !image) return null;
       const imageIds = [...new Set([...call.imageIds, imageId])];
       if (imageIds.length > call.outputCount) return null;
-      return tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: 'saved' } });
+      const complete = imageIds.length >= call.outputCount;
+      return tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: complete ? 'saved' : 'pending', result: complete ? Prisma.DbNull : undefined } });
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     if (!record) return res.status(404).json({ error: '未找到本人可关联的成功调用或图片' });
     res.json({ id: record.id, imageIds: record.imageIds, storageStatus: record.storageStatus });
@@ -160,6 +187,8 @@ router.get('/images/file/:id', async (req: Request, res: Response) => {
     } catch {
       return res.status(404).json({ error: 'Image file no longer exists' });
     }
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
     res.sendFile(filePath);
   } catch (error) {
     console.error('Error serving image:', error);
@@ -191,46 +220,42 @@ router.delete('/images/:id', async (req: Request, res: Response) => {
 router.post('/images', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { image, mode, model, originalName, callId } = req.body;
+    const { image, originalName, callId, outputIndex = 0 } = req.body;
     if (typeof callId !== 'string') return res.status(400).json({ error: 'callId is required for generated images' });
     const call = await prisma.aiUsageCall.findFirst({ where: { id: callId, userId, kind: 'generation', status: 'success', provenance: 'native' } });
     if (!call) return res.status(404).json({ error: 'Successful call not found' });
-    if (call.imageIds.length) {
-      const existing = await prisma.chromaImage.findFirst({ where: { id: call.imageIds[0], userId } });
+    if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndex >= call.outputCount) return res.status(400).json({ error: 'Invalid outputIndex' });
+    if (originalName != null && (typeof originalName !== 'string' || originalName.length > 255)) return res.status(400).json({ error: 'Invalid image or originalName' });
+    const stableImageId = crypto.createHash('sha256').update(callId + ':' + outputIndex).digest('hex');
+    {
+      const existing = await prisma.chromaImage.findFirst({ where: { id: stableImageId, userId } });
       if (existing) return res.json(existing);
     }
 
-    if (!image) return res.status(400).json({ error: 'Missing required field: image' });
-
-    // Validate image data
-    const isBase64 = image.startsWith('data:');
-    const rawBase64 = isBase64 ? image.split(',')[1] || '' : image;
-    const estimatedSize = Math.floor(rawBase64.length * 3 / 4);
-    if (estimatedSize > MAX_IMAGE_SIZE) {
-      return res.status(400).json({ error: `Image too large, max ${MAX_IMAGE_SIZE / 1024 / 1024}MB` });
-    }
-    if (isBase64 && !image.startsWith('data:image/')) {
-      return res.status(400).json({ error: 'Invalid image format, only image uploads are allowed' });
-    }
+    const decoded = decodeUploadedImage(image);
+    if (!decoded) return res.status(400).json({ error: 'Invalid PNG, JPEG or WebP image' });
 
     const userDir = await ensureUserDir(userId);
 
-    let base64Data = rawBase64.replace(/\n/g, '').replace(/\r/g, '');
-
-    const buffer = Buffer.from(base64Data, 'base64');
-    const filename = `${Date.now()}-${crypto.randomUUID()}.png`;
+    const { buffer, extension } = decoded;
+    const filename = `${Date.now()}-${crypto.randomUUID()}.${extension}`;
     const filePath = path.join(userDir, filename);
 
     await fs.writeFile(filePath, buffer);
 
-    const chromaImage = await prisma.$transaction(async tx => {
+    let chromaImage;
+    try {
+    for (let attempt = 0; ; attempt++) {
+    try {
+    chromaImage = await prisma.$transaction(async tx => {
       const latest = await tx.aiUsageCall.findUniqueOrThrow({ where: { id: callId } });
-      if (latest.imageIds.length) {
-        const existing = await tx.chromaImage.findFirst({ where: { id: latest.imageIds[0], userId } });
+      {
+        const existing = await tx.chromaImage.findFirst({ where: { id: stableImageId, userId } });
         if (existing) return existing;
       }
       const saved = await tx.chromaImage.create({
       data: {
+        id: stableImageId,
         filename,
         originalName: originalName || null,
         size: buffer.length,
@@ -240,15 +265,26 @@ router.post('/images', async (req: Request, res: Response) => {
       },
     });
 
-      await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds: [saved.id], storageStatus: 'saved' } });
+      const imageIds = [...new Set([...latest.imageIds, saved.id])];
+      const complete = imageIds.length >= latest.outputCount;
+      await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: complete ? 'saved' : 'pending', result: complete ? Prisma.DbNull : undefined } });
       return saved;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-
+    break;
+    } catch (error: any) {
+      if (error.code !== 'P2034' || attempt >= 2) throw error;
+    }
+    }
+    } catch (error) {
+      await fs.unlink(filePath).catch(() => {});
+      throw error;
+    }
+    if (chromaImage.filename !== filename) await fs.unlink(filePath).catch(() => {});
     await cleanupOldImages(userId);
 
     res.status(201).json(chromaImage);
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.error('Error uploading image');
     if (typeof req.body.callId === 'string') await prisma.aiUsageCall.updateMany({ where: { id: req.body.callId, userId: req.user!.id, storageStatus: { not: 'saved' } }, data: { storageStatus: 'failed' } }).catch(err => console.error('Storage status persistence failed:', err));
     res.status(500).json({ error: 'Failed to upload image' });
   }

@@ -20,14 +20,19 @@ jest.mock('../../index', () => {
     user: {
       findUnique: jest.fn(),
     },
-    userActivity: {
+    usageEvent: {
       create: jest.fn().mockResolvedValue(undefined),
+    },
+    aiUsageCall: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
     },
     $transaction: jest.fn(),
   };
   return { prisma };
 });
-
 jest.mock('../../services/glm/glmClient', () => ({
   glmChat: jest.fn(),
 }));
@@ -40,6 +45,7 @@ import { glmChat } from '../../services/glm/glmClient';
 const mockShopFindFirst = prisma.productAnalysisShop.findFirst as jest.Mock;
 const mockShopFindMany = prisma.productAnalysisShop.findMany as jest.Mock;
 const mockShopCreate = prisma.productAnalysisShop.create as jest.Mock;
+const mockShopUpdate = prisma.productAnalysisShop.update as jest.Mock;
 const mockShopDeleteMany = prisma.productAnalysisShop.deleteMany as jest.Mock;
 const mockUploadFindFirst = prisma.productAnalysisDailyUpload.findFirst as jest.Mock;
 const mockUploadFindMany = prisma.productAnalysisDailyUpload.findMany as jest.Mock;
@@ -50,6 +56,7 @@ const mockItemFindMany = prisma.productDailyItem.findMany as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockTransaction = prisma.$transaction as jest.Mock;
 const mockGlmChat = glmChat as jest.Mock;
+const mockAiUsageCall = prisma.aiUsageCall as unknown as Record<string, jest.Mock>;
 
 type RouteHandler = (req: Request, res: Response, next: (err?: unknown) => void) => Promise<unknown>;
 
@@ -123,6 +130,15 @@ const PARSED_SHEETS = [
   },
 ];
 
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockTransaction.mockImplementation(async callback => callback(prisma));
+  (prisma.usageEvent.create as jest.Mock).mockResolvedValue(undefined);
+  mockAiUsageCall.create.mockResolvedValue({ id: 'ai-call-1' });
+  mockAiUsageCall.update.mockImplementation(async ({ data }) => ({ id: 'ai-call-1', ...data }));
+  mockAiUsageCall.count.mockResolvedValue(0);
+});
+
 describe('POST /shops', () => {
   test('validates name and site', async () => {
     const badSite = makeReq({ body: { name: '店', site: 'XX' } });
@@ -140,6 +156,7 @@ describe('POST /shops', () => {
     const { res, status, json } = makeRes();
     await runRoute('/shops', 'post', req as Request, res as Response);
     expect(mockShopCreate.mock.calls[0][0].data).toMatchObject({ name: 'PH 店', site: 'PH', currency: 'PHP', userId: 'owner-1' });
+    expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'product_analysis_shop_create', module: 'product-analysis' }) }));
     expect(status).toHaveBeenCalledWith(201);
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ currency: 'PHP' }));
   });
@@ -152,7 +169,16 @@ describe('POST /shops', () => {
     expect(json).toHaveBeenCalledWith({ detail: '同名店铺已存在' });
   });
 });
-
+describe('PATCH /shops/:id', () => {
+  test('updates the owned shop and records the operation atomically', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockShopUpdate.mockResolvedValueOnce({ ...SHOP, name: '新名称' });
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id', 'patch', makeReq({ params: { id: SHOP.id }, body: { name: '新名称' } }) as Request, res as Response);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ name: '新名称' }));
+    expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'product_analysis_shop_update', objectId: SHOP.id }) }));
+  });
+});
 describe('GET /shops', () => {
   test('merges upload stats into shop list', async () => {
     mockShopFindMany.mockResolvedValueOnce([{ ...SHOP, createdAt: new Date(), updatedAt: new Date() }]);
@@ -173,6 +199,7 @@ describe('DELETE /shops/:id', () => {
     const { res, json } = makeRes();
     await runRoute('/shops/:id', 'delete', makeReq({ params: { id: 'shop-1' } }) as Request, res as Response);
     expect(mockShopDeleteMany).toHaveBeenCalledWith({ where: { id: 'shop-1', userId: 'owner-1' } });
+    expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'product_analysis_shop_delete', affectedCount: 1 }) }));
     expect(json).toHaveBeenCalledWith({ ok: true });
   });
 });
@@ -204,7 +231,7 @@ describe('POST /shops/:id/daily-uploads', () => {
 
   test('replaces same-day upload in a transaction with server-side itemCount', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
-    mockTransaction.mockResolvedValueOnce([{}, { date: new Date('2026-09-06T00:00:00.000Z'), fileName: 'a.xlsx', itemCount: 1 }]);
+    mockTransaction.mockImplementationOnce(async callback => callback(prisma));
     const req = makeReq({
       params: { id: 'shop-1' },
       body: { date: '2026-09-06', payload: { fileName: 'a.xlsx', currency: 'MYR', warnings: ['w'], sheets: PARSED_SHEETS } },
@@ -231,6 +258,17 @@ describe('POST /shops/:id/daily-uploads', () => {
     const { res, status } = makeRes();
     await runRoute('/shops/:id/daily-uploads', 'post', makeReq({ params: { id: 'nope' }, body: { date: '2026-09-06', payload: { fileName: 'a', sheets: PARSED_SHEETS } } }) as Request, res as Response);
     expect(status).toHaveBeenCalledWith(404);
+  });
+});
+
+describe('DELETE /shops/:id/daily-uploads/:date', () => {
+  test('deletes the day and records the actual affected count atomically', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadDeleteMany.mockResolvedValueOnce({ count: 1 });
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/daily-uploads/:date', 'delete', makeReq({ params: { id: SHOP.id, date: '2026-09-06' } }) as Request, res as Response);
+    expect(json).toHaveBeenCalledWith({ ok: true });
+    expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'product_analysis_daily_delete', affectedCount: 1 }) }));
   });
 });
 
@@ -314,7 +352,7 @@ describe('POST /chat', () => {
   test('permission middleware rejects non-owner without aiChat permission', async () => {
     mockUserFindUnique.mockResolvedValueOnce({ isActive: true, permissions: ['product-analysis.upload'] });
     const req = makeReq({
-      user: { id: 'sub-1', username: 'sub', role: 'user' },
+      user: { id: 'sub-1', username: 'sub', role: 'user', permissions: [] },
       body: { shopId: 'shop-1', messages: [{ role: 'user', content: 'hi' }] },
     });
     const { res, status } = makeRes();
@@ -338,7 +376,7 @@ describe('POST /chat', () => {
     mockShopFindFirst.mockResolvedValueOnce(SHOP);
     mockUploadFindFirst.mockResolvedValueOnce(null);
     const { res, status } = makeRes();
-    await runRoute('/chat', 'post', makeReq({ body: { shopId: 'shop-1', messages: [{ role: 'user', content: 'hi' }] } }) as Request, res as Response);
+    await runRoute('/chat', 'post', makeReq({ body: { shopId: 'shop-1', requestKey: 'request-1', operationId: 'operation-1', messages: [{ role: 'user', content: 'hi' }] } }) as Request, res as Response);
     expect(status).toHaveBeenCalledWith(400);
   });
 
@@ -356,13 +394,14 @@ describe('POST /chat', () => {
     mockGlmChat.mockResolvedValueOnce({ content: '结论', model: 'glm-test' });
     const { res, json } = makeRes();
 
-    await runRoute('/chat', 'post', makeReq({ body: { shopId: 'shop-1', messages: [{ role: 'user', content: 'hi' }] } }) as Request, res as Response);
+    await runRoute('/chat', 'post', makeReq({ body: { shopId: 'shop-1', requestKey: 'request-overview', operationId: 'operation-overview', messages: [{ role: 'user', content: 'hi' }] } }) as Request, res as Response);
 
     const messages = mockGlmChat.mock.calls[0][0] as { role: string; content: string }[];
     expect(messages[0].role).toBe('system');
     expect(messages[0].content).toContain('2026-08-31 至 2026-09-06');
     expect(messages[0].content).toContain('MY 主店');
     expect(messages[0].content).toContain('销售额 Top');
+    expect(mockAiUsageCall.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ module: 'product-analysis', kind: 'analysis', requestKey: 'request-overview' }) }));
     expect(json).toHaveBeenCalledWith({ content: '结论', model: 'glm-test' });
   });
 
@@ -394,7 +433,7 @@ describe('POST /chat', () => {
     ]);
     mockGlmChat.mockResolvedValueOnce({ content: '单品结论', model: 'glm-test' });
     const req = makeReq({
-      body: { shopId: 'shop-1', itemId: '10001', messages: [{ role: 'user', content: 'hi' }] },
+      body: { shopId: 'shop-1', itemId: '10001', requestKey: 'request-2', operationId: 'operation-2', messages: [{ role: 'user', content: 'hi' }] },
     });
     const { res, json } = makeRes();
 

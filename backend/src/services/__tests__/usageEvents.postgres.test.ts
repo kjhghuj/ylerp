@@ -19,6 +19,7 @@ integration('PostgreSQL business mutation and usage event atomicity', () => {
   });
 
   beforeAll(async () => {
+    if (!new URL(databaseUrl!).pathname.includes('test')) throw new Error('Requires an isolated test database');
     db = new PrismaClient({ datasources: { db: { url: databaseUrl! } } });
     await db.user.create({ data: { id: actorId, username, displayName: username, password: 'test-only', role: 'owner' } });
   });

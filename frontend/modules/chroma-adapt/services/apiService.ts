@@ -21,7 +21,10 @@ async function postAi(url: string, payload: Record<string, unknown>, operationId
 async function saveGeneratedResult(data: any, mode: string, model: string, url: unknown): Promise<string> {
   if (typeof url !== 'string' || !url.startsWith('data:image/') || !data.callId) throw new Error('供应商未返回有效图片，请核对调用记录');
   try {
-    await uploadChromaImage(url, mode, model, data.callId);
+    const outputs = data.data ?? data.result?.data ?? [{ url }];
+    for (let index = 0; index < outputs.length; index++) {
+      await uploadChromaImage(outputs[index].url, mode, model, data.callId, index);
+    }
     window.dispatchEvent(new Event('chroma-usage-updated'));
   } catch {
     throw Object.assign(new Error('图片已生成，用量已记录，但图库保存失败。请下载当前图片后再尝试保存。'), { generatedUrl: url });
@@ -236,8 +239,8 @@ export const getCostSummary = async (): Promise<CostSummary> => {
   return data;
 };
 
-export const uploadChromaImage = async (image: string, mode: string, model: string, callId: string): Promise<ChromaImageInfo> => {
-  const { data } = await api.post(`${DATA_URL}/images`, { image, mode, model, callId });
+export const uploadChromaImage = async (image: string, mode: string, model: string, callId: string, outputIndex = 0): Promise<ChromaImageInfo> => {
+  const { data } = await api.post(`${DATA_URL}/images`, { image, mode, model, callId, outputIndex });
   return data;
 };
 

@@ -9,7 +9,7 @@ const aiUsage_1 = require("../services/aiUsage");
 const router = (0, express_1.Router)();
 async function tracked(req, kind, model, provider) {
     const { requestKey, operationId, ...payload } = req.body;
-    const { call, result } = await (0, aiUsage_1.runAiCall)({ userId: req.user.id, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
+    const { call, result } = await (0, aiUsage_1.runAiCall)({ userId: req.user.id, actorName: req.user.username, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
     return { ...result, callId: call.id, cost: call.estimatedCost == null ? null : Number(call.estimatedCost), currency: 'CNY', pricingVersion: call.pricingVersion };
 }
 async function deliver(result) {
@@ -183,7 +183,7 @@ router.post('/translate', async (req, res) => {
                 size,
                 original_dimensions: { width, height },
             },
-            result: { data: [{ url: imageDataUrl }] },
+            result: { data: delivered.data },
             callId: delivered.callId,
             cost: delivered.cost,
             currency: 'CNY',

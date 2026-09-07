@@ -5,7 +5,7 @@ import { nativeUsageRows, usageMeta } from './usageReport';
 export function parseDetailsOptions(query: Record<string, unknown>) {
   const page = Number(query.page ?? 1), pageSize = Number(query.pageSize ?? 50);
   const kind = query.kind ?? 'all';
-  if ((query.page !== undefined && (typeof query.page !== 'string' || !/^\d+$/.test(query.page))) || (query.pageSize !== undefined && (typeof query.pageSize !== 'string' || !/^\d+$/.test(query.pageSize))) || !Number.isInteger(page) || page < 1 || page > 100000 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 200) throw new Error('分页参数无效');
+  if ((query.page !== undefined && (typeof query.page !== 'string' || !/^\d+$/.test(query.page))) || (query.pageSize !== undefined && (typeof query.pageSize !== 'string' || !/^\d+$/.test(query.pageSize))) || !Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 200 || (page - 1) * pageSize > 10_000) throw new Error('分页参数无效或超出可浏览深度');
   if (typeof kind !== 'string' || !['all','event','ai','legacy','rebuilt'].includes(kind)) throw new Error('kind 无效');
   return { page, pageSize, kind };
 }

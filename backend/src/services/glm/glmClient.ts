@@ -16,14 +16,12 @@ export interface GlmChatResult {
   model: string;
 }
 
-const UPSTREAM_ERROR_SNIPPET_LENGTH = 500;
-
 export async function glmChat(
   messages: GlmChatMessage[],
   options: { temperature?: number } = {}
 ): Promise<GlmChatResult> {
   if (!GLM_API_KEY) {
-    throw new GlmApiError(503, 'GLM_API_KEY not configured');
+    throw new GlmApiError(503, 'GLM_API_KEY not configured', true);
   }
   try {
     const response = await fetch(`${GLM_BASE_URL}/chat/completions`, {
@@ -40,11 +38,7 @@ export async function glmChat(
       signal: AbortSignal.timeout(GLM_TIMEOUT_MS),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new GlmApiError(
-        502,
-        `GLM API Error (${response.status}): ${text.slice(0, UPSTREAM_ERROR_SNIPPET_LENGTH)}`
-      );
+      throw new GlmApiError(502, `GLM provider rejected the request (${response.status})`);
     }
     const data: unknown = await response.json();
     const content = extractContent(data);
@@ -54,7 +48,7 @@ export async function glmChat(
     return { content, model: extractModel(data) || GLM_MODEL };
   } catch (error) {
     if (error instanceof GlmApiError) throw error;
-    throw new GlmApiError(502, `GLM request failed: ${String(error)}`);
+    throw new GlmApiError(502, 'GLM request failed');
   }
 }
 

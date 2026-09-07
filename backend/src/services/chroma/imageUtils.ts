@@ -94,13 +94,90 @@ export function calculateSizeForAspectRatio(width: number, height: number): stri
   return `${targetWidth}x${targetHeight}`;
 }
 
-export async function downloadImageAsDataUrl(imageUrl: string): Promise<string> {
-  if (!imageUrl || !imageUrl.startsWith('https://')) throw new Error('Missing valid generated image URL');
-  const response = await fetch(imageUrl, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) throw new Error('Generated image download failed');
-  const contentType = response.headers.get('content-type')?.split(';')[0] || '';
-  if (!contentType.startsWith('image/')) throw new Error('Generated output is not an image');
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length || buffer.length > 10 * 1024 * 1024) throw new Error('Invalid generated image size');
-  return 'data:' + contentType + ';base64,' + buffer.toString('base64');
+const MAX_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+
+function isPrivateAddress(address: string): boolean {
+  const normalized = address.toLowerCase();
+  if (normalized === '::' || normalized === '::1' || normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+  if (/^fe[89ab]/.test(normalized)) return true;
+  const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)?.[1];
+  const ipv4 = mapped || (isIP(normalized) === 4 ? normalized : null);
+  if (!ipv4) return false;
+  const [a, b] = ipv4.split('.').map(Number);
+  return a === 0 || a === 10 || a === 127 || a >= 224
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 198 && (b === 18 || b === 19));
 }
+
+async function validateGeneratedImageUrl(value: string): Promise<URL> {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error('Missing valid generated image URL'); }
+  if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) {
+    throw new Error('Generated image URL is not allowed');
+  }
+  const configured = (process.env.ARK_IMAGE_DOWNLOAD_HOSTS || '')
+    .split(',').map(host => host.trim().toLowerCase()).filter(Boolean);
+  const suffixes = configured.length ? configured : ['volces.com', 'volcengine.com'];
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (isIP(hostname) || !suffixes.some(suffix => hostname === suffix || hostname.endsWith(`.${suffix}`))) {
+    throw new Error('Generated image host is not allowed');
+  }
+  const addresses = await lookup(hostname, { all: true, verbatim: true });
+  if (!addresses.length || addresses.some(entry => isPrivateAddress(entry.address))) {
+    throw new Error('Generated image host resolved to a private address');
+  }
+  return url;
+}
+
+async function readBoundedBody(response: Response): Promise<Buffer> {
+  const announced = Number(response.headers.get('content-length'));
+  if (Number.isFinite(announced) && announced > MAX_DOWNLOAD_BYTES) throw new Error('Generated image is too large');
+  if (!response.body) throw new Error('Generated image response is empty');
+  const reader = response.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_DOWNLOAD_BYTES) {
+      await reader.cancel();
+      throw new Error('Generated image is too large');
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function hasImageMagic(buffer: Buffer, contentType: string): boolean {
+  if (contentType === 'image/png') return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (contentType === 'image/jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  return contentType === 'image/webp' && buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
+}
+
+export async function downloadImageAsDataUrl(imageUrl: string): Promise<string> {
+  let url = await validateGeneratedImageUrl(imageUrl);
+  for (let redirects = 0; redirects <= 3; redirects += 1) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000), redirect: 'manual' });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      if (redirects === 3) throw new Error('Too many generated image redirects');
+      const location = response.headers.get('location');
+      if (!location) throw new Error('Generated image redirect is missing a location');
+      url = await validateGeneratedImageUrl(new URL(location, url).toString());
+      continue;
+    }
+    if (!response.ok) throw new Error('Generated image download failed');
+    const contentType = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() || '';
+    if (!ALLOWED_IMAGE_TYPES.has(contentType)) throw new Error('Generated output is not a supported image');
+    const buffer = await readBoundedBody(response);
+    if (!buffer.length || !hasImageMagic(buffer, contentType)) throw new Error('Generated output has invalid image data');
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  }
+  throw new Error('Generated image download failed');
+}
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';

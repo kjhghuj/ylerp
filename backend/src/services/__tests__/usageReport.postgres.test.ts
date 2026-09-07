@@ -57,4 +57,15 @@ integration('usage report real PostgreSQL', () => {
     const r = await getUsageReport(db,filter());
     expect(r.summary.imageCount).toBe(3); expect(r.summary.currentGalleryCount).toBe(0);
   });
+  it('filters current replenishment operations under restock-v2', async () => {
+    const eventKey = randomUUID();
+    await db.usageEvent.create({ data: { actorId: userId, module: 'restock-v2', action: 'restock_rule_save', eventKey, occurredAt: time } });
+    try {
+      const report = await getUsageReport(db, { ...filter(), module: 'restock-v2' });
+      expect(report.summary.operationCount).toBe(1);
+      expect(report.modules).toEqual([expect.objectContaining({ module: 'restock-v2', operationCount: 1 })]);
+    } finally {
+      await db.usageEvent.delete({ where: { eventKey } });
+    }
+  });
 });

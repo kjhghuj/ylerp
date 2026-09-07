@@ -46,13 +46,12 @@ export async function chatWithImages(model: string, content: ChatContentItem[]):
       signal: AbortSignal.timeout(120_000),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new ApiError(response.status, `Ark API Error: ${text}`);
+      throw new ApiError(response.status, `Ark provider rejected the analysis request (${response.status})`);
     }
     return response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, String(error));
+    throw new ApiError(502, 'Ark analysis request failed');
   }
 }
 
@@ -82,12 +81,11 @@ export async function generateImage(
       signal: AbortSignal.timeout(120_000),
     });
     if (!response.ok) {
-      const text = await response.text();
-      throw new ApiError(response.status, `Ark API Error: ${text}`);
+      throw new ApiError(response.status, `Ark provider rejected the generation request (${response.status})`);
     }
     return response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(500, String(error));
+    throw new ApiError(502, 'Ark generation request failed');
   }
 }

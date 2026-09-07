@@ -6,6 +6,7 @@ const glmConfig_1 = require("../services/glm/glmConfig");
 const glmClient_1 = require("../services/glm/glmClient");
 const prompts_1 = require("../services/glm/prompts");
 const activityLogger_1 = require("../services/activityLogger");
+const usageEvents_1 = require("../services/usageEvents");
 const productAnalysisAggregation_1 = require("../services/productAnalysisAggregation");
 const productAnalysisPotential_1 = require("../services/productAnalysisPotential");
 const router = (0, express_1.Router)();
@@ -314,9 +315,9 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
             return data;
         };
         // 同日重传整体替换（删除级联清理旧 items）
-        await index_1.prisma.$transaction([
-            index_1.prisma.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: uploadDate } }),
-            index_1.prisma.productAnalysisDailyUpload.create({
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_upload', objectType: 'ProductAnalysisDailyUpload', affectedCount: rows.length, metadata: { shopId: shop.id, date } }, async (tx) => {
+            await tx.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: uploadDate } });
+            return tx.productAnalysisDailyUpload.create({
                 data: {
                     shopId: shop.id,
                     date: uploadDate,
@@ -328,13 +329,8 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
                     items: { create: rows.map(toDailyItemCreate) },
                 },
                 select: { date: true, fileName: true, itemCount: true },
-            }),
-        ]);
-        (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_daily_upload', 'product-analysis', {
-            shopId: shop.id,
-            date,
-            itemCount: rows.length,
-        }).catch((err) => console.error('活动记录失败:', err));
+            });
+        });
         return res.status(201).json({ date, fileName, itemCount: rows.length });
     }
     catch (error) {
@@ -521,13 +517,13 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
                 context || '（该区间无可用数据）',
             ].join('\n\n');
             const result = await (0, glmClient_1.glmChat)([{ role: 'system', content: systemPrompt }, ...history]);
-            (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
+            await (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
                 shopId,
                 itemId,
                 mode,
                 from,
                 to,
-            }).catch((err) => console.error('活动记录失败:', err));
+            });
             return res.json(result);
         }
         const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
@@ -557,12 +553,12 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
             context || '（该区间无可用数据）',
         ].join('\n\n');
         const result = await (0, glmClient_1.glmChat)([{ role: 'system', content: systemPrompt }, ...history]);
-        (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
+        await (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
             shopId,
             mode,
             from,
             to,
-        }).catch((err) => console.error('活动记录失败:', err));
+        });
         return res.json(result);
     }
     catch (error) {

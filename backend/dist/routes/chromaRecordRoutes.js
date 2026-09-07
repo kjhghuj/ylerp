@@ -38,10 +38,6 @@ async function cleanupOldImages(userId) {
     await index_1.prisma.chromaImage.deleteMany({
         where: { id: { in: oldImages.map(i => i.id) } },
     });
-    await index_1.prisma.chromaGenerationRecord.updateMany({
-        where: { imageId: { in: oldImages.map(i => i.id) } },
-        data: { imageId: null },
-    });
 }
 // Authoritative server calls and explicitly separate unverified legacy history.
 router.get('/records', async (req, res) => {
@@ -189,14 +185,19 @@ router.delete('/images/:id', async (req, res) => {
 router.post('/images', async (req, res) => {
     try {
         const userId = req.user.id;
-        const { image, mode, model, originalName, callId } = req.body;
+        const { image, originalName, callId, outputIndex = 0 } = req.body;
         if (typeof callId !== 'string')
             return res.status(400).json({ error: 'callId is required for generated images' });
         const call = await index_1.prisma.aiUsageCall.findFirst({ where: { id: callId, userId, kind: 'generation', status: 'success', provenance: 'native' } });
         if (!call)
             return res.status(404).json({ error: 'Successful call not found' });
-        if (call.imageIds.length) {
-            const existing = await index_1.prisma.chromaImage.findFirst({ where: { id: call.imageIds[0], userId } });
+        if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndex >= call.outputCount)
+            return res.status(400).json({ error: 'Invalid outputIndex' });
+        if (typeof image !== 'string' || !image || (originalName != null && (typeof originalName !== 'string' || originalName.length > 255)))
+            return res.status(400).json({ error: 'Invalid image or originalName' });
+        const stableImageId = crypto_1.default.createHash('sha256').update(callId + ':' + outputIndex).digest('hex');
+        {
+            const existing = await index_1.prisma.chromaImage.findFirst({ where: { id: stableImageId, userId } });
             if (existing)
                 return res.json(existing);
         }
@@ -218,31 +219,50 @@ router.post('/images', async (req, res) => {
         const filename = `${Date.now()}-${crypto_1.default.randomUUID()}.png`;
         const filePath = path_1.default.join(userDir, filename);
         await promises_1.default.writeFile(filePath, buffer);
-        const chromaImage = await index_1.prisma.$transaction(async (tx) => {
-            const latest = await tx.aiUsageCall.findUniqueOrThrow({ where: { id: callId } });
-            if (latest.imageIds.length) {
-                const existing = await tx.chromaImage.findFirst({ where: { id: latest.imageIds[0], userId } });
-                if (existing)
-                    return existing;
+        let chromaImage;
+        try {
+            for (let attempt = 0;; attempt++) {
+                try {
+                    chromaImage = await index_1.prisma.$transaction(async (tx) => {
+                        const latest = await tx.aiUsageCall.findUniqueOrThrow({ where: { id: callId } });
+                        {
+                            const existing = await tx.chromaImage.findFirst({ where: { id: stableImageId, userId } });
+                            if (existing)
+                                return existing;
+                        }
+                        const saved = await tx.chromaImage.create({
+                            data: {
+                                id: stableImageId,
+                                filename,
+                                originalName: originalName || null,
+                                size: buffer.length,
+                                mode: call.mode,
+                                model: call.model,
+                                userId,
+                            },
+                        });
+                        await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds: [...new Set([...latest.imageIds, saved.id])], storageStatus: latest.imageIds.length + 1 >= latest.outputCount ? 'saved' : 'pending' } });
+                        return saved;
+                    }, { isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable });
+                    break;
+                }
+                catch (error) {
+                    if (error.code !== 'P2034' || attempt >= 2)
+                        throw error;
+                }
             }
-            const saved = await tx.chromaImage.create({
-                data: {
-                    filename,
-                    originalName: originalName || null,
-                    size: buffer.length,
-                    mode: call.mode,
-                    model: call.model,
-                    userId,
-                },
-            });
-            await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds: [saved.id], storageStatus: 'saved' } });
-            return saved;
-        }, { isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable });
+        }
+        catch (error) {
+            await promises_1.default.unlink(filePath).catch(() => { });
+            throw error;
+        }
+        if (chromaImage.filename !== filename)
+            await promises_1.default.unlink(filePath).catch(() => { });
         await cleanupOldImages(userId);
         res.status(201).json(chromaImage);
     }
     catch (error) {
-        console.error('Error uploading image:', error);
+        console.error('Error uploading image');
         if (typeof req.body.callId === 'string')
             await index_1.prisma.aiUsageCall.updateMany({ where: { id: req.body.callId, userId: req.user.id, storageStatus: { not: 'saved' } }, data: { storageStatus: 'failed' } }).catch(err => console.error('Storage status persistence failed:', err));
         res.status(500).json({ error: 'Failed to upload image' });

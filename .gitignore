@@ -2,3 +2,6 @@ backend/backups/
 backend/coverage/
 frontend/coverage/
 .claude/
+.tmp/
+.vite/
+*.log
