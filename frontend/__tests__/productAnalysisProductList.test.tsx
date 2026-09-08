@@ -69,10 +69,10 @@ function countRows(container: HTMLElement): number {
 }
 
 describe('ProductList', () => {
-  it('renders one clickable row per item with pagination hidden when all fit one page', () => {
+  it('renders one clickable row per item with pagination disabled when all fit one page', () => {
     const { container } = render(<ProductList {...PROPS} items={ITEMS} />);
     expect(countRows(container)).toBe(3);
-    expect(screen.getByText('第 1 / 1 页')).toBeTruthy();
+    expect(screen.getByText('共 3 条')).toBeTruthy();
     expect((screen.getByRole('button', { name: '上一页' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: '下一页' }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -83,15 +83,17 @@ describe('ProductList', () => {
     const many = Array.from({ length: 25 }, (_, index) => makeItem({ itemId: `i-${index}` }));
     const first = render(<ProductList {...PROPS} items={many} page={1} onPageChange={onPageChange} />);
     expect(countRows(first.container)).toBe(10);
-    expect(first.getByText('第 1 / 3 页')).toBeTruthy();
+    expect(first.getByText('共 25 条')).toBeTruthy();
 
     await user.click(first.getByRole('button', { name: '下一页' }));
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    await user.click(first.getByRole('button', { name: '2' }));
     expect(onPageChange).toHaveBeenCalledWith(2);
     first.unmount();
 
     const second = render(<ProductList {...PROPS} items={many} page={2} onPageChange={onPageChange} />);
     expect(countRows(second.container)).toBe(10);
-    expect(second.getByText('第 2 / 3 页')).toBeTruthy();
+    expect(second.getByRole('button', { name: '2' }).getAttribute('aria-current')).toBe('page');
     await user.click(second.getByRole('button', { name: '上一页' }));
     expect(onPageChange).toHaveBeenCalledWith(1);
     second.unmount();
@@ -104,8 +106,43 @@ describe('ProductList', () => {
   it('clamps an out-of-range page to the last page', () => {
     const many = Array.from({ length: 12 }, (_, index) => makeItem({ itemId: `i-${index}` }));
     const { container } = render(<ProductList {...PROPS} items={many} page={9} />);
-    expect(screen.getByText('第 2 / 2 页')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '2' }).getAttribute('aria-current')).toBe('page');
     expect(countRows(container)).toBe(2);
+  });
+
+  it('resizes rows per page and clamps current page when page size changes', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const many = Array.from({ length: 25 }, (_, index) => makeItem({ itemId: `i-${index}` }));
+    const { container } = render(
+      <ProductList {...PROPS} items={many} page={3} onPageChange={onPageChange} />
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: '每页条数' }), '50');
+    expect(onPageChange).toHaveBeenCalledWith(1); // 25 条 / 50 条每页 → 收敛到第 1 页
+    expect(countRows(container)).toBe(25);
+  });
+
+  it('jumps to the entered page and clamps out-of-range input', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const many = Array.from({ length: 25 }, (_, index) => makeItem({ itemId: `i-${index}` }));
+    render(<ProductList {...PROPS} items={many} page={1} onPageChange={onPageChange} />);
+    const input = screen.getByRole('textbox', { name: '跳转页码' });
+    await user.type(input, '2{Enter}');
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    await user.type(input, '99{Enter}');
+    expect(onPageChange).toHaveBeenCalledWith(3);
+  });
+
+  it('collapses page buttons with ellipsis that jumps 5 pages forward', async () => {
+    const user = userEvent.setup();
+    const onPageChange = vi.fn();
+    const many = Array.from({ length: 85 }, (_, index) => makeItem({ itemId: `i-${index}` }));
+    render(<ProductList {...PROPS} items={many} page={1} onPageChange={onPageChange} />);
+    // 9 页 → 1 2 3 4 5 … 9
+    expect(screen.getByRole('button', { name: '9' })).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '向后5页' }));
+    expect(onPageChange).toHaveBeenCalledWith(6);
   });
 
   it('calls onSelect with the clicked item and supports Enter on focused row', async () => {

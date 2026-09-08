@@ -13,7 +13,11 @@ const resolveEncryptionKey = (keySource?: string): Buffer => {
   return createHash('sha256').update(source, 'utf8').digest();
 };
 
-export const encryptYcAppSecret = (value: string, keySource?: string): string => {
+/** 前端 API Key 输入框的掩码占位；接口收到该值视为"未修改" */
+export const AI_KEY_MASK = '••••••••';
+
+/** 通用 AES-256-GCM 加密（YC 凭据与 AI API Key 共用，格式 v1:iv:authTag:cipher） */
+export const encryptSecret = (value: string, keySource?: string): string => {
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv('aes-256-gcm', resolveEncryptionKey(keySource), iv);
   const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
@@ -26,7 +30,7 @@ export const encryptYcAppSecret = (value: string, keySource?: string): string =>
   ].join(':');
 };
 
-export const decryptYcAppSecret = (value: string, keySource?: string): string => {
+export const decryptSecret = (value: string, keySource?: string): string => {
   const [version, ivValue, authTagValue, encryptedValue, ...extra] = value.split(':');
   if (
     version !== ENCRYPTION_VERSION
@@ -52,3 +56,10 @@ export const decryptYcAppSecret = (value: string, keySource?: string): string =>
     throw new Error('Unable to decrypt YC credential');
   }
 };
+
+/** 历史命名（元仓凭据沿用），实现委托给通用版本 */
+export const encryptYcAppSecret = (value: string, keySource?: string): string =>
+  encryptSecret(value, keySource);
+
+export const decryptYcAppSecret = (value: string, keySource?: string): string =>
+  decryptSecret(value, keySource);

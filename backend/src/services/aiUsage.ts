@@ -6,6 +6,8 @@ import { ApiError, MODEL_COSTS } from './chroma/config';
 export interface AiCallInput {
   userId: string; actorName?: string; requestKey: string; operationId: string;
   kind: 'analysis' | 'generation'; mode: string; model: string; payload: unknown; module?: string;
+  /** 模型白名单覆盖（用户级 AI 配置的自定义模型名）；缺省用环境变量/内置白名单 */
+  allowedModels?: string[];
 }
 
 function canonical(value: unknown): string {
@@ -23,7 +25,7 @@ export async function runAiCall(input: AiCallInput, provider: () => Promise<any>
     throw new ApiError(400, '请升级客户端：必须提供有效的 requestKey 和 operationId');
   }
   const models = input.module === 'product-analysis'
-    ? [process.env.GLM_MODEL || 'glm-5.3-flash']
+    ? input.allowedModels ?? [process.env.GLM_MODEL || 'glm-5.3-flash']
     : input.kind === 'analysis'
     ? ['doubao-seed-2-0-lite', 'doubao-seed-2-0-mini', 'doubao-seed-2-0-pro']
     : ['doubao-seedream-4.5', 'doubao-seedream-5.0-lite'];
@@ -60,7 +62,14 @@ export async function runAiCall(input: AiCallInput, provider: () => Promise<any>
       errorCode: notSubmitted ? 'NOT_SUBMITTED' : failed ? 'PROVIDER_REJECTED' : 'PROVIDER_RESULT_UNKNOWN',
       errorMessage: failed ? '供应商拒绝请求' : '调用结果未知，请核实后再发起新的生成',
     } });
-    throw new ApiError(failed ? 422 : 502, failed ? '供应商拒绝请求' : '调用结果未知或无有效产出；请核对调用记录，不要盲目重新生成');
+    // 把供应商/上游的具体原因（如"余额不足"）带给前端，避免只有通用文案
+    const reason = error instanceof ApiError
+      ? error.detail
+      : typeof error?.message === 'string' && error.message
+        ? error.message.slice(0, 200)
+        : '';
+    const baseDetail = failed ? '供应商拒绝请求' : '调用结果未知或无有效产出；请核对调用记录，不要盲目重新生成';
+    throw new ApiError(failed ? 422 : 502, reason ? `${baseDetail}（${reason}）` : baseDetail);
   }
 
   const outputCount = input.kind === 'generation' ? result.data.length : 0;

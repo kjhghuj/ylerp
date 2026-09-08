@@ -69,6 +69,6 @@ describe('PotentialList', () => {
 
   it('shows empty state when no items', () => {
     render(<PotentialList items={[]} onSelect={vi.fn()} />);
-    expect(screen.getByText(/暂无符合条件的潜力商品/)).toBeTruthy();
+    expect(screen.getByText(/新上架商品」表中暂无符合条件的商品/)).toBeTruthy();
   });
 });

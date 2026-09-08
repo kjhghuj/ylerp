@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, PackageX } from 'lucide-react';
 import { formatCount, formatMoney, formatPercent, type SortDirection } from '../utils/format';
 import { useProductAnalysisStrings } from '../i18n';
@@ -8,6 +8,32 @@ import type { ParentProduct } from '../types';
 export type ProductSortKey = 'salesOrdered' | 'ordersOrdered' | 'cvrConfirmed' | 'visitors';
 
 export const PRODUCT_PAGE_SIZE = 10;
+
+/** 每页条数可选项与页码折叠阈值（对齐 Element 分页器） */
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGER_MAX_BUTTONS = 7;
+const PAGER_FAST_STEP = 5;
+
+type PagerItem = number | 'prev-more' | 'next-more';
+
+/**
+ * 页码序列（Element pagerCount=7 规则）：
+ * 总页数 ≤7 全量展示；否则 1 … c-1 c c+1 … 末页，两端各自在边缘时展开为连续 5 个
+ */
+function buildPager(current: number, totalPages: number): PagerItem[] {
+  if (totalPages <= PAGER_MAX_BUTTONS) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+  const showPrevMore = current > 4;
+  const showNextMore = current < totalPages - 3;
+  if (showPrevMore && !showNextMore) {
+    return [1, 'prev-more', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  }
+  if (!showPrevMore && showNextMore) {
+    return [1, 2, 3, 4, 5, 'next-more', totalPages];
+  }
+  return [1, 'prev-more', current - 1, current, current + 1, 'next-more', totalPages];
+}
 
 interface ProductListProps {
   items: ParentProduct[];
@@ -27,7 +53,7 @@ function statusStyle(status: string | undefined): { background: string; color: s
   return { background: 'rgba(245,158,11,0.14)', color: '#d97706' };
 }
 
-/** 商品列表：整行点击打开详情，列头点击排序（降/升切换），每页 10 条，左下角分页器 */
+/** 商品列表：整行点击打开详情，列头点击排序（降/升切换），左下角分页器（Element 风格） */
 export const ProductList: React.FC<ProductListProps> = ({
   items,
   currency,
@@ -39,10 +65,20 @@ export const ProductList: React.FC<ProductListProps> = ({
   onSelect,
 }) => {
   const strings = useProductAnalysisStrings();
-  const totalPages = Math.max(1, Math.ceil(items.length / PRODUCT_PAGE_SIZE));
+  const [pageSize, setPageSize] = useState(PRODUCT_PAGE_SIZE);
+  const [jumpInput, setJumpInput] = useState('');
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   // 筛选收窄后页码可能越界，渲染前收敛到最后一页
   const safePage = Math.min(page, totalPages);
-  const visibleItems = items.slice((safePage - 1) * PRODUCT_PAGE_SIZE, safePage * PRODUCT_PAGE_SIZE);
+  const visibleItems = items.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  /** 快速跳转：回车/失焦时提交，越界收敛到有效页 */
+  const commitJump = () => {
+    if (jumpInput === '') return;
+    const target = Math.min(totalPages, Math.max(1, Number(jumpInput)));
+    if (Number.isFinite(target)) onPageChange(target);
+    setJumpInput('');
+  };
 
   if (items.length === 0) {
     return (
@@ -94,33 +130,112 @@ export const ProductList: React.FC<ProductListProps> = ({
           </tbody>
         </table>
       </div>
-      {/* 分页器：列表左下方 */}
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          aria-label={strings.prevPage}
-          disabled={safePage <= 1}
-          onClick={() => onPageChange(Math.max(1, safePage - 1))}
-          className="p-1 rounded-lg transition-colors duration-200"
-          style={navButtonStyle(safePage <= 1)}
-        >
-          <ChevronLeft size={15} />
-        </button>
-        <span className="text-xs tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
-          {strings.pageIndicator
-            .replace('{page}', String(safePage))
-            .replace('{totalPages}', String(totalPages))}
+      {/* 分页器（Element 风格）：共 X 条 · 每页条数 · 上一页 · 页码（省略号快捷跳转）· 下一页 · 快速跳转 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+        <span className="tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+          {strings.pagination.total.replace('{total}', String(items.length))}
         </span>
-        <button
-          type="button"
-          aria-label={strings.nextPage}
-          disabled={safePage >= totalPages}
-          onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
-          className="p-1 rounded-lg transition-colors duration-200"
-          style={navButtonStyle(safePage >= totalPages)}
+        <select
+          value={pageSize}
+          aria-label={strings.pagination.sizeLabel}
+          onChange={(event) => {
+            const size = Number(event.target.value);
+            if (!PAGE_SIZE_OPTIONS.includes(size) || size === pageSize) return;
+            setPageSize(size);
+            // 对齐 Element：切换每页条数后当前页收敛到新的有效范围
+            const nextTotalPages = Math.max(1, Math.ceil(items.length / size));
+            onPageChange(Math.min(page, nextTotalPages));
+          }}
+          className="px-1.5 py-1 rounded-lg border cursor-pointer outline-none"
+          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
         >
-          <ChevronRight size={15} />
-        </button>
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {strings.pagination.sizeOption.replace('{size}', String(size))}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={strings.prevPage}
+            disabled={safePage <= 1}
+            onClick={() => onPageChange(Math.max(1, safePage - 1))}
+            className="p-1 rounded-lg transition-colors duration-200"
+            style={navButtonStyle(safePage <= 1)}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          {buildPager(safePage, totalPages).map((item) =>
+            item === 'prev-more' || item === 'next-more' ? (
+              <button
+                key={item}
+                type="button"
+                aria-label={item === 'prev-more' ? strings.pagination.prevMore : strings.pagination.nextMore}
+                onClick={() =>
+                  onPageChange(
+                    Math.max(
+                      1,
+                      Math.min(totalPages, safePage + (item === 'prev-more' ? -PAGER_FAST_STEP : PAGER_FAST_STEP))
+                    )
+                  )
+                }
+                className="min-w-[28px] h-7 px-1 rounded-lg flex items-center justify-center transition-colors duration-200 hover:opacity-80"
+                style={{ color: 'var(--text-tertiary)' }}
+              >
+                …
+              </button>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                onClick={() => onPageChange(item)}
+                aria-current={item === safePage ? 'page' : undefined}
+                className={
+                  item === safePage
+                    ? 'min-w-[28px] h-7 px-1 rounded-lg flex items-center justify-center tabular-nums font-medium transition-colors duration-200'
+                    : 'min-w-[28px] h-7 px-1 rounded-lg flex items-center justify-center tabular-nums transition-colors duration-200 hover:opacity-80'
+                }
+                style={
+                  item === safePage
+                    ? { backgroundColor: 'var(--primary)', color: '#fff' }
+                    : { color: 'var(--text-secondary)' }
+                }
+              >
+                {item}
+              </button>
+            )
+          )}
+          <button
+            type="button"
+            aria-label={strings.nextPage}
+            disabled={safePage >= totalPages}
+            onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
+            className="p-1 rounded-lg transition-colors duration-200"
+            style={navButtonStyle(safePage >= totalPages)}
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+        <span className="inline-flex items-center gap-1">
+          <span style={{ color: 'var(--text-tertiary)' }}>{strings.pagination.jumpPrefix}</span>
+          <input
+            value={jumpInput}
+            aria-label={strings.pagination.jumpLabel}
+            inputMode="numeric"
+            onChange={(event) => setJumpInput(event.target.value.replace(/\D/g, ''))}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commitJump();
+            }}
+            onBlur={commitJump}
+            placeholder={String(safePage)}
+            className="w-11 px-1 py-1 text-center rounded-lg border outline-none tabular-nums"
+            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-primary)' }}
+          />
+          {strings.pagination.jumpSuffix && (
+            <span style={{ color: 'var(--text-tertiary)' }}>{strings.pagination.jumpSuffix}</span>
+          )}
+        </span>
       </div>
     </div>
   );

@@ -170,9 +170,30 @@ export interface PotentialResponse {
   items: PotentialItem[];
 }
 
+/** 新商品分析筛选条件（数值项 null = 不限该条件），与后端 PotentialFilterOptions 对应；数据根基为「新上架商品」sheet */
+export interface PotentialFilters {
+  minCtrPercent: number | null;
+  minClicks: number | null;
+  minCartRatePercent: number | null;
+  excludeBannedDeleted: boolean;
+  limit: number;
+}
+
+export const DEFAULT_POTENTIAL_FILTERS: PotentialFilters = {
+  minCtrPercent: 4,
+  minClicks: 5,
+  minCartRatePercent: 1,
+  excludeBannedDeleted: true,
+  limit: 10,
+};
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  /** 推理模型的思考过程（仅前端展示，发送历史时不回传） */
+  reasoning?: string;
+  /** 思考耗时（毫秒），用于「已深度思考 X 秒」提示 */
+  reasoningMs?: number;
 }
 
 export interface FunnelStage {

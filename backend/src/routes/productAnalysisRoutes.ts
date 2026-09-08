@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
-import { GLM_MODEL, GlmApiError } from '../services/glm/glmConfig';
-import { glmChat, GlmChatMessage } from '../services/glm/glmClient';
+import { GlmApiError } from '../services/glm/glmConfig';
+import { glmChat, glmChatStream, GlmChatMessage } from '../services/glm/glmClient';
 import { ApiError } from '../services/chroma/config';
+import { resolveChatAiConfig } from '../services/aiUserConfig';
 import {
   buildShopAnalysisSystemPrompt,
   serializeAggregatedItem,
@@ -18,7 +19,7 @@ import {
   mapParsedSheetItemsToDailyRows,
   type DailyItemRow,
 } from '../services/productAnalysisAggregation';
-import { rankPotentialItems } from '../services/productAnalysisPotential';
+import { rankPotentialItems, type PotentialFilterOptions } from '../services/productAnalysisPotential';
 
 const router = Router();
 
@@ -462,25 +463,50 @@ router.get('/shops/:id/agg', async (req: Request, res: Response) => {
   }
 });
 
+/** 新商品分析筛选参数：数字或 'none'（不限）；缺省回退服务端默认阈值 */
+function parsePotentialFilters(query: Record<string, unknown>): PotentialFilterOptions {
+  const numberOrNull = (key: string): number | null | undefined => {
+    const raw = query[key];
+    if (raw === undefined || raw === '') return undefined;
+    if (raw === 'none') return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  };
+  const excludeRaw = query.excludeBannedDeleted;
+  return {
+    minCtrPercent: numberOrNull('minCtr'),
+    minClicks: numberOrNull('minClicks'),
+    minCartRatePercent: numberOrNull('minCartRate'),
+    excludeBannedDeleted: excludeRaw === undefined ? undefined : excludeRaw !== '0',
+    limit: numberOrNull('limit') ?? undefined,
+  };
+}
+
 router.get('/shops/:id/potential', async (req: Request, res: Response) => {
   try {
     const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
     if (!shop) return res.status(404).json({ detail: 'Shop not found' });
     const range = parseRange(req.query as Record<string, unknown>);
     if (!range) return res.status(400).json({ detail: 'from/to 需为合法的 YYYY-MM-DD 且 from ≤ to' });
-    // 需要 extra 中的上架天数/日期做潜力入围判断
+    // 数据根基：区间内出现在「新上架商品」sheet 的商品。
+    // 入库时同商品多 sheet 只保留一行（按优先级归属，避免聚合重复累加），
+    // 因此判定需同时看行的归属 sheetKey 与 extra.sheetKeys（商品当天出现过的全部工作表）。
+    const inNewSheet = (row: DailyItemRow) => {
+      if (row.sheetKey === 'new') return true;
+      const sheetKeys = (row.extra as { sheetKeys?: unknown } | null)?.sheetKeys;
+      return Array.isArray(sheetKeys) && sheetKeys.includes('new');
+    };
     const { rows } = await fetchRangeRows(shop.id, range.from, range.to, { includeDetailFields: true });
+    const newItemIds = new Set(rows.filter(inNewSheet).map((row) => row.itemId));
     const byItem = new Map<string, {
       itemId: string;
       itemName: string;
       sheetKey: string;
       status?: string | null;
-      createdAt: string | null;
-      createdDays: number | null;
-      lastExtraDate: string;
       daily: { date: string; ordersOrdered: number; visitors: number; clicks: number; impressions: number; cartVisitors: number }[];
     }>();
     for (const row of rows) {
+      if (!newItemIds.has(row.itemId)) continue;
       let candidate = byItem.get(row.itemId);
       if (!candidate) {
         candidate = {
@@ -488,21 +514,9 @@ router.get('/shops/:id/potential', async (req: Request, res: Response) => {
           itemName: row.itemName,
           sheetKey: row.sheetKey,
           status: row.status ?? null,
-          createdAt: null,
-          createdDays: null,
-          lastExtraDate: '',
           daily: [],
         };
         byItem.set(row.itemId, candidate);
-      }
-      // 上架天数/日期取自区间内最后一天行的 extra（商品属性不随日聚合）
-      if (row.date >= candidate.lastExtraDate) {
-        candidate.lastExtraDate = row.date;
-        const extra = row.extra as Record<string, unknown> | null | undefined;
-        const createdAt = extra?.createdAt;
-        const createdDays = extra?.createdDays;
-        candidate.createdAt = typeof createdAt === 'string' ? createdAt : null;
-        candidate.createdDays = typeof createdDays === 'number' && Number.isFinite(createdDays) ? createdDays : null;
       }
       candidate.daily.push({
         date: row.date,
@@ -513,7 +527,7 @@ router.get('/shops/:id/potential', async (req: Request, res: Response) => {
         cartVisitors: typeof row.cartVisitors === 'number' ? row.cartVisitors : 0,
       });
     }
-    const items = rankPotentialItems([...byItem.values()]);
+    const items = rankPotentialItems([...byItem.values()], parsePotentialFilters(req.query as Record<string, unknown>));
     return res.json({ from: range.from, to: range.to, items });
   } catch (error) {
     return errorResponse(error, res);
@@ -579,22 +593,26 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       return res.status(400).json({ detail: 'from 不能晚于 to' });
     }
     const itemId = typeof body.itemId === 'string' && body.itemId ? body.itemId : null;
+    // 个人中心 AI 配置优先，未配置回退环境变量
+    const chatConfig = await resolveChatAiConfig(req.user!.id);
 
-    let context: string;
-    let mode: 'item' | 'overview';
+    let systemPrompt: string;
+    let chatMode: string;
+    let payload: Record<string, unknown>;
     if (itemId) {
       const { uploads, rows } = await fetchRangeRows(shop.id, from, to, { includeDetailFields: true, itemId });
       if (rows.length === 0) {
         return res.status(404).json({ detail: 'Item not found in this shop' });
       }
       const detail = buildItemDetail(rows);
-      context = serializeAggregatedItem(
+      const context = serializeAggregatedItem(
         detail.item as unknown as Record<string, unknown>,
         detail.series,
         detail.variations
       );
-      mode = 'item';
-      const systemPrompt = [
+      chatMode = 'product_analysis_chat_item';
+      payload = { shopId, itemId, from, to, history };
+      systemPrompt = [
         buildShopAnalysisSystemPrompt({
           shopName: shop.name,
           site: shop.site,
@@ -602,64 +620,108 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
           from,
           to,
           days: uploads.length,
-          mode,
+          mode: 'item',
         }),
         '===== 分析数据 =====',
         context || '（该区间无可用数据）',
       ].join('\n\n');
-      const { result } = await runAiCall({
-        userId: req.user!.id,
-        actorName: req.user!.username,
-        requestKey: body.requestKey as string,
-        operationId: body.operationId as string,
-        kind: 'analysis',
-        module: 'product-analysis',
-        mode: 'product_analysis_chat_item',
-        model: GLM_MODEL,
-        payload: { shopId, itemId, from, to, history },
-      }, () => glmChat([{ role: 'system', content: systemPrompt }, ...history]));
-      return res.json(result);
+    } else {
+      const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
+      const aggregated = aggregateItems(rows);
+      const bySheet = new Map<string, typeof aggregated>();
+      for (const item of aggregated) {
+        const list = bySheet.get(item.sheetKey) ?? [];
+        list.push(item);
+        bySheet.set(item.sheetKey, list);
+      }
+      const context = serializeAggregatedOverview(
+        [...bySheet.entries()].map(([sheetKey, items]) => ({
+          sheetKey,
+          items: items as unknown as Record<string, unknown>[],
+        }))
+      );
+      chatMode = 'product_analysis_chat_overview';
+      payload = { shopId, from, to, history };
+      systemPrompt = [
+        buildShopAnalysisSystemPrompt({
+          shopName: shop.name,
+          site: shop.site,
+          currency: shop.currency,
+          from,
+          to,
+          days: uploads.length,
+          mode: 'overview',
+        }),
+        '===== 分析数据 =====',
+        context || '（该区间无可用数据）',
+      ].join('\n\n');
     }
 
-    const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
-    const aggregated = aggregateItems(rows);
-    const bySheet = new Map<string, typeof aggregated>();
-    for (const item of aggregated) {
-      const list = bySheet.get(item.sheetKey) ?? [];
-      list.push(item);
-      bySheet.set(item.sheetKey, list);
-    }
-    context = serializeAggregatedOverview(
-      [...bySheet.entries()].map(([sheetKey, items]) => ({
-        sheetKey,
-        items: items as unknown as Record<string, unknown>[],
-      }))
-    );
-    mode = 'overview';
-    const systemPrompt = [
-      buildShopAnalysisSystemPrompt({
-        shopName: shop.name,
-        site: shop.site,
-        currency: shop.currency,
-        from,
-        to,
-        days: uploads.length,
-        mode,
-      }),
-      '===== 分析数据 =====',
-      context || '（该区间无可用数据）',
-    ].join('\n\n');
-    const { result } = await runAiCall({
+    const chatMessages: GlmChatMessage[] = [{ role: 'system', content: systemPrompt }, ...history];
+    const aiCallInput = {
       userId: req.user!.id,
       actorName: req.user!.username,
       requestKey: body.requestKey as string,
       operationId: body.operationId as string,
-      kind: 'analysis',
+      kind: 'analysis' as const,
       module: 'product-analysis',
-      mode: 'product_analysis_chat_overview',
-      model: GLM_MODEL,
-      payload: { shopId, from, to, history },
-    }, () => glmChat([{ role: 'system', content: systemPrompt }, ...history]));
+      mode: chatMode,
+      model: chatConfig.model,
+      allowedModels: [chatConfig.model],
+      payload,
+    };
+
+    // 流式模式：SSE 逐块推送增量，结束事件带最终模型；错误以事件形式返回
+    if (body.stream === true) {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+      res.flushHeaders();
+      const send = (data: Record<string, unknown>) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
+      };
+      // 推理模型思考期可能数十秒无正文：期间定时发 SSE 注释心跳，防止代理空闲断连
+      let sawProviderData = false;
+      const heartbeat = setInterval(() => {
+        if (!sawProviderData) res.write(': keep-alive\n\n');
+      }, 5_000);
+      try {
+        let emitted = false;
+        const { result } = await runAiCall(aiCallInput, () =>
+          glmChatStream(
+            chatMessages,
+            { config: chatConfig, fastMode: body.deepThinking === false },
+            (delta) => {
+              sawProviderData = true;
+              emitted = true;
+              send({ delta });
+            },
+            (reasoning) => {
+              sawProviderData = true;
+              send({ reasoning });
+            }
+          )
+        );
+        // 幂等重放（或供应商未产生增量）时把完整内容一次性补发
+        if (!emitted && typeof result?.content === 'string' && result.content) {
+          send({ delta: result.content });
+        }
+        send({ done: true, model: typeof result?.model === 'string' ? result.model : chatConfig.model });
+      } catch (error) {
+        const detail =
+          error instanceof ApiError || error instanceof GlmApiError ? error.detail : 'AI 调用失败';
+        send({ error: detail });
+      } finally {
+        clearInterval(heartbeat);
+        res.end();
+      }
+      return;
+    }
+
+    const { result } = await runAiCall(aiCallInput, () => glmChat(chatMessages, { config: chatConfig }));
     return res.json(result);
   } catch (error) {
     return errorResponse(error, res);

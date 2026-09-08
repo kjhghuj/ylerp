@@ -145,7 +145,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
 
   return (
     <div
-      className="rounded-2xl border flex flex-col h-full min-h-0"
+      className="rounded-2xl border flex flex-col"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
     >
       <div className="flex items-center justify-between px-3 pt-3">
@@ -202,9 +202,9 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 auto-rows-fr gap-1 px-2 pb-2 flex-1 min-h-0">
+      <div className="grid grid-cols-7 gap-1 px-2 pb-2">
         {cells.map((date, index) => {
-          if (date === null) return <span key={`blank-${index}`} />;
+          if (date === null) return <span key={`blank-${index}`} className="aspect-square" />;
           const day = uploadedMap.get(date);
           const isUploaded = Boolean(day);
           const isToday = date === today;
@@ -220,7 +220,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 onClick={() => toggleDate(date)}
                 aria-pressed={isSelected}
                 aria-label={date}
-                className="rounded-lg text-[11px] font-medium border transition-colors"
+                className="aspect-square rounded-lg text-[11px] font-medium border transition-colors"
                 style={{
                   backgroundColor: isSelected ? '#dc2626' : isUploaded ? 'var(--primary)' : 'transparent',
                   borderColor: isSelected ? '#dc2626' : isUploaded ? 'var(--primary)' : 'transparent',
@@ -238,7 +238,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
           return (
             <span
               key={date}
-              className="group relative rounded-lg text-[11px] flex items-center justify-center border transition-colors"
+              className="group relative aspect-square rounded-lg text-[11px] flex items-center justify-center border transition-colors"
               style={{
                 backgroundColor: isUploaded ? 'var(--primary)' : 'transparent',
                 borderColor: isUploaded ? 'var(--primary)' : 'transparent',

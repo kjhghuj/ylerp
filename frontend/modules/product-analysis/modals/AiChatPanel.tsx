@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Send, Loader2, Bot, User, RotateCcw, Sparkles, Lock } from 'lucide-react';
+import { Send, Loader2, Bot, User, RotateCcw, Sparkles, Lock, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../../../AuthContext';
 import { hasPermission } from '../../../components/PermissionTree';
-import { getApiErrorDetail, sendProductAnalysisChat } from '../services/productAnalysisApi';
+import { getApiErrorDetail, sendProductAnalysisChatStream } from '../services/productAnalysisApi';
+import { MarkdownText } from '../components/MarkdownText';
 import { useProductAnalysisStrings } from '../i18n';
 import type { ChatMessage } from '../types';
 
@@ -15,7 +16,7 @@ interface AiChatPanelProps {
 
 const ITEM_NAME_SNIPPET_LENGTH = 40;
 
-/** GLM AI 对话面板：非流式，130s 超时，聊天记录仅存前端 state */
+/** GLM AI 对话面板：SSE 流式输出（含思考过程），聊天记录仅存前端 state */
 export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTitle }) => {
   const { user } = useAuth();
   const strings = useProductAnalysisStrings();
@@ -26,6 +27,9 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deepThinking, setDeepThinking] = useState(true);
+  /** 各消息思考区的手动展开状态（未设置时：思考流式中展开、出正文后折叠） */
+  const [expandedReasoning, setExpandedReasoning] = useState<Record<number, boolean>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -37,18 +41,54 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     const trimmed = text.trim();
     if (!trimmed || isSending || !hasAiPermission) return;
     const nextMessages: ChatMessage[] = [...messages, { role: 'user', content: trimmed }];
-    setMessages(nextMessages);
+    // 先放置空的助手占位消息，思考与正文增量逐段填充
+    const assistantIndex = nextMessages.length;
+    setMessages([...nextMessages, { role: 'assistant', content: '' }]);
     setInput('');
     setError(null);
     setIsSending(true);
-    try {
-      const result = await sendProductAnalysisChat({
-        shopId,
-        ...(itemId ? { itemId } : {}),
-        messages: nextMessages,
+    const startedAt = Date.now();
+    let streamed = '';
+    let reasoning = '';
+    let contentStartedAt = 0;
+    const patchAssistant = (patch: Partial<ChatMessage>) => {
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[assistantIndex] = { ...copy[assistantIndex], ...patch };
+        return copy;
       });
-      setMessages((prev) => [...prev, { role: 'assistant', content: result.content }]);
+    };
+    try {
+      await sendProductAnalysisChatStream(
+        {
+          shopId,
+          ...(itemId ? { itemId } : {}),
+          messages: nextMessages,
+          deepThinking,
+        },
+        {
+          onReasoning: (chunk) => {
+            reasoning += chunk;
+            patchAssistant({ reasoning });
+          },
+          onDelta: (delta) => {
+            if (!contentStartedAt) {
+              contentStartedAt = Date.now();
+              patchAssistant({ reasoningMs: contentStartedAt - startedAt });
+            }
+            streamed += delta;
+            patchAssistant({ content: streamed });
+          },
+        }
+      );
+      if (!streamed) {
+        setMessages((prev) => prev.filter((_, index) => index !== assistantIndex));
+      }
     } catch (err) {
+      // 已有部分内容时保留已生成部分，仅提示错误
+      if (!streamed) {
+        setMessages((prev) => prev.filter((_, index) => index !== assistantIndex));
+      }
       setError(getApiErrorDetail(err));
     } finally {
       setIsSending(false);
@@ -70,7 +110,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
 
   return (
     <div className="flex flex-col rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}>
-      {/* 上下文指示 */}
+      {/* 上下文指示 + 深度思考开关 */}
       <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}>
         <Sparkles size={13} style={{ color: 'var(--primary)' }} />
         <span className="truncate">
@@ -78,6 +118,21 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             ? `${strings.ai.contextItem}：${(itemTitle ?? '').slice(0, ITEM_NAME_SNIPPET_LENGTH)}`
             : strings.ai.contextReport}
         </span>
+        <button
+          type="button"
+          onClick={() => setDeepThinking((value) => !value)}
+          disabled={isSending}
+          aria-pressed={deepThinking}
+          title={strings.ai.deepThinkingHint}
+          className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full border transition-colors"
+          style={{
+            borderColor: deepThinking ? 'var(--primary)' : 'var(--border-light)',
+            color: deepThinking ? 'var(--primary)' : 'var(--text-tertiary)',
+          }}
+        >
+          <Brain size={12} />
+          {strings.ai.deepThinking}
+        </button>
       </div>
 
       {/* 消息区 */}
@@ -100,9 +155,59 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             </div>
           </div>
         )}
-        {messages.map((message, index) => (
+        {messages.map((message, index) => {
+          const isStreamingLast =
+            isSending && index === messages.length - 1 && message.role === 'assistant';
+          const thinkingStreaming = isStreamingLast && !message.content;
+          // 思考流式期间自动展开；正文出现后自动折叠为摘要条（用户手动展开的除外）
+          const reasoningExpanded = expandedReasoning[index] ?? thinkingStreaming;
+          return (
+          <React.Fragment key={index}>
+          {message.role === 'assistant' && message.reasoning && (
+            <div className="self-start ml-8 w-full max-w-[92%]">
+              {reasoningExpanded ? (
+                <div
+                  className="rounded-xl border px-3 py-2"
+                  style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)' }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setExpandedReasoning((prev) => ({ ...prev, [index]: !reasoningExpanded }))}
+                    className="w-full flex items-center justify-between text-[11px] mb-1"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    <span className="inline-flex items-center gap-1 font-medium">
+                      {thinkingStreaming ? <Loader2 size={11} className="animate-spin" /> : <Brain size={11} />}
+                      {thinkingStreaming ? strings.ai.thinkingNow : strings.ai.reasoningLabel}
+                    </span>
+                    {!thinkingStreaming && <ChevronUp size={12} />}
+                  </button>
+                  <div
+                    className="max-h-28 overflow-y-auto text-[11px] leading-relaxed whitespace-pre-wrap break-words"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {message.reasoning}
+                    {thinkingStreaming && <span className="animate-pulse">▍</span>}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setExpandedReasoning((prev) => ({ ...prev, [index]: true }))}
+                  className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors"
+                  style={{ borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+                >
+                  <Brain size={11} />
+                  {strings.ai.thoughtFor.replace(
+                    '{seconds}',
+                    String(Math.max(1, Math.round((message.reasoningMs ?? 0) / 1000)))
+                  )}
+                  <ChevronDown size={11} />
+                </button>
+              )}
+            </div>
+          )}
           <div
-            key={index}
             className={`flex items-start gap-2 max-w-[92%] ${message.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'}`}
           >
             <div
@@ -115,7 +220,11 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
               {message.role === 'user' ? <User size={13} /> : <Bot size={13} />}
             </div>
             <div
-              className="px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words"
+              className={`rounded-2xl text-sm ${
+                message.role === 'user'
+                  ? 'px-3.5 py-2.5 whitespace-pre-wrap break-words'
+                  : 'px-3.5 py-2.5 break-words min-w-0'
+              }`}
               style={{
                 backgroundColor: message.role === 'user' ? 'var(--primary)' : 'var(--bg-card-hover)',
                 color: message.role === 'user' ? '#fff' : 'var(--text-primary)',
@@ -123,11 +232,14 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                 borderBottomLeftRadius: message.role === 'assistant' ? 6 : undefined,
               }}
             >
-              {message.content}
+              {message.role === 'assistant' ? <MarkdownText content={message.content} /> : message.content}
+              {isStreamingLast && message.content && <span className="animate-pulse">▍</span>}
             </div>
           </div>
-        ))}
-        {isSending && (
+          </React.Fragment>
+          );
+        })}
+        {isSending && !messages[messages.length - 1]?.content && !messages[messages.length - 1]?.reasoning && (
           <div className="flex items-center gap-2 self-start text-xs" style={{ color: 'var(--text-tertiary)' }}>
             <Loader2 size={14} className="animate-spin" />
             {strings.ai.thinking}

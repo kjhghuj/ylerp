@@ -1,15 +1,38 @@
 /**
  * 潜力商品评分（纯函数）。
- * 筛选规则：上架 ≤ 60 天、区间点击率 > 4%、区间点击数 > 5、区间加购率 > 1%，且未被封禁/删除。
+ * 筛选规则默认：上架 ≤ 60 天、区间点击率 > 4%、区间点击数 > 5、区间加购率 > 1%，且未被封禁/删除；
+ * 全部阈值可由调用方覆盖（null = 不限该条件），前端「潜力商品」筛选面板即基于此。
  * 入围后按已确认算法排序：score = 0.35×环比增长 + 0.25×加购率 + 0.25×优化空间 + 0.15×流量基数，附中文理由。
  * 转化率统一访客口径（orders/visitors）。
  */
 
-export const MAX_LISTED_DAYS = 60;
+/**
+ * 新商品分析评分（纯函数）。
+ * 数据根基：区间内出现在「新上架商品」sheet 的商品（由路由层筛选后传入）。
+ * 筛选规则默认：区间点击率 > 4%、区间点击数 > 5、区间加购率 > 1%，且未被封禁/删除；
+ * 全部阈值可由调用方覆盖（null = 不限该条件），前端筛选面板即基于此。
+ * 入围后按已确认算法排序：score = 0.35×环比增长 + 0.25×加购率 + 0.25×优化空间 + 0.15×流量基数，附中文理由。
+ * 转化率统一访客口径（orders/visitors）。
+ */
+
 export const MIN_CTR_PERCENT = 4;
 export const MIN_CLICKS = 5;
 export const MIN_CART_RATE_PERCENT = 1;
 const EXCLUDED_STATUS = new Set(['Banned', 'Deleted']);
+
+/** 新商品分析筛选条件（全部可由前端覆盖；0 或 null = 不限制该条件） */
+export interface PotentialFilterOptions {
+  /** 区间点击率下限（%，严格大于）；0 或 null = 不限 */
+  minCtrPercent?: number | null;
+  /** 区间点击数下限（严格大于）；0 或 null = 不限 */
+  minClicks?: number | null;
+  /** 区间加购率下限（%，严格大于）；0 或 null = 不限 */
+  minCartRatePercent?: number | null;
+  /** 排除 Banned/Deleted 商品；默认 true */
+  excludeBannedDeleted?: boolean;
+  /** 返回数量上限；默认 10 */
+  limit?: number;
+}
 
 export interface PotentialDailyRow {
   date: string;
@@ -25,10 +48,6 @@ export interface PotentialCandidate {
   itemName: string;
   sheetKey: string;
   status?: string | null;
-  /** extra.createdDays：导出当天的上架天数 */
-  createdDays?: number | null;
-  /** extra.createdAt：上架日期（YYYY-MM-DD 或原文本） */
-  createdAt?: string | null;
   daily: PotentialDailyRow[];
 }
 
@@ -98,41 +117,36 @@ function computeMetrics(candidate: PotentialCandidate): PotentialMetrics & { rec
   };
 }
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-/** 上架天数：优先用导出的创建天数，其次按上架日期与区间最后一天的差值推算；两者皆缺返回 null（不具备入围资格） */
-function resolveListedDays(candidate: PotentialCandidate, referenceDate: string | null): number | null {
-  if (typeof candidate.createdDays === 'number' && Number.isFinite(candidate.createdDays)) {
-    return candidate.createdDays;
-  }
-  if (typeof candidate.createdAt === 'string' && referenceDate !== null && ISO_DATE_PATTERN.test(candidate.createdAt)) {
-    const diff = Math.floor(
-      (Date.parse(`${referenceDate}T00:00:00.000Z`) - Date.parse(`${candidate.createdAt}T00:00:00.000Z`)) / 86_400_000
-    );
-    return diff >= 0 ? diff : null;
-  }
-  return null;
-}
-
 function formatPercent(value: number | null): string {
   return value === null ? '—' : `${value.toFixed(1)}%`;
 }
 
-/** 评分并排序，返回前 limit 名（rank 从 1 开始） */
-export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10): PotentialResult[] {
+/** 阈值归一：0 与 null 都视为"不限"（填 0 是用户放宽条件的常见习惯，不应卡出"必须>0"） */
+function normalizeThreshold(value: number | null | undefined, fallback: number): number | null {
+  if (value === null) return null;
+  if (value === undefined) return fallback;
+  return value > 0 ? value : null;
+}
+
+/** 评分并排序，返回前 limit 名（rank 从 1 开始）；阈值条件由 options 覆盖，0/null 表示不限 */
+export function rankPotentialItems(candidates: PotentialCandidate[], options: PotentialFilterOptions = {}): PotentialResult[] {
+  const resolved = {
+    minCtrPercent: normalizeThreshold(options.minCtrPercent, MIN_CTR_PERCENT),
+    minClicks: normalizeThreshold(options.minClicks, MIN_CLICKS),
+    minCartRatePercent: normalizeThreshold(options.minCartRatePercent, MIN_CART_RATE_PERCENT),
+    excludeBannedDeleted: options.excludeBannedDeleted !== undefined ? options.excludeBannedDeleted : true,
+    limit: options.limit !== undefined && options.limit > 0 ? options.limit : 10,
+  };
   const computed = candidates.map((candidate) => ({ candidate, metrics: computeMetrics(candidate) }));
-  // 入围条件：未封禁/删除 + 上架 ≤ 60 天 + 点击率 > 4% + 点击数 > 5 + 加购率 > 1%
+  // 入围条件（任一项为 null 即跳过该条件）
   const eligible = computed.filter(({ candidate, metrics }) => {
-    if (EXCLUDED_STATUS.has(String(candidate.status ?? ''))) return false;
-    const listedDays = resolveListedDays(candidate, metrics.lastDate);
-    if (listedDays === null || listedDays > MAX_LISTED_DAYS) return false;
-    if (metrics.ctr === null || metrics.ctr <= MIN_CTR_PERCENT) return false;
-    if (metrics.clicks <= MIN_CLICKS) return false;
-    if (metrics.cartRate === null || metrics.cartRate <= MIN_CART_RATE_PERCENT) return false;
+    if (resolved.excludeBannedDeleted && EXCLUDED_STATUS.has(String(candidate.status ?? ''))) return false;
+    if (resolved.minCtrPercent !== null && (metrics.ctr === null || metrics.ctr <= resolved.minCtrPercent)) return false;
+    if (resolved.minClicks !== null && metrics.clicks <= resolved.minClicks) return false;
+    if (resolved.minCartRatePercent !== null && (metrics.cartRate === null || metrics.cartRate <= resolved.minCartRatePercent)) return false;
     return true;
   });
   const metricsById = new Map(eligible.map(({ candidate, metrics }) => [candidate.itemId, metrics]));
-  const listedDaysById = new Map(eligible.map(({ candidate, metrics }) => [candidate.itemId, resolveListedDays(candidate, metrics.lastDate)!]));
 
   const growthValues = eligible.map(({ metrics }) => metrics.growthPercent ?? -100);
   const cartValues = eligible.map(({ metrics }) => metrics.cartRate ?? 0);
@@ -153,7 +167,7 @@ export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10)
     const trafficScore = pct(trafficValues, metrics.visitors / Math.max(1, candidate.daily.length));
     const score = Number((0.35 * growthScore + 0.25 * cartScore + 0.25 * gapScore + 0.15 * trafficScore).toFixed(1));
 
-    const reasons: string[] = [`上架 ${listedDaysById.get(candidate.itemId)} 天`];
+    const reasons: string[] = [];
     if (metrics.growthPercent !== null && metrics.growthPercent >= 30) {
       reasons.push(`后半程销量环比 ${metrics.growthPercent >= 0 ? '+' : ''}${metrics.growthPercent.toFixed(0)}%`);
     }
@@ -168,7 +182,7 @@ export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10)
     if (trafficScore >= 70) {
       reasons.push(`访客基数居前 30%（日均 ${Math.round(metrics.visitors / Math.max(1, candidate.daily.length))}）`);
     }
-    if (reasons.length === 1) {
+    if (reasons.length === 0) {
       reasons.push('综合流量与转化表现均衡，具备提升空间');
     }
 
@@ -186,6 +200,6 @@ export function rankPotentialItems(candidates: PotentialCandidate[], limit = 10)
 
   return scored
     .sort((a, b) => b.score - a.score || a.itemId.localeCompare(b.itemId))
-    .slice(0, limit)
+    .slice(0, resolved.limit)
     .map((result, index) => ({ ...result, rank: index + 1 }));
 }

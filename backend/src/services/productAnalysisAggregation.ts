@@ -250,6 +250,20 @@ export function mapParsedSheetItemsToDailyRows(
   sheets: { sheetKey: string; items: unknown[] }[]
 ): DailyItemRow[] {
   const rows: DailyItemRow[] = [];
+  // 先记录每个商品出现过的全部工作表：归属仍按优先级取一行（避免聚合重复累加），
+  // 但 extra.sheetKeys 保留完整归属，供"新商品分析"等按 sheet 基数筛选（如新品同时进热销表的情况）
+  const sheetKeysByItem = new Map<string, string[]>();
+  for (const sheet of sheets) {
+    if (!sheet || typeof sheet !== 'object' || !Array.isArray(sheet.items)) continue;
+    for (const raw of sheet.items) {
+      if (typeof raw !== 'object' || raw === null) continue;
+      const itemId = String((raw as Record<string, unknown>).itemId ?? '').trim();
+      if (!itemId) continue;
+      const known = sheetKeysByItem.get(itemId) ?? [];
+      if (!known.includes(sheet.sheetKey)) known.push(sheet.sheetKey);
+      sheetKeysByItem.set(itemId, known);
+    }
+  }
   const seenItemIds = new Set<string>();
   const ordered = [...sheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
   for (const sheet of ordered) {
@@ -277,7 +291,9 @@ export function mapParsedSheetItemsToDailyRows(
         const value = item[field];
         if (value !== null && value !== undefined && value !== '') extra[field] = value;
       }
-      row.extra = Object.keys(extra).length > 0 ? extra : null;
+      const allSheetKeys = sheetKeysByItem.get(itemId) ?? [sheet.sheetKey];
+      extra.sheetKeys = allSheetKeys;
+      row.extra = extra;
       row.variations = Array.isArray(item.variations) ? item.variations : null;
       rows.push(row);
     }

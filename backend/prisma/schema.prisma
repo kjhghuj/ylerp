@@ -377,6 +377,13 @@ model User {
   phone               String?
   ycAppKey            String?
   ycAppSecret         String?
+  aiChatBaseUrl       String?
+  aiChatApiKeyEnc     String?
+  aiChatModel         String?
+  aiChatProvider      String?
+  aiImageApiKeyEnc    String?
+  aiImageBaseUrl      String?
+  aiImageEndpoints    Json?
   chromaRecords       ChromaGenerationRecord[]
   chromaImages        ChromaImage[]
   financeRecords      FinanceRecord[]

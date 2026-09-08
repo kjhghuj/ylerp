@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { ApiError } from '../services/chroma/config';
-import { chatWithImages, generateImage } from '../services/chroma/arkClient';
+import { chatWithImages, generateImage, type ArkClientConfig } from '../services/chroma/arkClient';
+import { resolveImageAiConfig } from '../services/aiUserConfig';
 import {
   cleanBase64Image,
   getImageDimensionsFromBase64,
@@ -19,9 +20,11 @@ import { authorizeAnyPermission } from '../middleware/authMiddleware';
 
 const router = Router();
 
-async function tracked(req: Request, kind: 'analysis' | 'generation', model: string, provider: () => Promise<any>) {
+// provider 接收按当前用户解析的方舟配置（个人中心配置优先，环境变量回退）
+async function tracked(req: Request, kind: 'analysis' | 'generation', model: string, provider: (config: ArkClientConfig) => Promise<any>) {
   const { requestKey, operationId, ...payload } = req.body;
-  const { call, result } = await runAiCall({ userId: req.user!.id, actorName: req.user!.username, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, provider);
+  const config = await resolveImageAiConfig(req.user!.id);
+  const { call, result } = await runAiCall({ userId: req.user!.id, actorName: req.user!.username, requestKey, operationId, kind, model, mode: req.path.replace(/^\//, ''), payload }, () => provider(config));
   return { ...result, callId: call.id, cost: call.estimatedCost == null ? null : Number(call.estimatedCost), currency: 'CNY', pricingVersion: call.pricingVersion };
 }
 async function deliver(result: any) {
@@ -51,7 +54,7 @@ function analyzeSingleImage(req: Request, image: string, prompt: string, model: 
     { type: 'text', text: prompt },
     { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64Data}` } },
   ];
-  return tracked(req, 'analysis', model, () => chatWithImages(model, content));
+  return tracked(req, 'analysis', model, (config) => chatWithImages(model, content, config));
 }
 
 router.post('/analyze', authorizeAnyPermission('chroma-adapt.edit'), async (req: Request, res: Response) => {
@@ -110,7 +113,7 @@ router.post('/color-mapping', authorizeAnyPermission('chroma-adapt.edit'), async
       { type: 'text', text: '\n\n下面是参考图片：' },
       { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${refClean}` } },
     ];
-    const result = await tracked(req, 'analysis', usedModel, () => chatWithImages(usedModel, content));
+    const result = await tracked(req, 'analysis', usedModel, (config) => chatWithImages(usedModel, content, config));
     res.json(result);
   } catch (error) {
     errorResponse(error, res);
@@ -121,11 +124,12 @@ router.post('/generate', authorizeAnyPermission('chroma-adapt.generate'), async 
   try {
     const { prompt, image_urls, size, model } = req.body;
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
-    const result = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
+    const result = await tracked(req, 'generation', model || 'doubao-seedream-4.5', (config) => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size || '2048x2048',
-      image_urls || undefined
+      image_urls || undefined,
+      config
     ));
     const delivered = await deliver(result);
     const imageDataUrl = delivered.data[0].url;
@@ -143,11 +147,12 @@ router.post('/edit', authorizeAnyPermission('chroma-adapt.edit'), async (req: Re
     if (!prompt) return res.status(400).json({ detail: 'Missing required field: prompt' });
     const { width, height } = getImageDimensionsFromBase64(image);
     const size = calculateSizeForAspectRatio(width, height);
-    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', (config) => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
-      [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
+      [`data:image/jpeg;base64,${cleanBase64Image(image)}`],
+      config
     ));
     const delivered = await deliver(generated);
     const imageDataUrl = delivered.data[0].url;
@@ -166,14 +171,15 @@ router.post('/color-adaptation', authorizeAnyPermission('chroma-adapt.edit'), as
     const { width, height } = getImageDimensionsFromBase64(poster_image);
     const size = calculateSizeForAspectRatio(width, height);
     const prompt = buildColorAdaptationPrompt(palette || [], style_config || null, color_mapping_plan || null);
-    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', (config) => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
       [
         `data:image/jpeg;base64,${cleanBase64Image(poster_image)}`,
         `data:image/jpeg;base64,${cleanBase64Image(reference_image)}`,
-      ]
+      ],
+      config
     ));
     const delivered = await deliver(generated);
     const imageDataUrl = delivered.data[0].url;
@@ -192,11 +198,12 @@ router.post('/translate', authorizeAnyPermission('chroma-adapt.translate'), asyn
     const { width, height } = getImageDimensionsFromBase64(image);
     const size = calculateSizeForAspectRatio(width, height);
     const prompt = buildTranslationPrompt(target_lang, target_font || 'original');
-    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', () => generateImage(
+    const generated = await tracked(req, 'generation', model || 'doubao-seedream-4.5', (config) => generateImage(
       model || 'doubao-seedream-4.5',
       prompt,
       size,
-      [`data:image/jpeg;base64,${cleanBase64Image(image)}`]
+      [`data:image/jpeg;base64,${cleanBase64Image(image)}`],
+      config
     ));
     const delivered = await deliver(generated);
     const imageDataUrl = delivered.data[0].url;

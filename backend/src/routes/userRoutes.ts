@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { authenticate, authorize } from '../middleware/authMiddleware';
-import { encryptYcAppSecret } from '../services/ycCredentials';
+import { encryptYcAppSecret, encryptSecret, AI_KEY_MASK } from '../services/ycCredentials';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -108,6 +108,141 @@ router.put('/me/yc-credentials', async (req, res) => {
         return res.json(ycCredentialsResponse(credentials));
     } catch {
         return res.status(500).json({ error: '保存元仓配置失败' });
+    }
+});
+
+// ---- 个人 AI 接口配置（个人优先，环境变量回退；Key 加密存储、只回显已配置状态） ----
+
+const AI_ENDPOINT_KEYS = ['analysisLite', 'analysisMini', 'analysisPro', 'generationDefault', 'generationLite'] as const;
+
+const aiConfigPutSchema = z.object({
+    chat: z.object({
+        baseUrl: z.string().max(512).optional(),
+        model: z.string().max(128).optional(),
+        apiKey: z.string().max(512).optional(),
+        provider: z.string().max(32).optional(),
+    }).strict().optional(),
+    image: z.object({
+        baseUrl: z.string().max(512).optional(),
+        apiKey: z.string().max(512).optional(),
+        endpoints: z.object({
+            analysisLite: z.string().max(256).optional(),
+            analysisMini: z.string().max(256).optional(),
+            analysisPro: z.string().max(256).optional(),
+            generationDefault: z.string().max(256).optional(),
+            generationLite: z.string().max(256).optional(),
+        }).strict().optional(),
+    }).strict().optional(),
+}).strict();
+
+const endpointStringValue = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const aiConfigResponse = (user: {
+    aiChatBaseUrl: string | null;
+    aiChatApiKeyEnc: string | null;
+    aiChatModel: string | null;
+    aiChatProvider: string | null;
+    aiImageApiKeyEnc: string | null;
+    aiImageBaseUrl: string | null;
+    aiImageEndpoints: unknown;
+}) => {
+    const rawEndpoints = (typeof user.aiImageEndpoints === 'object' && user.aiImageEndpoints !== null && !Array.isArray(user.aiImageEndpoints))
+        ? user.aiImageEndpoints as Record<string, unknown>
+        : {};
+    return {
+        chat: {
+            baseUrl: user.aiChatBaseUrl || '',
+            model: user.aiChatModel || '',
+            provider: user.aiChatProvider || '',
+            apiKeyConfigured: Boolean(user.aiChatApiKeyEnc),
+            environmentConfigured: Boolean(process.env.GLM_API_KEY),
+        },
+        image: {
+            baseUrl: user.aiImageBaseUrl || '',
+            apiKeyConfigured: Boolean(user.aiImageApiKeyEnc),
+            environmentConfigured: Boolean(process.env.ARK_API_KEY),
+            endpoints: Object.fromEntries(AI_ENDPOINT_KEYS.map((key) => [key, endpointStringValue(rawEndpoints[key])])),
+            environmentEndpoints: {
+                analysisLite: Boolean(process.env.ARK_ANALYSIS_ENDPOINT_ID),
+                analysisMini: Boolean(process.env.ARK_ANALYSIS_ENDPOINT_ID_SEED_2_MINI),
+                analysisPro: Boolean(process.env.ARK_ANALYSIS_ENDPOINT_ID_SEED_2_PRO),
+                generationDefault: Boolean(process.env.ARK_ENDPOINT_ID),
+                generationLite: Boolean(process.env.ARK_ENDPOINT_ID_SEEDREAM_5_LITE),
+            },
+        },
+    };
+};
+
+router.get('/me/ai-config', async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user!.id },
+            select: {
+                aiChatBaseUrl: true, aiChatApiKeyEnc: true, aiChatModel: true, aiChatProvider: true,
+                aiImageApiKeyEnc: true, aiImageBaseUrl: true, aiImageEndpoints: true,
+            },
+        });
+        if (!user) {
+            return res.status(404).json({ error: '用户不存在' });
+        }
+        return res.json(aiConfigResponse(user));
+    } catch {
+        return res.status(500).json({ error: '获取 AI 配置失败' });
+    }
+});
+
+router.put('/me/ai-config', async (req, res) => {
+    const parsed = aiConfigPutSchema.safeParse(req.body);
+    if (!parsed.success) {
+        return res.status(400).json({ error: 'AI 配置格式不正确' });
+    }
+    try {
+        const updateData: Record<string, unknown> = {};
+        const chat = parsed.data.chat;
+        if (chat) {
+            if (chat.baseUrl !== undefined) updateData.aiChatBaseUrl = chat.baseUrl.trim() || null;
+            if (chat.model !== undefined) updateData.aiChatModel = chat.model.trim() || null;
+            if (chat.provider !== undefined) updateData.aiChatProvider = chat.provider.trim() || null;
+            // apiKey：不传或为掩码=保持不变；空串=清除；其他=加密保存
+            if (chat.apiKey !== undefined && chat.apiKey !== AI_KEY_MASK) {
+                const apiKey = chat.apiKey.trim();
+                updateData.aiChatApiKeyEnc = apiKey ? encryptSecret(apiKey) : null;
+            }
+        }
+        const image = parsed.data.image;
+        if (image) {
+            if (image.baseUrl !== undefined) updateData.aiImageBaseUrl = image.baseUrl.trim() || null;
+            if (image.apiKey !== undefined && image.apiKey !== AI_KEY_MASK) {
+                const apiKey = image.apiKey.trim();
+                updateData.aiImageApiKeyEnc = apiKey ? encryptSecret(apiKey) : null;
+            }
+            if (image.endpoints) {
+                const current = await prisma.user.findUnique({
+                    where: { id: req.user!.id },
+                    select: { aiImageEndpoints: true },
+                });
+                const currentRaw = (typeof current?.aiImageEndpoints === 'object' && current?.aiImageEndpoints !== null && !Array.isArray(current.aiImageEndpoints))
+                    ? current.aiImageEndpoints as Record<string, unknown>
+                    : {};
+                const provided = image.endpoints;
+                const merged = Object.fromEntries(AI_ENDPOINT_KEYS.map((key) => [
+                    key,
+                    provided[key] !== undefined ? provided[key]!.trim() : endpointStringValue(currentRaw[key]),
+                ]));
+                updateData.aiImageEndpoints = Object.values(merged).some(Boolean) ? merged : null;
+            }
+        }
+        const user = await prisma.user.update({
+            where: { id: req.user!.id },
+            data: updateData,
+            select: {
+                aiChatBaseUrl: true, aiChatApiKeyEnc: true, aiChatModel: true, aiChatProvider: true,
+                aiImageApiKeyEnc: true, aiImageBaseUrl: true, aiImageEndpoints: true,
+            },
+        });
+        return res.json(aiConfigResponse(user));
+    } catch {
+        return res.status(500).json({ error: '保存 AI 配置失败' });
     }
 });
 

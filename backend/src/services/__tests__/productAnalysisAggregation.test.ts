@@ -186,5 +186,16 @@ describe('mapParsedSheetItemsToDailyRows', () => {
     expect(rows.map((row) => row.sheetKey)).toEqual(['hot', 'hot']);
     expect(rows[0].visitors).toBe(100);
     expect(rows[1].itemId).toBe('20002');
+    // 归属按优先级取一行，但 extra.sheetKeys 保留商品出现过的全部工作表
+    expect(rows[0].extra).toMatchObject({ sheetKeys: expect.arrayContaining(['hot', 'competitive']) });
+    expect(rows[1].extra).toMatchObject({ sheetKeys: expect.arrayContaining(['hot', 'new']) });
+  });
+
+  test('records full sheet membership in extra even for single-sheet items', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'new', items: [{ itemId: '30003', itemName: 'New Only', visitors: 5 }] },
+    ]);
+    expect(rows[0].sheetKey).toBe('new');
+    expect(rows[0].extra).toMatchObject({ sheetKeys: ['new'] });
   });
 });

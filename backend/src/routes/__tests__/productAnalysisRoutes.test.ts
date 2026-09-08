@@ -35,12 +35,13 @@ jest.mock('../../index', () => {
 });
 jest.mock('../../services/glm/glmClient', () => ({
   glmChat: jest.fn(),
+  glmChatStream: jest.fn(),
 }));
 
 import { Request, Response } from 'express';
 import router from '../productAnalysisRoutes';
 import { prisma } from '../../index';
-import { glmChat } from '../../services/glm/glmClient';
+import { glmChat, glmChatStream } from '../../services/glm/glmClient';
 
 const mockShopFindFirst = prisma.productAnalysisShop.findFirst as jest.Mock;
 const mockShopFindMany = prisma.productAnalysisShop.findMany as jest.Mock;
@@ -56,6 +57,7 @@ const mockItemFindMany = prisma.productDailyItem.findMany as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockTransaction = prisma.$transaction as jest.Mock;
 const mockGlmChat = glmChat as jest.Mock;
+const mockGlmChatStream = glmChatStream as jest.Mock;
 const mockAiUsageCall = prisma.aiUsageCall as unknown as Record<string, jest.Mock>;
 
 type RouteHandler = (req: Request, res: Response, next: (err?: unknown) => void) => Promise<unknown>;
@@ -365,7 +367,7 @@ describe('GET /shops/:id/agg', () => {
 });
 
 describe('GET /shops/:id/potential', () => {
-  test('returns ranked potential items with reasons', async () => {
+  test('returns ranked new-sheet items with reasons', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
     const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
     mockUploadFindMany.mockResolvedValue([
@@ -373,8 +375,8 @@ describe('GET /shops/:id/potential', () => {
       { id: 'u-1', date: day('2026-09-02') },
     ]);
     mockItemFindMany.mockResolvedValue([
-      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 0, visitors: 100, clicks: 10, impressions: 200, cartVisitors: 20, extra: { createdDays: 30 } },
-      { itemId: 'grow', itemName: 'Growing', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-02') }, ordersOrdered: 10, visitors: 120, clicks: 10, impressions: 200, cartVisitors: 30, extra: { createdDays: 30 } },
+      { itemId: 'grow', itemName: 'Growing', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 0, visitors: 100, clicks: 10, impressions: 200, cartVisitors: 20 },
+      { itemId: 'grow', itemName: 'Growing', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-02') }, ordersOrdered: 10, visitors: 120, clicks: 10, impressions: 200, cartVisitors: 30 },
     ]);
     const req = makeReq({ params: { id: 'shop-1' }, query: { from: '2026-09-01', to: '2026-09-02' } });
     const { res, json } = makeRes();
@@ -385,6 +387,97 @@ describe('GET /shops/:id/potential', () => {
     expect(payload.items).toHaveLength(1);
     expect(payload.items[0].rank).toBe(1);
     expect(payload.items[0].reasons.length).toBeGreaterThan(0);
+  });
+
+  test('base is the new sheet only: hot-sheet items never enter the ranking', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
+    mockUploadFindMany.mockResolvedValue([{ id: 'u-0', date: day('2026-09-01') }]);
+    mockItemFindMany.mockResolvedValue([
+      // 各方面都很优质的非新品：不参与
+      { itemId: 'hot-strong', itemName: 'Hot', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 20, visitors: 500, clicks: 100, impressions: 1000, cartVisitors: 90 },
+      // 指标平平的新品：参与排名
+      { itemId: 'new-weak', itemName: 'New', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 1, visitors: 50, clicks: 6, impressions: 100, cartVisitors: 2 },
+    ]);
+    // 放开全部阈值，验证基底部仍只含 new 商品
+    const req = makeReq({
+      params: { id: 'shop-1' },
+      query: {
+        from: '2026-09-01', to: '2026-09-01',
+        minCtr: 'none', minClicks: 'none', minCartRate: 'none', excludeBannedDeleted: '0',
+      },
+    });
+    const { res, json } = makeRes();
+
+    await runRoute('/shops/:id/potential', 'get', req as Request, res as Response);
+
+    const payload = json.mock.calls[0][0];
+    expect(payload.items.map((item: { itemId: string }) => item.itemId)).toEqual(['new-weak']);
+  });
+
+  test('new arrivals that also appear in the hot sheet still enter the base (extra.sheetKeys)', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
+    mockUploadFindMany.mockResolvedValue([{ id: 'u-0', date: day('2026-09-01') }]);
+    mockItemFindMany.mockResolvedValue([
+      // 新品卖得好同时进热销表：入库归属 hot，但 extra.sheetKeys 记录其也在新上架表
+      { itemId: 'new-hot', itemName: 'New Hot', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 20, visitors: 300, clicks: 60, impressions: 800, cartVisitors: 40, extra: { sheetKeys: ['hot', 'new'] } },
+      // 普通热销老品：不参与
+      { itemId: 'hot-old', itemName: 'Hot Old', sheetKey: 'hot', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 30, visitors: 400, clicks: 80, impressions: 900, cartVisitors: 50, extra: { sheetKeys: ['hot'] } },
+    ]);
+    const req = makeReq({
+      params: { id: 'shop-1' },
+      query: { from: '2026-09-01', to: '2026-09-01', minCtr: 'none', minClicks: 'none', minCartRate: 'none' },
+    });
+    const { res, json } = makeRes();
+
+    await runRoute('/shops/:id/potential', 'get', req as Request, res as Response);
+
+    const payload = json.mock.calls[0][0];
+    expect(payload.items.map((item: { itemId: string }) => item.itemId)).toEqual(['new-hot']);
+  });
+
+  test('applies custom filter query params (none = unlimited)', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
+    mockUploadFindMany.mockResolvedValue([{ id: 'u-0', date: day('2026-09-01') }]);
+    // 不满足默认条件的新品：ctr=2%、点击 2、无加购
+    mockItemFindMany.mockResolvedValue([
+      { itemId: 'weak', itemName: 'Weak', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 1, visitors: 50, clicks: 2, impressions: 100, cartVisitors: 0 },
+    ]);
+
+    // 默认条件：被排除
+    const defaultReq = makeReq({ params: { id: 'shop-1' }, query: { from: '2026-09-01', to: '2026-09-01' } });
+    const defaultRes = makeRes();
+    await runRoute('/shops/:id/potential', 'get', defaultReq as Request, defaultRes.res as Response);
+    expect(defaultRes.json.mock.calls[0][0].items).toHaveLength(0);
+
+    // 全部放开：入围
+    const relaxedReq = makeReq({
+      params: { id: 'shop-1' },
+      query: {
+        from: '2026-09-01', to: '2026-09-01',
+        minCtr: 'none', minClicks: 'none', minCartRate: 'none',
+        excludeBannedDeleted: '0', limit: '5',
+      },
+    });
+    const relaxedRes = makeRes();
+    await runRoute('/shops/:id/potential', 'get', relaxedReq as Request, relaxedRes.res as Response);
+    expect(relaxedRes.json.mock.calls[0][0].items).toHaveLength(1);
+    expect(relaxedRes.json.mock.calls[0][0].items[0].itemId).toBe('weak');
+
+    // 填 0 与 none 等价：零互动新品也入围
+    mockItemFindMany.mockResolvedValue([
+      { itemId: 'weak', itemName: 'Weak', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 1, visitors: 50, clicks: 2, impressions: 100, cartVisitors: 0 },
+      { itemId: 'idle', itemName: 'Idle', sheetKey: 'new', status: 'Normal', upload: { date: day('2026-09-01') }, ordersOrdered: 0, visitors: 20, clicks: 0, impressions: 0, cartVisitors: 0 },
+    ]);
+    const zeroReq = makeReq({
+      params: { id: 'shop-1' },
+      query: { from: '2026-09-01', to: '2026-09-01', minCtr: '0', minClicks: '0', minCartRate: '0' },
+    });
+    const zeroRes = makeRes();
+    await runRoute('/shops/:id/potential', 'get', zeroReq as Request, zeroRes.res as Response);
+    expect(zeroRes.json.mock.calls[0][0].items.map((item: { itemId: string }) => item.itemId).sort()).toEqual(['idle', 'weak']);
   });
 });
 
@@ -496,5 +589,70 @@ describe('POST /chat', () => {
     expect(messages[0].content).toContain('2026-09-05: 2 | 100');
     expect(messages[0].content).toContain('Black');
     expect(json).toHaveBeenCalledWith({ content: '单品结论', model: 'glm-test' });
+  });
+
+  test('stream mode writes SSE reasoning + deltas and passes fastMode through', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadFindFirst.mockResolvedValueOnce({ date: new Date('2026-09-06T00:00:00.000Z') });
+    mockUploadFindMany.mockResolvedValue([{ id: 'u-0', date: new Date('2026-09-06T00:00:00.000Z') }]);
+    mockItemFindMany.mockResolvedValue([]);
+    mockAiUsageCall.create.mockResolvedValue({ id: 'call-1' });
+    mockAiUsageCall.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'call-1', ...data }));
+    mockGlmChatStream.mockImplementationOnce(async (_messages: unknown, _options: unknown, onDelta?: (d: string) => void, onReasoning?: (r: string) => void) => {
+      onReasoning?.('先思考');
+      onDelta?.('结');
+      onDelta?.('论');
+      return { content: '结论', model: 'glm-test' };
+    });
+
+    const write = jest.fn();
+    const writeHead = jest.fn();
+    const end = jest.fn();
+    const res = { write, writeHead, end, flushHeaders: jest.fn(), json: jest.fn(), status: jest.fn().mockReturnThis() };
+
+    await runRoute('/chat', 'post', makeReq({
+      body: { shopId: 'shop-1', stream: true, deepThinking: false, requestKey: 'request-stream', operationId: 'operation-stream', messages: [{ role: 'user', content: 'hi' }] },
+    }) as Request, res as unknown as Response);
+
+    expect(writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ 'Content-Type': 'text/event-stream; charset=utf-8' }));
+    const events = write.mock.calls.map((call) => JSON.parse(String(call[0]).replace(/^data: /, '')));
+    expect(events).toEqual([
+      { reasoning: '先思考' },
+      { delta: '结' },
+      { delta: '论' },
+      { done: true, model: 'glm-test' },
+    ]);
+    expect(mockGlmChatStream).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ fastMode: true }),
+      expect.any(Function),
+      expect.any(Function)
+    );
+    expect(end).toHaveBeenCalled();
+    expect(mockGlmChat).not.toHaveBeenCalled();
+  });
+
+  test('stream mode falls back to one-shot delta when the provider emits no increments', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadFindFirst.mockResolvedValueOnce({ date: new Date('2026-09-06T00:00:00.000Z') });
+    mockUploadFindMany.mockResolvedValue([{ id: 'u-0', date: new Date('2026-09-06T00:00:00.000Z') }]);
+    mockItemFindMany.mockResolvedValue([]);
+    mockAiUsageCall.create.mockResolvedValue({ id: 'call-1' });
+    mockAiUsageCall.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'call-1', ...data }));
+    // 覆盖"无增量"分支：与幂等重放相同——provider 未执行/未回调 onDelta
+    mockGlmChatStream.mockResolvedValueOnce({ content: '已存结论', model: 'glm-test' });
+
+    const write = jest.fn();
+    const res = { write, writeHead: jest.fn(), end: jest.fn(), flushHeaders: jest.fn(), json: jest.fn(), status: jest.fn().mockReturnThis() };
+
+    await runRoute('/chat', 'post', makeReq({
+      body: { shopId: 'shop-1', stream: true, requestKey: 'request-oneshot', operationId: 'operation-oneshot', messages: [{ role: 'user', content: 'hi' }] },
+    }) as Request, res as unknown as Response);
+
+    const events = write.mock.calls.map((call) => JSON.parse(String(call[0]).replace(/^data: /, '')));
+    expect(events).toEqual([
+      { delta: '已存结论' },
+      { done: true, model: 'glm-test' },
+    ]);
   });
 });

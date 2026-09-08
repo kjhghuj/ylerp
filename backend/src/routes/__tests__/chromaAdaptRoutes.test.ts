@@ -1,4 +1,8 @@
-jest.mock('../../index', () => ({ prisma: { aiUsageCall: { create: jest.fn(), update: jest.fn() } } }));
+jest.mock('../../index', () => ({ prisma: {
+  aiUsageCall: { create: jest.fn(), update: jest.fn() },
+  // tracked() 会按用户解析 AI 配置：无个人配置（null）时回退环境变量
+  user: { findUnique: jest.fn().mockResolvedValue(null) },
+} }));
 jest.mock('../../services/chroma/arkClient', () => ({ chatWithImages: jest.fn(), generateImage: jest.fn() }));
 jest.mock('../../services/chroma/imageUtils', () => ({ cleanBase64Image: (x: string) => x, getImageDimensionsFromBase64: () => ({ width: 100, height: 100 }), calculateSizeForAspectRatio: () => '2048x2048', downloadImageAsDataUrl: jest.fn() }));
 import router from '../chromaAdaptRoutes';

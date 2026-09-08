@@ -39,10 +39,50 @@ import {
   resolveQuickRange,
   type RangePreset,
 } from './utils/range';
+import { PotentialFiltersPanel } from './components/PotentialFiltersPanel';
 import { useProductAnalysisStrings } from './i18n';
-import type { AggregatedItem, AggResponse, DayMeta, PotentialResponse, SheetKey, ShopMeta } from './types';
+import {
+  DEFAULT_POTENTIAL_FILTERS,
+  type AggregatedItem,
+  type AggResponse,
+  type DayMeta,
+  type PotentialFilters,
+  type PotentialResponse,
+  type SheetKey,
+  type ShopMeta,
+} from './types';
 
 const SEARCH_DEBOUNCE_MS = 300;
+const POTENTIAL_FILTERS_STORAGE_KEY = 'yl-pa-potential-filters';
+
+/** 从 localStorage 恢复筛选条件；缺失/非法字段逐项回退默认值 */
+const loadPotentialFilters = (): PotentialFilters => {
+  try {
+    const raw = localStorage.getItem(POTENTIAL_FILTERS_STORAGE_KEY);
+    if (!raw) return DEFAULT_POTENTIAL_FILTERS;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const threshold = (value: unknown): number | null | undefined => {
+      if (value === null) return null;
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return value;
+      return undefined;
+    };
+    return {
+      minCtrPercent: threshold(parsed.minCtrPercent) ?? DEFAULT_POTENTIAL_FILTERS.minCtrPercent,
+      minClicks: threshold(parsed.minClicks) ?? DEFAULT_POTENTIAL_FILTERS.minClicks,
+      minCartRatePercent: threshold(parsed.minCartRatePercent) ?? DEFAULT_POTENTIAL_FILTERS.minCartRatePercent,
+      excludeBannedDeleted:
+        typeof parsed.excludeBannedDeleted === 'boolean'
+          ? parsed.excludeBannedDeleted
+          : DEFAULT_POTENTIAL_FILTERS.excludeBannedDeleted,
+      limit:
+        typeof parsed.limit === 'number' && Number.isFinite(parsed.limit) && parsed.limit >= 1
+          ? parsed.limit
+          : DEFAULT_POTENTIAL_FILTERS.limit,
+    };
+  } catch {
+    return DEFAULT_POTENTIAL_FILTERS;
+  }
+};
 
 type ContentTab = 'list' | 'potential';
 
@@ -63,6 +103,9 @@ export const ProductAnalysis: React.FC = () => {
   const [contentTab, setContentTab] = useState<ContentTab>('list');
   const [agg, setAgg] = useState<AggResponse | null>(null);
   const [potential, setPotential] = useState<PotentialResponse | null>(null);
+  // 潜力商品筛选：draft 承接面板输入，防抖后提交为 potentialFilters 并触发重新拉取
+  const [potentialFilters, setPotentialFilters] = useState<PotentialFilters>(loadPotentialFilters);
+  const [potentialFiltersDraft, setPotentialFiltersDraft] = useState<PotentialFilters>(potentialFilters);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
@@ -155,7 +198,7 @@ export const ProductAnalysis: React.FC = () => {
       try {
         const [aggResponse, potentialResponse] = await Promise.all([
           fetchShopAgg(activeShopId, range.from, range.to),
-          fetchPotential(activeShopId, range.from, range.to),
+          fetchPotential(activeShopId, range.from, range.to, potentialFilters),
         ]);
         if (isCancelled) return;
         setAgg(aggResponse);
@@ -171,7 +214,21 @@ export const ProductAnalysis: React.FC = () => {
       isCancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeShopId, range.from, range.to]);
+  }, [activeShopId, range.from, range.to, potentialFilters]);
+
+  // 筛选输入防抖：停止输入后提交，持久化并触发上方 effect 重新拉取
+  useEffect(() => {
+    const timer = setTimeout(() => setPotentialFilters(potentialFiltersDraft), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [potentialFiltersDraft]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(POTENTIAL_FILTERS_STORAGE_KEY, JSON.stringify(potentialFilters));
+    } catch {
+      // 存储配额/隐私模式失败时静默降级为会话内生效
+    }
+  }, [potentialFilters]);
 
   const handleShopsChanged = async () => {
     const list = await refreshShops();
@@ -578,7 +635,12 @@ export const ProductAnalysis: React.FC = () => {
                 <Loader2 size={26} className="animate-spin" style={{ color: 'var(--primary)' }} />
               </div>
             ) : contentTab === 'potential' ? (
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
+                <PotentialFiltersPanel
+                  value={potentialFiltersDraft}
+                  onChange={setPotentialFiltersDraft}
+                  onReset={() => setPotentialFiltersDraft(DEFAULT_POTENTIAL_FILTERS)}
+                />
                 <PotentialList
                   items={potential?.items ?? []}
                   onSelect={(item) => {
