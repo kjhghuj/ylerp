@@ -9,8 +9,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.dailyUploadPayloadSchema = exports.MAX_UPLOAD_VARIATIONS_PER_ITEM = exports.MAX_UPLOAD_ITEMS_PER_SHEET = exports.MAX_UPLOAD_SHEETS = exports.MAX_UPLOAD_ITEM_NAME_LENGTH = exports.MAX_UPLOAD_ITEM_ID_LENGTH = exports.MAX_UPLOAD_FILE_NAME_LENGTH = exports.SHEET_KEYS = void 0;
 exports.isValidCalendarDate = isValidCalendarDate;
 exports.validateDailyUploadPayload = validateDailyUploadPayload;
-exports.validatePeriodMatchesDate = validatePeriodMatchesDate;
+exports.extractPeriodFromUploadFileName = extractPeriodFromUploadFileName;
 exports.isSuspectedRangeFileName = isSuspectedRangeFileName;
+exports.validatePeriodMatchesDate = validatePeriodMatchesDate;
 const zod_1 = require("zod");
 const productAnalysisAggregation_1 = require("./productAnalysisAggregation");
 exports.SHEET_KEYS = ['hot', 'new', 'uncompetitive', 'competitive'];
@@ -101,10 +102,88 @@ function validateDailyUploadPayload(payload) {
         },
     };
 }
-/** 周期与单日 date 的一致性校验：返回错误文案，null 表示通过。
- *  period 均为 null（单日期文件名解析不出区间）时不做交叉校验；一旦携带周期则必须真实、同日且等于 date。 */
-function validatePeriodMatchesDate(period, date) {
-    const { periodStart, periodEnd } = period;
+const RANGE_FILE_NAME_PATTERN = /(\d{8})[_-](\d{8})/;
+const SINGLE_DATE_FILE_NAME_PATTERN = /(?<!\d)(\d{8})(?!\d)/;
+function toIsoDate(yyyymmdd) {
+    return `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+}
+/** 从文件名解析周期（与前端 excelParser 语义一致，但后端独立实现，不信任前端声明） */
+function extractPeriodFromUploadFileName(fileName) {
+    const rangeMatch = fileName.match(RANGE_FILE_NAME_PATTERN);
+    if (rangeMatch) {
+        return { kind: 'range', start: toIsoDate(rangeMatch[1]), end: toIsoDate(rangeMatch[2]) };
+    }
+    const singleMatch = fileName.match(SINGLE_DATE_FILE_NAME_PATTERN);
+    if (singleMatch) {
+        return { kind: 'single', date: toIsoDate(singleMatch[1]) };
+    }
+    return { kind: 'unknown' };
+}
+/** 只读排查：文件名带起止不同的 8 位日期对 → 疑似按结束日混入每日表的区间报表（仅标记，不改写数据）。
+ *  能力边界：只能识别文件名中可见的、起止不同的日期区间；文件被改成单日文件名后，
+ *  本标记无法识别其真实内容周期——周期校验约束的是文件名与声明日期的一致性，
+ *  不能证明文件内容一定属于单日数据。 */
+function isSuspectedRangeFileName(fileName) {
+    const period = extractPeriodFromUploadFileName(fileName);
+    if (period.kind !== 'range')
+        return false;
+    return isValidCalendarDate(period.start) && isValidCalendarDate(period.end) && period.start !== period.end;
+}
+/** 周期与单日 date 的三方交叉校验（文件名 × 声明周期 × 上传 date）：返回错误文案，null 表示通过。
+ *  规则（缺一不可，均在校验通过后才允许删除旧上传 / 写入）：
+ *  1. 文件名可识别为多日区间（起止不同）→ 一律拒绝，无论声明周期是否省略或伪造；
+ *  2. 文件名可识别为单日（单日期或起止相同）→ 其日期必须等于上传 date；
+ *  3. 声明周期一旦存在必须真实、同日且等于上传 date；与文件名冲突 → 拒绝；
+ *  4. 日期依据至少一种完整：文件名无法识别日期且未声明周期 → 拒绝（收紧，原兼容放行）；
+ *     文件名无法识别但声明为合法同日周期且等于上传 date → 允许。
+ *  注意：该校验只能约束「日期依据」，不能证明文件内容一定是单日数据。 */
+function validatePeriodMatchesDate(fileName, declared, date) {
+    const { periodStart, periodEnd } = declared;
+    // 声明周期自检：成对、真实、有序、同日、等于 date
+    const declaredError = validateDeclaredPeriod(declared, date);
+    if (declaredError)
+        return declaredError;
+    const period = extractPeriodFromUploadFileName(fileName);
+    if (period.kind === 'range') {
+        if (!isValidCalendarDate(period.start) || !isValidCalendarDate(period.end)) {
+            return `文件名中的周期日期非法（${period.start} ~ ${period.end}）：需为真实存在的 YYYY-MM-DD`;
+        }
+        if (period.start > period.end) {
+            return `文件名中的周期起止倒置（${period.start} ~ ${period.end}）`;
+        }
+        if (period.start !== period.end) {
+            return `文件名识别为多日报表（${period.start} ~ ${period.end}）：每日数据仅支持单日报表，请导出单日数据后重传`;
+        }
+        if (period.end !== date) {
+            return `文件名日期（${period.end}）与上传日期（${date}）不一致`;
+        }
+        if (periodStart !== null && periodStart !== period.end) {
+            return `声明周期（${periodStart}）与文件名日期（${period.end}）不一致`;
+        }
+        return null;
+    }
+    if (period.kind === 'single') {
+        if (!isValidCalendarDate(period.date)) {
+            return `文件名中的日期（${period.date}）不是真实存在的日历日期`;
+        }
+        if (period.date !== date) {
+            return `文件名日期（${period.date}）与上传日期（${date}）不一致`;
+        }
+        if (periodStart !== null && periodStart !== period.date) {
+            return `声明周期（${periodStart}）与文件名日期（${period.date}）不一致`;
+        }
+        return null;
+    }
+    // 文件名无法识别日期：必须提供完整的同日声明周期（已按上方规则校验须等于上传 date）；
+    // 两种依据都缺失 → 拒绝（不做无日期依据的写入）
+    if (periodStart === null && periodEnd === null) {
+        return '文件名无可识别日期且未声明报表周期：请把日期写进文件名（如 20260906），或在 payload 中提供等于上传日期的 periodStart / periodEnd';
+    }
+    return null;
+}
+/** 声明周期校验：均空 → 放行（兼容不带日期的文件名）；一旦存在必须成对、真实、有序、同日且等于上传 date */
+function validateDeclaredPeriod(declared, date) {
+    const { periodStart, periodEnd } = declared;
     if (periodStart === null && periodEnd === null)
         return null;
     if (periodStart === null || periodEnd === null) {
@@ -123,15 +202,4 @@ function validatePeriodMatchesDate(period, date) {
         return `报表周期（${periodStart}）与上传日期（${date}）不一致`;
     }
     return null;
-}
-const RANGE_FILE_NAME_PATTERN = /(\d{8})[_-](\d{8})/;
-/** 只读排查：文件名带起止不同的 8 位日期对 → 疑似按结束日混入每日表的区间报表（仅标记，不改写数据） */
-function isSuspectedRangeFileName(fileName) {
-    const match = fileName.match(RANGE_FILE_NAME_PATTERN);
-    if (!match)
-        return false;
-    const toIso = (raw) => `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
-    const start = toIso(match[1]);
-    const end = toIso(match[2]);
-    return isValidCalendarDate(start) && isValidCalendarDate(end) && start !== end;
 }

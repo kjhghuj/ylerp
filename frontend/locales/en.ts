@@ -11,6 +11,7 @@ export const en = {
     profit: 'Profit Calculation',
     finance: 'Finance Hub',
     restockV2: 'Restock V2',
+    restockV3: 'Restock V3',
     chromaAdapt: 'Image Studio',
     productList: 'Product List',
     personalCenter: 'Profile',

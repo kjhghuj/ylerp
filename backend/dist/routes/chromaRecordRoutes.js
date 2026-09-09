@@ -13,21 +13,57 @@ const router = (0, express_1.Router)();
 const UPLOAD_DIR = path_1.default.join(process.cwd(), 'uploads', 'chroma');
 const MAX_IMAGES_PER_USER = 500;
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_STORAGE_BYTES_PER_USER = 500 * 1024 * 1024;
+const MAX_IMAGE_PIXELS = 40_000_000;
+function decodeUploadedImage(value) {
+    if (typeof value !== 'string')
+        return null;
+    const match = value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=\r\n]+)$/i);
+    if (!match)
+        return null;
+    const encoded = match[2].replace(/[\r\n]/g, '');
+    if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded))
+        return null;
+    const estimatedSize = Math.floor(encoded.length * 3 / 4);
+    if (estimatedSize <= 0 || estimatedSize > MAX_IMAGE_SIZE)
+        return null;
+    const buffer = Buffer.from(encoded, 'base64');
+    const mime = match[1].toLowerCase();
+    const png = mime === 'image/png' && buffer.length >= 24
+        && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    const jpeg = mime === 'image/jpeg' && buffer.length >= 3
+        && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+    const webp = mime === 'image/webp' && buffer.length >= 12
+        && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP';
+    if (!png && !jpeg && !webp)
+        return null;
+    if (png && buffer.readUInt32BE(16) * buffer.readUInt32BE(20) > MAX_IMAGE_PIXELS)
+        return null;
+    return { buffer, extension: png ? 'png' : jpeg ? 'jpg' : 'webp' };
+}
 async function ensureUserDir(userId) {
     const userDir = path_1.default.join(UPLOAD_DIR, userId);
     await promises_1.default.mkdir(userDir, { recursive: true });
     return userDir;
 }
 async function cleanupOldImages(userId) {
-    const count = await index_1.prisma.chromaImage.count({ where: { userId } });
-    if (count <= MAX_IMAGES_PER_USER)
-        return;
-    const toDelete = count - MAX_IMAGES_PER_USER;
-    const oldImages = await index_1.prisma.chromaImage.findMany({
+    const images = await index_1.prisma.chromaImage.findMany({
         where: { userId },
         orderBy: { createdAt: 'asc' },
-        take: toDelete,
+        select: { id: true, filename: true, size: true },
     });
+    let totalBytes = images.reduce((sum, image) => sum + image.size, 0);
+    let remainingCount = images.length;
+    const oldImages = [];
+    for (const image of images) {
+        if (remainingCount <= MAX_IMAGES_PER_USER && totalBytes <= MAX_STORAGE_BYTES_PER_USER)
+            break;
+        oldImages.push(image);
+        remainingCount -= 1;
+        totalBytes -= image.size;
+    }
+    if (!oldImages.length)
+        return;
     for (const img of oldImages) {
         try {
             const filePath = path_1.default.join(UPLOAD_DIR, userId, img.filename);
@@ -105,7 +141,8 @@ router.post('/records', async (req, res) => {
             const imageIds = [...new Set([...call.imageIds, imageId])];
             if (imageIds.length > call.outputCount)
                 return null;
-            return tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: 'saved' } });
+            const complete = imageIds.length >= call.outputCount;
+            return tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: complete ? 'saved' : 'pending', result: complete ? client_1.Prisma.DbNull : undefined } });
         }, { isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable });
         if (!record)
             return res.status(404).json({ error: '未找到本人可关联的成功调用或图片' });
@@ -156,6 +193,8 @@ router.get('/images/file/:id', async (req, res) => {
         catch {
             return res.status(404).json({ error: 'Image file no longer exists' });
         }
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
         res.sendFile(filePath);
     }
     catch (error) {
@@ -193,7 +232,7 @@ router.post('/images', async (req, res) => {
             return res.status(404).json({ error: 'Successful call not found' });
         if (!Number.isSafeInteger(outputIndex) || outputIndex < 0 || outputIndex >= call.outputCount)
             return res.status(400).json({ error: 'Invalid outputIndex' });
-        if (typeof image !== 'string' || !image || (originalName != null && (typeof originalName !== 'string' || originalName.length > 255)))
+        if (originalName != null && (typeof originalName !== 'string' || originalName.length > 255))
             return res.status(400).json({ error: 'Invalid image or originalName' });
         const stableImageId = crypto_1.default.createHash('sha256').update(callId + ':' + outputIndex).digest('hex');
         {
@@ -201,22 +240,12 @@ router.post('/images', async (req, res) => {
             if (existing)
                 return res.json(existing);
         }
-        if (!image)
-            return res.status(400).json({ error: 'Missing required field: image' });
-        // Validate image data
-        const isBase64 = image.startsWith('data:');
-        const rawBase64 = isBase64 ? image.split(',')[1] || '' : image;
-        const estimatedSize = Math.floor(rawBase64.length * 3 / 4);
-        if (estimatedSize > MAX_IMAGE_SIZE) {
-            return res.status(400).json({ error: `Image too large, max ${MAX_IMAGE_SIZE / 1024 / 1024}MB` });
-        }
-        if (isBase64 && !image.startsWith('data:image/')) {
-            return res.status(400).json({ error: 'Invalid image format, only image uploads are allowed' });
-        }
+        const decoded = decodeUploadedImage(image);
+        if (!decoded)
+            return res.status(400).json({ error: 'Invalid PNG, JPEG or WebP image' });
         const userDir = await ensureUserDir(userId);
-        let base64Data = rawBase64.replace(/\n/g, '').replace(/\r/g, '');
-        const buffer = Buffer.from(base64Data, 'base64');
-        const filename = `${Date.now()}-${crypto_1.default.randomUUID()}.png`;
+        const { buffer, extension } = decoded;
+        const filename = `${Date.now()}-${crypto_1.default.randomUUID()}.${extension}`;
         const filePath = path_1.default.join(userDir, filename);
         await promises_1.default.writeFile(filePath, buffer);
         let chromaImage;
@@ -241,7 +270,9 @@ router.post('/images', async (req, res) => {
                                 userId,
                             },
                         });
-                        await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds: [...new Set([...latest.imageIds, saved.id])], storageStatus: latest.imageIds.length + 1 >= latest.outputCount ? 'saved' : 'pending' } });
+                        const imageIds = [...new Set([...latest.imageIds, saved.id])];
+                        const complete = imageIds.length >= latest.outputCount;
+                        await tx.aiUsageCall.update({ where: { id: callId }, data: { imageIds, storageStatus: complete ? 'saved' : 'pending', result: complete ? client_1.Prisma.DbNull : undefined } });
                         return saved;
                     }, { isolationLevel: client_1.Prisma.TransactionIsolationLevel.Serializable });
                     break;

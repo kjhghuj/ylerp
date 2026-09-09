@@ -48,6 +48,6 @@ export interface FinanceRecord {
 }
 
 export interface AppState {
-  currentView: 'dashboard' | 'profit' | 'finance' | 'restock-v2'
+  currentView: 'dashboard' | 'profit' | 'finance' | 'restock-v2' | 'restock-v3'
     | 'product-list' | 'user-management' | 'chroma-adapt' | 'personal-center' | 'schedule' | 'usage-stats' | 'product-analysis';
 }

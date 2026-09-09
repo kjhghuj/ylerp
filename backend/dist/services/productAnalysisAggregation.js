@@ -7,6 +7,9 @@
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EXTRA_FIELDS = exports.SUMMABLE_FIELDS = void 0;
+exports.pairwiseSums = pairwiseSums;
+exports.pairwiseRatio = pairwiseRatio;
+exports.summarizeSheetEffective = summarizeSheetEffective;
 exports.aggregateItems = aggregateItems;
 exports.buildDailySeries = buildDailySeries;
 exports.mergeVariations = mergeVariations;
@@ -33,14 +36,48 @@ exports.EXTRA_FIELDS = [
 function numOrUndef(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
-function rate(numerator, denominator) {
-    if (numerator === null || numerator === undefined)
-        return null;
-    if (!denominator || denominator <= 0)
-        return null;
-    return (numerator / denominator) * 100;
+/**
+ * 成对完整样本求和（聚合 / 新品榜 / 汇总卡共用，保证同名指标同一有效样本口径）：
+ * 分子分母仅同时计入两者均为有效数值的观测行——缺失（null/undefined）不计为零、不参与样本。
+ * 注意：行上的总量字段（如 visitors 合计）是「各自有效观测」的求和，与这里的成对样本可能不同，
+ * 前端不得用总量互除重算比率。
+ */
+function pairwiseSums(rows, numeratorField, denominatorField) {
+    let numerator = 0;
+    let denominator = 0;
+    let pairs = 0;
+    for (const row of rows) {
+        const numeratorValue = numOrUndef(row[numeratorField]);
+        const denominatorValue = numOrUndef(row[denominatorField]);
+        if (numeratorValue === undefined || denominatorValue === undefined)
+            continue;
+        numerator += numeratorValue;
+        denominator += denominatorValue;
+        pairs += 1;
+    }
+    return pairs > 0 ? { numerator, denominator } : null;
 }
-/** 区间聚合多行 → 单商品（率类统一访客/展示口径推导；cvrOrdered/cvrConfirmed 采用访客口径便于排序与 AI 口径统一） */
+/** 成对完整样本比率：无任何成对观测或分母合计 ≤ 0 时返回 null（未知，而非 0）。合法零值正常参与。 */
+function pairwiseRatio(rows, numeratorField, denominatorField) {
+    const sums = pairwiseSums(rows, numeratorField, denominatorField);
+    if (sums === null || sums.denominator <= 0)
+        return null;
+    return sums.numerator / sums.denominator;
+}
+/** 按原始日行计算工作表级加权转化率（与商品明细、新品榜的下单转化率同一成对样本口径） */
+function summarizeSheetEffective(rows) {
+    const sums = pairwiseSums(rows, 'ordersOrdered', 'visitors');
+    if (sums === null)
+        return { weightedCvrNumerator: null, weightedCvrDenominator: null, weightedCvr: null };
+    return {
+        weightedCvrNumerator: sums.numerator,
+        weightedCvrDenominator: sums.denominator,
+        weightedCvr: sums.denominator > 0 ? (sums.numerator / sums.denominator) * 100 : null,
+    };
+}
+/** 区间聚合多行 → 单商品。
+ *  比率类（ctr / cvrOrdered / cvrConfirmed / cartRate / bounceRate / aov*）统一按成对完整样本计算，
+ *  与新品榜（productAnalysisPotential）同名指标同一口径；总量仍为各自有效观测求和。 */
 function buildAggregate(itemId, rows) {
     const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
     const latest = sorted[sorted.length - 1];
@@ -55,8 +92,11 @@ function buildAggregate(itemId, rows) {
         }
         sums[field] = total;
     }
-    const visitors = sums.visitors;
-    const impressions = sums.impressions;
+    const looseRows = sorted;
+    const percent = (numeratorField, denominatorField) => {
+        const ratio = pairwiseRatio(looseRows, numeratorField, denominatorField);
+        return ratio === null ? null : ratio * 100;
+    };
     return {
         itemId,
         itemName: latest.itemName,
@@ -66,15 +106,15 @@ function buildAggregate(itemId, rows) {
         firstDate: sorted[0].date,
         lastDate: latest.date,
         ...sums,
-        ctr: rate(sums.clicks, impressions),
-        cvrOrdered: rate(sums.ordersOrdered, visitors),
-        cvrConfirmed: rate(sums.ordersConfirmed, visitors),
-        cvrVisitorsOrdered: rate(sums.ordersOrdered, visitors),
-        cvrVisitorsConfirmed: rate(sums.ordersConfirmed, visitors),
-        cartRate: rate(sums.cartVisitors, visitors),
-        bounceRate: rate(sums.bounceVisitors, visitors),
-        aovOrdered: sums.salesOrdered !== null && sums.ordersOrdered ? sums.salesOrdered / sums.ordersOrdered : null,
-        aovConfirmed: sums.salesConfirmed !== null && sums.ordersConfirmed ? sums.salesConfirmed / sums.ordersConfirmed : null,
+        ctr: percent('clicks', 'impressions'),
+        cvrOrdered: percent('ordersOrdered', 'visitors'),
+        cvrConfirmed: percent('ordersConfirmed', 'visitors'),
+        cvrVisitorsOrdered: percent('ordersOrdered', 'visitors'),
+        cvrVisitorsConfirmed: percent('ordersConfirmed', 'visitors'),
+        cartRate: percent('cartVisitors', 'visitors'),
+        bounceRate: percent('bounceVisitors', 'visitors'),
+        aovOrdered: pairwiseRatio(looseRows, 'salesOrdered', 'ordersOrdered'),
+        aovConfirmed: pairwiseRatio(looseRows, 'salesConfirmed', 'ordersConfirmed'),
         repeatOrderRate: null,
         repurchaseRateConfirmed: null,
         avgReorderDays: null,
@@ -94,20 +134,25 @@ function aggregateItems(rows) {
     }
     return [...grouped.entries()].map(([itemId, itemRows]) => buildAggregate(itemId, itemRows));
 }
-/** 单品日序列（每日期一行，按日升序） */
+/** 单品日序列（每日期一行，按日升序）。缺失指标保留 null（未知 ≠ 0），不做日期补齐/补零 */
 function buildDailySeries(rows) {
     const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
     return sorted.map((row) => {
-        const visitors = numOrUndef(row.visitors) ?? 0;
-        const ordersConfirmed = numOrUndef(row.ordersConfirmed);
+        const visitors = numOrUndef(row.visitors) ?? null;
+        const ordersConfirmed = numOrUndef(row.ordersConfirmed) ?? null;
+        const ordersOrdered = numOrUndef(row.ordersOrdered) ?? null;
+        // 当日成对样本：订单与访客均有效且访客 > 0 才有转化率
+        const cvrConfirmed = ordersConfirmed !== null && visitors !== null && visitors > 0
+            ? (ordersConfirmed / visitors) * 100
+            : null;
         return {
             date: row.date,
-            ordersOrdered: numOrUndef(row.ordersOrdered) ?? 0,
-            ordersConfirmed: numOrUndef(row.ordersConfirmed) ?? 0,
+            ordersOrdered,
+            ordersConfirmed,
             visitors,
-            clicks: numOrUndef(row.clicks) ?? 0,
-            unitsOrdered: numOrUndef(row.unitsOrdered) ?? 0,
-            cvrConfirmed: ordersConfirmed !== undefined && visitors > 0 ? (ordersConfirmed / visitors) * 100 : null,
+            clicks: numOrUndef(row.clicks) ?? null,
+            unitsOrdered: numOrUndef(row.unitsOrdered) ?? null,
+            cvrConfirmed,
         };
     });
 }

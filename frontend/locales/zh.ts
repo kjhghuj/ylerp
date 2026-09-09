@@ -11,6 +11,7 @@ export const zh = {
     profit: '利润计算',
     finance: '财务管理',
     restockV2: '补货V2',
+    restockV3: '补货V3',
     chromaAdapt: '图片制作',
     productList: '商品明细表',
     personalCenter: '个人中心',

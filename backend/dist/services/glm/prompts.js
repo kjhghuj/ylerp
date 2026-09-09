@@ -133,7 +133,9 @@ function serializeAggregatedItem(item, series, variations) {
         ...serializeMetrics(item),
     ];
     if (series.length > 0) {
-        lines.push('日趋势（日期: 已下订单 | 访客 | 访客转化率%）:', ...series.map((point) => `  ${point.date}: ${point.ordersOrdered} | ${point.visitors} | ${point.cvrConfirmed === null ? '—' : point.cvrConfirmed.toFixed(2)}`));
+        // 缺失指标标「无数据」：与真实 0 区分，避免 AI 把未知当作零销量得出错误结论
+        const cell = (value) => (value === null ? '无数据' : String(value));
+        lines.push('日趋势（日期: 已下订单 | 访客 | 访客转化率%；「无数据」=当日缺失该指标，不是 0）:', ...series.map((point) => `  ${point.date}: ${cell(point.ordersOrdered)} | ${cell(point.visitors)} | ${point.cvrConfirmed === null ? '无数据' : point.cvrConfirmed.toFixed(2)}`));
     }
     lines.push(...serializeVariations({ variations }));
     return truncate(lines.join('\n'));

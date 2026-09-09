@@ -9,11 +9,18 @@
  * 环比口径（growthPercent）：
  * - 基于查询区间建立两个等长日历窗口（所有商品共用同一窗口）：奇数天舍弃最早一天，
  *   如 7 天区间 = 前 3 天（第 2~4 天）vs 后 3 天（第 5~7 天）；
- * - 每窗口只统计该商品「有记录」的日期的日均已下订单——零订单记录是真实 0，
- *   缺失记录（当天导出无此商品）为未知、不假设为 0；
- * - 前窗口日均为 0 且后窗口 > 0：无法计算百分比（growthStatus = 'new-orders'，不伪造 +∞）；
- * - 区间仅 1 天、某侧窗口无任何记录：growthPercent = null（'insufficient' / 'no-data'），
+ * - 每窗口仅使用「有效订单观测」（ordersOrdered 非 null 的日期）：真实 0 单是有效观测，
+ *   缺失指标（null，当日导出无该数据）为未知，不计为 0 也不计入样本；
+ * - 覆盖度要求：前、后窗口各需 ≥1 条有效订单观测，否则 growthPercent = null；
+ * - 前窗口有效订单确实全部为 0 且后窗口 > 0：无法计算百分比（growthStatus = 'new-orders'，不伪造 +∞）；
+ * - 区间仅 1 天或某侧窗口无有效观测：growthPercent = null（'insufficient' / 'no-data'），
  *   评分中增长项记 0 分——缺失数据既无奖励也无惩罚。
+ *
+ * 缺失指标语义：ordersOrdered/visitors 等为 null 表示未知（与 0 严格区分）；合计仅统计有效观测，
+ * 比率（ctr / cvrOrdered / cartRate）分子分母仅使用两者均有观测的日期（成对完整样本），避免口径错配；
+ * 成对比率复用 productAnalysisAggregation.pairwiseRatio，与聚合/详情同名指标同一有效样本口径。
+ * 环比覆盖度：growthPreviousObservedDays / growthRecentObservedDays 返回两侧窗口的有效订单观测天数，
+ * 供前端展示「前期 1/3 天 · 后期 3/3 天」；环比基于有效观测的日均订单。
  *
  * 转化率口径：cvrOrdered = 已下订单 / 访客（下单口径），区别于详情页的 cvrConfirmed（已确认口径）。
  */
@@ -22,6 +29,7 @@ exports.MIN_CART_RATE_PERCENT = exports.MIN_CLICKS = exports.MIN_CTR_PERCENT = v
 exports.buildGrowthWindows = buildGrowthWindows;
 exports.buildPercentileRanker = buildPercentileRanker;
 exports.rankPotentialItems = rankPotentialItems;
+const productAnalysisAggregation_1 = require("./productAnalysisAggregation");
 exports.MIN_CTR_PERCENT = 4;
 exports.MIN_CLICKS = 5;
 exports.MIN_CART_RATE_PERCENT = 1;
@@ -77,50 +85,72 @@ function buildPercentileRanker(values) {
     };
 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+/** 有效观测求和：仅统计字段非 null 的日期；无有效观测返回 null（未知 ≠ 0） */
+function sumObserved(rows, field) {
+    let total = null;
+    for (const row of rows) {
+        const value = row[field];
+        if (typeof value === 'number')
+            total = (total ?? 0) + value;
+    }
+    return total;
+}
+/** 成对比率（%）：复用聚合服务的 pairwiseRatio，保证同名指标（ctr / cvrOrdered / cartRate）同一有效样本口径 */
+function pairwisePercent(rows, numerator, denominator) {
+    const ratio = (0, productAnalysisAggregation_1.pairwiseRatio)(rows, numerator, denominator);
+    return ratio === null ? null : ratio * 100;
+}
 function computeMetrics(candidate, windows) {
     const sorted = [...candidate.daily].sort((a, b) => a.date.localeCompare(b.date));
-    const totals = sorted.reduce((acc, row) => ({
-        ordersOrdered: acc.ordersOrdered + (row.ordersOrdered || 0),
-        visitors: acc.visitors + (row.visitors || 0),
-        clicks: acc.clicks + (row.clicks || 0),
-        impressions: acc.impressions + (row.impressions || 0),
-        cartVisitors: acc.cartVisitors + (row.cartVisitors || 0),
-    }), { ordersOrdered: 0, visitors: 0, clicks: 0, impressions: 0, cartVisitors: 0 });
-    // 环比：仅统计窗口内「有记录」的日期；缺失日不假设为 0
+    // 环比：仅使用「有效订单观测」（ordersOrdered 非 null）；缺失观测不计为零，也不参与样本
+    // 覆盖度要求：前、后窗口各需 ≥1 条有效订单观测，否则视为样本不足
     let growthPercent = null;
     let growthStatus;
-    if (windows.windowDays < 1) {
-        growthStatus = 'insufficient';
-    }
-    else {
-        const averageOrders = (rows) => {
-            const sum = rows.reduce((total, row) => total + (row.ordersOrdered || 0), 0);
-            return { avg: rows.length > 0 ? sum / rows.length : null, sum };
-        };
-        const previous = averageOrders(sorted.filter((row) => windows.previousDays.has(row.date)));
-        const recent = averageOrders(sorted.filter((row) => windows.recentDays.has(row.date)));
-        if (previous.avg === null && recent.avg === null) {
+    let previousObservedDays = 0;
+    let recentObservedDays = 0;
+    if (windows.windowDays >= 1) {
+        const observedOrders = (rows) => rows.filter((row) => typeof row.ordersOrdered === 'number');
+        const previousObserved = observedOrders(sorted.filter((row) => windows.previousDays.has(row.date)));
+        const recentObserved = observedOrders(sorted.filter((row) => windows.recentDays.has(row.date)));
+        previousObservedDays = previousObserved.length;
+        recentObservedDays = recentObserved.length;
+        if (previousObserved.length === 0 && recentObserved.length === 0) {
             growthStatus = 'no-data';
         }
-        else if (previous.avg === null || recent.avg === null) {
+        else if (previousObserved.length === 0 || recentObserved.length === 0) {
             growthStatus = 'insufficient';
         }
-        else if (previous.avg === 0 && recent.avg > 0) {
-            growthStatus = 'new-orders';
-        }
         else {
-            growthStatus = 'ok';
-            growthPercent = previous.avg === 0 ? 0 : ((recent.avg - previous.avg) / previous.avg) * 100;
+            const averageOrders = (rows) => rows.reduce((total, row) => total + row.ordersOrdered, 0) / rows.length;
+            const previousAvg = averageOrders(previousObserved);
+            const recentAvg = averageOrders(recentObserved);
+            if (previousAvg === 0 && recentAvg > 0) {
+                // 仅当前期有效订单确实全部为 0 时才标记新增订单
+                growthStatus = 'new-orders';
+            }
+            else {
+                growthStatus = 'ok';
+                growthPercent = previousAvg === 0 ? 0 : ((recentAvg - previousAvg) / previousAvg) * 100;
+            }
         }
     }
+    else {
+        growthStatus = 'insufficient';
+    }
     return {
-        ...totals,
-        ctr: totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : null,
-        cvrOrdered: totals.visitors > 0 ? (totals.ordersOrdered / totals.visitors) * 100 : null,
-        cartRate: totals.visitors > 0 ? (totals.cartVisitors / totals.visitors) * 100 : null,
+        ordersOrdered: sumObserved(sorted, 'ordersOrdered'),
+        visitors: sumObserved(sorted, 'visitors'),
+        clicks: sumObserved(sorted, 'clicks'),
+        impressions: sumObserved(sorted, 'impressions'),
+        cartVisitors: sumObserved(sorted, 'cartVisitors'),
+        ctr: pairwisePercent(sorted, 'clicks', 'impressions'),
+        cvrOrdered: pairwisePercent(sorted, 'ordersOrdered', 'visitors'),
+        cartRate: pairwisePercent(sorted, 'cartVisitors', 'visitors'),
         growthPercent,
         growthStatus,
         growthWindowDays: windows.windowDays,
+        growthPreviousObservedDays: previousObservedDays,
+        growthRecentObservedDays: recentObservedDays,
     };
 }
 function formatPercent(value) {
@@ -161,24 +191,26 @@ function rankPotentialItems(candidates, options = {}) {
     };
     const windows = resolveWindows(candidates, options.range);
     const computed = candidates.map((candidate) => ({ candidate, metrics: computeMetrics(candidate, windows) }));
-    // 入围条件（任一项为 null 即跳过该条件）
+    // 入围条件（任一项为 null 即跳过该条件）；指标未知（null，无有效观测）不能满足任何正阈值
     const eligible = computed.filter(({ candidate, metrics }) => {
         if (resolved.excludeBannedDeleted && EXCLUDED_STATUS.has(String(candidate.status ?? '')))
             return false;
         if (resolved.minCtrPercent !== null && (metrics.ctr === null || metrics.ctr <= resolved.minCtrPercent))
             return false;
-        if (resolved.minClicks !== null && metrics.clicks <= resolved.minClicks)
+        if (resolved.minClicks !== null && (metrics.clicks === null || metrics.clicks <= resolved.minClicks))
             return false;
         if (resolved.minCartRatePercent !== null && (metrics.cartRate === null || metrics.cartRate <= resolved.minCartRatePercent))
             return false;
         return true;
     });
     const metricsById = new Map(eligible.map(({ candidate, metrics }) => [candidate.itemId, metrics]));
+    // 访客基数仅用于排名：未知（null）按 0 参与排名，不改变其他口径
+    const dailyVisitorRate = ({ candidate, metrics }) => (metrics.visitors ?? 0) / Math.max(1, candidate.daily.length);
     // 百分位基准：入围样本（推荐理由中如引用均值，均指入围样本而非全店）
     const cartRank = buildPercentileRanker(eligible.map(({ metrics }) => metrics.cartRate ?? 0));
     const ctrRank = buildPercentileRanker(eligible.map(({ metrics }) => metrics.ctr ?? 0));
     const cvrRank = buildPercentileRanker(eligible.map(({ metrics }) => metrics.cvrOrdered ?? 0));
-    const trafficRank = buildPercentileRanker(eligible.map(({ candidate, metrics }) => metrics.visitors / Math.max(1, candidate.daily.length)));
+    const trafficRank = buildPercentileRanker(eligible.map(dailyVisitorRate));
     const cartValues = eligible.map(({ metrics }) => metrics.cartRate ?? 0);
     const avgEligibleCartRate = cartValues.length > 0 ? cartValues.reduce((a, b) => a + b, 0) / cartValues.length : 0;
     const scored = eligible.map(({ candidate }) => {
@@ -191,11 +223,11 @@ function rankPotentialItems(candidates, options = {}) {
         const ctrPct = ctrRank(metrics.ctr ?? 0);
         const cvrPct = cvrRank(metrics.cvrOrdered ?? 0);
         const gapScore = (ctrPct / 100) * (100 - cvrPct);
-        const trafficScore = trafficRank(metrics.visitors / Math.max(1, candidate.daily.length));
+        const trafficScore = trafficRank(dailyVisitorRate({ candidate, metrics }));
         const score = Number((0.35 * growthScore + 0.25 * cartScore + 0.25 * gapScore + 0.15 * trafficScore).toFixed(1));
         const reasons = [];
         if (metrics.growthStatus === 'new-orders') {
-            reasons.push(`近 ${metrics.growthWindowDays} 天新增订单（前期无订单，无法计算百分比）`);
+            reasons.push(`近 ${metrics.growthWindowDays} 天新增订单（前期有效订单为 0，无法计算百分比）`);
         }
         else if (metrics.growthPercent !== null && metrics.growthPercent >= 30) {
             reasons.push(`后 ${metrics.growthWindowDays} 天日均订单环比 ${metrics.growthPercent >= 0 ? '+' : ''}${metrics.growthPercent.toFixed(0)}%`);
@@ -207,7 +239,7 @@ function rankPotentialItems(candidates, options = {}) {
             reasons.push(`点击率 ${formatPercent(metrics.ctr)} 但下单转化率仅 ${formatPercent(metrics.cvrOrdered)}，详情页/价格有优化空间`);
         }
         if (trafficScore >= 70) {
-            reasons.push(`访客基数居前 30%（日均 ${Math.round(metrics.visitors / Math.max(1, candidate.daily.length))}）`);
+            reasons.push(`访客基数居前 30%（日均 ${Math.round(dailyVisitorRate({ candidate, metrics }))}）`);
         }
         if (reasons.length === 0) {
             reasons.push('综合流量与转化表现均衡，具备提升空间');

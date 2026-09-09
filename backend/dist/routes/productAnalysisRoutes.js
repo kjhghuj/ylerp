@@ -145,6 +145,15 @@ async function fetchRangeRows(shopId, from, to, options = {}) {
     const rows = rawRows.map((raw) => ({ ...raw, date: dateString(raw.upload.date) }));
     return { uploads, rows };
 }
+/** 币种一致性守卫：区间内任一上传币种与店铺币种不一致即视为异常。
+ *  金额分析（聚合 / 详情 / AI）统一拦截——不跨币种相加、不做隐式换算、不以店铺币种误标历史数据；
+ *  返回可识别错误详情，null 表示一致（含空区间）。 */
+function currencyMismatchDetail(shopCurrency, uploads) {
+    const mismatched = [...new Set(uploads.filter((upload) => upload.currency !== shopCurrency).map((upload) => upload.currency))];
+    if (mismatched.length === 0)
+        return null;
+    return `区间内存在与店铺币种（${shopCurrency}）不一致的上传数据（${mismatched.join(' / ')}）：金额不可跨币种汇总，已停止金额分析。请在数据日历中排查异常币种的日期`;
+}
 // ---- 店铺管理 ----
 router.post('/shops', requireProductAnalysisPermission('product-analysis.upload'), async (req, res) => {
     try {
@@ -292,7 +301,9 @@ router.get('/shops/:id/days', async (req, res) => {
             itemCount: day.itemCount,
             currency: day.currency,
             createdAt: day.createdAt,
-            // 只读排查标记：文件名为起止不同的区间（start≠end），提示该日可能混入区间报表，不改写数据
+            // 只读排查标记：文件名中可见的、起止不同的日期区间（start≠end）→ 疑似区间报表，不改写数据。
+            // 能力边界：仅基于文件名可见日期；文件被改成单日文件名后无法识别其真实内容周期，
+            // 周期校验也只能约束文件名与声明日期的一致性，不能证明文件内容一定属于单日。
             suspectedRange: (0, productAnalysisUpload_1.isSuspectedRangeFileName)(day.fileName),
         })));
     }
@@ -320,8 +331,8 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
         if (JSON.stringify(body).length > MAX_UPLOAD_JSON_LENGTH) {
             return res.status(400).json({ detail: 'Report payload too large (limit 20MB)' });
         }
-        // 周期校验（服务端独立于前端文件名识别）：多日区间 / 倒置 / 非法日期 / 与 date 不一致均拒绝
-        const periodError = (0, productAnalysisUpload_1.validatePeriodMatchesDate)({ periodStart, periodEnd }, date);
+        // 周期校验（服务端独立解析文件名，与声明周期、上传 date 三方交叉；多日区间不能因省略/伪造周期字段通过）
+        const periodError = (0, productAnalysisUpload_1.validatePeriodMatchesDate)(fileName, { periodStart, periodEnd }, date);
         if (periodError) {
             return res.status(400).json({ detail: periodError });
         }
@@ -437,6 +448,11 @@ router.get('/shops/:id/agg', async (req, res) => {
         if (!range)
             return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
         const { uploads, rows } = await fetchRangeRows(shop.id, range.from, range.to);
+        // 币种一致性：任一上传币种 ≠ 店铺币种即拒绝金额分析（含全部历史为单一外币的情况）
+        const currencyError = currencyMismatchDetail(shop.currency, uploads);
+        if (currencyError) {
+            return res.status(409).json({ code: 'CURRENCY_MISMATCH', detail: currencyError });
+        }
         const aggregated = (0, productAnalysisAggregation_1.aggregateItems)(rows);
         const bySheet = new Map();
         for (const item of aggregated) {
@@ -444,12 +460,26 @@ router.get('/shops/:id/agg', async (req, res) => {
             list.push(item);
             bySheet.set(item.sheetKey, list);
         }
+        // 汇总卡口径：按与前端展示一致的「工作表」范围，对原始日行做订单×访客成对有效样本加权
+        // （跨商品为有效订单总和÷对应访客总和；不能平均商品百分比，也不能用不完整的访客总量）
+        const sheetKeyByItem = new Map(aggregated.map((item) => [item.itemId, item.sheetKey]));
+        const rowsBySheet = new Map();
+        for (const row of rows) {
+            const key = sheetKeyByItem.get(row.itemId) ?? row.sheetKey;
+            const list = rowsBySheet.get(key) ?? [];
+            list.push(row);
+            rowsBySheet.set(key, list);
+        }
         const sheets = [...bySheet.entries()]
             .sort((a, b) => {
             const rank = (key) => SHEET_ORDER.indexOf(key);
             return (rank(a[0]) === -1 ? 99 : rank(a[0])) - (rank(b[0]) === -1 ? 99 : rank(b[0]));
         })
-            .map(([sheetKey, items]) => ({ sheetKey, items }));
+            .map(([sheetKey, items]) => ({
+            sheetKey,
+            items,
+            summary: (0, productAnalysisAggregation_1.summarizeSheetEffective)(rowsBySheet.get(sheetKey) ?? []),
+        }));
         // 混合币种只检测并报告（历史数据可能存在多币种），金额不做换算
         const uploadCurrencies = [...new Set(uploads.map((upload) => upload.currency))];
         return res.json({
@@ -535,11 +565,12 @@ router.get('/shops/:id/potential', async (req, res) => {
             }
             candidate.daily.push({
                 date: row.date,
-                ordersOrdered: typeof row.ordersOrdered === 'number' ? row.ordersOrdered : 0,
-                visitors: typeof row.visitors === 'number' ? row.visitors : 0,
-                clicks: typeof row.clicks === 'number' ? row.clicks : 0,
-                impressions: typeof row.impressions === 'number' ? row.impressions : 0,
-                cartVisitors: typeof row.cartVisitors === 'number' ? row.cartVisitors : 0,
+                // null（缺失指标）原样透传：未知订单 ≠ 无订单，增长率按「有效订单观测」口径处理
+                ordersOrdered: typeof row.ordersOrdered === 'number' ? row.ordersOrdered : null,
+                visitors: typeof row.visitors === 'number' ? row.visitors : null,
+                clicks: typeof row.clicks === 'number' ? row.clicks : null,
+                impressions: typeof row.impressions === 'number' ? row.impressions : null,
+                cartVisitors: typeof row.cartVisitors === 'number' ? row.cartVisitors : null,
             });
         }
         const items = (0, productAnalysisPotential_1.rankPotentialItems)([...byItem.values()], { ...filters, range });
@@ -560,11 +591,15 @@ router.get('/shops/:id/items/:itemId', async (req, res) => {
         const itemId = String(req.params.itemId ?? '');
         if (!itemId)
             return res.status(400).json({ detail: 'Missing required field: itemId' });
-        const { rows } = await fetchRangeRows(shop.id, range.from, range.to, {
+        const { rows, uploads: detailUploads } = await fetchRangeRows(shop.id, range.from, range.to, {
             includeExtra: true,
             includeVariations: true,
             itemId,
         });
+        const currencyError = currencyMismatchDetail(shop.currency, detailUploads);
+        if (currencyError) {
+            return res.status(409).json({ code: 'CURRENCY_MISMATCH', detail: currencyError });
+        }
         if (rows.length === 0)
             return res.status(404).json({ detail: 'Item not found in this shop' });
         const detail = (0, productAnalysisAggregation_1.buildItemDetail)(rows);
@@ -605,11 +640,28 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
         if (!latest) {
             return res.status(400).json({ detail: '该店铺还没有上传过数据' });
         }
-        // 默认区间：以最新上传日为锚点的近 7 天
-        const to = isValidDateString(body?.to) ? body.to : dateString(latest.date);
-        const from = isValidDateString(body?.from) ? body.from : addDays(to, -6);
-        if (from > to) {
-            return res.status(400).json({ detail: 'from 不能晚于 to' });
+        // 区间解析：调用方未提供 from/to 时默认以最新上传日为锚点的近 7 天（兼容路径）；
+        // 一旦显式提供则严格校验（成对、真实日历日、from ≤ to、跨度 ≤ 366 天），不完整/非法返回 400 而非静默回退
+        const rawFrom = body?.from;
+        const rawTo = body?.to;
+        let from;
+        let to;
+        if (rawFrom === undefined && rawTo === undefined) {
+            to = dateString(latest.date);
+            from = addDays(to, -6);
+        }
+        else {
+            if (typeof rawFrom !== 'string' || typeof rawTo !== 'string' || !isValidDateString(rawFrom) || !isValidDateString(rawTo)) {
+                return res.status(400).json({ detail: 'from/to 需成对提供且为真实存在的 YYYY-MM-DD 日期' });
+            }
+            from = rawFrom;
+            to = rawTo;
+            if (from > to) {
+                return res.status(400).json({ detail: 'from 不能晚于 to' });
+            }
+            if (daysBetweenInclusive(from, to) > MAX_QUERY_RANGE_DAYS) {
+                return res.status(400).json({ detail: `from/to 区间跨度不能超过 ${MAX_QUERY_RANGE_DAYS} 天` });
+            }
         }
         const itemId = typeof body.itemId === 'string' && body.itemId ? body.itemId : null;
         // 个人中心 AI 配置优先，未配置回退环境变量
@@ -617,8 +669,16 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
         let systemPrompt;
         let chatMode;
         let payload;
+        // 与聚合/新品榜一致的有效样本口径说明，避免 AI 用总量互除重算比率或把缺失当零
+        const sampleNote = '注：转化率/点击率/加购率等比率按「成对有效观测」计算（分子分母均有效的日期才计入）；' +
+            '订单/访客等总量为有效观测求和；缺失日不计为 0，总量不得用于重算比率。';
         if (itemId) {
             const { uploads, rows } = await fetchRangeRows(shop.id, from, to, { includeExtra: true, includeVariations: true, itemId });
+            // 币种一致性：异常时在调用模型供应商前拦截，不产生错误金额结论
+            const currencyError = currencyMismatchDetail(shop.currency, uploads);
+            if (currencyError) {
+                return res.status(409).json({ code: 'CURRENCY_MISMATCH', detail: currencyError });
+            }
             if (rows.length === 0) {
                 return res.status(404).json({ detail: 'Item not found in this shop' });
             }
@@ -637,11 +697,17 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
                     mode: 'item',
                 }),
                 '===== 分析数据 =====',
+                sampleNote,
                 context || '（该区间无可用数据）',
             ].join('\n\n');
         }
         else {
             const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
+            // 币种一致性：异常时在调用模型供应商前拦截，不产生错误金额结论
+            const currencyError = currencyMismatchDetail(shop.currency, uploads);
+            if (currencyError) {
+                return res.status(409).json({ code: 'CURRENCY_MISMATCH', detail: currencyError });
+            }
             const aggregated = (0, productAnalysisAggregation_1.aggregateItems)(rows);
             const bySheet = new Map();
             for (const item of aggregated) {
@@ -666,6 +732,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
                     mode: 'overview',
                 }),
                 '===== 分析数据 =====',
+                sampleNote,
                 context || '（该区间无可用数据）',
             ].join('\n\n');
         }

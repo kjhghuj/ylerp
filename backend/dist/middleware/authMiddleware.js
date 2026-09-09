@@ -3,36 +3,31 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.authorize = exports.authenticate = void 0;
+exports.authorize = exports.authorizeAnyPermission = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
+const jwtSecret_1 = require("../services/jwtSecret");
 /**
  * Verify JWT token and attach user to request
  */
-const bcrypt_1 = __importDefault(require("bcrypt"));
 const index_1 = require("../index");
 const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
-    if (process.env.NODE_ENV !== 'production' && authHeader === 'Bearer dev-token') {
-        let owner = await index_1.prisma.user.findFirst({ where: { role: 'owner' } });
-        if (!owner) {
-            const hashedPassword = await bcrypt_1.default.hash('admin123', 10);
-            owner = await index_1.prisma.user.create({
-                data: { username: 'admin', password: hashedPassword, displayName: '管理员', role: 'owner', isActive: true },
-            });
-            console.log('[Dev] 自动创建 owner 账户: admin / admin123');
-        }
-        req.user = { id: owner.id, username: owner.username, role: owner.role };
-        return next();
-    }
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         res.status(401).json({ error: '未登录，请先登录' });
         return;
     }
     const token = authHeader.split(' ')[1];
     try {
-        const decoded = jsonwebtoken_1.default.verify(token, JWT_SECRET);
-        req.user = decoded;
+        const decoded = jsonwebtoken_1.default.verify(token, (0, jwtSecret_1.getJwtSecret)());
+        const current = await index_1.prisma.user.findUnique({
+            where: { id: decoded.id },
+            select: { id: true, username: true, role: true, permissions: true, isActive: true },
+        });
+        if (!current?.isActive) {
+            res.status(401).json({ error: '用户不存在或已被禁用' });
+            return;
+        }
+        req.user = { id: current.id, username: current.username, role: current.role, permissions: current.permissions };
         next();
     }
     catch (error) {
@@ -40,6 +35,26 @@ const authenticate = async (req, res, next) => {
     }
 };
 exports.authenticate = authenticate;
+const authorizeAnyPermission = (...permissionKeys) => {
+    return (req, res, next) => {
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({ error: '未登录' });
+            return;
+        }
+        const permissions = user.permissions || [];
+        const allowed = user.role === 'owner' || permissions.includes('*') || permissionKeys.some(key => {
+            const moduleKey = key.includes('.') ? key.split('.')[0] : key;
+            return permissions.includes(key) || permissions.includes(moduleKey);
+        });
+        if (!allowed) {
+            res.status(403).json({ error: '权限不足' });
+            return;
+        }
+        next();
+    };
+};
+exports.authorizeAnyPermission = authorizeAnyPermission;
 /**
  * Check if user has one of the allowed roles
  */

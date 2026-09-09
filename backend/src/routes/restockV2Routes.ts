@@ -14,7 +14,6 @@ import {
   createUserYcOpenPlatformClient,
   getYcWarehouseCodesForSite,
   YC_CLIENT_LIMITS,
-  YcClientError,
   type YcCustomerWarehouse,
   type YcOpenPlatformClient,
   type YcProductSpecs,
@@ -25,6 +24,31 @@ import {
   buildTargetSalesAggregates,
   normalizeRestockSku,
 } from '../services/restockSalesImport';
+import {
+  buildYcSkuAliasMap,
+  createRestockPermissionGuard,
+  fetchRemoteRows,
+  logSafeFailure,
+  MAX_GROWTH_PERCENT,
+  MAX_IMPORT_FILE_NAME_LENGTH,
+  MAX_IMPORT_ID_LENGTH,
+  MAX_PLANNING_DAYS,
+  MAX_SITE_LENGTH,
+  MAX_TARGET_SKU_NAME_LENGTH,
+  mergeWarehouseCodes,
+  normalizeSite,
+  normalizeSku,
+  parseBoundedQueryNumber,
+  parseDateQuery,
+  parseNullableBoundedNumber,
+  parseRequiredString,
+  resolveWarehouseCodesForSite,
+  SITE_LABELS,
+  warehouseCodesForSite,
+  withMappedCustomerSku,
+  withMappedInboundCustomerSku,
+  YC_STOCK_SKU_MAX_LENGTH,
+} from '../services/restockYcShared';
 
 interface CreateRestockV2RouterDeps {
   ycClient?: YcOpenPlatformClient;
@@ -58,25 +82,6 @@ interface YcProductDimensions {
   ycVolumeM3: number | null;
 }
 
-const SITE_LABELS: Record<string, string> = {
-  MY: 'Malaysia',
-  SG: 'Singapore',
-  PH: 'Philippines',
-  TH: 'Thailand',
-  ID: 'Indonesia',
-  CN: 'China',
-};
-
-const normalizeSite = (site: unknown) => String(site || '').trim().toUpperCase();
-
-const MAX_PLANNING_DAYS = 3650;
-const MAX_GROWTH_PERCENT = 1000;
-const MAX_IMPORT_FILE_NAME_LENGTH = 255;
-const MAX_SITE_LENGTH = 32;
-const MAX_IMPORT_ID_LENGTH = 100;
-const MAX_TARGET_SKU_NAME_LENGTH = 500;
-const YC_STOCK_SKU_MAX_LENGTH = 50;
-
 const parseOptionalYcSkuSelection = (value: unknown): string[] | null => {
   if (value === undefined) return null;
   if (!Array.isArray(value) || value.length < 1 || value.length > YC_CLIENT_LIMITS.maxListRows) {
@@ -91,57 +96,6 @@ const parseOptionalYcSkuSelection = (value: unknown): string[] | null => {
     return sku;
   });
   return Array.from(new Set(normalized));
-};
-
-const parseBoundedQueryNumber = (
-  value: unknown,
-  field: string,
-  fallback: number,
-  minimum: number,
-  maximum: number,
-  integer = false,
-): number => {
-  if (value === undefined) return fallback;
-  if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-    throw new Error(`Invalid ${field}`);
-  }
-  if (typeof value === 'string' && value.trim() === '') throw new Error(`Invalid ${field}`);
-  if (typeof value === 'string' && !/^\d+(?:\.\d+)?$/.test(value.trim())) throw new Error(`Invalid ${field}`);
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum || (integer && !Number.isInteger(parsed))) {
-    throw new Error(`Invalid ${field}`);
-  }
-  return parsed;
-};
-
-const parseDateQuery = (value: unknown, field: string): string | undefined => {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`Invalid ${field}`);
-  }
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-    throw new Error(`Invalid ${field}`);
-  }
-  return value;
-};
-
-const parseRequiredString = (value: unknown, field: string, maxLength: number): string => {
-  if (typeof value !== 'string') throw new Error(`Invalid ${field}`);
-  const parsed = value.trim();
-  if (!parsed || parsed.length > maxLength) throw new Error(`Invalid ${field}`);
-  return parsed;
-};
-
-const parseNullableBoundedNumber = (
-  value: unknown,
-  field: string,
-  minimum: number,
-  maximum: number,
-  integer = false,
-): number | null => {
-  if (value === undefined || value === null) return null;
-  return parseBoundedQueryNumber(value, field, minimum, minimum, maximum, integer);
 };
 
 const salesImportResponse = (salesImport: any) => {
@@ -176,18 +130,6 @@ const siteSetForProduct = (product: { country?: string | null; sites?: string[] 
   return sites;
 };
 
-const warehouseCodesForSite = (warehouses: YcCustomerWarehouse[], site: string): string[] => {
-  const normalizedSite = normalizeSite(site);
-  return warehouses
-    .filter(warehouse => normalizeSite(warehouse.siteCode) === normalizedSite)
-    .map(warehouse => String(warehouse.code || '').trim())
-    .filter(Boolean);
-};
-
-const mergeWarehouseCodes = (envCodes: string[], remoteCodes: string[]) => {
-  return Array.from(new Set([...envCodes, ...remoteCodes].filter(Boolean)));
-};
-
 const collectLocalSites = (
   products: Array<{ country?: string | null; sites?: string[] | null; siteData?: unknown }>,
   remoteWarehouses: YcCustomerWarehouse[] = [],
@@ -212,53 +154,6 @@ const collectLocalSites = (
       ),
     }));
 };
-
-const resolveWarehouseCodesForSite = async (
-  ycClient: YcOpenPlatformClient,
-  site: string,
-): Promise<{ warehouseCodes: string[]; warnings: string[] }> => {
-  const envCodes = getYcWarehouseCodesForSite(site);
-  if (!ycClient.isConfigured()) return { warehouseCodes: envCodes, warnings: [] };
-
-  try {
-    const remoteWarehouses = await ycClient.listCustomerWarehouses();
-    return {
-      warehouseCodes: mergeWarehouseCodes(envCodes, warehouseCodesForSite(remoteWarehouses, site)),
-      warnings: [],
-    };
-  } catch (error) {
-    logSafeFailure('YC warehouse lookup failed', error);
-    return {
-      warehouseCodes: envCodes,
-      warnings: ['YC warehouse fetch failed'],
-    };
-  }
-};
-
-const fetchRemoteRows = async (
-  ycClient: YcOpenPlatformClient,
-  warehouseCodes: string[],
-  skus: string[],
-): Promise<{
-  stockRows?: RemoteStockRow[];
-  inboundOrders?: RemoteInboundOrder[];
-  failures: Array<{ source: 'stock' | 'inbound'; error: unknown }>;
-}> => {
-  const [stockResult, inboundResult] = await Promise.allSettled([
-    ycClient.listProductInventory({ warehouseCodes, customerSkus: skus }),
-    ycClient.listInboundOrders({ warehouseCodes }),
-  ]);
-  const failures: Array<{ source: 'stock' | 'inbound'; error: unknown }> = [];
-  if (stockResult.status === 'rejected') failures.push({ source: 'stock', error: stockResult.reason });
-  if (inboundResult.status === 'rejected') failures.push({ source: 'inbound', error: inboundResult.reason });
-  return {
-    stockRows: stockResult.status === 'fulfilled' ? stockResult.value : undefined,
-    inboundOrders: inboundResult.status === 'fulfilled' ? inboundResult.value : undefined,
-    failures,
-  };
-};
-
-const normalizeSku = (sku: string | null | undefined) => String(sku || '').trim().toUpperCase();
 
 const toFiniteNumber = (value: unknown, fallback = 0): number => {
   if (typeof value === 'string' && value.trim() === '') return fallback;
@@ -313,86 +208,7 @@ const safeYcStockAdd = (left: number, right: number, field: string): number => {
   return total;
 };
 
-const logSafeFailure = (context: string, error: unknown) => {
-  if (error instanceof YcClientError) {
-    console.warn(context, {
-      code: error.code,
-      path: error.path,
-      httpStatus: error.httpStatus,
-    });
-    return;
-  }
-  const safeCode = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-    ? error.code
-    : 'UNKNOWN';
-  console.warn(context, { code: safeCode });
-};
-
-const hasRestockPermission = (permissions: string[], permission: string): boolean => {
-  const moduleKey = permission.split('.')[0];
-  return permissions.includes('*') || permissions.includes(permission) || permissions.includes(moduleKey);
-};
-
-const requireRestockPermission = (permission: 'restock-v2.view' | 'restock-v2.refresh') => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-    if (req.user.role === 'owner') return next();
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { permissions: true, isActive: true },
-      });
-      if (!user?.isActive || !hasRestockPermission(user.permissions || [], permission)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      return next();
-    } catch (error) {
-      logSafeFailure('Restock permission lookup failed', error);
-      return res.status(500).json({ error: 'Permission check failed' });
-    }
-  };
-};
-
-const buildYcSkuAliasMap = (
-  warehouseMappings: Array<{ sku: string; thirdPartyWarehouseId?: string | null; type?: string | null }>,
-  productSkus: string[],
-) => {
-  const productSkuSet = new Set(productSkus.map(normalizeSku));
-  const aliases = new Map<string, string>();
-
-  for (const mapping of warehouseMappings) {
-    const erpSku = String(mapping.sku || '').trim();
-    const ycSku = String(mapping.thirdPartyWarehouseId || '').trim();
-    if (!erpSku || !ycSku) continue;
-    if (mapping.type && mapping.type !== 'third') continue;
-    if (normalizeSku(erpSku) === normalizeSku(ycSku)) continue;
-    if (!productSkuSet.has(normalizeSku(erpSku))) continue;
-    aliases.set(normalizeSku(ycSku), erpSku);
-  }
-
-  return aliases;
-};
-
-const withMappedCustomerSku = (rows: RemoteStockRow[], aliases: Map<string, string>): RemoteStockRow[] => {
-  return rows.map(row => {
-    const mappedSku = aliases.get(normalizeSku(row.customerSku));
-    return mappedSku ? { ...row, customerSku: mappedSku } : row;
-  });
-};
-
-const withMappedInboundCustomerSku = (
-  orders: RemoteInboundOrder[],
-  aliases: Map<string, string>,
-): RemoteInboundOrder[] => {
-  return orders.map(order => ({
-    ...order,
-    details: (order.details || []).map(detail => {
-      const mappedSku = aliases.get(normalizeSku(detail.customerSku))
-        || aliases.get(normalizeSku(detail.productSku));
-      return mappedSku ? { ...detail, customerSku: mappedSku } : detail;
-    }),
-  }));
-};
+const requireRestockPermission = createRestockPermissionGuard(() => prisma, 'restock-v2');
 
 const aggregateYcStockRows = (rows: RemoteStockRow[]): YcProductSyncItem[] => {
   const aggregates = new Map<string, YcProductSyncItem>();

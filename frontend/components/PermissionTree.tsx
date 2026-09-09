@@ -54,6 +54,13 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         ]
     },
     {
+        key: 'restock-v3', label: '补货V3', labelEn: 'Restock V3', icon: PackageCheck,
+        children: [
+            { key: 'restock-v3.view', label: '查看建议', labelEn: 'View Suggestions', icon: Search },
+            { key: 'restock-v3.refresh', label: '刷新建议', labelEn: 'Refresh Suggestions', icon: Truck },
+        ]
+    },
+    {
         key: 'chroma-adapt', label: '图片制作', labelEn: 'Image Studio', icon: Image,
         children: [
             { key: 'chroma-adapt.translate', label: '图片翻译', labelEn: 'Translate', icon: Edit3 },

@@ -9,8 +9,8 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const usageEvents_1 = require("../services/usageEvents");
 const index_1 = require("../index");
+const jwtSecret_1 = require("../services/jwtSecret");
 const router = (0, express_1.Router)();
-const JWT_SECRET = process.env.JWT_SECRET || 'yangling-erp-secret-key-2026';
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
     try {
@@ -29,7 +29,7 @@ router.post('/login', async (req, res) => {
         if (!isValid) {
             return res.status(401).json({ error: '用户名或密码错误' });
         }
-        const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+        const token = jsonwebtoken_1.default.sign({ id: user.id, username: user.username, role: user.role }, (0, jwtSecret_1.getJwtSecret)(), { expiresIn: '7d' });
         await (0, usageEvents_1.recordUsageEvent)(index_1.prisma, {
             actorId: user.id, actorName: user.displayName || user.username,
             action: 'login', module: 'auth', objectType: 'User', objectId: user.id,

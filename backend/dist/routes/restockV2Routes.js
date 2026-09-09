@@ -8,22 +8,7 @@ const productCache_1 = require("../services/productCache");
 const restockPlanner_1 = require("../services/restockPlanner");
 const ycOpenPlatformClient_1 = require("../services/ycOpenPlatformClient");
 const restockSalesImport_1 = require("../services/restockSalesImport");
-const SITE_LABELS = {
-    MY: 'Malaysia',
-    SG: 'Singapore',
-    PH: 'Philippines',
-    TH: 'Thailand',
-    ID: 'Indonesia',
-    CN: 'China',
-};
-const normalizeSite = (site) => String(site || '').trim().toUpperCase();
-const MAX_PLANNING_DAYS = 3650;
-const MAX_GROWTH_PERCENT = 1000;
-const MAX_IMPORT_FILE_NAME_LENGTH = 255;
-const MAX_SITE_LENGTH = 32;
-const MAX_IMPORT_ID_LENGTH = 100;
-const MAX_TARGET_SKU_NAME_LENGTH = 500;
-const YC_STOCK_SKU_MAX_LENGTH = 50;
+const restockYcShared_1 = require("../services/restockYcShared");
 const parseOptionalYcSkuSelection = (value) => {
     if (value === undefined)
         return null;
@@ -33,54 +18,13 @@ const parseOptionalYcSkuSelection = (value) => {
     const normalized = value.map(item => {
         if (typeof item !== 'string')
             throw new Error('Invalid YC SKU selection');
-        const sku = normalizeSku(item);
+        const sku = (0, restockYcShared_1.normalizeSku)(item);
         if (!sku || sku.length > ycOpenPlatformClient_1.YC_CLIENT_LIMITS.maxIdentifierLength) {
             throw new Error('Invalid YC SKU selection');
         }
         return sku;
     });
     return Array.from(new Set(normalized));
-};
-const parseBoundedQueryNumber = (value, field, fallback, minimum, maximum, integer = false) => {
-    if (value === undefined)
-        return fallback;
-    if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
-        throw new Error(`Invalid ${field}`);
-    }
-    if (typeof value === 'string' && value.trim() === '')
-        throw new Error(`Invalid ${field}`);
-    if (typeof value === 'string' && !/^\d+(?:\.\d+)?$/.test(value.trim()))
-        throw new Error(`Invalid ${field}`);
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum || (integer && !Number.isInteger(parsed))) {
-        throw new Error(`Invalid ${field}`);
-    }
-    return parsed;
-};
-const parseDateQuery = (value, field) => {
-    if (value === undefined)
-        return undefined;
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        throw new Error(`Invalid ${field}`);
-    }
-    const parsed = new Date(`${value}T00:00:00.000Z`);
-    if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-        throw new Error(`Invalid ${field}`);
-    }
-    return value;
-};
-const parseRequiredString = (value, field, maxLength) => {
-    if (typeof value !== 'string')
-        throw new Error(`Invalid ${field}`);
-    const parsed = value.trim();
-    if (!parsed || parsed.length > maxLength)
-        throw new Error(`Invalid ${field}`);
-    return parsed;
-};
-const parseNullableBoundedNumber = (value, field, minimum, maximum, integer = false) => {
-    if (value === undefined || value === null)
-        return null;
-    return parseBoundedQueryNumber(value, field, minimum, minimum, maximum, integer);
 };
 const salesImportResponse = (salesImport) => {
     const items = Array.isArray(salesImport.items) ? salesImport.items : [];
@@ -103,26 +47,16 @@ const siteSetForProduct = (product) => {
     const sites = new Set();
     for (const site of product.sites || []) {
         if (site)
-            sites.add(normalizeSite(site));
+            sites.add((0, restockYcShared_1.normalizeSite)(site));
     }
     if (product.country)
-        sites.add(normalizeSite(product.country));
+        sites.add((0, restockYcShared_1.normalizeSite)(product.country));
     if (product.siteData && typeof product.siteData === 'object') {
         for (const site of Object.keys(product.siteData)) {
-            sites.add(normalizeSite(site));
+            sites.add((0, restockYcShared_1.normalizeSite)(site));
         }
     }
     return sites;
-};
-const warehouseCodesForSite = (warehouses, site) => {
-    const normalizedSite = normalizeSite(site);
-    return warehouses
-        .filter(warehouse => normalizeSite(warehouse.siteCode) === normalizedSite)
-        .map(warehouse => String(warehouse.code || '').trim())
-        .filter(Boolean);
-};
-const mergeWarehouseCodes = (envCodes, remoteCodes) => {
-    return Array.from(new Set([...envCodes, ...remoteCodes].filter(Boolean)));
 };
 const collectLocalSites = (products, remoteWarehouses = []) => {
     const counts = new Map();
@@ -137,47 +71,11 @@ const collectLocalSites = (products, remoteWarehouses = []) => {
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([site, productCount]) => ({
         code: site,
-        label: SITE_LABELS[site] || site,
+        label: restockYcShared_1.SITE_LABELS[site] || site,
         productCount,
-        warehouseCodes: mergeWarehouseCodes((0, ycOpenPlatformClient_1.getYcWarehouseCodesForSite)(site), warehouseCodesForSite(remoteWarehouses, site)),
+        warehouseCodes: (0, restockYcShared_1.mergeWarehouseCodes)((0, ycOpenPlatformClient_1.getYcWarehouseCodesForSite)(site), (0, restockYcShared_1.warehouseCodesForSite)(remoteWarehouses, site)),
     }));
 };
-const resolveWarehouseCodesForSite = async (ycClient, site) => {
-    const envCodes = (0, ycOpenPlatformClient_1.getYcWarehouseCodesForSite)(site);
-    if (!ycClient.isConfigured())
-        return { warehouseCodes: envCodes, warnings: [] };
-    try {
-        const remoteWarehouses = await ycClient.listCustomerWarehouses();
-        return {
-            warehouseCodes: mergeWarehouseCodes(envCodes, warehouseCodesForSite(remoteWarehouses, site)),
-            warnings: [],
-        };
-    }
-    catch (error) {
-        logSafeFailure('YC warehouse lookup failed', error);
-        return {
-            warehouseCodes: envCodes,
-            warnings: ['YC warehouse fetch failed'],
-        };
-    }
-};
-const fetchRemoteRows = async (ycClient, warehouseCodes, skus) => {
-    const [stockResult, inboundResult] = await Promise.allSettled([
-        ycClient.listProductInventory({ warehouseCodes, customerSkus: skus }),
-        ycClient.listInboundOrders({ warehouseCodes }),
-    ]);
-    const failures = [];
-    if (stockResult.status === 'rejected')
-        failures.push({ source: 'stock', error: stockResult.reason });
-    if (inboundResult.status === 'rejected')
-        failures.push({ source: 'inbound', error: inboundResult.reason });
-    return {
-        stockRows: stockResult.status === 'fulfilled' ? stockResult.value : undefined,
-        inboundOrders: inboundResult.status === 'fulfilled' ? inboundResult.value : undefined,
-        failures,
-    };
-};
-const normalizeSku = (sku) => String(sku || '').trim().toUpperCase();
 const toFiniteNumber = (value, fallback = 0) => {
     if (typeof value === 'string' && value.trim() === '')
         return fallback;
@@ -229,87 +127,14 @@ const safeYcStockAdd = (left, right, field) => {
         throw new restockPlanner_1.RestockSourceDataError(`${field} is unsafe`);
     return total;
 };
-const logSafeFailure = (context, error) => {
-    if (error instanceof ycOpenPlatformClient_1.YcClientError) {
-        console.warn(context, {
-            code: error.code,
-            path: error.path,
-            httpStatus: error.httpStatus,
-        });
-        return;
-    }
-    const safeCode = error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-        ? error.code
-        : 'UNKNOWN';
-    console.warn(context, { code: safeCode });
-};
-const hasRestockPermission = (permissions, permission) => {
-    const moduleKey = permission.split('.')[0];
-    return permissions.includes('*') || permissions.includes(permission) || permissions.includes(moduleKey);
-};
-const requireRestockPermission = (permission) => {
-    return async (req, res, next) => {
-        if (!req.user)
-            return res.status(401).json({ error: 'Unauthorized' });
-        if (req.user.role === 'owner')
-            return next();
-        try {
-            const user = await index_1.prisma.user.findUnique({
-                where: { id: req.user.id },
-                select: { permissions: true, isActive: true },
-            });
-            if (!user?.isActive || !hasRestockPermission(user.permissions || [], permission)) {
-                return res.status(403).json({ error: 'Forbidden' });
-            }
-            return next();
-        }
-        catch (error) {
-            logSafeFailure('Restock permission lookup failed', error);
-            return res.status(500).json({ error: 'Permission check failed' });
-        }
-    };
-};
-const buildYcSkuAliasMap = (warehouseMappings, productSkus) => {
-    const productSkuSet = new Set(productSkus.map(normalizeSku));
-    const aliases = new Map();
-    for (const mapping of warehouseMappings) {
-        const erpSku = String(mapping.sku || '').trim();
-        const ycSku = String(mapping.thirdPartyWarehouseId || '').trim();
-        if (!erpSku || !ycSku)
-            continue;
-        if (mapping.type && mapping.type !== 'third')
-            continue;
-        if (normalizeSku(erpSku) === normalizeSku(ycSku))
-            continue;
-        if (!productSkuSet.has(normalizeSku(erpSku)))
-            continue;
-        aliases.set(normalizeSku(ycSku), erpSku);
-    }
-    return aliases;
-};
-const withMappedCustomerSku = (rows, aliases) => {
-    return rows.map(row => {
-        const mappedSku = aliases.get(normalizeSku(row.customerSku));
-        return mappedSku ? { ...row, customerSku: mappedSku } : row;
-    });
-};
-const withMappedInboundCustomerSku = (orders, aliases) => {
-    return orders.map(order => ({
-        ...order,
-        details: (order.details || []).map(detail => {
-            const mappedSku = aliases.get(normalizeSku(detail.customerSku))
-                || aliases.get(normalizeSku(detail.productSku));
-            return mappedSku ? { ...detail, customerSku: mappedSku } : detail;
-        }),
-    }));
-};
+const requireRestockPermission = (0, restockYcShared_1.createRestockPermissionGuard)(() => index_1.prisma, 'restock-v2');
 const aggregateYcStockRows = (rows) => {
     const aggregates = new Map();
     for (const row of rows) {
         const rawSku = String(row.customerSku || '').trim();
         if (!rawSku)
             continue;
-        const skuKey = normalizeSku(rawSku);
+        const skuKey = (0, restockYcShared_1.normalizeSku)(rawSku);
         const existing = aggregates.get(skuKey);
         const warehouseCode = String(row.warehouseCode || '').trim();
         const next = existing || {
@@ -344,7 +169,7 @@ const mergeSiteData = (siteData, site) => {
     }
     return next;
 };
-const mappingKey = (sku, ycSku) => `${normalizeSku(sku)}::${normalizeSku(ycSku)}`;
+const mappingKey = (sku, ycSku) => `${(0, restockYcShared_1.normalizeSku)(sku)}::${(0, restockYcShared_1.normalizeSku)(ycSku)}`;
 const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
     const router = (0, express_1.Router)();
     const getYcClient = async (userId) => {
@@ -361,7 +186,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const products = await index_1.prisma.product.findMany({ where: { userId } });
             const remoteWarehouses = activeYcClient.isConfigured()
                 ? await activeYcClient.listCustomerWarehouses().catch(error => {
-                    logSafeFailure('YC warehouse lookup failed', error);
+                    (0, restockYcShared_1.logSafeFailure)('YC warehouse lookup failed', error);
                     return [];
                 })
                 : [];
@@ -371,7 +196,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
         }
         catch (error) {
-            logSafeFailure('Restock site lookup failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock site lookup failed', error);
             res.status(500).json({ error: 'Failed to fetch restock sites' });
         }
     });
@@ -379,14 +204,14 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
         try {
             const userId = req.user.id;
             const activeYcClient = await getYcClient(userId);
-            const site = normalizeSite(req.query.site);
+            const site = (0, restockYcShared_1.normalizeSite)(req.query.site);
             if (!site) {
                 return res.status(400).json({ error: 'site is required' });
             }
             if (!activeYcClient.isConfigured()) {
                 return res.status(400).json({ error: 'YC credentials are not configured' });
             }
-            const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
+            const warehouseResolution = await (0, restockYcShared_1.resolveWarehouseCodesForSite)(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             if (warehouseCodes.length === 0) {
                 return res.status(400).json({
@@ -400,10 +225,10 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             ]);
             const currentSiteSkus = new Set(products
                 .filter(product => siteSetForProduct(product).has(site))
-                .map(product => normalizeSku(product.sku)));
+                .map(product => (0, restockYcShared_1.normalizeSku)(product.sku)));
             const items = aggregateYcStockRows(stockRows).map(item => ({
                 ...item,
-                alreadyInCurrentSite: currentSiteSkus.has(normalizeSku(item.sku)),
+                alreadyInCurrentSite: currentSiteSkus.has((0, restockYcShared_1.normalizeSku)(item.sku)),
             }));
             return res.json({
                 site,
@@ -413,7 +238,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
         }
         catch (error) {
-            logSafeFailure('YC product sync preview failed', error);
+            (0, restockYcShared_1.logSafeFailure)('YC product sync preview failed', error);
             if (error instanceof restockPlanner_1.RestockSourceDataError) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
@@ -424,7 +249,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
         try {
             const userId = req.user.id;
             const activeYcClient = await getYcClient(userId);
-            const site = normalizeSite(req.body?.site || req.query.site);
+            const site = (0, restockYcShared_1.normalizeSite)(req.body?.site || req.query.site);
             let selectedSkus;
             if (!site) {
                 return res.status(400).json({ error: 'site is required' });
@@ -438,7 +263,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             if (!activeYcClient.isConfigured()) {
                 return res.status(400).json({ error: 'YC credentials are not configured' });
             }
-            const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
+            const warehouseResolution = await (0, restockYcShared_1.resolveWarehouseCodesForSite)(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             if (warehouseCodes.length === 0) {
                 return res.status(400).json({
@@ -452,17 +277,17 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             ]);
             const dimensionsBySku = new Map(ycProducts
                 .map(product => [
-                normalizeSku(product.customerSku),
+                (0, restockYcShared_1.normalizeSku)(product.customerSku),
                 (0, exports.parseYcProductDimensions)(product.productSpecs),
             ])
                 .filter(([sku]) => Boolean(sku)));
             const specsSyncedAt = new Date();
             const selectedSkuSet = selectedSkus ? new Set(selectedSkus) : null;
             const syncItems = aggregateYcStockRows(selectedSkuSet
-                ? stockRows.filter(row => selectedSkuSet.has(normalizeSku(row.customerSku)))
+                ? stockRows.filter(row => selectedSkuSet.has((0, restockYcShared_1.normalizeSku)(row.customerSku)))
                 : stockRows);
             if (selectedSkus) {
-                const availableSkus = new Set(syncItems.map(item => normalizeSku(item.sku)));
+                const availableSkus = new Set(syncItems.map(item => (0, restockYcShared_1.normalizeSku)(item.sku)));
                 if (selectedSkus.some(sku => !availableSkus.has(sku))) {
                     return res.status(400).json({ error: 'Selected YC products are no longer available' });
                 }
@@ -472,8 +297,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 index_1.prisma.inventoryItem.findMany({ where: { userId } }),
                 index_1.prisma.warehouseMapping.findMany({ where: { userId } }),
             ]);
-            const productBySku = new Map(products.map(product => [normalizeSku(product.sku), product]));
-            const inventoryBySku = new Map(inventoryItems.map(item => [normalizeSku(item.sku), item]));
+            const productBySku = new Map(products.map(product => [(0, restockYcShared_1.normalizeSku)(product.sku), product]));
+            const inventoryBySku = new Map(inventoryItems.map(item => [(0, restockYcShared_1.normalizeSku)(item.sku), item]));
             const thirdMappingKeys = new Set(warehouseMappings
                 .filter(mapping => mapping.type === 'third' && mapping.thirdPartyWarehouseId)
                 .map(mapping => mappingKey(mapping.sku, mapping.thirdPartyWarehouseId || '')));
@@ -482,9 +307,9 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let createdInventoryItems = 0;
             let updatedInventoryItems = 0;
             let createdMappings = 0;
-            await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_sync', objectType: 'SKU', affectedCount: syncItems.length, metadata: { site } }, async (tx) => {
+            await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_sync', objectType: 'SKU', affectedCount: syncItems.length, metadata: { site } }, async (tx) => {
                 for (const item of syncItems) {
-                    const skuKey = normalizeSku(item.sku);
+                    const skuKey = (0, restockYcShared_1.normalizeSku)(item.sku);
                     const dimensions = dimensionsBySku.get(skuKey)
                         || (0, exports.parseYcProductDimensions)(null);
                     const existingProduct = productBySku.get(skuKey);
@@ -500,7 +325,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                         if (JSON.stringify(nextSiteData) !== JSON.stringify(existingProduct.siteData || {})) {
                             productUpdates.siteData = nextSiteData;
                         }
-                        if ((!existingProduct.name || normalizeSku(existingProduct.name) === skuKey) && item.name !== item.sku) {
+                        if ((!existingProduct.name || (0, restockYcShared_1.normalizeSku)(existingProduct.name) === skuKey) && item.name !== item.sku) {
                             productUpdates.name = item.name;
                         }
                         if (Object.keys(productUpdates).length > 0) {
@@ -610,7 +435,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
         }
         catch (error) {
-            logSafeFailure('YC product sync failed', error);
+            (0, restockYcShared_1.logSafeFailure)('YC product sync failed', error);
             if (error instanceof restockPlanner_1.RestockSourceDataError) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
@@ -625,9 +450,9 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let statisticsDays;
             let initialItems;
             try {
-                site = normalizeSite(parseRequiredString(req.body?.site, 'site', MAX_SITE_LENGTH));
-                fileName = parseRequiredString(req.body?.fileName, 'fileName', MAX_IMPORT_FILE_NAME_LENGTH);
-                statisticsDays = parseBoundedQueryNumber(req.body?.statisticsDays, 'statisticsDays', 30, 1, MAX_PLANNING_DAYS, true);
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.body?.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
+                fileName = (0, restockYcShared_1.parseRequiredString)(req.body?.fileName, 'fileName', restockYcShared_1.MAX_IMPORT_FILE_NAME_LENGTH);
+                statisticsDays = (0, restockYcShared_1.parseBoundedQueryNumber)(req.body?.statisticsDays, 'statisticsDays', 30, 1, restockYcShared_1.MAX_PLANNING_DAYS, true);
                 initialItems = (0, restockSalesImport_1.aggregateSalesImportRows)(req.body?.rows);
             }
             catch {
@@ -659,7 +484,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 exactFallbackMappings.push({ externalSku, targetSku: externalSku });
             }
             const items = (0, restockSalesImport_1.aggregateSalesImportRows)(req.body.rows, reusableMappings);
-            const created = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async (tx) => {
+            const created = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async (tx) => {
                 await Promise.all(exactFallbackMappings.map(({ externalSku, targetSku }) => tx.externalSkuMapping.upsert({
                     where: { userId_site_externalSku: { userId, site, externalSku } },
                     create: { userId, site, externalSku, targetSku },
@@ -679,7 +504,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.status(201).json(salesImportResponse(created));
         }
         catch (error) {
-            logSafeFailure('Restock sales import failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock sales import failed', error);
             return res.status(500).json({ error: 'Failed to import sales data' });
         }
     });
@@ -688,7 +513,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const userId = req.user.id;
             let site;
             try {
-                site = normalizeSite(parseRequiredString(req.query.site, 'site', MAX_SITE_LENGTH));
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.query.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
             }
             catch {
                 return res.status(400).json({ error: 'site is required' });
@@ -703,13 +528,13 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.json(salesImportResponse(salesImport));
         }
         catch (error) {
-            logSafeFailure('Restock sales import lookup failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock sales import lookup failed', error);
             return res.status(500).json({ error: 'Failed to fetch sales import' });
         }
     });
     router.get('/sales-imports/:id', requireRestockPermission('restock-v2.view'), async (req, res) => {
         try {
-            const id = parseRequiredString(req.params.id, 'id', MAX_IMPORT_ID_LENGTH);
+            const id = (0, restockYcShared_1.parseRequiredString)(req.params.id, 'id', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
             const salesImport = await index_1.prisma.restockSalesImport.findFirst({
                 where: { id, userId: req.user.id },
                 include: { items: true },
@@ -722,7 +547,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             if (error instanceof Error && error.message.startsWith('Invalid')) {
                 return res.status(400).json({ error: 'Invalid sales import id' });
             }
-            logSafeFailure('Restock sales import lookup failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock sales import lookup failed', error);
             return res.status(500).json({ error: 'Failed to fetch sales import' });
         }
     });
@@ -752,7 +577,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.json({ items });
         }
         catch (error) {
-            logSafeFailure('Restock target SKU lookup failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock target SKU lookup failed', error);
             return res.status(500).json({ error: 'Failed to fetch target SKUs' });
         }
     });
@@ -763,7 +588,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let sku;
             let name;
             try {
-                site = normalizeSite(parseRequiredString(req.body?.site, 'site', MAX_SITE_LENGTH));
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.body?.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
                 sku = (0, restockSalesImport_1.normalizeRestockSku)(req.body?.sku);
                 if (!sku || sku.length > 200)
                     throw new Error('Invalid sku');
@@ -771,7 +596,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 if (suppliedName !== undefined && typeof suppliedName !== 'string')
                     throw new Error('Invalid name');
                 name = suppliedName?.trim() || sku;
-                if (name.length > MAX_TARGET_SKU_NAME_LENGTH)
+                if (name.length > restockYcShared_1.MAX_TARGET_SKU_NAME_LENGTH)
                     throw new Error('Invalid name');
             }
             catch {
@@ -784,7 +609,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             if ([...products, ...inventoryItems].some(item => (0, restockSalesImport_1.normalizeRestockSku)(item.sku) === sku)) {
                 return res.status(409).json({ error: 'Target SKU already exists' });
             }
-            const inventory = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_target_create', objectType: 'InventoryItem' }, async (tx) => {
+            const inventory = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_target_create', objectType: 'InventoryItem' }, async (tx) => {
                 await tx.product.create({
                     data: {
                         name,
@@ -828,7 +653,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.status(201).json(inventory);
         }
         catch (error) {
-            logSafeFailure('Restock target SKU create failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock target SKU create failed', error);
             return res.status(500).json({ error: 'Failed to create target SKU' });
         }
     });
@@ -839,8 +664,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let itemId;
             let targetSku;
             try {
-                importId = parseRequiredString(req.params.importId, 'importId', MAX_IMPORT_ID_LENGTH);
-                itemId = parseRequiredString(req.params.itemId, 'itemId', MAX_IMPORT_ID_LENGTH);
+                importId = (0, restockYcShared_1.parseRequiredString)(req.params.importId, 'importId', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
+                itemId = (0, restockYcShared_1.parseRequiredString)(req.params.itemId, 'itemId', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
                 targetSku = (0, restockSalesImport_1.normalizeRestockSku)(req.body?.targetSku);
                 if (!targetSku)
                     throw new Error('Invalid targetSku');
@@ -866,7 +691,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 return res.status(400).json({ error: 'Target SKU not found' });
             const normalizedTargetSku = (0, restockSalesImport_1.normalizeRestockSku)(matchedInventory?.sku || matchedProduct.sku);
             const externalSku = (0, restockSalesImport_1.normalizeRestockSku)(item.platformSku);
-            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_mapping_save', objectType: 'RestockSalesItem' }, async (tx) => {
+            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_mapping_save', objectType: 'RestockSalesItem' }, async (tx) => {
                 if (!matchedInventory) {
                     await tx.inventoryItem.create({
                         data: {
@@ -901,7 +726,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.json(updatedItem);
         }
         catch (error) {
-            logSafeFailure('Restock SKU mapping failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock SKU mapping failed', error);
             return res.status(500).json({ error: 'Failed to save SKU mapping' });
         }
     });
@@ -911,8 +736,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let importId;
             let itemId;
             try {
-                importId = parseRequiredString(req.params.importId, 'importId', MAX_IMPORT_ID_LENGTH);
-                itemId = parseRequiredString(req.params.itemId, 'itemId', MAX_IMPORT_ID_LENGTH);
+                importId = (0, restockYcShared_1.parseRequiredString)(req.params.importId, 'importId', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
+                itemId = (0, restockYcShared_1.parseRequiredString)(req.params.itemId, 'itemId', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
                 if (req.body?.dismissed !== true)
                     throw new Error('Invalid dismissed');
             }
@@ -927,14 +752,14 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const item = await index_1.prisma.restockSalesItem.findFirst({ where: { id: itemId, importId } });
             if (!item)
                 return res.status(404).json({ error: 'Sales import item not found' });
-            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_item_dismiss', objectType: 'RestockSalesItem' }, tx => tx.restockSalesItem.update({
+            const updatedItem = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_item_dismiss', objectType: 'RestockSalesItem' }, tx => tx.restockSalesItem.update({
                 where: { id: item.id },
                 data: { dismissedAt: new Date() },
             }));
             return res.json(updatedItem);
         }
         catch (error) {
-            logSafeFailure('Restock sales import dismissal failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock sales import dismissal failed', error);
             return res.status(500).json({ error: 'Failed to dismiss sales import item' });
         }
     });
@@ -942,7 +767,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
         try {
             let site;
             try {
-                site = normalizeSite(parseRequiredString(req.query.site, 'site', MAX_SITE_LENGTH));
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.query.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
             }
             catch {
                 return res.status(400).json({ error: 'site is required' });
@@ -954,7 +779,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.json({ site, rules });
         }
         catch (error) {
-            logSafeFailure('Restock SKU rule lookup failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock SKU rule lookup failed', error);
             return res.status(500).json({ error: 'Failed to fetch SKU rules' });
         }
     });
@@ -967,13 +792,13 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let safetyDays;
             let growthPercent;
             try {
-                site = normalizeSite(parseRequiredString(req.body?.site, 'site', MAX_SITE_LENGTH));
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.body?.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
                 sku = (0, restockSalesImport_1.normalizeRestockSku)(req.params.sku);
                 if (!sku)
                     throw new Error('Invalid sku');
-                leadTimeDays = parseNullableBoundedNumber(req.body?.leadTimeDays, 'leadTimeDays', 0, MAX_PLANNING_DAYS, true);
-                safetyDays = parseNullableBoundedNumber(req.body?.safetyDays, 'safetyDays', 0, MAX_PLANNING_DAYS, true);
-                growthPercent = parseNullableBoundedNumber(req.body?.growthPercent, 'growthPercent', 0, MAX_GROWTH_PERCENT);
+                leadTimeDays = (0, restockYcShared_1.parseNullableBoundedNumber)(req.body?.leadTimeDays, 'leadTimeDays', 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                safetyDays = (0, restockYcShared_1.parseNullableBoundedNumber)(req.body?.safetyDays, 'safetyDays', 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                growthPercent = (0, restockYcShared_1.parseNullableBoundedNumber)(req.body?.growthPercent, 'growthPercent', 0, restockYcShared_1.MAX_GROWTH_PERCENT);
             }
             catch {
                 return res.status(400).json({ error: 'Invalid SKU rule payload' });
@@ -983,7 +808,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 return res.status(400).json({ error: 'Inventory SKU not found' });
             }
             const data = { leadTimeDays, safetyDays, growthPercent };
-            const rule = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock', action: 'restock_rule_save', objectType: 'RestockSkuRule' }, tx => tx.restockSkuRule.upsert({
+            const rule = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_rule_save', objectType: 'RestockSkuRule' }, tx => tx.restockSkuRule.upsert({
                 where: { userId_site_sku: { userId, site, sku } },
                 create: { userId, site, sku, ...data },
                 update: data,
@@ -991,7 +816,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             return res.json(rule);
         }
         catch (error) {
-            logSafeFailure('Restock SKU rule update failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock SKU rule update failed', error);
             return res.status(500).json({ error: 'Failed to save SKU rule' });
         }
     });
@@ -999,7 +824,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
         try {
             const userId = req.user.id;
             const activeYcClient = await getYcClient(userId);
-            const site = normalizeSite(req.query.site);
+            const site = (0, restockYcShared_1.normalizeSite)(req.query.site);
             if (!site) {
                 return res.status(400).json({ error: 'site is required' });
             }
@@ -1013,7 +838,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                     items: [],
                 });
             }
-            const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
+            const warehouseResolution = await (0, restockYcShared_1.resolveWarehouseCodesForSite)(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             warnings.push(...warehouseResolution.warnings);
             if (warehouseCodes.length === 0) {
@@ -1032,7 +857,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             ]);
             const siteProducts = products.filter(product => siteSetForProduct(product).has(site));
             const skus = siteProducts.map(product => product.sku).filter(Boolean);
-            const ycSkuAliases = buildYcSkuAliasMap(warehouseMappings, skus);
+            const ycSkuAliases = (0, restockYcShared_1.buildYcSkuAliasMap)(warehouseMappings, skus);
             const querySkus = Array.from(new Set([
                 ...skus,
                 ...Array.from(ycSkuAliases.keys()),
@@ -1041,7 +866,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 warehouseCodes,
                 customerSkus: querySkus,
             });
-            const mappedRows = withMappedCustomerSku(stockRows, ycSkuAliases);
+            const mappedRows = (0, restockYcShared_1.withMappedCustomerSku)(stockRows, ycSkuAliases);
             const items = aggregateYcStockRows(mappedRows);
             res.json({
                 site,
@@ -1052,7 +877,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
         }
         catch (error) {
-            logSafeFailure('YC stock snapshot failed', error);
+            (0, restockYcShared_1.logSafeFailure)('YC stock snapshot failed', error);
             if (error instanceof restockPlanner_1.RestockSourceDataError) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
@@ -1071,19 +896,19 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let safetyDays;
             let growthPercent;
             try {
-                site = normalizeSite(parseRequiredString(req.body?.site, 'site', MAX_SITE_LENGTH));
-                salesImportId = parseRequiredString(req.body?.salesImportId, 'salesImportId', MAX_IMPORT_ID_LENGTH);
-                planningDate = parseDateQuery(req.body?.planningDate, 'planningDate')
+                site = (0, restockYcShared_1.normalizeSite)((0, restockYcShared_1.parseRequiredString)(req.body?.site, 'site', restockYcShared_1.MAX_SITE_LENGTH));
+                salesImportId = (0, restockYcShared_1.parseRequiredString)(req.body?.salesImportId, 'salesImportId', restockYcShared_1.MAX_IMPORT_ID_LENGTH);
+                planningDate = (0, restockYcShared_1.parseDateQuery)(req.body?.planningDate, 'planningDate')
                     || new Date().toISOString().slice(0, 10);
-                const parsedTargetDate = parseDateQuery(req.body?.targetDate, 'targetDate');
+                const parsedTargetDate = (0, restockYcShared_1.parseDateQuery)(req.body?.targetDate, 'targetDate');
                 if (!parsedTargetDate)
                     throw new Error('Invalid targetDate');
                 targetDate = parsedTargetDate;
-                leadTimeDays = parseBoundedQueryNumber(req.body?.leadTimeDays, 'leadTimeDays', 25, 0, MAX_PLANNING_DAYS, true);
-                safetyDays = parseBoundedQueryNumber(req.body?.safetyDays, 'safetyDays', 30, 0, MAX_PLANNING_DAYS, true);
-                growthPercent = parseBoundedQueryNumber(req.body?.growthPercent, 'growthPercent', 0, 0, MAX_GROWTH_PERCENT);
+                leadTimeDays = (0, restockYcShared_1.parseBoundedQueryNumber)(req.body?.leadTimeDays, 'leadTimeDays', 25, 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                safetyDays = (0, restockYcShared_1.parseBoundedQueryNumber)(req.body?.safetyDays, 'safetyDays', 30, 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                growthPercent = (0, restockYcShared_1.parseBoundedQueryNumber)(req.body?.growthPercent, 'growthPercent', 0, 0, restockYcShared_1.MAX_GROWTH_PERCENT);
                 const horizonDays = (Date.parse(`${targetDate}T00:00:00.000Z`) - Date.parse(`${planningDate}T00:00:00.000Z`)) / (24 * 60 * 60 * 1000);
-                if (horizonDays <= leadTimeDays || horizonDays > MAX_PLANNING_DAYS)
+                if (horizonDays <= leadTimeDays || horizonDays > restockYcShared_1.MAX_PLANNING_DAYS)
                     throw new Error('Invalid targetDate');
             }
             catch {
@@ -1100,7 +925,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 return res.status(404).json({ error: 'Sales import not found' });
             if (!Number.isInteger(salesImport.statisticsDays)
                 || salesImport.statisticsDays < 1
-                || salesImport.statisticsDays > MAX_PLANNING_DAYS) {
+                || salesImport.statisticsDays > restockYcShared_1.MAX_PLANNING_DAYS) {
                 return res.status(500).json({ error: 'Sales import contains invalid statistics days' });
             }
             const activeItems = salesImport.items.filter(item => !item.dismissedAt);
@@ -1115,9 +940,9 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const productBySku = new Map(products.map(product => [(0, restockSalesImport_1.normalizeRestockSku)(product.sku), product]));
             const inventoryBackedAggregates = salesAggregates.filter(aggregate => inventoryBySku.has(aggregate.targetSku));
             const excludedOversizedSkus = inventoryBackedAggregates
-                .filter(aggregate => aggregate.targetSku.length > YC_STOCK_SKU_MAX_LENGTH)
+                .filter(aggregate => aggregate.targetSku.length > restockYcShared_1.YC_STOCK_SKU_MAX_LENGTH)
                 .map(aggregate => aggregate.targetSku);
-            const validAggregates = inventoryBackedAggregates.filter(aggregate => aggregate.targetSku.length <= YC_STOCK_SKU_MAX_LENGTH);
+            const validAggregates = inventoryBackedAggregates.filter(aggregate => aggregate.targetSku.length <= restockYcShared_1.YC_STOCK_SKU_MAX_LENGTH);
             const importedInventoryItems = validAggregates.map(aggregate => {
                 const inventory = inventoryBySku.get(aggregate.targetSku);
                 return {
@@ -1139,24 +964,24 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 };
             });
             const skus = importedInventoryItems.map(item => item.sku);
-            const ycSkuAliases = buildYcSkuAliasMap(warehouseMappings, skus);
-            const querySkus = Array.from(new Set([...skus, ...Array.from(ycSkuAliases.keys())])).filter(sku => sku.length <= YC_STOCK_SKU_MAX_LENGTH);
-            const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
+            const ycSkuAliases = (0, restockYcShared_1.buildYcSkuAliasMap)(warehouseMappings, skus);
+            const querySkus = Array.from(new Set([...skus, ...Array.from(ycSkuAliases.keys())])).filter(sku => sku.length <= restockYcShared_1.YC_STOCK_SKU_MAX_LENGTH);
+            const warehouseResolution = await (0, restockYcShared_1.resolveWarehouseCodesForSite)(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             if (warehouseCodes.length === 0) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
             const remoteRows = querySkus.length > 0
-                ? await fetchRemoteRows(activeYcClient, warehouseCodes, querySkus)
+                ? await (0, restockYcShared_1.fetchRemoteRows)(activeYcClient, warehouseCodes, querySkus)
                 : { stockRows: [], inboundOrders: [], failures: [] };
             if (remoteRows.failures.length > 0 || !remoteRows.stockRows || !remoteRows.inboundOrders) {
                 for (const failure of remoteRows.failures) {
-                    logSafeFailure(`YC ${failure.source} lookup failed`, failure.error);
+                    (0, restockYcShared_1.logSafeFailure)(`YC ${failure.source} lookup failed`, failure.error);
                 }
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
-            const stockRows = withMappedCustomerSku(remoteRows.stockRows, ycSkuAliases);
-            const inboundOrders = withMappedInboundCustomerSku(remoteRows.inboundOrders, ycSkuAliases);
+            const stockRows = (0, restockYcShared_1.withMappedCustomerSku)(remoteRows.stockRows, ycSkuAliases);
+            const inboundOrders = (0, restockYcShared_1.withMappedInboundCustomerSku)(remoteRows.inboundOrders, ycSkuAliases);
             const eligibleSkus = new Set(validAggregates.map(aggregate => aggregate.targetSku));
             const skuRules = savedRules
                 .filter(rule => eligibleSkus.has((0, restockSalesImport_1.normalizeRestockSku)(rule.sku)))
@@ -1183,7 +1008,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 });
             }
             catch (error) {
-                logSafeFailure('Imported restock plan rejected', error);
+                (0, restockYcShared_1.logSafeFailure)('Imported restock plan rejected', error);
                 if (error instanceof restockPlanner_1.RestockPlanValidationError) {
                     return res.status(400).json({ error: 'Invalid restock parameters' });
                 }
@@ -1211,7 +1036,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             });
         }
         catch (error) {
-            logSafeFailure('Imported restock recommendation request failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Imported restock recommendation request failed', error);
             return res.status(500).json({ error: 'Failed to build restock recommendations' });
         }
     });
@@ -1219,7 +1044,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
         try {
             const userId = req.user.id;
             const activeYcClient = await getYcClient(userId);
-            const site = normalizeSite(req.query.site);
+            const site = (0, restockYcShared_1.normalizeSite)(req.query.site);
             if (!site) {
                 return res.status(400).json({ error: 'site is required' });
             }
@@ -1229,19 +1054,19 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             let safetyDays;
             let growthPercent;
             try {
-                planningDate = parseDateQuery(req.query.planningDate, 'planningDate')
+                planningDate = (0, restockYcShared_1.parseDateQuery)(req.query.planningDate, 'planningDate')
                     || new Date().toISOString().slice(0, 10);
-                const parsedTargetDate = parseDateQuery(req.query.targetDate, 'targetDate');
+                const parsedTargetDate = (0, restockYcShared_1.parseDateQuery)(req.query.targetDate, 'targetDate');
                 if (!parsedTargetDate)
                     throw new Error('Invalid targetDate');
                 targetDate = parsedTargetDate;
-                leadTimeDays = parseBoundedQueryNumber(req.query.leadTimeDays, 'leadTimeDays', 25, 0, MAX_PLANNING_DAYS, true);
-                safetyDays = parseBoundedQueryNumber(req.query.safetyDays, 'safetyDays', 30, 0, MAX_PLANNING_DAYS, true);
-                growthPercent = parseBoundedQueryNumber(req.query.growthPercent, 'growthPercent', 0, 0, MAX_GROWTH_PERCENT);
+                leadTimeDays = (0, restockYcShared_1.parseBoundedQueryNumber)(req.query.leadTimeDays, 'leadTimeDays', 25, 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                safetyDays = (0, restockYcShared_1.parseBoundedQueryNumber)(req.query.safetyDays, 'safetyDays', 30, 0, restockYcShared_1.MAX_PLANNING_DAYS, true);
+                growthPercent = (0, restockYcShared_1.parseBoundedQueryNumber)(req.query.growthPercent, 'growthPercent', 0, 0, restockYcShared_1.MAX_GROWTH_PERCENT);
                 const planningTime = Date.parse(`${planningDate}T00:00:00.000Z`);
                 const targetTime = Date.parse(`${targetDate}T00:00:00.000Z`);
                 const planningHorizonDays = (targetTime - planningTime) / (24 * 60 * 60 * 1000);
-                if (planningHorizonDays <= leadTimeDays || planningHorizonDays > MAX_PLANNING_DAYS) {
+                if (planningHorizonDays <= leadTimeDays || planningHorizonDays > restockYcShared_1.MAX_PLANNING_DAYS) {
                     throw new Error('Invalid targetDate');
                 }
             }
@@ -1252,7 +1077,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             if (!ycConfigured) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
-            const warehouseResolution = await resolveWarehouseCodesForSite(activeYcClient, site);
+            const warehouseResolution = await (0, restockYcShared_1.resolveWarehouseCodesForSite)(activeYcClient, site);
             const warehouseCodes = warehouseResolution.warehouseCodes;
             if (warehouseCodes.length === 0) {
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
@@ -1262,20 +1087,20 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const warehouseMappings = await index_1.prisma.warehouseMapping.findMany({ where: { userId } });
             const warnings = [...warehouseResolution.warnings];
             const skus = products.map(product => product.sku).filter(Boolean);
-            const ycSkuAliases = buildYcSkuAliasMap(warehouseMappings, skus);
+            const ycSkuAliases = (0, restockYcShared_1.buildYcSkuAliasMap)(warehouseMappings, skus);
             const querySkus = Array.from(new Set([
                 ...skus,
                 ...Array.from(ycSkuAliases.keys()),
             ]));
-            const remoteRows = await fetchRemoteRows(activeYcClient, warehouseCodes, querySkus);
+            const remoteRows = await (0, restockYcShared_1.fetchRemoteRows)(activeYcClient, warehouseCodes, querySkus);
             if (remoteRows.failures.length > 0 || !remoteRows.stockRows || !remoteRows.inboundOrders) {
                 for (const failure of remoteRows.failures) {
-                    logSafeFailure(`YC ${failure.source} lookup failed`, failure.error);
+                    (0, restockYcShared_1.logSafeFailure)(`YC ${failure.source} lookup failed`, failure.error);
                 }
                 return res.status(503).json({ error: 'Restock data is temporarily unavailable' });
             }
-            const stockRows = withMappedCustomerSku(remoteRows.stockRows, ycSkuAliases);
-            const inboundOrders = withMappedInboundCustomerSku(remoteRows.inboundOrders, ycSkuAliases);
+            const stockRows = (0, restockYcShared_1.withMappedCustomerSku)(remoteRows.stockRows, ycSkuAliases);
+            const inboundOrders = (0, restockYcShared_1.withMappedInboundCustomerSku)(remoteRows.inboundOrders, ycSkuAliases);
             let plan;
             try {
                 plan = (0, restockPlanner_1.buildRestockPlan)({
@@ -1292,7 +1117,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 });
             }
             catch (error) {
-                logSafeFailure('Restock plan rejected', error);
+                (0, restockYcShared_1.logSafeFailure)('Restock plan rejected', error);
                 if (error instanceof restockPlanner_1.RestockPlanValidationError) {
                     return res.status(400).json({ error: 'Invalid restock parameters' });
                 }
@@ -1314,7 +1139,7 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             res.json(response);
         }
         catch (error) {
-            logSafeFailure('Restock recommendation request failed', error);
+            (0, restockYcShared_1.logSafeFailure)('Restock recommendation request failed', error);
             res.status(500).json({ error: 'Failed to build restock recommendations' });
         }
     });

@@ -6,6 +6,7 @@ import { Dashboard } from './modules/Dashboard';
 import { ProfitCalculator } from './modules/ProfitCalculator';
 import { FinanceManager } from './modules/FinanceManager';
 import { RestockV2 } from './modules/RestockV2';
+import { RestockV3 } from './modules/RestockV3';
 import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
 import { UserManagement } from './modules/UserManagement';
@@ -55,7 +56,7 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
-    const moduleViews = ['dashboard', 'profit', 'finance', 'restock-v2', 'product-list', 'schedule', 'usage-stats', 'product-analysis'];
+    const moduleViews = ['dashboard', 'profit', 'finance', 'restock-v2', 'restock-v3', 'product-list', 'schedule', 'usage-stats', 'product-analysis'];
     if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !hasPermission(user.permissions || [], currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: 'var(--text-tertiary)' }}>
@@ -72,6 +73,7 @@ const MainContent: React.FC = () => {
       case 'profit': return <ProfitCalculator />;
       case 'finance': return <FinanceManager />;
       case 'restock-v2': return <RestockV2 />;
+      case 'restock-v3': return <RestockV3 />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
       case 'personal-center': return <PersonalCenter />;
@@ -89,6 +91,7 @@ const MainContent: React.FC = () => {
       case 'profit': return strings.sidebar.profit;
       case 'finance': return strings.sidebar.finance;
       case 'restock-v2': return strings.sidebar.restockV2 || '补货V2';
+      case 'restock-v3': return strings.sidebar.restockV3 || '补货V3';
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
       case 'personal-center': return '个人中心';
