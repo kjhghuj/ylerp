@@ -5,6 +5,7 @@ import {
   validateProductAnalysisFile,
   extractPeriodFromFileName,
   detectDailyDateFromFileName,
+  resolveDailyUploadDate,
   ProductAnalysisParseError,
   MAX_PRODUCT_ANALYSIS_FILE_BYTES,
 } from '../modules/product-analysis/utils/excelParser';
@@ -153,6 +154,19 @@ describe('parseProductAnalysisWorkbook', () => {
     expect(report.currency).toBe('MYR');
   });
 
+  test('reports currency as null when headers carry no currency marker', () => {
+    // 回归：未识别币种曾被默认成 MYR，导致非 MY 站点误判为币种一致；现在交由店铺币种校验
+    const noCurrencyHeaders = HOT_HEADERS.map((header) => header.replace(/ ?\((?:MYR|[A-Z]{3})\)/g, ''));
+    const buffer = buildWorkbookBuffer([
+      {
+        name: '热销商品',
+        rows: [noCurrencyHeaders, hotRow({ 0: '1', 1: 'A', 3: '-', 4: '-' })],
+      },
+    ]);
+    const report = parseProductAnalysisWorkbook(buffer, 'x.20260906.xlsx');
+    expect(report.currency).toBeNull();
+  });
+
   test('records warning and skips orphan variation rows without parent', () => {
     const buffer = buildWorkbookBuffer([
       {
@@ -264,10 +278,22 @@ describe('extractPeriodFromFileName', () => {
   });
 });
 
-describe('detectDailyDateFromFileName', () => {
-  test('range filenames resolve to the end date', () => {
-    expect(detectDailyDateFromFileName('parentskudetail.20260807_20260905.xlsx')).toBe('2026-09-05');
-    expect(detectDailyDateFromFileName('parentskudetail-20260101-20260131.xlsx')).toBe('2026-01-31');
+describe('detectDailyUploadDate / resolveDailyUploadDate', () => {
+  test('multi-day range filenames are rejected, not silently treated as their end date', () => {
+    // 回归：区间文件名曾被当作结束日的单日数据导入，重叠区间造成重复统计
+    expect(detectDailyDateFromFileName('parentskudetail.20260807_20260905.xlsx')).toBeNull();
+    expect(detectDailyDateFromFileName('parentskudetail-20260101-20260131.xlsx')).toBeNull();
+    expect(resolveDailyUploadDate('parentskudetail.20260807_20260905.xlsx')).toEqual({
+      status: 'rejected',
+      reason: 'multi-day',
+      periodStart: '2026-08-07',
+      periodEnd: '2026-09-05',
+    });
+  });
+
+  test('range filenames where start equals end are single-day reports', () => {
+    expect(detectDailyDateFromFileName('parentskudetail.20260906_20260906.xlsx')).toBe('2026-09-06');
+    expect(resolveDailyUploadDate('parentskudetail.20260906_20260906.xlsx')).toEqual({ status: 'ok', date: '2026-09-06' });
   });
 
   test('single-date filenames resolve to that date', () => {
@@ -275,15 +301,27 @@ describe('detectDailyDateFromFileName', () => {
     expect(detectDailyDateFromFileName('20260905.xls')).toBe('2026-09-05');
   });
 
+  test('inverted range filenames are rejected with a reason', () => {
+    expect(resolveDailyUploadDate('a.20260905_20260807.xlsx')).toEqual({
+      status: 'rejected',
+      reason: 'inverted',
+      periodStart: '2026-09-05',
+      periodEnd: '2026-08-07',
+    });
+  });
+
+  test('calendar-invalid dates are rejected instead of rolling over', () => {
+    // 回归：2026-02-31 曾被 JS Date 溢出成 2026-03-03
+    expect(resolveDailyUploadDate('a.20260231.xlsx')).toEqual({ status: 'rejected', reason: 'invalid' });
+    expect(detectDailyDateFromFileName('a.20261399.xlsx')).toBeNull();
+  });
+
   test('returns null when no standalone 8-digit date exists', () => {
     expect(detectDailyDateFromFileName('no-date.xlsx')).toBeNull();
+    expect(resolveDailyUploadDate('no-date.xlsx')).toEqual({ status: 'rejected', reason: 'missing' });
     // 9 位数字不是独立 8 位日期，不应截前 8 位误判
     expect(detectDailyDateFromFileName('a.202609060.xlsx')).toBeNull();
     expect(detectDailyDateFromFileName('order-1234-5678.xlsx')).toBeNull();
-  });
-
-  test('returns null for implausible dates that only look like dates', () => {
-    expect(detectDailyDateFromFileName('a.20261399.xlsx')).toBeNull();
   });
 });
 

@@ -29,6 +29,15 @@ export function getApiErrorDetail(error: unknown): string {
   return String(error);
 }
 
+/** 提取后端错误码（如 CURRENCY_MISMATCH），用于前端针对性呈现 */
+export function getApiErrorCode(error: unknown): string | null {
+  if (typeof error === 'object' && error !== null) {
+    const code = (error as { response?: { data?: { code?: unknown } } }).response?.data?.code;
+    if (typeof code === 'string' && code) return code;
+  }
+  return null;
+}
+
 // ---- 店铺 ----
 
 export async function fetchShops(): Promise<ShopMeta[]> {
@@ -178,8 +187,13 @@ export interface ChatStreamEvents {
   onDone?: (model: string) => void;
 }
 
-/** 流式发送对话：结束后 resolve；错误（含流中途的错误事件）以 detail 形状抛出 */
-export async function sendProductAnalysisChatStream(request: ChatRequest, events: ChatStreamEvents): Promise<void> {
+/** 流式发送对话：结束后 resolve；错误（含流中途的错误事件）以 detail 形状抛出。
+ *  options.signal 用于上下文切换时中止旧流（AbortError 会原样抛出，由调用方决定是否静默）。 */
+export async function sendProductAnalysisChatStream(
+  request: ChatRequest,
+  events: ChatStreamEvents,
+  options: { signal?: AbortSignal } = {}
+): Promise<void> {
   const token = localStorage.getItem('erp_token');
   const response = await fetch(`${API_BASE}/product-analysis/chat`, {
     method: 'POST',
@@ -193,6 +207,7 @@ export async function sendProductAnalysisChatStream(request: ChatRequest, events
       requestKey: request.requestKey || crypto.randomUUID(),
       operationId: request.operationId || crypto.randomUUID(),
     }),
+    signal: options.signal,
   });
 
   if (!response.ok || !response.body) {

@@ -9,8 +9,11 @@ export interface DateRange {
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+/** 严格日历日期：格式匹配后解析再回比原字符串，杜绝 2026-02-31 被 JS 溢出成 2026-03-03 */
 export function isValidDateString(value: unknown): value is string {
-  return typeof value === 'string' && ISO_DATE_PATTERN.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 export function addDays(date: string, delta: number): string {

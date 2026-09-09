@@ -45,7 +45,8 @@ describe('AiChatPanel streaming', () => {
         });
         expect(mockStream).toHaveBeenCalledWith(
             expect.objectContaining({ shopId: 'shop-1', messages: [{ role: 'user', content: '总结一下' }] }),
-            expect.objectContaining({ onDelta: expect.any(Function) })
+            expect.objectContaining({ onDelta: expect.any(Function) }),
+            expect.objectContaining({ signal: expect.anything() })
         );
         // 发送完成后输入区恢复可用
         await waitFor(() => {
@@ -129,9 +130,182 @@ describe('AiChatPanel streaming', () => {
         await waitFor(() => {
             expect(mockStream).toHaveBeenCalledWith(
                 expect.objectContaining({ deepThinking: false }),
-                expect.objectContaining({ onDelta: expect.any(Function) })
+                expect.objectContaining({ onDelta: expect.any(Function) }),
+            expect.objectContaining({ signal: expect.anything() })
             );
         });
         expect(await screen.findByText('快')).toBeInTheDocument();
+    });
+});
+
+describe('AiChatPanel detail-range context', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('passes the current detail range (30d / custom) verbatim into the AI request and shows it', async () => {
+        mockStream.mockImplementation(async () => {});
+        render(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-08-08" to="2026-09-06" />);
+        // 界面明确展示分析日期
+        expect(screen.getByText('2026-08-08 ~ 2026-09-06')).toBeInTheDocument();
+        await send('分析');
+        await waitFor(() => {
+            expect(mockStream).toHaveBeenCalledWith(
+                expect.objectContaining({ shopId: 'shop-1', itemId: '10001', from: '2026-08-08', to: '2026-09-06' }),
+                expect.objectContaining({ onDelta: expect.any(Function) }),
+                expect.objectContaining({ signal: expect.anything() })
+            );
+        });
+    });
+
+    it('omits from/to when the caller did not provide a range (legacy compatible path)', async () => {
+        mockStream.mockImplementation(async () => {});
+        render(<AiChatPanel shopId="shop-1" />);
+        await send('分析');
+        await waitFor(() => expect(mockStream).toHaveBeenCalled());
+        const request = mockStream.mock.calls[0][0] as Record<string, unknown>;
+        expect(request.from).toBeUndefined();
+        expect(request.to).toBeUndefined();
+    });
+
+    it('clears the conversation when shop, item or range changes', async () => {
+        mockStream.mockImplementation(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            events.onDelta('旧区间的结论');
+        });
+        const { rerender } = render(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-08-08" to="2026-09-06" />);
+        await send('分析');
+        await waitFor(() => {
+            expect(screen.getByText('旧区间的结论')).toBeInTheDocument();
+        });
+
+        // 区间变化 → 旧对话清空
+        rerender(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-09-01" to="2026-09-06" />);
+        expect(screen.queryByText('旧区间的结论')).toBeNull();
+        expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toHaveValue('');
+
+        // 重新发送后再换商品 → 同样清空
+        mockStream.mockImplementation(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            events.onDelta('另一个商品的结论');
+        });
+        await send('继续');
+        await waitFor(() => {
+            expect(screen.getByText('另一个商品的结论')).toBeInTheDocument();
+        });
+        rerender(<AiChatPanel shopId="shop-1" itemId="20002" from="2026-09-01" to="2026-09-06" />);
+        expect(screen.queryByText('另一个商品的结论')).toBeNull();
+    });
+
+    it('aborts and discards the in-flight stream when the range changes mid-stream', async () => {
+        let releaseFirst: ((value: void) => void) | null = null;
+        let firstEvents: { onDelta: (d: string) => void } | null = null;
+        mockStream.mockImplementationOnce(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            firstEvents = events;
+            return new Promise<void>((resolve) => { releaseFirst = resolve; });
+        });
+        const { rerender } = render(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-08-08" to="2026-09-06" />);
+        await send('分析');
+        await waitFor(() => expect(screen.getByText('分析')).toBeInTheDocument());
+
+        // 区间切换：旧流被中止，对话清空
+        rerender(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-09-01" to="2026-09-06" />);
+
+        // 旧流的迟到增量：不得写入新上下文
+        firstEvents!.onDelta('迟到的旧流内容');
+        releaseFirst!();
+        await waitFor(() => expect(screen.queryByText('迟到的旧流内容')).toBeNull());
+    });
+});
+
+describe('AiChatPanel resume after context switch', () => {
+    const PLACEHOLDER = '问问 AI 关于这个商品或店铺的问题…';
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('can send again immediately after switching shop/item/range while the old stream hangs', async () => {
+        // 旧流悬挂（不 resolve），期间发起提问 → 输入禁用
+        let oldEvents: { onDelta: (d: string) => void } | null = null;
+        let releaseOld: ((value: void) => void) | null = null;
+        mockStream.mockImplementationOnce(
+            (_request: unknown, events: { onDelta: (d: string) => void }) =>
+                new Promise<void>((resolve) => { oldEvents = events; releaseOld = resolve; })
+        );
+        const { rerender } = render(
+            <AiChatPanel shopId="shop-1" itemId="10001" from="2026-08-08" to="2026-09-06" />
+        );
+        await send('第一个问题');
+        await waitFor(() => expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeDisabled());
+
+        // 切换区间：输入立即恢复，可以发送第二个问题并收到回答
+        mockStream.mockImplementationOnce(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            events.onDelta('区间切换后的回答');
+        });
+        rerender(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-09-01" to="2026-09-06" />);
+        await waitFor(() => expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeEnabled());
+        await send('第二个问题');
+        await waitFor(() => expect(screen.getByText('区间切换后的回答')).toBeInTheDocument());
+
+        // 切换商品：继续提问
+        mockStream.mockImplementationOnce(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            events.onDelta('商品切换后的回答');
+        });
+        rerender(<AiChatPanel shopId="shop-1" itemId="20002" from="2026-09-01" to="2026-09-06" />);
+        await waitFor(() => expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeEnabled());
+        await send('第三个问题');
+        await waitFor(() => expect(screen.getByText('商品切换后的回答')).toBeInTheDocument());
+
+        // 切换店铺：继续提问
+        mockStream.mockImplementationOnce(async (_request: unknown, events: { onDelta: (d: string) => void }) => {
+            events.onDelta('店铺切换后的回答');
+        });
+        rerender(<AiChatPanel shopId="shop-2" itemId="20002" from="2026-09-01" to="2026-09-06" />);
+        await waitFor(() => expect(screen.getByPlaceholderText(PLACEHOLDER)).toBeEnabled());
+        await send('第四个问题');
+        await waitFor(() => expect(screen.getByText('店铺切换后的回答')).toBeInTheDocument());
+
+        // 旧流此时才 resolve，且其迟到增量不写入新上下文
+        oldEvents!.onDelta('旧流迟到内容');
+        releaseOld!();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(screen.queryByText('旧流迟到内容')).toBeNull();
+        expect(screen.queryByText('第一个问题')).toBeNull();
+    });
+
+    it('a late rejection of the old request does not disturb the new in-flight request', async () => {
+        let rejectOld: ((reason?: unknown) => void) | null = null;
+        let releaseNew: ((value: void) => void) | null = null;
+        mockStream.mockImplementationOnce(
+            () => new Promise<void>((_resolve, reject) => { rejectOld = reject; })
+        );
+        const { rerender } = render(
+            <AiChatPanel shopId="shop-1" itemId="10001" from="2026-08-08" to="2026-09-06" />
+        );
+        await send('第一个问题');
+
+        // 切换区间并发送新问题（新请求悬挂中）
+        rerender(<AiChatPanel shopId="shop-1" itemId="10001" from="2026-09-01" to="2026-09-06" />);
+        await waitFor(() => expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled());
+        mockStream.mockImplementationOnce(
+            (_request: unknown, events: { onDelta: (d: string) => void }) =>
+                new Promise<void>((resolve) => {
+                    events.onDelta('新请求的部分回答');
+                    releaseNew = resolve;
+                })
+        );
+        await send('第二个问题');
+        await waitFor(() => expect(screen.getByText('新请求的部分回答')).toBeInTheDocument());
+        expect(screen.getByRole('button', { name: '发送' }).querySelector('svg')).toBeTruthy();
+
+        // 旧请求此时才 reject：新请求的加载状态与内容不受影响，也不产生错误提示
+        rejectOld!(new Error('旧请求失败'));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(screen.getByText('新请求的部分回答')).toBeInTheDocument();
+        expect(screen.queryByText(/旧请求失败/)).toBeNull();
+        // 仍处于发送中（旧请求的 finally 不得复位新请求状态）
+        expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeDisabled();
+
+        releaseNew!();
+        await waitFor(() => expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled());
     });
 });

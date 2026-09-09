@@ -9,15 +9,19 @@ import type { ChatMessage } from '../types';
 
 interface AiChatPanelProps {
   shopId: string;
-  /** 传入则以单品上下文对话；省略为整店汇总模式。from/to 缺省时后端默认近 7 天 */
+  /** 传入则以单品上下文对话；省略为整店汇总模式。 */
   itemId?: string;
   itemTitle?: string;
+  /** 分析区间（与详情页一致）。提供时随请求发送并展示；省略时后端默认近 7 天 */
+  from?: string;
+  to?: string;
 }
 
 const ITEM_NAME_SNIPPET_LENGTH = 40;
 
-/** GLM AI 对话面板：SSE 流式输出（含思考过程），聊天记录仅存前端 state */
-export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTitle }) => {
+/** GLM AI 对话面板：SSE 流式输出（含思考过程），聊天记录仅存前端 state。
+ *  上下文（店铺 / 商品 / 区间）变化时清空对话并中止在途旧流，旧流内容不会写入新上下文。 */
+export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTitle, from, to }) => {
   const { user } = useAuth();
   const strings = useProductAnalysisStrings();
   const hasAiPermission =
@@ -32,6 +36,27 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   const [expandedReasoning, setExpandedReasoning] = useState<Record<number, boolean>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  /** 上下文令牌：发送时快照，回调/收尾时与当前值比对，过期上下文的流不写入 state */
+  const contextTokenRef = useRef(0);
+  /** 在途流的 AbortController：上下文切换 / 卸载时中止 */
+  const abortRef = useRef<AbortController | null>(null);
+
+  // 上下文变化（店铺 / 商品 / 区间）：重置对话与错误，中止旧流，
+  // 并复位属于旧上下文的发送/思考展示状态——否则旧请求的 finally 因过期检查跳过复位，
+  // 输入框与发送按钮将持续禁用，新上下文无法继续提问
+  useEffect(() => {
+    contextTokenRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setMessages([]);
+    setError(null);
+    setInput('');
+    setIsSending(false);
+    setExpandedReasoning({});
+  }, [shopId, itemId, from, to]);
+
+  // 卸载时同样中止在途流
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,6 +65,9 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || isSending || !hasAiPermission) return;
+    const contextToken = contextTokenRef.current;
+    const controller = new AbortController();
+    abortRef.current = controller;
     const nextMessages: ChatMessage[] = [...messages, { role: 'user', content: trimmed }];
     // 先放置空的助手占位消息，思考与正文增量逐段填充
     const assistantIndex = nextMessages.length;
@@ -51,7 +79,9 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     let streamed = '';
     let reasoning = '';
     let contentStartedAt = 0;
+    const isStale = () => contextTokenRef.current !== contextToken;
     const patchAssistant = (patch: Partial<ChatMessage>) => {
+      if (isStale()) return; // 上下文已切换：旧流不写入新上下文
       setMessages((prev) => {
         const copy = [...prev];
         copy[assistantIndex] = { ...copy[assistantIndex], ...patch };
@@ -63,6 +93,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
         {
           shopId,
           ...(itemId ? { itemId } : {}),
+          ...(from !== undefined && to !== undefined ? { from, to } : {}),
           messages: nextMessages,
           deepThinking,
         },
@@ -79,20 +110,26 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             streamed += delta;
             patchAssistant({ content: streamed });
           },
-        }
+        },
+        { signal: controller.signal }
       );
-      if (!streamed) {
+      if (!streamed && !isStale()) {
         setMessages((prev) => prev.filter((_, index) => index !== assistantIndex));
       }
     } catch (err) {
-      // 已有部分内容时保留已生成部分，仅提示错误
-      if (!streamed) {
-        setMessages((prev) => prev.filter((_, index) => index !== assistantIndex));
+      // 上下文切换导致的主动中止静默处理；真实错误仅在当前上下文内提示
+      if (!controller.signal.aborted) {
+        if (!streamed && !isStale()) {
+          setMessages((prev) => prev.filter((_, index) => index !== assistantIndex));
+        }
+        if (!isStale()) setError(getApiErrorDetail(err));
       }
-      setError(getApiErrorDetail(err));
     } finally {
-      setIsSending(false);
-      inputRef.current?.focus();
+      if (!isStale()) {
+        setIsSending(false);
+        inputRef.current?.focus();
+      }
+      if (abortRef.current === controller) abortRef.current = null;
     }
   };
 
@@ -118,6 +155,11 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             ? `${strings.ai.contextItem}：${(itemTitle ?? '').slice(0, ITEM_NAME_SNIPPET_LENGTH)}`
             : strings.ai.contextReport}
         </span>
+        {from !== undefined && to !== undefined && (
+          <span className="shrink-0 font-mono" title={strings.ai.contextRange.replace('{from}', from).replace('{to}', to)}>
+            {from} ~ {to}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setDeepThinking((value) => !value)}

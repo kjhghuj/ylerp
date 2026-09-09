@@ -65,17 +65,52 @@ describe('buildFunnelStages', () => {
     expect(stages[4].rateFromPrev).toBeCloseTo((163 / 1171) * 100, 6);
   });
 
-  test('treats missing metrics as 0 without crashing', () => {
+  test('keeps missing metrics as null instead of faking zero', () => {
+    // 回归：缺失阶段曾被 value ?? 0 显示为真实零值
     const stages = buildFunnelStages(makeItem({ impressions: null, clicks: null }));
-    expect(stages[0].value).toBe(0);
+    expect(stages[0].value).toBeNull();
     expect(stages[0].rateFromPrev).toBeNull();
-    expect(stages[1].value).toBe(0);
+    expect(stages[1].value).toBeNull();
+    // 相邻阶段任一缺失 → 不计算转化率（不产生虚假 0%）
     expect(stages[1].rateFromPrev).toBeNull();
+    // 后续有效阶段的转化率也不跨缺失阶段计算
+    expect(stages[2].rateFromPrev).toBeNull();
+    expect(stages[2].value).toBeGreaterThan(0);
+  });
+
+  test('non-finite (undefined) stage values are treated as missing, never NaN%', () => {
+    // 回归：字段整体缺失（undefined）时曾产出 rateFromPrev = NaN%（真实浏览器发现）
+    const item = makeItem({}) as unknown as Record<string, unknown>;
+    delete item.cartUnits; // 字段不存在，而非 null
+    const stages = buildFunnelStages(item as unknown as ParentProduct);
+    const cartStage = stages.find((stage) => stage.key === 'cartUnits')!;
+    expect(cartStage.value).toBeNull();
+    expect(cartStage.rateFromPrev).toBeNull();
+    // 下一阶段（订单）不跨缺失阶段计算转化率
+    const orderStage = stages.find((stage) => stage.key === 'orders')!;
+    expect(orderStage.rateFromPrev).toBeNull();
+    expect(Number.isNaN(orderStage.rateFromPrev as unknown as number)).toBe(false);
+  });
+
+  test('real zero vs missing are distinct; zero denominator stage yields no rate', () => {
+    // 真实 0 订单 + 上一阶段有效 > 0 → 0%
+    const zeroOrderStages = buildFunnelStages(makeItem({ ordersOrdered: 0 }));
+    expect(zeroOrderStages[4].value).toBe(0);
+    expect(zeroOrderStages[4].rateFromPrev).toBeCloseTo(0, 6);
+    // 上一阶段为真实 0（分母无效）→ 不计算下一阶段转化率
+    const zeroPrevStages = buildFunnelStages(makeItem({ visitors: 0 }));
+    expect(zeroPrevStages[2].value).toBe(0);
+    expect(zeroPrevStages[3].rateFromPrev).toBeNull();
+    // 全部缺失：不崩溃、全部为 null
+    const allMissing = buildFunnelStages(makeItem({
+      impressions: null, clicks: null, visitors: null, cartUnits: null, ordersOrdered: null,
+    }));
+    expect(allMissing.every((stage) => stage.value === null && stage.rateFromPrev === null)).toBe(true);
   });
 });
 
 describe('summarizeSheet', () => {
-  test('sums metrics and computes weighted conversion rate', () => {
+  test('sums totals only; conversion rate is no longer derived from totals', () => {
     const group: SheetGroup = {
       sheetKey: 'hot',
       sheetName: '热销商品',
@@ -92,17 +127,8 @@ describe('summarizeSheet', () => {
     expect(summary.totalOrders).toBe(15);
     expect(summary.totalVisitors).toBe(1000);
     expect(summary.totalClicks).toBe(300);
-    expect(summary.weightedCvr).toBeCloseTo(1.5, 6);
-  });
-
-  test('weightedCvr is null when no visitors', () => {
-    const group: SheetGroup = {
-      sheetKey: 'new',
-      sheetName: '新上架商品',
-      columns: [],
-      items: [makeItem({ visitors: null, ordersOrdered: null })],
-    };
-    expect(summarizeSheet(group).weightedCvr).toBeNull();
+    // 加权转化率改由后端按成对有效样本返回（sheets[].summary），客户端不再从总量重算
+    expect(summary).not.toHaveProperty('weightedCvr');
   });
 });
 

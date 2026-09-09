@@ -246,7 +246,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 opacity: isFuture && !isUploaded ? 0.55 : 1,
                 boxShadow: isToday ? 'inset 0 0 0 1.5px rgba(59,130,246,0.8)' : undefined,
               }}
-              title={day ? `${day.fileName} · ${day.itemCount}` : date}
+              title={day ? `${day.fileName} · ${day.itemCount}${day.suspectedRange ? ' · ⚠ 疑似区间报表（文件名为多日区间）' : ''}` : date}
               aria-label={date}
             >
               {Number(date.slice(8))}

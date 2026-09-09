@@ -4,36 +4,53 @@ const express_1 = require("express");
 const index_1 = require("../index");
 const glmConfig_1 = require("../services/glm/glmConfig");
 const glmClient_1 = require("../services/glm/glmClient");
+const config_1 = require("../services/chroma/config");
+const aiUserConfig_1 = require("../services/aiUserConfig");
 const prompts_1 = require("../services/glm/prompts");
-const activityLogger_1 = require("../services/activityLogger");
 const usageEvents_1 = require("../services/usageEvents");
+const aiUsage_1 = require("../services/aiUsage");
 const productAnalysisAggregation_1 = require("../services/productAnalysisAggregation");
 const productAnalysisPotential_1 = require("../services/productAnalysisPotential");
+const productAnalysisUpload_1 = require("../services/productAnalysisUpload");
 const router = (0, express_1.Router)();
 const MAX_UPLOAD_JSON_LENGTH = 20 * 1024 * 1024; // 20MB
+const MAX_BATCH_DELETE_DATES = 500;
 const MAX_CHAT_HISTORY_MESSAGES = 8;
+/** 查询区间上限：界面最长支持 90 天快捷区间 + 自定义区间，一年封顶防止无界拉取 */
+const MAX_QUERY_RANGE_DAYS = 366;
+/** 新品榜返回数量上限 */
+const MAX_POTENTIAL_LIMIT = 100;
 const SITES = ['PH', 'MY', 'SG', 'ID', 'TH'];
 const SITE_CURRENCY = { PH: 'PHP', MY: 'MYR', SG: 'SGD', ID: 'IDR', TH: 'THB' };
 const SHEET_ORDER = ['hot', 'new', 'uncompetitive', 'competitive'];
+class ProductAnalysisNotFoundError extends Error {
+}
 function errorResponse(error, res) {
-    if (error instanceof glmConfig_1.GlmApiError) {
+    if (error instanceof ProductAnalysisNotFoundError) {
+        res.status(404).json({ detail: error.message });
+    }
+    else if (error instanceof glmConfig_1.GlmApiError || error instanceof config_1.ApiError) {
         res.status(error.status_code).json({ detail: error.detail });
     }
     else {
-        res.status(500).json({ detail: String(error) });
+        console.error('Unexpected product analysis error:', error instanceof Error ? (error.stack ?? error.name) : typeof error);
+        res.status(500).json({ detail: 'Internal server error' });
     }
 }
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 function isValidDateString(value) {
-    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`));
+    return typeof value === 'string' && (0, productAnalysisUpload_1.isValidCalendarDate)(value);
 }
 function parseDateUtc(date) {
     return new Date(`${date}T00:00:00.000Z`);
 }
 function dateString(date) {
     return date.toISOString().slice(0, 10);
+}
+function daysBetweenInclusive(from, to) {
+    return Math.round((parseDateUtc(to).getTime() - parseDateUtc(from).getTime()) / 86_400_000) + 1;
 }
 function addDays(date, delta) {
     const next = parseDateUtc(date);
@@ -84,13 +101,15 @@ function sanitizeChatMessages(raw) {
 async function findOwnedShop(id, userId) {
     return index_1.prisma.productAnalysisShop.findFirst({ where: { id, userId } });
 }
-/** 校验区间参数并归一化（from ≤ to），默认区间由调用方决定 */
+/** 校验区间参数并归一化（from ≤ to 且跨度 ≤ MAX_QUERY_RANGE_DAYS），默认区间由调用方决定 */
 function parseRange(query) {
     const from = query.from;
     const to = query.to;
     if (!isValidDateString(from) || !isValidDateString(to))
         return null;
     if (from > to)
+        return null;
+    if (daysBetweenInclusive(from, to) > MAX_QUERY_RANGE_DAYS)
         return null;
     return { from, to };
 }
@@ -101,11 +120,11 @@ const ITEM_SELECT_BASE = {
     status: true,
     upload: { select: { date: true } },
 };
-/** 拉取区间内的日行（includeDetailFields 时附带 extra/variations） */
+/** 拉取区间内的日行（extra / variations 按需加载：新品榜只读 extra.sheetKeys，无需全量变体） */
 async function fetchRangeRows(shopId, from, to, options = {}) {
     const uploads = await index_1.prisma.productAnalysisDailyUpload.findMany({
         where: { shopId, date: { gte: parseDateUtc(from), lte: parseDateUtc(to) } },
-        select: { id: true, date: true },
+        select: { id: true, date: true, currency: true },
         orderBy: { date: 'asc' },
     });
     if (uploads.length === 0)
@@ -114,10 +133,10 @@ async function fetchRangeRows(shopId, from, to, options = {}) {
         ...ITEM_SELECT_BASE,
         ...Object.fromEntries(productAnalysisAggregation_1.SUMMABLE_FIELDS.map((field) => [field, true])),
     };
-    if (options.includeDetailFields) {
+    if (options.includeExtra)
         select.extra = true;
+    if (options.includeVariations)
         select.variations = true;
-    }
     const where = { uploadId: { in: uploads.map((upload) => upload.id) } };
     if (options.itemId)
         where.itemId = options.itemId;
@@ -139,7 +158,7 @@ router.post('/shops', requireProductAnalysisPermission('product-analysis.upload'
             return res.status(400).json({ detail: `站点必须是 ${SITES.join(' / ')} 之一` });
         }
         try {
-            const shop = await index_1.prisma.productAnalysisShop.create({
+            const shop = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_create', objectType: 'ProductAnalysisShop' }, tx => tx.productAnalysisShop.create({
                 data: {
                     name,
                     site,
@@ -147,7 +166,7 @@ router.post('/shops', requireProductAnalysisPermission('product-analysis.upload'
                     userId: req.user.id,
                 },
                 select: { id: true, name: true, site: true, platform: true, currency: true, createdAt: true, updatedAt: true },
-            });
+            }));
             return res.status(201).json(shop);
         }
         catch (error) {
@@ -209,15 +228,25 @@ router.patch('/shops/:id', requireProductAnalysisPermission('product-analysis.up
             if (!SITES.includes(site)) {
                 return res.status(400).json({ detail: `站点必须是 ${SITES.join(' / ')} 之一` });
             }
+            const nextCurrency = SITE_CURRENCY[site] ?? 'MYR';
+            // 币种防错配：历史金额按原币种存储，换站点改币种标签会让旧数据被误标，不做隐式换算
+            if (nextCurrency !== shop.currency) {
+                const existingDays = await index_1.prisma.productAnalysisDailyUpload.count({ where: { shopId: shop.id } });
+                if (existingDays > 0) {
+                    return res.status(400).json({
+                        detail: `该店铺已有 ${existingDays} 天历史数据（${shop.currency}），不能改为 ${nextCurrency} 站点；请新建店铺后单独上传`,
+                    });
+                }
+            }
             data.site = site;
-            data.currency = SITE_CURRENCY[site] ?? 'MYR';
+            data.currency = nextCurrency;
         }
         try {
-            const updated = await index_1.prisma.productAnalysisShop.update({
+            const updated = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_update', objectType: 'ProductAnalysisShop', objectId: shop.id }, tx => tx.productAnalysisShop.update({
                 where: { id: shop.id },
                 data,
                 select: { id: true, name: true, site: true, platform: true, currency: true, createdAt: true, updatedAt: true },
-            });
+            }));
             return res.json(updated);
         }
         catch (error) {
@@ -233,11 +262,13 @@ router.patch('/shops/:id', requireProductAnalysisPermission('product-analysis.up
 });
 router.delete('/shops/:id', requireProductAnalysisPermission('product-analysis.upload'), async (req, res) => {
     try {
-        const result = await index_1.prisma.productAnalysisShop.deleteMany({
-            where: { id: String(req.params.id ?? ''), userId: req.user.id },
+        const shopId = String(req.params.id ?? '');
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_shop_delete', objectType: 'ProductAnalysisShop', objectId: shopId }, async (tx) => {
+            const result = await tx.productAnalysisShop.deleteMany({ where: { id: shopId, userId: req.user.id } });
+            if (result.count === 0)
+                throw new ProductAnalysisNotFoundError('Shop not found');
+            return result;
         });
-        if (result.count === 0)
-            return res.status(404).json({ detail: 'Shop not found' });
         return res.json({ ok: true });
     }
     catch (error) {
@@ -261,6 +292,8 @@ router.get('/shops/:id/days', async (req, res) => {
             itemCount: day.itemCount,
             currency: day.currency,
             createdAt: day.createdAt,
+            // 只读排查标记：文件名为起止不同的区间（start≠end），提示该日可能混入区间报表，不改写数据
+            suspectedRange: (0, productAnalysisUpload_1.isSuspectedRangeFileName)(day.fileName),
         })));
     }
     catch (error) {
@@ -276,28 +309,34 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
         const date = body?.date;
         const payload = body?.payload;
         if (!isValidDateString(date)) {
-            return res.status(400).json({ detail: 'date 需为 YYYY-MM-DD' });
+            return res.status(400).json({ detail: 'date 需为真实存在的 YYYY-MM-DD 日期' });
         }
-        if (!isRecord(payload)) {
-            return res.status(400).json({ detail: 'Missing required field: payload' });
+        // 结构校验（Zod）：fileName / sheets / sheetKey / items 类型、长度与数量上限；非法一律 400 而非 500
+        const validated = (0, productAnalysisUpload_1.validateDailyUploadPayload)(payload);
+        if (!validated.ok) {
+            return res.status(400).json({ detail: validated.detail });
         }
-        const fileName = typeof payload.fileName === 'string' ? payload.fileName.trim() : '';
-        if (!fileName) {
-            return res.status(400).json({ detail: 'Missing required field: fileName' });
-        }
-        if (!Array.isArray(payload.sheets) || payload.sheets.length === 0) {
-            return res.status(400).json({ detail: 'Missing required field: sheets' });
-        }
+        const { fileName, periodStart, periodEnd, currency: reportCurrency, warnings, sheets } = validated.value;
         if (JSON.stringify(body).length > MAX_UPLOAD_JSON_LENGTH) {
             return res.status(400).json({ detail: 'Report payload too large (limit 20MB)' });
         }
-        const rows = (0, productAnalysisAggregation_1.mapParsedSheetItemsToDailyRows)(payload.sheets);
+        // 周期校验（服务端独立于前端文件名识别）：多日区间 / 倒置 / 非法日期 / 与 date 不一致均拒绝
+        const periodError = (0, productAnalysisUpload_1.validatePeriodMatchesDate)({ periodStart, periodEnd }, date);
+        if (periodError) {
+            return res.status(400).json({ detail: periodError });
+        }
+        // 币种校验：报表识别到币种时必须与店铺一致（不做隐式换算）；未识别（null）以店铺币种入库
+        if (reportCurrency !== null && reportCurrency !== shop.currency) {
+            return res.status(400).json({
+                detail: `报表币种 ${reportCurrency} 与店铺币种 ${shop.currency} 不一致，请确认站点后重传`,
+            });
+        }
+        const currency = shop.currency;
+        const uploadDate = parseDateUtc(date);
+        const rows = (0, productAnalysisAggregation_1.mapParsedSheetItemsToDailyRows)(sheets);
         if (rows.length === 0) {
             return res.status(400).json({ detail: 'Report contains no product items' });
         }
-        const currency = typeof payload.currency === 'string' && payload.currency ? payload.currency : shop.currency;
-        const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
-        const uploadDate = parseDateUtc(date);
         const toDailyItemCreate = (row) => {
             const data = {
                 itemId: row.itemId,
@@ -346,12 +385,43 @@ router.delete('/shops/:id/daily-uploads/:date', requireProductAnalysisPermission
         if (!isValidDateString(date)) {
             return res.status(400).json({ detail: 'date 需为 YYYY-MM-DD' });
         }
-        const result = await index_1.prisma.productAnalysisDailyUpload.deleteMany({
-            where: { shopId: shop.id, date: parseDateUtc(date) },
+        await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_delete', objectType: 'ProductAnalysisDailyUpload', metadata: { shopId: shop.id, date } }, async (tx) => {
+            const result = await tx.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: parseDateUtc(date) } });
+            if (result.count === 0)
+                throw new ProductAnalysisNotFoundError('Day not found');
+            return result;
         });
-        if (result.count === 0)
-            return res.status(404).json({ detail: 'Day not found' });
         return res.json({ ok: true });
+    }
+    catch (error) {
+        return errorResponse(error, res);
+    }
+});
+router.post('/shops/:id/daily-uploads/batch-delete', requireProductAnalysisPermission('product-analysis.upload'), async (req, res) => {
+    try {
+        const shop = await findOwnedShop(String(req.params.id ?? ''), req.user.id);
+        if (!shop)
+            return res.status(404).json({ detail: 'Shop not found' });
+        const dates = req.body?.dates;
+        if (!Array.isArray(dates) || dates.length === 0) {
+            return res.status(400).json({ detail: 'dates 需为非空的 YYYY-MM-DD 数组' });
+        }
+        if (dates.length > MAX_BATCH_DELETE_DATES) {
+            return res.status(400).json({ detail: `dates 数量超过上限 ${MAX_BATCH_DELETE_DATES}` });
+        }
+        if (!dates.every(isValidDateString)) {
+            return res.status(400).json({ detail: 'dates 需为非空的 YYYY-MM-DD 数组' });
+        }
+        const uniqueDates = [...new Set(dates)];
+        const result = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_batch_delete', objectType: 'ProductAnalysisDailyUpload', metadata: { shopId: shop.id, dates: uniqueDates } }, async (tx) => {
+            const deleted = await tx.productAnalysisDailyUpload.deleteMany({
+                where: { shopId: shop.id, date: { in: uniqueDates.map(parseDateUtc) } },
+            });
+            if (deleted.count === 0)
+                throw new ProductAnalysisNotFoundError('Day not found');
+            return deleted;
+        });
+        return res.json({ ok: true, deletedCount: result.count });
     }
     catch (error) {
         return errorResponse(error, res);
@@ -365,7 +435,7 @@ router.get('/shops/:id/agg', async (req, res) => {
             return res.status(404).json({ detail: 'Shop not found' });
         const range = parseRange(req.query);
         if (!range)
-            return res.status(400).json({ detail: 'from/to 需为合法的 YYYY-MM-DD 且 from ≤ to' });
+            return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
         const { uploads, rows } = await fetchRangeRows(shop.id, range.from, range.to);
         const aggregated = (0, productAnalysisAggregation_1.aggregateItems)(rows);
         const bySheet = new Map();
@@ -380,12 +450,15 @@ router.get('/shops/:id/agg', async (req, res) => {
             return (rank(a[0]) === -1 ? 99 : rank(a[0])) - (rank(b[0]) === -1 ? 99 : rank(b[0]));
         })
             .map(([sheetKey, items]) => ({ sheetKey, items }));
+        // 混合币种只检测并报告（历史数据可能存在多币种），金额不做换算
+        const uploadCurrencies = [...new Set(uploads.map((upload) => upload.currency))];
         return res.json({
             from: range.from,
             to: range.to,
             days: uploads.length,
             itemCount: aggregated.length,
             currency: shop.currency,
+            uploadCurrencies,
             sheets,
         });
     }
@@ -393,6 +466,26 @@ router.get('/shops/:id/agg', async (req, res) => {
         return errorResponse(error, res);
     }
 });
+/** 新商品分析筛选参数：数字或 'none'（不限）；缺省回退服务端默认阈值 */
+function parsePotentialFilters(query) {
+    const numberOrNull = (key) => {
+        const raw = query[key];
+        if (raw === undefined || raw === '')
+            return undefined;
+        if (raw === 'none')
+            return null;
+        const value = Number(raw);
+        return Number.isFinite(value) && value >= 0 ? value : undefined;
+    };
+    const excludeRaw = query.excludeBannedDeleted;
+    return {
+        minCtrPercent: numberOrNull('minCtr'),
+        minClicks: numberOrNull('minClicks'),
+        minCartRatePercent: numberOrNull('minCartRate'),
+        excludeBannedDeleted: excludeRaw === undefined ? undefined : excludeRaw !== '0',
+        limit: numberOrNull('limit') ?? undefined,
+    };
+}
 router.get('/shops/:id/potential', async (req, res) => {
     try {
         const shop = await findOwnedShop(String(req.params.id ?? ''), req.user.id);
@@ -400,10 +493,27 @@ router.get('/shops/:id/potential', async (req, res) => {
             return res.status(404).json({ detail: 'Shop not found' });
         const range = parseRange(req.query);
         if (!range)
-            return res.status(400).json({ detail: 'from/to 需为合法的 YYYY-MM-DD 且 from ≤ to' });
-        const { rows } = await fetchRangeRows(shop.id, range.from, range.to);
+            return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
+        const filters = parsePotentialFilters(req.query);
+        if (filters.limit !== undefined && filters.limit > MAX_POTENTIAL_LIMIT) {
+            return res.status(400).json({ detail: `limit 不能超过 ${MAX_POTENTIAL_LIMIT}` });
+        }
+        // 数据根基：区间内出现在「新上架商品」sheet 的商品。
+        // 入库时同商品多 sheet 只保留一行（按优先级归属，避免聚合重复累加），
+        // 因此判定需同时看行的归属 sheetKey 与 extra.sheetKeys（商品当天出现过的全部工作表）。
+        const inNewSheet = (row) => {
+            if (row.sheetKey === 'new')
+                return true;
+            const sheetKeys = row.extra?.sheetKeys;
+            return Array.isArray(sheetKeys) && sheetKeys.includes('new');
+        };
+        // 新品榜只需要 extra.sheetKeys 与求和列，不加载全量 variations（大字段，纯为详情页服务）
+        const { rows } = await fetchRangeRows(shop.id, range.from, range.to, { includeExtra: true });
+        const newItemIds = new Set(rows.filter(inNewSheet).map((row) => row.itemId));
         const byItem = new Map();
         for (const row of rows) {
+            if (!newItemIds.has(row.itemId))
+                continue;
             let candidate = byItem.get(row.itemId);
             if (!candidate) {
                 candidate = {
@@ -411,9 +521,17 @@ router.get('/shops/:id/potential', async (req, res) => {
                     itemName: row.itemName,
                     sheetKey: row.sheetKey,
                     status: row.status ?? null,
+                    latestDate: row.date,
                     daily: [],
                 };
                 byItem.set(row.itemId, candidate);
+            }
+            else if (row.date > candidate.latestDate) {
+                // 名称 / 状态以区间内最新日期为准，不依赖数据库返回顺序（正常→封禁按封禁处理，反之按正常处理）
+                candidate.itemName = row.itemName;
+                candidate.sheetKey = row.sheetKey;
+                candidate.status = row.status ?? null;
+                candidate.latestDate = row.date;
             }
             candidate.daily.push({
                 date: row.date,
@@ -424,7 +542,7 @@ router.get('/shops/:id/potential', async (req, res) => {
                 cartVisitors: typeof row.cartVisitors === 'number' ? row.cartVisitors : 0,
             });
         }
-        const items = (0, productAnalysisPotential_1.rankPotentialItems)([...byItem.values()]);
+        const items = (0, productAnalysisPotential_1.rankPotentialItems)([...byItem.values()], { ...filters, range });
         return res.json({ from: range.from, to: range.to, items });
     }
     catch (error) {
@@ -438,12 +556,13 @@ router.get('/shops/:id/items/:itemId', async (req, res) => {
             return res.status(404).json({ detail: 'Shop not found' });
         const range = parseRange(req.query);
         if (!range)
-            return res.status(400).json({ detail: 'from/to 需为合法的 YYYY-MM-DD 且 from ≤ to' });
+            return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
         const itemId = String(req.params.itemId ?? '');
         if (!itemId)
             return res.status(400).json({ detail: 'Missing required field: itemId' });
         const { rows } = await fetchRangeRows(shop.id, range.from, range.to, {
-            includeDetailFields: true,
+            includeExtra: true,
+            includeVariations: true,
             itemId,
         });
         if (rows.length === 0)
@@ -493,17 +612,21 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
             return res.status(400).json({ detail: 'from 不能晚于 to' });
         }
         const itemId = typeof body.itemId === 'string' && body.itemId ? body.itemId : null;
-        let context;
-        let mode;
+        // 个人中心 AI 配置优先，未配置回退环境变量
+        const chatConfig = await (0, aiUserConfig_1.resolveChatAiConfig)(req.user.id);
+        let systemPrompt;
+        let chatMode;
+        let payload;
         if (itemId) {
-            const { uploads, rows } = await fetchRangeRows(shop.id, from, to, { includeDetailFields: true, itemId });
+            const { uploads, rows } = await fetchRangeRows(shop.id, from, to, { includeExtra: true, includeVariations: true, itemId });
             if (rows.length === 0) {
                 return res.status(404).json({ detail: 'Item not found in this shop' });
             }
             const detail = (0, productAnalysisAggregation_1.buildItemDetail)(rows);
-            context = (0, prompts_1.serializeAggregatedItem)(detail.item, detail.series, detail.variations);
-            mode = 'item';
-            const systemPrompt = [
+            const context = (0, prompts_1.serializeAggregatedItem)(detail.item, detail.series, detail.variations);
+            chatMode = 'product_analysis_chat_item';
+            payload = { shopId, itemId, from, to, history };
+            systemPrompt = [
                 (0, prompts_1.buildShopAnalysisSystemPrompt)({
                     shopName: shop.name,
                     site: shop.site,
@@ -511,54 +634,99 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
                     from,
                     to,
                     days: uploads.length,
-                    mode,
+                    mode: 'item',
                 }),
                 '===== 分析数据 =====',
                 context || '（该区间无可用数据）',
             ].join('\n\n');
-            const result = await (0, glmClient_1.glmChat)([{ role: 'system', content: systemPrompt }, ...history]);
-            await (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
-                shopId,
-                itemId,
-                mode,
-                from,
-                to,
+        }
+        else {
+            const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
+            const aggregated = (0, productAnalysisAggregation_1.aggregateItems)(rows);
+            const bySheet = new Map();
+            for (const item of aggregated) {
+                const list = bySheet.get(item.sheetKey) ?? [];
+                list.push(item);
+                bySheet.set(item.sheetKey, list);
+            }
+            const context = (0, prompts_1.serializeAggregatedOverview)([...bySheet.entries()].map(([sheetKey, items]) => ({
+                sheetKey,
+                items: items,
+            })));
+            chatMode = 'product_analysis_chat_overview';
+            payload = { shopId, from, to, history };
+            systemPrompt = [
+                (0, prompts_1.buildShopAnalysisSystemPrompt)({
+                    shopName: shop.name,
+                    site: shop.site,
+                    currency: shop.currency,
+                    from,
+                    to,
+                    days: uploads.length,
+                    mode: 'overview',
+                }),
+                '===== 分析数据 =====',
+                context || '（该区间无可用数据）',
+            ].join('\n\n');
+        }
+        const chatMessages = [{ role: 'system', content: systemPrompt }, ...history];
+        const aiCallInput = {
+            userId: req.user.id,
+            actorName: req.user.username,
+            requestKey: body.requestKey,
+            operationId: body.operationId,
+            kind: 'analysis',
+            module: 'product-analysis',
+            mode: chatMode,
+            model: chatConfig.model,
+            allowedModels: [chatConfig.model],
+            payload,
+        };
+        // 流式模式：SSE 逐块推送增量，结束事件带最终模型；错误以事件形式返回
+        if (body.stream === true) {
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                Connection: 'keep-alive',
+                'X-Accel-Buffering': 'no',
             });
-            return res.json(result);
+            res.flushHeaders();
+            const send = (data) => {
+                res.write(`data: ${JSON.stringify(data)}\n\n`);
+            };
+            // 推理模型思考期可能数十秒无正文：期间定时发 SSE 注释心跳，防止代理空闲断连
+            let sawProviderData = false;
+            const heartbeat = setInterval(() => {
+                if (!sawProviderData)
+                    res.write(': keep-alive\n\n');
+            }, 5_000);
+            try {
+                let emitted = false;
+                const { result } = await (0, aiUsage_1.runAiCall)(aiCallInput, () => (0, glmClient_1.glmChatStream)(chatMessages, { config: chatConfig, fastMode: body.deepThinking === false }, (delta) => {
+                    sawProviderData = true;
+                    emitted = true;
+                    send({ delta });
+                }, (reasoning) => {
+                    sawProviderData = true;
+                    send({ reasoning });
+                }));
+                // 幂等重放（或供应商未产生增量）时把完整内容一次性补发
+                if (!emitted && typeof result?.content === 'string' && result.content) {
+                    send({ delta: result.content });
+                }
+                send({ done: true, model: typeof result?.model === 'string' ? result.model : chatConfig.model });
+            }
+            catch (error) {
+                const detail = error instanceof config_1.ApiError || error instanceof glmConfig_1.GlmApiError ? error.detail : 'AI 调用失败';
+                send({ error: detail });
+            }
+            finally {
+                clearInterval(heartbeat);
+                res.end();
+            }
+            return;
         }
-        const { uploads, rows } = await fetchRangeRows(shop.id, from, to);
-        const aggregated = (0, productAnalysisAggregation_1.aggregateItems)(rows);
-        const bySheet = new Map();
-        for (const item of aggregated) {
-            const list = bySheet.get(item.sheetKey) ?? [];
-            list.push(item);
-            bySheet.set(item.sheetKey, list);
-        }
-        context = (0, prompts_1.serializeAggregatedOverview)([...bySheet.entries()].map(([sheetKey, items]) => ({
-            sheetKey,
-            items: items,
-        })));
-        mode = 'overview';
-        const systemPrompt = [
-            (0, prompts_1.buildShopAnalysisSystemPrompt)({
-                shopName: shop.name,
-                site: shop.site,
-                currency: shop.currency,
-                from,
-                to,
-                days: uploads.length,
-                mode,
-            }),
-            '===== 分析数据 =====',
-            context || '（该区间无可用数据）',
-        ].join('\n\n');
-        const result = await (0, glmClient_1.glmChat)([{ role: 'system', content: systemPrompt }, ...history]);
-        await (0, activityLogger_1.logActivity)(req.user.id, 'product_analysis_chat', 'product-analysis', {
-            shopId,
-            mode,
-            from,
-            to,
-        });
+        const { result } = await (0, aiUsage_1.runAiCall)(aiCallInput, () => (0, glmClient_1.glmChat)(chatMessages, { config: chatConfig }));
         return res.json(result);
     }
     catch (error) {

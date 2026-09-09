@@ -8,21 +8,28 @@ const MONEY_FORMATTER = new Intl.NumberFormat('zh-CN', {
 });
 const COUNT_FORMATTER = new Intl.NumberFormat('zh-CN');
 
-/** 转化漏斗五级：曝光 → 点击 → 访客 → 加购件数 → 订单，附级间转化率（%） */
+/** 转化漏斗五级：曝光 → 点击 → 访客 → 加购件数 → 订单。
+ *  缺失阶段（含 undefined/NaN 等非有限值）一律归一为 null（显示「—」，不伪造零值）；
+ *  相邻阶段任一缺失或上一阶段 ≤ 0 时不计算转化率（不产生虚假 0%/NaN%）；
+ *  当前阶段为真实 0 且上一阶段有效 > 0 时显示 0%。 */
 export function buildFunnelStages(item: ParentProduct): FunnelStage[] {
-  const rawStages: { key: FunnelStage['key']; value: number | null }[] = [
-    { key: 'impressions', value: item.impressions },
-    { key: 'clicks', value: item.clicks },
-    { key: 'visitors', value: item.visitors },
-    { key: 'cartUnits', value: item.cartUnits },
-    { key: 'orders', value: item.ordersOrdered },
-  ];
+  const keys: FunnelStage['key'][] = ['impressions', 'clicks', 'visitors', 'cartUnits', 'orders'];
+  const metricByKey: Record<FunnelStage['key'], number | null> = {
+    impressions: item.impressions,
+    clicks: item.clicks,
+    visitors: item.visitors,
+    cartUnits: item.cartUnits,
+    orders: item.ordersOrdered,
+  };
+  const toFiniteOrNull = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
   let prevValue: number | null = null;
-  return rawStages.map(({ key, value }) => {
-    const safeValue = value ?? 0;
-    const rateFromPrev = prevValue !== null && prevValue > 0 ? (safeValue / prevValue) * 100 : null;
-    prevValue = safeValue;
-    return { key, value: safeValue, rateFromPrev };
+  return keys.map((key) => {
+    const value = toFiniteOrNull(metricByKey[key]);
+    const rateFromPrev =
+      value !== null && prevValue !== null && prevValue > 0 ? (value / prevValue) * 100 : null;
+    prevValue = value;
+    return { key, value, rateFromPrev };
   });
 }
 
@@ -33,8 +40,6 @@ export interface SheetSummary {
   totalOrders: number;
   totalVisitors: number;
   totalClicks: number;
-  /** 加权转化率（%）= Σ订单 / Σ访客；访客为 0 时为 null */
-  weightedCvr: number | null;
 }
 
 function sumMetric(items: ParentProduct[], key: keyof ParentProduct): number {
@@ -44,17 +49,17 @@ function sumMetric(items: ParentProduct[], key: keyof ParentProduct): number {
   }, 0);
 }
 
+/** 工作表总量汇总（各自有效观测求和）。
+ *  注意：加权转化率不在此计算——总量与比率的成对有效样本不同，
+ *  由后端按展示范围返回（sheets[].summary.weightedCvr），不得用总量互除重算。 */
 export function summarizeSheet(group: SheetGroup): SheetSummary {
-  const totalVisitors = sumMetric(group.items, 'visitors');
-  const totalOrders = sumMetric(group.items, 'ordersOrdered');
   return {
     itemCount: group.items.length,
     totalSalesOrdered: sumMetric(group.items, 'salesOrdered'),
     totalSalesConfirmed: sumMetric(group.items, 'salesConfirmed'),
-    totalOrders,
-    totalVisitors,
+    totalOrders: sumMetric(group.items, 'ordersOrdered'),
+    totalVisitors: sumMetric(group.items, 'visitors'),
     totalClicks: sumMetric(group.items, 'clicks'),
-    weightedCvr: totalVisitors > 0 ? (totalOrders / totalVisitors) * 100 : null,
   };
 }
 

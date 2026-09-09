@@ -88,12 +88,13 @@ export interface AggregatedItem {
 
 export interface DailySeriesPoint {
   date: string;
-  ordersOrdered: number;
-  ordersConfirmed: number;
-  visitors: number;
-  clicks: number;
-  unitsOrdered: number;
-  /** 访客口径日转化率（%），访客为 0 时 null */
+  /** 当日已下订单；缺失为 null（未知，不是 0） */
+  ordersOrdered: number | null;
+  ordersConfirmed: number | null;
+  visitors: number | null;
+  clicks: number | null;
+  unitsOrdered: number | null;
+  /** 访客口径日转化率（%）；订单或访客缺失、访客为 0 时 null */
   cvrConfirmed: number | null;
 }
 
@@ -113,13 +114,66 @@ function numOrUndef(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
-function rate(numerator: number | null | undefined, denominator: number | null | undefined): number | null {
-  if (numerator === null || numerator === undefined) return null;
-  if (!denominator || denominator <= 0) return null;
-  return (numerator / denominator) * 100;
+/**
+ * 成对完整样本求和（聚合 / 新品榜 / 汇总卡共用，保证同名指标同一有效样本口径）：
+ * 分子分母仅同时计入两者均为有效数值的观测行——缺失（null/undefined）不计为零、不参与样本。
+ * 注意：行上的总量字段（如 visitors 合计）是「各自有效观测」的求和，与这里的成对样本可能不同，
+ * 前端不得用总量互除重算比率。
+ */
+export function pairwiseSums(
+  rows: Array<Record<string, unknown>>,
+  numeratorField: string,
+  denominatorField: string
+): { numerator: number; denominator: number } | null {
+  let numerator = 0;
+  let denominator = 0;
+  let pairs = 0;
+  for (const row of rows) {
+    const numeratorValue = numOrUndef(row[numeratorField]);
+    const denominatorValue = numOrUndef(row[denominatorField]);
+    if (numeratorValue === undefined || denominatorValue === undefined) continue;
+    numerator += numeratorValue;
+    denominator += denominatorValue;
+    pairs += 1;
+  }
+  return pairs > 0 ? { numerator, denominator } : null;
 }
 
-/** 区间聚合多行 → 单商品（率类统一访客/展示口径推导；cvrOrdered/cvrConfirmed 采用访客口径便于排序与 AI 口径统一） */
+/** 成对完整样本比率：无任何成对观测或分母合计 ≤ 0 时返回 null（未知，而非 0）。合法零值正常参与。 */
+export function pairwiseRatio(
+  rows: Array<Record<string, unknown>>,
+  numeratorField: string,
+  denominatorField: string
+): number | null {
+  const sums = pairwiseSums(rows, numeratorField, denominatorField);
+  if (sums === null || sums.denominator <= 0) return null;
+  return sums.numerator / sums.denominator;
+}
+
+/** 工作表级汇总的有效样本口径：订单与访客同日有效的观测求和后相除（跨商品加权，不是商品百分比平均） */
+export interface SheetEffectiveSummary {
+  /** 成对样本内有效订单合计；无成对观测为 null */
+  weightedCvrNumerator: number | null;
+  /** 成对样本内对应访客合计；无成对观测为 null */
+  weightedCvrDenominator: number | null;
+  /** 加权转化率（%）= numerator / denominator；无样本或分母为 0 时为 null */
+  weightedCvr: number | null;
+}
+
+/** 按原始日行计算工作表级加权转化率（与商品明细、新品榜的下单转化率同一成对样本口径） */
+export function summarizeSheetEffective(rows: DailyItemRow[]): SheetEffectiveSummary {
+  const sums = pairwiseSums(rows as unknown as Array<Record<string, unknown>>, 'ordersOrdered', 'visitors');
+  if (sums === null) return { weightedCvrNumerator: null, weightedCvrDenominator: null, weightedCvr: null };
+  return {
+    weightedCvrNumerator: sums.numerator,
+    weightedCvrDenominator: sums.denominator,
+    weightedCvr: sums.denominator > 0 ? (sums.numerator / sums.denominator) * 100 : null,
+  };
+}
+
+/** 区间聚合多行 → 单商品。
+ *  比率类（ctr / cvrOrdered / cvrConfirmed / cartRate / bounceRate / aov*）统一按成对完整样本计算，
+ *  与新品榜（productAnalysisPotential）同名指标同一口径；总量仍为各自有效观测求和。 */
 function buildAggregate(itemId: string, rows: DailyItemRow[]): AggregatedItem {
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
@@ -133,8 +187,11 @@ function buildAggregate(itemId: string, rows: DailyItemRow[]): AggregatedItem {
     }
     sums[field] = total;
   }
-  const visitors = sums.visitors;
-  const impressions = sums.impressions;
+  const looseRows = sorted as unknown as Array<Record<string, unknown>>;
+  const percent = (numeratorField: string, denominatorField: string) => {
+    const ratio = pairwiseRatio(looseRows, numeratorField, denominatorField);
+    return ratio === null ? null : ratio * 100;
+  };
   return {
     itemId,
     itemName: latest.itemName,
@@ -144,15 +201,15 @@ function buildAggregate(itemId: string, rows: DailyItemRow[]): AggregatedItem {
     firstDate: sorted[0].date,
     lastDate: latest.date,
     ...sums,
-    ctr: rate(sums.clicks, impressions),
-    cvrOrdered: rate(sums.ordersOrdered, visitors),
-    cvrConfirmed: rate(sums.ordersConfirmed, visitors),
-    cvrVisitorsOrdered: rate(sums.ordersOrdered, visitors),
-    cvrVisitorsConfirmed: rate(sums.ordersConfirmed, visitors),
-    cartRate: rate(sums.cartVisitors, visitors),
-    bounceRate: rate(sums.bounceVisitors, visitors),
-    aovOrdered: sums.salesOrdered !== null && sums.ordersOrdered ? sums.salesOrdered / sums.ordersOrdered : null,
-    aovConfirmed: sums.salesConfirmed !== null && sums.ordersConfirmed ? sums.salesConfirmed / sums.ordersConfirmed : null,
+    ctr: percent('clicks', 'impressions'),
+    cvrOrdered: percent('ordersOrdered', 'visitors'),
+    cvrConfirmed: percent('ordersConfirmed', 'visitors'),
+    cvrVisitorsOrdered: percent('ordersOrdered', 'visitors'),
+    cvrVisitorsConfirmed: percent('ordersConfirmed', 'visitors'),
+    cartRate: percent('cartVisitors', 'visitors'),
+    bounceRate: percent('bounceVisitors', 'visitors'),
+    aovOrdered: pairwiseRatio(looseRows, 'salesOrdered', 'ordersOrdered'),
+    aovConfirmed: pairwiseRatio(looseRows, 'salesConfirmed', 'ordersConfirmed'),
     repeatOrderRate: null,
     repurchaseRateConfirmed: null,
     avgReorderDays: null,
@@ -172,20 +229,26 @@ export function aggregateItems(rows: DailyItemRow[]): AggregatedItem[] {
   return [...grouped.entries()].map(([itemId, itemRows]) => buildAggregate(itemId, itemRows));
 }
 
-/** 单品日序列（每日期一行，按日升序） */
+/** 单品日序列（每日期一行，按日升序）。缺失指标保留 null（未知 ≠ 0），不做日期补齐/补零 */
 export function buildDailySeries(rows: DailyItemRow[]): DailySeriesPoint[] {
   const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
   return sorted.map((row) => {
-    const visitors = numOrUndef(row.visitors) ?? 0;
-    const ordersConfirmed = numOrUndef(row.ordersConfirmed);
+    const visitors = numOrUndef(row.visitors) ?? null;
+    const ordersConfirmed = numOrUndef(row.ordersConfirmed) ?? null;
+    const ordersOrdered = numOrUndef(row.ordersOrdered) ?? null;
+    // 当日成对样本：订单与访客均有效且访客 > 0 才有转化率
+    const cvrConfirmed =
+      ordersConfirmed !== null && visitors !== null && visitors > 0
+        ? (ordersConfirmed / visitors) * 100
+        : null;
     return {
       date: row.date,
-      ordersOrdered: numOrUndef(row.ordersOrdered) ?? 0,
-      ordersConfirmed: numOrUndef(row.ordersConfirmed) ?? 0,
+      ordersOrdered,
+      ordersConfirmed,
       visitors,
-      clicks: numOrUndef(row.clicks) ?? 0,
-      unitsOrdered: numOrUndef(row.unitsOrdered) ?? 0,
-      cvrConfirmed: ordersConfirmed !== undefined && visitors > 0 ? (ordersConfirmed / visitors) * 100 : null,
+      clicks: numOrUndef(row.clicks) ?? null,
+      unitsOrdered: numOrUndef(row.unitsOrdered) ?? null,
+      cvrConfirmed,
     };
   });
 }
@@ -250,11 +313,17 @@ export function mapParsedSheetItemsToDailyRows(
   sheets: { sheetKey: string; items: unknown[] }[]
 ): DailyItemRow[] {
   const rows: DailyItemRow[] = [];
+  // 防御：空元素 / 非对象 / 缺 sheetKey 或 items 的工作表直接剔除（结构问题由路由层 Zod 校验返回 400，这里保证纯函数不崩）
+  const validSheets = sheets.filter(
+    (sheet): sheet is { sheetKey: string; items: unknown[] } =>
+      typeof sheet === 'object' && sheet !== null && !Array.isArray(sheet)
+      && typeof sheet.sheetKey === 'string' && sheet.sheetKey !== ''
+      && Array.isArray(sheet.items)
+  );
   // 先记录每个商品出现过的全部工作表：归属仍按优先级取一行（避免聚合重复累加），
   // 但 extra.sheetKeys 保留完整归属，供"新商品分析"等按 sheet 基数筛选（如新品同时进热销表的情况）
   const sheetKeysByItem = new Map<string, string[]>();
-  for (const sheet of sheets) {
-    if (!sheet || typeof sheet !== 'object' || !Array.isArray(sheet.items)) continue;
+  for (const sheet of validSheets) {
     for (const raw of sheet.items) {
       if (typeof raw !== 'object' || raw === null) continue;
       const itemId = String((raw as Record<string, unknown>).itemId ?? '').trim();
@@ -265,9 +334,8 @@ export function mapParsedSheetItemsToDailyRows(
     }
   }
   const seenItemIds = new Set<string>();
-  const ordered = [...sheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
+  const ordered = [...validSheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
   for (const sheet of ordered) {
-    if (!sheet || typeof sheet !== 'object' || !Array.isArray(sheet.items)) continue;
     for (const raw of sheet.items) {
       if (typeof raw !== 'object' || raw === null) continue;
       const item = raw as Record<string, unknown>;

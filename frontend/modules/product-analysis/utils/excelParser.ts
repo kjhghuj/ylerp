@@ -16,7 +16,6 @@ import type {
 export const MAX_PRODUCT_ANALYSIS_FILE_BYTES = 25 * 1024 * 1024;
 export const MAX_PRODUCT_ANALYSIS_ROWS = 20_000;
 
-const DEFAULT_CURRENCY = 'MYR';
 const HEADER_SCAN_ROW_LIMIT = 10;
 const MISSING_CELL_TEXT = '-';
 
@@ -159,11 +158,41 @@ export function extractPeriodFromFileName(fileName: string): {
   return { periodStart: toIsoDate(match[1]), periodEnd: toIsoDate(match[2]) };
 }
 
-/** 上传日期定位：区间文件名取结束日期（截至该日的数据），单日期文件名取该日期；无法识别或日期非法返回 null */
-export function detectDailyDateFromFileName(fileName: string): string | null {
+export type DailyUploadDateResolution =
+  | { status: 'ok'; date: string }
+  | { status: 'rejected'; reason: 'missing' | 'invalid' | 'inverted' | 'multi-day'; periodStart?: string; periodEnd?: string };
+
+/** 上传日期定位（每日数据仅接受单日报表）：
+ *  - 单日期文件名 → 该日期；
+ *  - 起止相同的区间文件名（start_end 同日）→ 该日期；
+ *  - 起止不同的多日区间文件名 → 拒绝（reason: 'multi-day'），不能把结束日当作单日数据入库；
+ *  - 无法识别 / 日期非真实日历日 / 起止倒置 → 'missing' / 'invalid' / 'inverted'。 */
+export function resolveDailyUploadDate(fileName: string): DailyUploadDateResolution {
   const rangeMatch = fileName.match(/(\d{8})[_-](\d{8})/);
-  const candidate = toIsoDate(rangeMatch ? rangeMatch[2] : fileName.match(/(?<!\d)(\d{8})(?!\d)/)?.[1] ?? '');
-  return candidate !== null && isValidDateString(candidate) ? candidate : null;
+  if (rangeMatch) {
+    const periodStart = toIsoDate(rangeMatch[1]);
+    const periodEnd = toIsoDate(rangeMatch[2]);
+    if (periodStart === null || periodEnd === null || !isValidDateString(periodStart) || !isValidDateString(periodEnd)) {
+      return { status: 'rejected', reason: 'invalid', periodStart: periodStart ?? undefined, periodEnd: periodEnd ?? undefined };
+    }
+    if (periodStart > periodEnd) {
+      return { status: 'rejected', reason: 'inverted', periodStart, periodEnd };
+    }
+    if (periodStart !== periodEnd) {
+      return { status: 'rejected', reason: 'multi-day', periodStart, periodEnd };
+    }
+    return { status: 'ok', date: periodEnd };
+  }
+  const candidate = toIsoDate(fileName.match(/(?<!\d)(\d{8})(?!\d)/)?.[1] ?? '');
+  return candidate !== null && isValidDateString(candidate)
+    ? { status: 'ok', date: candidate }
+    : { status: 'rejected', reason: candidate === null ? 'missing' : 'invalid' };
+}
+
+/** 兼容旧调用：仅单日报表（含起止相同的区间文件名）返回日期；多日区间 / 无法识别 / 非法日期返回 null */
+export function detectDailyDateFromFileName(fileName: string): string | null {
+  const resolution = resolveDailyUploadDate(fileName);
+  return resolution.status === 'ok' ? resolution.date : null;
 }
 
 function toIsoDate(yyyymmdd: string): string | null {
@@ -455,5 +484,6 @@ export function parseProductAnalysisWorkbook(
     );
   }
   const { periodStart, periodEnd } = extractPeriodFromFileName(fileName);
-  return { fileName, periodStart, periodEnd, currency: currency ?? DEFAULT_CURRENCY, sheets, warnings };
+  // 未识别到币种时置 null（而非默认 MYR）：后端据店铺币种校验，避免其他站点被误标
+  return { fileName, periodStart, periodEnd, currency, sheets, warnings };
 }

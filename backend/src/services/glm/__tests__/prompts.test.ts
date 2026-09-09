@@ -74,9 +74,26 @@ describe('serializeAggregatedItem', () => {
     expect(text).toContain('商品编号: 10001');
     expect(text).toContain('覆盖天数: 7');
     expect(text).toContain('2026-09-05: 20 | 700 | 2.85');
-    expect(text).toContain('2026-09-06: 25 | 800 | —');
+    expect(text).toContain('2026-09-06: 25 | 800 | 无数据');
     expect(text).toContain('变体明细');
     expect(text).toContain('Black');
+  });
+
+  test('marks missing daily metrics as 无数据 instead of zero sales', () => {
+    // 回归：日序列缺失订单曾被序列化为 0，AI 会把未知当作零销量得出错误结论
+    const text = serializeAggregatedItem(
+      makeItem(),
+      [
+        { date: '2026-09-05', ordersOrdered: 20, visitors: 700, cvrConfirmed: 2.85 },
+        { date: '2026-09-06', ordersOrdered: null, visitors: null, cvrConfirmed: null },
+        { date: '2026-09-07', ordersOrdered: 0, visitors: 700, cvrConfirmed: 0 },
+      ],
+      []
+    );
+    expect(text).toContain('「无数据」=当日缺失该指标，不是 0');
+    expect(text).toContain('2026-09-06: 无数据 | 无数据 | 无数据');
+    // 真实 0 仍按 0 序列化，与缺失严格区分
+    expect(text).toContain('2026-09-07: 0 | 700 | 0.00');
   });
 
   test('truncates beyond the context limit', () => {

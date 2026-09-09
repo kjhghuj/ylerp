@@ -68,15 +68,39 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
               <Metric label={strings.card.orders} value={formatCount(item.metrics.ordersOrdered)} />
               <Metric label={strings.card.visitors} value={formatCount(item.metrics.visitors)} />
-              <Metric label={strings.card.cvr} value={formatPercent(item.metrics.cvrConfirmed)} />
+              <Metric label={strings.potential.cvrOrdered} value={formatPercent(item.metrics.cvrOrdered)} />
               <Metric
                 label={strings.potential.growth}
+                title={strings.potential.growthScope}
                 value={
-                  item.metrics.growthPercent === null
-                    ? '—'
-                    : `${item.metrics.growthPercent >= 0 ? '+' : ''}${item.metrics.growthPercent.toFixed(0)}%`
+                  item.metrics.growthStatus === 'new-orders'
+                    ? strings.potential.growthNewOrders
+                    : item.metrics.growthPercent === null
+                      ? '—'
+                      : `${item.metrics.growthPercent >= 0 ? '+' : ''}${item.metrics.growthPercent.toFixed(0)}%`
                 }
               />
+            </div>
+            {/* 环比覆盖度：窗口日历天数 vs 有效订单观测天数；覆盖不完整时明确提示 */}
+            <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              <span
+                title={strings.potential.growthScope}
+                className="font-mono"
+              >
+                {strings.potential.growthCoverage
+                  .replaceAll('{prev}', String(item.metrics.growthPreviousObservedDays ?? 0))
+                  .replaceAll('{recent}', String(item.metrics.growthRecentObservedDays ?? 0))
+                  .replaceAll('{window}', String(item.metrics.growthWindowDays ?? 0))}
+              </span>
+              {item.metrics.growthWindowDays > 0
+                && (item.metrics.growthPreviousObservedDays ?? 0) < item.metrics.growthWindowDays || (item.metrics.growthRecentObservedDays ?? 0) < item.metrics.growthWindowDays ? (
+                <span
+                  className="px-1.5 py-0.5 rounded-full"
+                  style={{ backgroundColor: 'rgba(245,158,11,0.14)', color: '#b45309' }}
+                >
+                  {strings.potential.growthIncomplete}
+                </span>
+              ) : null}
             </div>
             <div className="flex flex-wrap gap-1.5">
               {item.reasons.map((reason) => (
@@ -97,9 +121,9 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
   );
 };
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" title={title}>
       <p style={{ color: 'var(--text-tertiary)' }}>{label}</p>
       <p className="font-semibold truncate" style={{ color: 'var(--text-secondary)' }} title={value}>
         {value}

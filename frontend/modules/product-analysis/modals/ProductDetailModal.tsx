@@ -10,7 +10,7 @@ import { AiChatPanel } from './AiChatPanel';
 import { formatCount, formatMoney, formatPercent } from '../utils/format';
 import { fetchShopItem, getApiErrorDetail } from '../services/productAnalysisApi';
 import { useProductAnalysisStrings } from '../i18n';
-import type { AggregatedItem, ItemDetailResponse, ParentProduct, ProductVariation } from '../types';
+import type { ItemDetailResponse, ParentProduct, ProductVariation } from '../types';
 
 type ModalTab = 'overview' | 'trend' | 'charts' | 'variations' | 'ai';
 const MODAL_TABS: { key: ModalTab; labelKey: 'tabOverview' | 'tabTrend' | 'tabCharts' | 'tabVariations' | 'tabAi' }[] = [
@@ -23,19 +23,24 @@ const MODAL_TABS: { key: ModalTab; labelKey: 'tabOverview' | 'tabTrend' | 'tabCh
 
 interface ProductDetailModalProps {
   shopId: string;
-  /** 点击行对应的聚合商品（作为头部与加载前兜底） */
-  item: AggregatedItem;
+  /** 商品 ID 与最小展示信息：详情数据由弹窗自行请求，不依赖聚合接口先成功 */
+  itemId: string;
+  itemName: string;
+  status?: string;
   from: string;
   to: string;
   onClose: () => void;
 }
 
-/** 详情弹窗：区间聚合单品。overview 用 聚合指标 + extra（最新日的率类/属性）合并展示 */
-export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, item, from, to, onClose }) => {
+/** 详情弹窗：区间聚合单品（自行加载数据，展示 加载/成功/错误 三态，支持重试）。
+ *  overview 用 聚合指标 + extra（最新日的率类/属性）合并展示 */
+export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, itemId, itemName, status, from, to, onClose }) => {
   const strings = useProductAnalysisStrings();
   const [activeTab, setActiveTab] = useState<ModalTab>('overview');
   const [detail, setDetail] = useState<ItemDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -45,26 +50,34 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // 详情查询 = 店铺 × 商品 × 区间：查询变化即重置为加载态（旧内容/旧错误不得兜底到新查询）
   useEffect(() => {
     let cancelled = false;
+    setDetail(null);
+    setError(null);
+    setIsLoading(true);
     (async () => {
       try {
-        const response = await fetchShopItem(shopId, item.itemId, from, to);
+        const response = await fetchShopItem(shopId, itemId, from, to);
         if (!cancelled) setDetail(response);
       } catch (err) {
         if (!cancelled) setError(getApiErrorDetail(err));
+      } finally {
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [shopId, item.itemId, from, to]);
+  }, [shopId, itemId, from, to, retryToken]);
 
   const currency = detail?.currency ?? '';
   const displayItem: ParentProduct = React.useMemo(() => {
-    const base = detail?.item ?? item;
-    const extra = detail?.extra;
-    if (!extra) return { ...base, variations: detail?.variations ?? [] };
+    // 数据由弹窗自行加载：无 detail 时不构造展示对象（渲染层处于加载/错误态）
+    if (!detail) return null as unknown as ParentProduct;
+    const base = detail.item;
+    const extra = detail.extra;
+    if (!extra) return { ...base, variations: detail.variations };
     return {
       ...base,
       // 区间不可推导的率类与商品属性，用最新日的 extra 补齐
@@ -77,9 +90,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
       createdDays: pickNumber(extra.createdDays),
       currentPrice: pickNumber(extra.currentPrice),
       priceFlag: typeof extra.priceFlag === 'string' ? extra.priceFlag : undefined,
-      variations: detail?.variations ?? [],
+      variations: detail.variations,
     };
-  }, [detail, item]);
+  }, [detail]);
 
   const variations: ProductVariation[] = detail?.variations ?? [];
 
@@ -98,13 +111,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
         <div className="px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-bold line-clamp-2 leading-5" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
-                {item.itemName}
+              <p className="text-sm font-bold line-clamp-2 leading-5" style={{ color: 'var(--text-primary)' }} title={itemName}>
+                {itemName}
               </p>
               <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-tertiary)' }}>
-                #{item.itemId}
-                {item.status ? ` · ${item.status}` : ''}
-                {currency ? ` · ${currency}` : ''}
+                #{itemId}
+                {status ? ` · ${status}` : ''}
                 {` · ${from} ~ ${to}`}
               </p>
             </div>
@@ -136,12 +148,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
           </div>
         </div>
 
-        {/* 内容 */}
+        {/* 内容：加载 / 错误（含币种异常，附重试）/ 成功 三态 */}
         <div className="flex-1 min-h-0 overflow-y-auto p-5">
           {error ? (
-            <div className="py-10 text-center text-sm" style={{ color: '#dc2626' }}>{error}</div>
+            <div className="py-10 flex flex-col items-center gap-3 text-center">
+              <p className="text-sm break-all" style={{ color: '#dc2626' }}>{error}</p>
+              <button
+                type="button"
+                onClick={() => setRetryToken((token) => token + 1)}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium"
+                style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              >
+                {strings.potential.retry}
+              </button>
+            </div>
           ) : !detail ? (
-            <div className="h-60 flex items-center justify-center">
+            <div className="h-60 flex items-center justify-center" role="status" aria-label="detail-loading">
               <Loader2 size={28} className="animate-spin" style={{ color: 'var(--primary)' }} />
             </div>
           ) : (
@@ -164,7 +186,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
                 </div>
               )}
               {activeTab === 'ai' && (
-                <AiChatPanel shopId={shopId} itemId={item.itemId} itemTitle={item.itemName} />
+                <AiChatPanel shopId={shopId} itemId={itemId} itemTitle={itemName} from={from} to={to} />
               )}
             </>
           )}

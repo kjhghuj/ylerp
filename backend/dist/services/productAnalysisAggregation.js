@@ -159,11 +159,29 @@ function sheetPriority(sheetKey) {
 }
 function mapParsedSheetItemsToDailyRows(sheets) {
     const rows = [];
+    // 防御：空元素 / 非对象 / 缺 sheetKey 或 items 的工作表直接剔除（结构问题由路由层 Zod 校验返回 400，这里保证纯函数不崩）
+    const validSheets = sheets.filter((sheet) => typeof sheet === 'object' && sheet !== null && !Array.isArray(sheet)
+        && typeof sheet.sheetKey === 'string' && sheet.sheetKey !== ''
+        && Array.isArray(sheet.items));
+    // 先记录每个商品出现过的全部工作表：归属仍按优先级取一行（避免聚合重复累加），
+    // 但 extra.sheetKeys 保留完整归属，供"新商品分析"等按 sheet 基数筛选（如新品同时进热销表的情况）
+    const sheetKeysByItem = new Map();
+    for (const sheet of validSheets) {
+        for (const raw of sheet.items) {
+            if (typeof raw !== 'object' || raw === null)
+                continue;
+            const itemId = String(raw.itemId ?? '').trim();
+            if (!itemId)
+                continue;
+            const known = sheetKeysByItem.get(itemId) ?? [];
+            if (!known.includes(sheet.sheetKey))
+                known.push(sheet.sheetKey);
+            sheetKeysByItem.set(itemId, known);
+        }
+    }
     const seenItemIds = new Set();
-    const ordered = [...sheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
+    const ordered = [...validSheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
     for (const sheet of ordered) {
-        if (!sheet || typeof sheet !== 'object' || !Array.isArray(sheet.items))
-            continue;
         for (const raw of sheet.items) {
             if (typeof raw !== 'object' || raw === null)
                 continue;
@@ -190,7 +208,9 @@ function mapParsedSheetItemsToDailyRows(sheets) {
                 if (value !== null && value !== undefined && value !== '')
                     extra[field] = value;
             }
-            row.extra = Object.keys(extra).length > 0 ? extra : null;
+            const allSheetKeys = sheetKeysByItem.get(itemId) ?? [sheet.sheetKey];
+            extra.sheetKeys = allSheetKeys;
+            row.extra = extra;
             row.variations = Array.isArray(item.variations) ? item.variations : null;
             rows.push(row);
         }
