@@ -40,6 +40,8 @@ interface RestockShop {
 interface ShopSalesRow {
   externalSku: string;
   displaySku: string;
+  /** 键来源：modelCode=规格货号（可与元仓对应）；variationSku=缺规格货号的回退；item=无变体父级 */
+  skuSource: "modelCode" | "variationSku" | "item";
   level: "variation" | "item";
   itemId: string;
   itemName: string;
@@ -919,7 +921,11 @@ export const RestockV3: React.FC = () => {
             <span className="font-semibold text-slate-800">
               {row.displaySku}
             </span>
-            {row.level === "item" ? (
+            {row.skuSource === "variationSku" ? (
+              <span className="text-[11px] text-amber-600">
+                缺少规格货号，以规格编号代替
+              </span>
+            ) : row.level === "item" ? (
               <span className="text-[11px] text-amber-600">
                 无变体数据，按商品整体件数
               </span>
@@ -1220,7 +1226,7 @@ export const RestockV3: React.FC = () => {
             ) : null}
             {sales && sales.noSkuVariationCount > 0 ? (
               <span className="text-amber-600">
-                有 {sales.noSkuVariationCount} 个规格缺少 SKU 编号（
+                有 {sales.noSkuVariationCount} 个规格既无规格货号也无规格编号（
                 {formatNumber(sales.noSkuVariationUnits)} 件），无法参与映射
               </span>
             ) : null}
@@ -1296,7 +1302,7 @@ export const RestockV3: React.FC = () => {
               >
                 <thead className="border-b text-left text-slate-500">
                   <tr>
-                    <th className="p-2">平台 SKU</th>
+                    <th className="p-2">规格货号</th>
                     <th className="p-2">商品 / 规格</th>
                     <th className="p-2">件数 / 观测天数</th>
                     <th className="p-2">

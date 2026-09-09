@@ -43,6 +43,7 @@ const salesResponse = (overrides: Record<string, unknown> = {}) => ({
       {
         externalSku: "SKU-A",
         displaySku: "SKU-A",
+        skuSource: "modelCode",
         level: "variation",
         itemId: "1001",
         itemName: "键盘",
@@ -55,6 +56,7 @@ const salesResponse = (overrides: Record<string, unknown> = {}) => ({
       {
         externalSku: "SKU-B",
         displaySku: "SKU-B",
+        skuSource: "modelCode",
         level: "variation",
         itemId: "1001",
         itemName: "键盘",

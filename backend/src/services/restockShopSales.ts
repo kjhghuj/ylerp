@@ -1,7 +1,9 @@
 /**
  * 补货V3：商品分析店铺销量聚合（纯函数，无 DB 依赖）。
- * 数据根基：ProductDailyItem 区间行 —— 有变体时按 variationSku 跨日求和 unitsOrdered
- * （已下订单件数，补货V3 选定口径），无变体行回退父级 unitsOrdered（externalSku = itemId）。
+ * 数据根基：ProductDailyItem 区间行 —— 有变体时按「规格货号」（modelCode，商家自填、
+ * 与元仓 customerSku 同一套编码）跨日求和 unitsOrdered（已下订单件数，补货V3 选定口径）。
+ * 规格货号缺失的变体回退「规格编号」（variationSku，Shopee 生成）并标记 skuSource，
+ * 两者皆缺计入 noSku 提示（无法映射，不参与计算）；无变体行回退父级 unitsOrdered（键 = itemId）。
  * 缺失指标（null）语义与商品分析一致：未知 ≠ 0，不计入合计，也不计入该变体的有效观测天数；
  * 店铺级统计天数（statisticsDays 默认值）另行按「区间内实际上传天数」计算。
  */
@@ -19,13 +21,18 @@ export interface ShopDailyItemRow {
   variations: unknown;
 }
 
+/** 聚合键来源：规格货号（可对元仓）> 规格编号（回退）> 父商品编号（无变体行） */
+export type ShopSkuSource = 'modelCode' | 'variationSku' | 'item';
+
 export type ShopSalesLevel = 'variation' | 'item';
 
 export interface ShopVariantSalesRow {
-  /** 聚合键（normalizeRestockSku 规范化后的平台 SKU 或 itemId） */
+  /** 聚合键（normalizeRestockSku 规范化后的规格货号 / 规格编号 / itemId） */
   externalSku: string;
   /** 首次出现的原始 SKU 文本（展示用） */
   displaySku: string;
+  /** 键来源：modelCode 可与元仓 customerSku 直接对应；variationSku 为缺规格货号的回退 */
+  skuSource: ShopSkuSource;
   level: ShopSalesLevel;
   itemId: string;
   itemName: string;
@@ -40,15 +47,16 @@ export interface ShopSalesAggregate {
   rows: ShopVariantSalesRow[];
   /** 区间内有上传记录的天数（statisticsDays 默认值） */
   shopObservedDays: number;
-  /** variationSku 为空的变体数量（无法映射，不参与计算，仅提示） */
+  /** 规格货号与规格编号均缺失的变体数量（无法映射，不参与计算，仅提示） */
   noSkuVariationCount: number;
-  /** variationSku 为空的变体件数合计（提示用） */
+  /** 规格货号与规格编号均缺失的变体件数合计（提示用） */
   noSkuVariationUnits: number;
 }
 
 interface VariationRecord {
   variationSku?: unknown;
   variationName?: unknown;
+  modelCode?: unknown;
   unitsOrdered?: unknown;
 }
 
@@ -62,7 +70,20 @@ function parseVariations(value: unknown): VariationRecord[] {
 const toUnits = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-/** 聚合区间行：变体级优先（variationSku 键），无变体回退父级 itemId 键 */
+/** 变体可映射键：规格货号优先；两者皆缺返回 null（计入 noSku 提示） */
+function resolveVariationKey(variation: VariationRecord): { key: string; source: ShopSkuSource } | null {
+  const modelCode = String(variation.modelCode ?? '').trim();
+  if (modelCode && modelCode !== '-') {
+    return { key: modelCode, source: 'modelCode' };
+  }
+  const variationSku = String(variation.variationSku ?? '').trim();
+  if (variationSku && variationSku !== '-') {
+    return { key: variationSku, source: 'variationSku' };
+  }
+  return null;
+}
+
+/** 聚合区间行：变体级优先（规格货号键），无变体回退父级 itemId 键 */
 export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSalesAggregate {
   const bySku = new Map<string, ShopVariantSalesRow>();
   const uploadDates = new Set<string>();
@@ -72,6 +93,7 @@ export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSa
   const upsert = (
     key: string,
     displaySku: string,
+    skuSource: ShopSkuSource,
     level: ShopSalesLevel,
     itemId: string,
     itemName: string,
@@ -91,6 +113,7 @@ export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSa
     bySku.set(normalizedKey, {
       externalSku: normalizedKey,
       displaySku,
+      skuSource,
       level,
       itemId,
       itemName,
@@ -105,16 +128,17 @@ export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSa
     const variations = parseVariations(row.variations);
     if (variations.length > 0) {
       for (const variation of variations) {
-        const sku = String(variation.variationSku ?? '').trim();
+        const key = resolveVariationKey(variation);
         const units = toUnits(variation.unitsOrdered);
-        if (!sku) {
+        if (!key) {
           noSkuVariationCount += 1;
           noSkuVariationUnits += units ?? 0;
           continue;
         }
         upsert(
-          sku,
-          sku,
+          key.key,
+          key.key,
+          key.source,
           'variation',
           row.itemId,
           row.itemName,
@@ -126,7 +150,7 @@ export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSa
       }
       continue;
     }
-    upsert(row.itemId, row.itemId, 'item', row.itemId, row.itemName, null, toUnits(row.unitsOrdered));
+    upsert(row.itemId, row.itemId, 'item', 'item', row.itemId, row.itemName, null, toUnits(row.unitsOrdered));
   }
 
   const rows = Array.from(bySku.values())
@@ -139,3 +163,4 @@ export function aggregateShopVariantSales(dailyRows: ShopDailyItemRow[]): ShopSa
     noSkuVariationUnits,
   };
 }
+

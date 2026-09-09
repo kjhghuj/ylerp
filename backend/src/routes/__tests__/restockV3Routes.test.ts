@@ -123,7 +123,7 @@ const INVENTORY_LOCAL_A = {
   userId: 'u1',
 };
 
-/** 两天上传：SKU-A 合计 7 件（3+4），SKU-B 合计 2 件 */
+/** 两天上传：SKU-A 合计 7 件（3+4），SKU-B 合计 2 件；聚合键取规格货号（modelCode） */
 const UPLOADS = [
   { id: 'up-1', date: new Date('2026-09-01T00:00:00Z') },
   { id: 'up-2', date: new Date('2026-09-02T00:00:00Z') },
@@ -132,13 +132,13 @@ const DAILY_ITEMS = [
   {
     uploadId: 'up-1', itemId: '1001', itemName: '键盘', unitsOrdered: 5,
     variations: [
-      { variationSku: 'SKU-A', variationName: '黑色', unitsOrdered: 3 },
-      { variationSku: 'SKU-B', variationName: '白色', unitsOrdered: 2 },
+      { variationSku: 'SYS-A1', modelCode: 'SKU-A', variationName: '黑色', unitsOrdered: 3 },
+      { variationSku: 'SYS-B1', modelCode: 'SKU-B', variationName: '白色', unitsOrdered: 2 },
     ],
   },
   {
     uploadId: 'up-2', itemId: '1001', itemName: '键盘', unitsOrdered: 4,
-    variations: [{ variationSku: 'SKU-A', variationName: '黑色', unitsOrdered: 4 }],
+    variations: [{ variationSku: 'SYS-A1', modelCode: 'SKU-A', variationName: '黑色', unitsOrdered: 4 }],
   },
 ];
 
