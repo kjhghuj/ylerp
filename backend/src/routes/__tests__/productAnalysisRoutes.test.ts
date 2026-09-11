@@ -11,12 +11,18 @@ jest.mock('../../index', () => {
       findFirst: jest.fn(),
       findMany: jest.fn(),
       groupBy: jest.fn(),
+      updateMany: jest.fn(),
       deleteMany: jest.fn(),
       create: jest.fn(),
       count: jest.fn(),
     },
+    productAnalysisSourceSheet: {
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
     productDailyItem: {
       findMany: jest.fn(),
+      count: jest.fn(),
     },
     user: {
       findUnique: jest.fn(),
@@ -52,10 +58,14 @@ const mockShopDeleteMany = prisma.productAnalysisShop.deleteMany as jest.Mock;
 const mockUploadFindFirst = prisma.productAnalysisDailyUpload.findFirst as jest.Mock;
 const mockUploadFindMany = prisma.productAnalysisDailyUpload.findMany as jest.Mock;
 const mockUploadGroupBy = prisma.productAnalysisDailyUpload.groupBy as jest.Mock;
+const mockUploadUpdateMany = prisma.productAnalysisDailyUpload.updateMany as jest.Mock;
 const mockUploadDeleteMany = prisma.productAnalysisDailyUpload.deleteMany as jest.Mock;
 const mockUploadCreate = prisma.productAnalysisDailyUpload.create as jest.Mock;
 const mockUploadCount = prisma.productAnalysisDailyUpload.count as jest.Mock;
 const mockItemFindMany = prisma.productDailyItem.findMany as jest.Mock;
+const mockItemCount = prisma.productDailyItem.count as jest.Mock;
+const mockSourceSheetFindFirst = prisma.productAnalysisSourceSheet.findFirst as jest.Mock;
+const mockSourceSheetFindMany = prisma.productAnalysisSourceSheet.findMany as jest.Mock;
 const mockUserFindUnique = prisma.user.findUnique as jest.Mock;
 const mockTransaction = prisma.$transaction as jest.Mock;
 const mockGlmChat = glmChat as jest.Mock;
@@ -94,13 +104,32 @@ function makeRes(): { res: Partial<Response>; json: jest.Mock; status: jest.Mock
 
 const OWNER = { id: 'owner-1', username: 'owner', role: 'owner' };
 
+const SOURCE_SHEETS = [{
+  sheetIndex: 0,
+  sheetName: '热销商品',
+  category: 'hot',
+  range: 'A1:B2',
+  headerRowNumber: 1,
+  rowCount: 2,
+  columnCount: 2,
+  rows: [
+    { rowNumber: 1, cells: [{ column: 1, type: 'string', value: '商品编号' }, { column: 2, type: 'string', value: '商品' }] },
+    { rowNumber: 2, cells: [{ column: 1, type: 'string', value: '10001' }, { column: 2, type: 'string', value: 'Keyboard' }] },
+  ],
+}];
+
 function makeReq(overrides: Partial<Request> = {}): Partial<Request> {
+  const body = overrides.body as Record<string, unknown> | undefined;
+  const payload = body?.payload as Record<string, unknown> | undefined;
+  const normalizedOverrides = payload && payload.sourceSheets === undefined
+    ? { ...overrides, body: { ...body, payload: { ...payload, sourceSheets: SOURCE_SHEETS } } }
+    : overrides;
   return {
     user: OWNER,
     body: {},
     params: {},
     query: {},
-    ...overrides,
+    ...normalizedOverrides,
   } as Partial<Request>;
 }
 
@@ -137,6 +166,12 @@ const PARSED_SHEETS = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockTransaction.mockImplementation(async callback => callback(prisma));
+  mockUploadFindFirst.mockResolvedValue(null);
+  mockUploadUpdateMany.mockResolvedValue({ count: 0 });
+  mockUploadCreate.mockResolvedValue({
+    id: 'upload-new', version: 1, date: new Date('2026-09-06T00:00:00.000Z'), fileName: 'a.xlsx',
+    itemCount: 1, sourceSheetCount: 1, sourceRowCount: 1, sourceComplete: true,
+  });
   (prisma.usageEvent.create as jest.Mock).mockResolvedValue(undefined);
   mockAiUsageCall.create.mockResolvedValue({ id: 'ai-call-1' });
   mockAiUsageCall.update.mockImplementation(async ({ data }) => ({ id: 'ai-call-1', ...data }));
@@ -266,7 +301,7 @@ describe('POST /shops/:id/daily-uploads', () => {
     expect(status).toHaveBeenCalledWith(400);
   });
 
-  test('replaces same-day upload in a transaction with server-side itemCount', async () => {
+  test('creates an immutable same-day version and switches active in one transaction', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
     mockTransaction.mockImplementationOnce(async callback => callback(prisma));
     const req = makeReq({
@@ -277,17 +312,23 @@ describe('POST /shops/:id/daily-uploads', () => {
 
     await runRoute('/shops/:id/daily-uploads', 'post', req as Request, res as Response);
 
-    // 事务内的同日替换：旧上传删除 + 新上传写入（服务端重算 itemCount）
-    expect(mockUploadDeleteMany).toHaveBeenCalledWith({
-      where: { shopId: 'shop-1', date: new Date('2026-09-06T00:00:00.000Z') },
+    expect(mockUploadDeleteMany).not.toHaveBeenCalled();
+    expect(mockUploadUpdateMany).toHaveBeenCalledWith({
+      where: { shopId: 'shop-1', date: new Date('2026-09-06T00:00:00.000Z'), isActive: true },
+      data: { isActive: false },
     });
     const createData = mockUploadCreate.mock.calls[0][0].data as Record<string, unknown>;
     expect(createData.itemCount).toBe(1);
     const createdItems = (createData.items as { create: Record<string, unknown>[] }).create;
     expect(createdItems[0]).toMatchObject({ itemId: '10001', sheetKey: 'hot', visitors: 100, clicks: 10 });
     expect(createdItems[0].extra).toMatchObject({ ctr: 2, modelId: 'M1' });
+    expect(createData).toMatchObject({ version: 1, isActive: true, sourceComplete: true, sourceSheetCount: 1, sourceRowCount: 1 });
+    expect((createData.sourceSheets as { create: unknown[] }).create).toHaveLength(1);
     expect(status).toHaveBeenCalledWith(201);
-    expect(json).toHaveBeenCalledWith({ date: '2026-09-06', fileName: 'a.20260906.xlsx', itemCount: 1 });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      uploadId: 'upload-new', version: 1, date: '2026-09-06', fileName: 'a.20260906.xlsx',
+      itemCount: 1, derivedItemCount: 1, variationCount: 1, sourceSheetCount: 1, sourceRowCount: 1, sourceComplete: true,
+    }));
   });
 
   test('404 for unknown shop', async () => {
@@ -514,6 +555,109 @@ describe('DELETE /shops/:id/daily-uploads/:date', () => {
     await runRoute('/shops/:id/daily-uploads/:date', 'delete', makeReq({ params: { id: SHOP.id, date: '2026-09-06' } }) as Request, res as Response);
     expect(json).toHaveBeenCalledWith({ ok: true });
     expect(prisma.usageEvent.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'product_analysis_daily_delete', affectedCount: 1 }) }));
+  });
+});
+
+describe('daily upload version and snapshot APIs', () => {
+  test('lists every version and identifies the active upload', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadFindMany.mockResolvedValueOnce([
+      { id: 'u2', version: 2, isActive: true, createdAt: new Date(), fileName: 'v2.xlsx' },
+      { id: 'u1', version: 1, isActive: false, createdAt: new Date(), fileName: 'v1.xlsx' },
+    ]);
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/daily-uploads/:date/versions', 'get', makeReq({
+      params: { id: SHOP.id, date: '2026-09-06' },
+    }) as Request, res as Response);
+    expect(mockUploadFindMany.mock.calls[0][0].where).toEqual({
+      shopId: SHOP.id, date: new Date('2026-09-06T00:00:00.000Z'),
+    });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ activeUploadId: 'u2' }));
+  });
+
+  test('rejects an over-limit UTF-8 payload before validation or transaction work', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    const oversized = '界'.repeat(21 * 1024 * 1024);
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { date: '2026-09-06', payload: { fileName: 'a.20260906.xlsx', sheets: PARSED_SHEETS, padding: oversized } },
+    }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(413);
+    expect(mockTransaction).not.toHaveBeenCalled();
+    expect(mockUploadCreate).not.toHaveBeenCalled();
+  });
+
+  test('retries a serializable conflict so concurrent uploads can receive the next version', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockTransaction
+      .mockRejectedValueOnce(Object.assign(new Error('serialization conflict'), { code: 'P2034' }))
+      .mockImplementationOnce(async callback => callback(prisma));
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { date: '2026-09-06', payload: { fileName: 'a.20260906.xlsx', sheets: PARSED_SHEETS } },
+    }) as Request, res as Response);
+    expect(mockTransaction).toHaveBeenCalledTimes(2);
+    expect(status).toHaveBeenCalledWith(201);
+  });
+
+  test('returns source rows with original row and column positions using bounded pagination', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockSourceSheetFindFirst.mockResolvedValueOnce({
+      sheetIndex: 1, sheetName: '优化您的广告', category: 'ads-optimize', range: 'A1:B3',
+      headerRowNumber: 1, rowCount: 3, columnCount: 2,
+      rows: SOURCE_SHEETS[0].rows.concat({ rowNumber: 3, cells: [{ column: 1, type: 'string', value: '10002' }] }),
+    });
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/daily-upload-versions/:uploadId/source-sheets/:sheetIndex', 'get', makeReq({
+      params: { id: SHOP.id, uploadId: 'u2', sheetIndex: '1' }, query: { offset: '1', limit: '1' },
+    }) as Request, res as Response);
+    expect(mockSourceSheetFindFirst.mock.calls[0][0].where).toEqual({
+      uploadId: 'u2', sheetIndex: 1, upload: { shopId: SHOP.id },
+    });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      offset: 1, limit: 1, total: 3, rows: [SOURCE_SHEETS[0].rows[1]],
+    }));
+  });
+
+  test('returns structured items for a historical upload version', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadFindFirst.mockResolvedValueOnce({
+      id: 'u1', version: 1, date: new Date('2026-09-06T00:00:00.000Z'), isActive: false, sourceComplete: true,
+    });
+    mockItemCount.mockResolvedValueOnce(1);
+    mockItemFindMany.mockResolvedValueOnce([{ itemId: '10001', variations: [{ salesConfirmed: 88 }] }]);
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/daily-upload-versions/:uploadId/items', 'get', makeReq({
+      params: { id: SHOP.id, uploadId: 'u1' }, query: {},
+    }) as Request, res as Response);
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      uploadId: 'u1', version: 1, isActive: false, total: 1,
+      items: [{ itemId: '10001', variations: [{ salesConfirmed: 88 }] }],
+    }));
+  });
+
+  test('activates a historical version without deleting either version', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    mockUploadFindFirst.mockResolvedValueOnce({
+      id: 'u1', version: 1, date: new Date('2026-09-06T00:00:00.000Z'), isActive: false,
+    });
+    mockUploadUpdateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 1 });
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/daily-upload-versions/:uploadId/activate', 'post', makeReq({
+      params: { id: SHOP.id, uploadId: 'u1' },
+    }) as Request, res as Response);
+    expect(mockUploadDeleteMany).not.toHaveBeenCalled();
+    expect(mockUploadUpdateMany).toHaveBeenNthCalledWith(1, {
+      where: { shopId: SHOP.id, date: new Date('2026-09-06T00:00:00.000Z'), isActive: true },
+      data: { isActive: false },
+    });
+    expect(mockUploadUpdateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'u1', shopId: SHOP.id, date: new Date('2026-09-06T00:00:00.000Z') },
+      data: { isActive: true },
+    });
+    expect(json).toHaveBeenCalledWith({ uploadId: 'u1', version: 1, date: '2026-09-06', isActive: true });
   });
 });
 

@@ -89,6 +89,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
       createdAt: typeof extra.createdAt === 'string' ? extra.createdAt : undefined,
       createdDays: pickNumber(extra.createdDays),
       currentPrice: pickNumber(extra.currentPrice),
+      uncompetitiveVariations: pickNumber(extra.uncompetitiveVariations),
+      competitiveVariations: pickNumber(extra.competitiveVariations),
       priceFlag: typeof extra.priceFlag === 'string' ? extra.priceFlag : undefined,
       variations: detail.variations,
     };
@@ -281,6 +283,12 @@ function OverviewTab({ item, currency, days }: { item: ParentProduct; currency: 
       ? [{ label: metrics.createdDays, value: formatCount(item.createdDays) }]
       : []),
     ...(item.priceFlag ? [{ label: metrics.priceFlag, value: item.priceFlag }] : []),
+    ...(item.uncompetitiveVariations !== null && item.uncompetitiveVariations !== undefined
+      ? [{ label: metrics.uncompetitiveVariations, value: formatCount(item.uncompetitiveVariations) }]
+      : []),
+    ...(item.competitiveVariations !== null && item.competitiveVariations !== undefined
+      ? [{ label: metrics.competitiveVariations, value: formatCount(item.competitiveVariations) }]
+      : []),
     { label: metrics.days, value: formatCount(days) },
   ];
 

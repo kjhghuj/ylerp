@@ -133,7 +133,7 @@ beforeEach(() => {
   mockFetchShopDays.mockResolvedValue(DAYS);
   mockFetchShopAgg.mockResolvedValue(makeAgg('MY 主店'));
   mockFetchPotential.mockResolvedValue({ from: '2026-08-31', to: '2026-09-06', items: [] });
-  mockUpload.mockResolvedValue({ date: '2026-09-06', itemCount: 10 });
+  mockUpload.mockResolvedValue({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 10, derivedItemCount: 10, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 10, sourceComplete: true, warnings: [] });
 });
 
 describe('ProductAnalysis write-then-refresh', () => {
@@ -156,7 +156,7 @@ describe('ProductAnalysis write-then-refresh', () => {
 
   it('still refreshes successfully-written days when part of a batch upload fails', async () => {
     mockUpload
-      .mockResolvedValueOnce({ date: '2026-09-05', itemCount: 10 })
+      .mockResolvedValueOnce({ uploadId: 'upload-1', version: 1, date: '2026-09-05', fileName: 'parentskudetail.xlsx', itemCount: 10, derivedItemCount: 10, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 10, sourceComplete: true, warnings: [] })
       .mockRejectedValueOnce(new Error('boom'));
     render(<ProductAnalysis />);
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(1));
@@ -195,7 +195,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     let releaseUpload: (() => void) | null = null;
     mockUpload.mockImplementationOnce(
       () => new Promise((resolve) => {
-        releaseUpload = () => resolve({ date: '2026-09-06', itemCount: 10 });
+        releaseUpload = () => resolve({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 10, derivedItemCount: 10, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 10, sourceComplete: true, warnings: [] });
       })
     );
     mockFetchShops.mockResolvedValue([

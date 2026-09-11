@@ -11,6 +11,9 @@ import type {
   ProductVariation,
   SheetGroup,
   SheetKey,
+  SourceCellSnapshot,
+  SourceSheetCategory,
+  SourceSheetSnapshot,
 } from '../types';
 
 export const MAX_PRODUCT_ANALYSIS_FILE_BYTES = 25 * 1024 * 1024;
@@ -50,6 +53,10 @@ const RATE_FIELDS = new Set<string>([
 
 /** 变体行会读取的指标字段（列名与父商品指标列同名，按行角色取值） */
 const VARIATION_METRIC_FIELDS = [
+  'salesOrdered',
+  'salesConfirmed',
+  'ordersOrdered',
+  'ordersConfirmed',
   'unitsOrdered',
   'unitsConfirmed',
   'buyersOrdered',
@@ -71,8 +78,8 @@ const HEADER_TO_FIELD = new Map<string, ColumnField>([
   ['创建日期', 'createdAt'],
   ['创建天数', 'createdDays'],
   ['CURRENTPRICE', 'currentPrice'],
-  ['UNCOMPETITIVEVARIATIONS', 'priceFlag'],
-  ['COMPETITIVEVARIATIONS', 'priceFlag'],
+  ['UNCOMPETITIVEVARIATIONS', 'uncompetitiveVariations'],
+  ['COMPETITIVEVARIATIONS', 'competitiveVariations'],
   ['销售额(已下订单)', 'salesOrdered'],
   ['销售额(已确定订单)', 'salesConfirmed'],
   ['商品展示量', 'impressions'],
@@ -90,6 +97,7 @@ const HEADER_TO_FIELD = new Map<string, ColumnField>([
   ['转化率(已确定订单)', 'cvrVisitorsConfirmed'],
   ['每笔订单销售额(已下订单)', 'aovOrdered'],
   ['每笔订单销售额(已确定订单)', 'aovConfirmed'],
+  ['每笔订单销售额(已确认订单)', 'aovConfirmed'],
   ['不重复的商品曝光量', 'uniqueImpressions'],
   ['不重复的商品点击量', 'uniqueClicks'],
   ['商品访客数量', 'visitors'],
@@ -112,6 +120,13 @@ const SHEET_NAME_MATCHERS: { key: SheetKey; test: RegExp }[] = [
   { key: 'new', test: /新上架|新商品/ },
   { key: 'uncompetitive', test: /uncompetitive/i },
   { key: 'competitive', test: /competitive/i },
+];
+
+const SOURCE_SHEET_MATCHERS: { category: SourceSheetCategory; test: RegExp }[] = [
+  ...SHEET_NAME_MATCHERS.map(({ key, test }) => ({ category: key, test })),
+  { category: 'ads-create', test: /创建广告/ },
+  { category: 'ads-optimize', test: /优化您的广告/ },
+  { category: 'ads-track', test: /追踪广告效果/ },
 ];
 
 interface ColumnMapping {
@@ -205,6 +220,85 @@ function resolveSheetKey(sheetName: string): SheetKey | null {
     if (matcher.test.test(sheetName)) return matcher.key;
   }
   return null;
+}
+
+function resolveSourceSheetCategory(sheetName: string): SourceSheetCategory {
+  for (const matcher of SOURCE_SHEET_MATCHERS) {
+    if (matcher.test.test(sheetName)) return matcher.category;
+  }
+  return 'other';
+}
+
+function sourceCellSnapshot(cell: XLSX.CellObject, column: number): SourceCellSnapshot {
+  let type: SourceCellSnapshot['type'];
+  let value: SourceCellSnapshot['value'];
+  if (cell.t === 'n') {
+    type = 'number';
+    value = typeof cell.v === 'number' && Number.isFinite(cell.v) ? cell.v : null;
+  } else if (cell.t === 'b') {
+    type = 'boolean';
+    value = Boolean(cell.v);
+  } else if (cell.t === 'd') {
+    type = 'date';
+    value = cell.v instanceof Date ? cell.v.toISOString() : String(cell.v ?? '');
+  } else if (cell.t === 'e') {
+    type = 'error';
+    value = String(cell.w ?? cell.v ?? '');
+  } else if (cell.t === 'z') {
+    type = 'blank';
+    value = null;
+  } else {
+    type = 'string';
+    value = String(cell.v ?? '');
+  }
+  return {
+    column,
+    type,
+    value,
+    ...(typeof cell.w === 'string' ? { formattedValue: cell.w } : {}),
+    ...(typeof cell.f === 'string' ? { formula: cell.f } : {}),
+  };
+}
+
+function buildSourceSheetSnapshot(
+  worksheet: XLSX.WorkSheet,
+  sheetName: string,
+  sheetIndex: number,
+): SourceSheetSnapshot {
+  const ref = typeof worksheet['!ref'] === 'string' ? worksheet['!ref'] : null;
+  if (!ref) {
+    return {
+      sheetIndex, sheetName, category: resolveSourceSheetCategory(sheetName), range: null,
+      headerRowNumber: null, rowCount: 0, columnCount: 0, rows: [],
+    };
+  }
+  const decoded = XLSX.utils.decode_range(ref);
+  const rows: SourceSheetSnapshot['rows'] = [];
+  let headerRowNumber: number | null = null;
+  for (let row = decoded.s.r; row <= decoded.e.r; row += 1) {
+    const cells: SourceCellSnapshot[] = [];
+    const normalizedValues: string[] = [];
+    for (let column = decoded.s.c; column <= decoded.e.c; column += 1) {
+      const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: column })] as XLSX.CellObject | undefined;
+      if (!cell) continue;
+      cells.push(sourceCellSnapshot(cell, column + 1));
+      normalizedValues.push(normalizeHeader(cell.v));
+    }
+    if (headerRowNumber === null && normalizedValues.includes('商品编号') && normalizedValues.includes('商品')) {
+      headerRowNumber = row + 1;
+    }
+    rows.push({ rowNumber: row + 1, cells });
+  }
+  return {
+    sheetIndex,
+    sheetName,
+    category: resolveSourceSheetCategory(sheetName),
+    range: ref,
+    headerRowNumber,
+    rowCount: decoded.e.r - decoded.s.r + 1,
+    columnCount: decoded.e.c - decoded.s.c + 1,
+    rows,
+  };
 }
 
 function findHeaderRowIndex(rows: unknown[][]): number {
@@ -352,6 +446,8 @@ function buildVariation(cells: unknown[], mapping: ColumnMapping): ProductVariat
   if (!isMissingText(variationStatus)) variation.variationStatus = variationStatus;
   const modelCode = textAt(cells, mapping.fieldIndex.modelCode);
   if (!isMissingText(modelCode)) variation.modelCode = modelCode;
+  const modelId = textAt(cells, mapping.fieldIndex.modelId);
+  if (!isMissingText(modelId)) variation.modelId = modelId;
   for (const field of VARIATION_METRIC_FIELDS) {
     const index = mapping.fieldIndex[field];
     if (index === undefined) continue;
@@ -458,6 +554,9 @@ export function parseProductAnalysisWorkbook(
   }
   const warnings: string[] = [];
   const sheets: SheetGroup[] = [];
+  const sourceSheets = workbook.SheetNames.map((sheetName, sheetIndex) =>
+    buildSourceSheetSnapshot(workbook.Sheets[sheetName], sheetName, sheetIndex)
+  );
   // 同类别（sheetKey）只保留第一个有效工作表，避免出现重复 key 导致前端切换/渲染异常
   const usedSheetNames = new Map<SheetKey, string>();
   let currency: string | null = null;
@@ -485,5 +584,5 @@ export function parseProductAnalysisWorkbook(
   }
   const { periodStart, periodEnd } = extractPeriodFromFileName(fileName);
   // 未识别到币种时置 null（而非默认 MYR）：后端据店铺币种校验，避免其他站点被误标
-  return { fileName, periodStart, periodEnd, currency, sheets, warnings };
+  return { fileName, periodStart, periodEnd, currency, sheets, sourceSheets, warnings };
 }

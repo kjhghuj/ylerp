@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { prisma } from '../index';
 import { GlmApiError } from '../services/glm/glmConfig';
 import { glmChat, glmChatStream, GlmChatMessage } from '../services/glm/glmClient';
@@ -30,7 +31,7 @@ import {
 
 const router = Router();
 
-const MAX_UPLOAD_JSON_LENGTH = 20 * 1024 * 1024; // 20MB
+const MAX_UPLOAD_JSON_LENGTH = 60 * 1024 * 1024;
 const MAX_BATCH_DELETE_DATES = 500;
 const MAX_CHAT_HISTORY_MESSAGES = 8;
 /** 查询区间上限：界面最长支持 90 天快捷区间 + 自定义区间，一年封顶防止无界拉取 */
@@ -77,6 +78,28 @@ function addDays(date: string, delta: number): string {
   const next = parseDateUtc(date);
   next.setUTCDate(next.getUTCDate() + delta);
   return dateString(next);
+}
+
+function parsePageNumber(value: unknown, fallback: number, max: number): number | null {
+  if (value === undefined) return fallback;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : null;
+}
+
+/** Object keys are sorted recursively so equivalent validated snapshots hash identically. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function isRetryableSerializationError(error: unknown): boolean {
+  if (!isRecord(error)) return false;
+  const code = typeof error.code === 'string' ? error.code : '';
+  return code === 'P2034' || code === 'P2002';
 }
 
 /** '*' 通配 / 模块级 key（product-analysis）/ 具体 subkey 三级放行，与前端 PermissionTree 语义对齐 */
@@ -157,7 +180,7 @@ async function fetchRangeRows(
   options: { includeExtra?: boolean; includeVariations?: boolean; itemId?: string } = {}
 ) {
   const uploads = await prisma.productAnalysisDailyUpload.findMany({
-    where: { shopId, date: { gte: parseDateUtc(from), lte: parseDateUtc(to) } },
+    where: { shopId, isActive: true, date: { gte: parseDateUtc(from), lte: parseDateUtc(to) } },
     select: { id: true, date: true, currency: true },
     orderBy: { date: 'asc' },
   });
@@ -234,7 +257,7 @@ router.get('/shops', async (req: Request, res: Response) => {
       }),
       prisma.productAnalysisDailyUpload.groupBy({
         by: ['shopId'],
-        where: { userId: req.user!.id },
+        where: { userId: req.user!.id, isActive: true },
         _count: { _all: true },
         _max: { date: true },
       }),
@@ -276,7 +299,7 @@ router.patch('/shops/:id', requireProductAnalysisPermission('product-analysis.up
       const nextCurrency = SITE_CURRENCY[site] ?? 'MYR';
       // 币种防错配：历史金额按原币种存储，换站点改币种标签会让旧数据被误标，不做隐式换算
       if (nextCurrency !== shop.currency) {
-        const existingDays = await prisma.productAnalysisDailyUpload.count({ where: { shopId: shop.id } });
+        const existingDays = await prisma.productAnalysisDailyUpload.count({ where: { shopId: shop.id, isActive: true } });
         if (existingDays > 0) {
           return res.status(400).json({
             detail: `该店铺已有 ${existingDays} 天历史数据（${shop.currency}），不能改为 ${nextCurrency} 站点；请新建店铺后单独上传`,
@@ -325,9 +348,12 @@ router.get('/shops/:id/days', async (req: Request, res: Response) => {
     const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
     if (!shop) return res.status(404).json({ detail: 'Shop not found' });
     const days = await prisma.productAnalysisDailyUpload.findMany({
-      where: { shopId: shop.id },
+      where: { shopId: shop.id, isActive: true },
       orderBy: { date: 'desc' },
-      select: { date: true, fileName: true, itemCount: true, currency: true, createdAt: true },
+      select: {
+        id: true, date: true, fileName: true, itemCount: true, currency: true, createdAt: true,
+        version: true, sourceSheetCount: true, sourceRowCount: true, sourceComplete: true,
+      },
     });
     return res.json(
       days.map((day) => ({
@@ -336,12 +362,159 @@ router.get('/shops/:id/days', async (req: Request, res: Response) => {
         itemCount: day.itemCount,
         currency: day.currency,
         createdAt: day.createdAt,
+        uploadId: day.id,
+        version: day.version,
+        sourceSheetCount: day.sourceSheetCount,
+        sourceRowCount: day.sourceRowCount,
+        sourceComplete: day.sourceComplete,
         // 只读排查标记：文件名中可见的、起止不同的日期区间（start≠end）→ 疑似区间报表，不改写数据。
         // 能力边界：仅基于文件名可见日期；文件被改成单日文件名后无法识别其真实内容周期，
         // 周期校验也只能约束文件名与声明日期的一致性，不能证明文件内容一定属于单日。
         suspectedRange: isSuspectedRangeFileName(day.fileName),
       }))
     );
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.get('/shops/:id/daily-uploads/:date/versions', async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const date = req.params.date;
+    if (!isValidDateString(date)) return res.status(400).json({ detail: 'date 需为真实存在的 YYYY-MM-DD 日期' });
+    const versions = await prisma.productAnalysisDailyUpload.findMany({
+      where: { shopId: shop.id, date: parseDateUtc(date) },
+      orderBy: { version: 'desc' },
+      select: {
+        id: true, version: true, isActive: true, fileName: true, currency: true, itemCount: true,
+        sourceSchemaVersion: true, sourceHash: true, sourceSheetCount: true, sourceRowCount: true,
+        sourceComplete: true, warnings: true, createdAt: true,
+      },
+    });
+    return res.json({ date, activeUploadId: versions.find((version) => version.isActive)?.id ?? null, versions });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.get('/shops/:id/daily-upload-versions/:uploadId/source-sheets', async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const uploadId = String(req.params.uploadId ?? '');
+    const upload = await prisma.productAnalysisDailyUpload.findFirst({
+      where: { id: uploadId, shopId: shop.id },
+      select: { id: true, version: true, date: true, sourceComplete: true },
+    });
+    if (!upload) return res.status(404).json({ detail: 'Upload version not found' });
+    const sheets = await prisma.productAnalysisSourceSheet.findMany({
+      where: { uploadId },
+      orderBy: { sheetIndex: 'asc' },
+      select: {
+        sheetIndex: true, sheetName: true, category: true, range: true, headerRowNumber: true,
+        rowCount: true, columnCount: true,
+      },
+    });
+    return res.json({
+      uploadId, version: upload.version, date: dateString(upload.date), sourceComplete: upload.sourceComplete, sheets,
+    });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.get('/shops/:id/daily-upload-versions/:uploadId/source-sheets/:sheetIndex', async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const uploadId = String(req.params.uploadId ?? '');
+    const sheetIndex = parsePageNumber(req.params.sheetIndex, -1, 63);
+    const offset = parsePageNumber(req.query.offset, 0, 1_000_000);
+    const limit = parsePageNumber(req.query.limit, 200, 500);
+    if (sheetIndex === null || sheetIndex < 0 || offset === null || limit === null || limit < 1) {
+      return res.status(400).json({ detail: 'sheetIndex / offset / limit 参数无效（limit 需为 1-500）' });
+    }
+    const sheet = await prisma.productAnalysisSourceSheet.findFirst({
+      where: { uploadId, sheetIndex, upload: { shopId: shop.id } },
+      select: {
+        sheetIndex: true, sheetName: true, category: true, range: true, headerRowNumber: true,
+        rowCount: true, columnCount: true, rows: true,
+      },
+    });
+    if (!sheet) return res.status(404).json({ detail: 'Source sheet not found' });
+    const allRows = Array.isArray(sheet.rows) ? sheet.rows : [];
+    return res.json({
+      uploadId,
+      sheet: { ...sheet, rows: undefined },
+      offset,
+      limit,
+      total: allRows.length,
+      rows: allRows.slice(offset, offset + limit),
+    });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.get('/shops/:id/daily-upload-versions/:uploadId/items', async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const uploadId = String(req.params.uploadId ?? '');
+    const offset = parsePageNumber(req.query.offset, 0, 1_000_000);
+    const limit = parsePageNumber(req.query.limit, 200, 500);
+    if (offset === null || limit === null || limit < 1) {
+      return res.status(400).json({ detail: 'offset / limit 参数无效（limit 需为 1-500）' });
+    }
+    const upload = await prisma.productAnalysisDailyUpload.findFirst({
+      where: { id: uploadId, shopId: shop.id },
+      select: { id: true, version: true, date: true, isActive: true, sourceComplete: true },
+    });
+    if (!upload) return res.status(404).json({ detail: 'Upload version not found' });
+    const [total, items] = await Promise.all([
+      prisma.productDailyItem.count({ where: { uploadId } }),
+      prisma.productDailyItem.findMany({ where: { uploadId }, orderBy: { itemId: 'asc' }, skip: offset, take: limit }),
+    ]);
+    return res.json({
+      uploadId, version: upload.version, date: dateString(upload.date), isActive: upload.isActive,
+      sourceComplete: upload.sourceComplete, offset, limit, total, items,
+    });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.post('/shops/:id/daily-upload-versions/:uploadId/activate', requireProductAnalysisPermission('product-analysis.upload'), async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const uploadId = String(req.params.uploadId ?? '');
+    const target = await prisma.productAnalysisDailyUpload.findFirst({
+      where: { id: uploadId, shopId: shop.id },
+      select: { id: true, date: true, version: true, isActive: true },
+    });
+    if (!target) return res.status(404).json({ detail: 'Upload version not found' });
+    if (!target.isActive) {
+      await withUsageEvent(prisma, req, {
+        module: 'product-analysis', action: 'product_analysis_version_activate',
+        objectType: 'ProductAnalysisDailyUpload', objectId: target.id,
+        metadata: { shopId: shop.id, date: dateString(target.date), version: target.version },
+      }, async tx => {
+        await tx.productAnalysisDailyUpload.updateMany({
+          where: { shopId: shop.id, date: target.date, isActive: true },
+          data: { isActive: false },
+        });
+        const activated = await tx.productAnalysisDailyUpload.updateMany({
+          where: { id: target.id, shopId: shop.id, date: target.date },
+          data: { isActive: true },
+        });
+        if (activated.count !== 1) throw new ProductAnalysisNotFoundError('Upload version not found');
+        return activated;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    }
+    return res.json({ uploadId: target.id, version: target.version, date: dateString(target.date), isActive: true });
   } catch (error) {
     return errorResponse(error, res);
   }
@@ -357,15 +530,16 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
     if (!isValidDateString(date)) {
       return res.status(400).json({ detail: 'date 需为真实存在的 YYYY-MM-DD 日期' });
     }
+    // 在深度 Zod 校验前按 UTF-8 字节数拒绝超限 JSON，避免解析超大对象且绝不进入写事务。
+    if (Buffer.byteLength(JSON.stringify(body), 'utf8') > MAX_UPLOAD_JSON_LENGTH) {
+      return res.status(413).json({ detail: 'Report payload too large (limit 60MB)' });
+    }
     // 结构校验（Zod）：fileName / sheets / sheetKey / items 类型、长度与数量上限；非法一律 400 而非 500
     const validated = validateDailyUploadPayload(payload);
     if (!validated.ok) {
       return res.status(400).json({ detail: validated.detail });
     }
-    const { fileName, periodStart, periodEnd, currency: reportCurrency, warnings, sheets } = validated.value;
-    if (JSON.stringify(body).length > MAX_UPLOAD_JSON_LENGTH) {
-      return res.status(400).json({ detail: 'Report payload too large (limit 20MB)' });
-    }
+    const { fileName, periodStart, periodEnd, currency: reportCurrency, warnings, sheets, sourceSheets } = validated.value;
     // 周期校验（服务端独立解析文件名，与声明周期、上传 date 三方交叉；多日区间不能因省略/伪造周期字段通过）
     const periodError = validatePeriodMatchesDate(fileName, { periodStart, periodEnd }, date);
     if (periodError) {
@@ -401,10 +575,41 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
       return data;
     };
 
-    // 同日重传整体替换（删除级联清理旧 items）
-    await withUsageEvent(prisma, req, { module: 'product-analysis', action: 'product_analysis_daily_upload', objectType: 'ProductAnalysisDailyUpload', affectedCount: rows.length, metadata: { shopId: shop.id, date } }, async tx => {
-      await tx.productAnalysisDailyUpload.deleteMany({ where: { shopId: shop.id, date: uploadDate } });
-      return tx.productAnalysisDailyUpload.create({
+    const sourceRowCount = sourceSheets.reduce((total, sheet) => total + sheet.rows.filter((row) =>
+      row.cells.length > 0 && (sheet.headerRowNumber === null || row.rowNumber > sheet.headerRowNumber)
+    ).length, 0);
+    const variationCount = rows.reduce((total, row) =>
+      total + (Array.isArray(row.variations) ? row.variations.length : 0), 0);
+    const sourceHash = createHash('sha256').update(canonicalJson(sourceSheets)).digest('hex');
+
+    // 每次同日上传创建不可变版本；全部数据写入成功后才切换 active。
+    let created: {
+      id: string;
+      version: number;
+      date: Date;
+      fileName: string;
+      itemCount: number;
+      sourceSheetCount: number;
+      sourceRowCount: number;
+      sourceComplete: boolean;
+    } | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        created = await withUsageEvent(prisma, req, {
+          module: 'product-analysis', action: 'product_analysis_daily_upload', objectType: 'ProductAnalysisDailyUpload',
+          affectedCount: rows.length, metadata: { shopId: shop.id, date },
+        }, async tx => {
+          const latest = await tx.productAnalysisDailyUpload.findFirst({
+            where: { shopId: shop.id, date: uploadDate },
+            orderBy: { version: 'desc' },
+            select: { version: true },
+          });
+          const version = (latest?.version ?? 0) + 1;
+          await tx.productAnalysisDailyUpload.updateMany({
+            where: { shopId: shop.id, date: uploadDate, isActive: true },
+            data: { isActive: false },
+          });
+          return tx.productAnalysisDailyUpload.create({
         data: {
           shopId: shop.id,
           date: uploadDate,
@@ -412,13 +617,53 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
           currency,
           itemCount: rows.length,
           warnings: warnings as unknown as object,
+          version,
+          isActive: true,
+          sourceSchemaVersion: 1,
+          sourceHash,
+          sourceSheetCount: sourceSheets.length,
+          sourceRowCount,
+          sourceComplete: true,
           userId: req.user!.id,
           items: { create: rows.map(toDailyItemCreate) },
+          sourceSheets: {
+            create: sourceSheets.map((sheet) => ({
+              sheetIndex: sheet.sheetIndex,
+              sheetName: sheet.sheetName,
+              category: sheet.category,
+              range: sheet.range,
+              headerRowNumber: sheet.headerRowNumber,
+              rowCount: sheet.rowCount,
+              columnCount: sheet.columnCount,
+              rows: sheet.rows as unknown as Prisma.InputJsonValue,
+            })),
+          },
         },
-        select: { date: true, fileName: true, itemCount: true },
-      });
+        select: {
+          id: true, version: true, date: true, fileName: true, itemCount: true,
+          sourceSheetCount: true, sourceRowCount: true, sourceComplete: true,
+        },
+          });
+        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+        break;
+      } catch (error) {
+        if (attempt === 2 || !isRetryableSerializationError(error)) throw error;
+      }
+    }
+    if (!created) throw new Error('Upload transaction did not return a result');
+    return res.status(201).json({
+      uploadId: created.id,
+      version: created.version,
+      date,
+      fileName,
+      itemCount: rows.length,
+      derivedItemCount: rows.length,
+      variationCount,
+      sourceSheetCount: created.sourceSheetCount,
+      sourceRowCount: created.sourceRowCount,
+      sourceComplete: created.sourceComplete,
+      warnings,
     });
-    return res.status(201).json({ date, fileName, itemCount: rows.length });
   } catch (error) {
     return errorResponse(error, res);
   }
@@ -663,7 +908,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
     if (!shop) return res.status(404).json({ detail: 'Shop not found' });
 
     const latest = await prisma.productAnalysisDailyUpload.findFirst({
-      where: { shopId: shop.id },
+      where: { shopId: shop.id, isActive: true },
       orderBy: { date: 'desc' },
       select: { date: true },
     });
@@ -715,7 +960,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       }
       const detail = buildItemDetail(rows);
       const context = serializeAggregatedItem(
-        detail.item as unknown as Record<string, unknown>,
+        { ...detail.item, ...(detail.extra ?? {}) } as unknown as Record<string, unknown>,
         detail.series,
         detail.variations
       );

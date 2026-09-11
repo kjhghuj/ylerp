@@ -6,7 +6,7 @@
  * - 周期：每日数据仅接受单日报表 —— 文件名周期起止不同 / 倒置 / 非真实日历日 / 与上传 date 不一致均拒绝。
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.dailyUploadPayloadSchema = exports.MAX_UPLOAD_VARIATIONS_PER_ITEM = exports.MAX_UPLOAD_ITEMS_PER_SHEET = exports.MAX_UPLOAD_SHEETS = exports.MAX_UPLOAD_ITEM_NAME_LENGTH = exports.MAX_UPLOAD_ITEM_ID_LENGTH = exports.MAX_UPLOAD_FILE_NAME_LENGTH = exports.SHEET_KEYS = void 0;
+exports.dailyUploadPayloadSchema = exports.MAX_SOURCE_CELLS = exports.MAX_SOURCE_COLUMNS = exports.MAX_SOURCE_ROWS = exports.MAX_SOURCE_SHEETS = exports.MAX_UPLOAD_VARIATIONS_PER_ITEM = exports.MAX_UPLOAD_ITEMS_PER_SHEET = exports.MAX_UPLOAD_SHEETS = exports.MAX_UPLOAD_ITEM_NAME_LENGTH = exports.MAX_UPLOAD_ITEM_ID_LENGTH = exports.MAX_UPLOAD_FILE_NAME_LENGTH = exports.SHEET_KEYS = void 0;
 exports.isValidCalendarDate = isValidCalendarDate;
 exports.validateDailyUploadPayload = validateDailyUploadPayload;
 exports.extractPeriodFromUploadFileName = extractPeriodFromUploadFileName;
@@ -21,6 +21,10 @@ exports.MAX_UPLOAD_ITEM_NAME_LENGTH = 500;
 exports.MAX_UPLOAD_SHEETS = 8;
 exports.MAX_UPLOAD_ITEMS_PER_SHEET = 20_000;
 exports.MAX_UPLOAD_VARIATIONS_PER_ITEM = 5_000;
+exports.MAX_SOURCE_SHEETS = 64;
+exports.MAX_SOURCE_ROWS = 50_000;
+exports.MAX_SOURCE_COLUMNS = 512;
+exports.MAX_SOURCE_CELLS = 1_000_000;
 const isoDate = zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期需为 YYYY-MM-DD');
 /** 真实日历日：解析后回比原字符串，2026-02-31 这类溢出日期不合法 */
 function isValidCalendarDate(value) {
@@ -30,13 +34,30 @@ function isValidCalendarDate(value) {
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 const numericField = zod_1.z.number().finite();
+const variationSchema = zod_1.z.object({
+    variationSku: zod_1.z.string().max(500).optional(),
+    variationName: zod_1.z.string().max(500).optional(),
+    variationStatus: zod_1.z.string().max(64).optional(),
+    modelCode: zod_1.z.string().max(500).optional(),
+    modelId: zod_1.z.string().max(500).optional(),
+    salesOrdered: numericField.nullable().optional(),
+    salesConfirmed: numericField.nullable().optional(),
+    ordersOrdered: numericField.nullable().optional(),
+    ordersConfirmed: numericField.nullable().optional(),
+    unitsOrdered: numericField.nullable().optional(),
+    unitsConfirmed: numericField.nullable().optional(),
+    buyersOrdered: numericField.nullable().optional(),
+    buyersConfirmed: numericField.nullable().optional(),
+    cartVisitors: numericField.nullable().optional(),
+    cartUnits: numericField.nullable().optional(),
+}).strict();
 const itemSchema = zod_1.z
     .object({
     itemId: zod_1.z.string().trim().min(1, '商品编号不能为空').max(exports.MAX_UPLOAD_ITEM_ID_LENGTH),
     itemName: zod_1.z.string().max(exports.MAX_UPLOAD_ITEM_NAME_LENGTH),
     status: zod_1.z.string().max(64).optional(),
     variations: zod_1.z
-        .array(zod_1.z.record(zod_1.z.string(), zod_1.z.unknown()))
+        .array(variationSchema)
         .max(exports.MAX_UPLOAD_VARIATIONS_PER_ITEM, `变体数量超过上限 ${exports.MAX_UPLOAD_VARIATIONS_PER_ITEM}`)
         .optional(),
 })
@@ -47,6 +68,50 @@ const sheetSchema = zod_1.z
     items: zod_1.z.array(itemSchema).max(exports.MAX_UPLOAD_ITEMS_PER_SHEET, `单工作表商品数超过上限 ${exports.MAX_UPLOAD_ITEMS_PER_SHEET}`),
 })
     .passthrough();
+const sourceCellSchema = zod_1.z.object({
+    column: zod_1.z.number().int().min(1).max(exports.MAX_SOURCE_COLUMNS),
+    type: zod_1.z.enum(['string', 'number', 'boolean', 'date', 'error', 'blank']),
+    value: zod_1.z.union([zod_1.z.string().max(100_000), zod_1.z.number().finite(), zod_1.z.boolean(), zod_1.z.null()]),
+    formattedValue: zod_1.z.string().max(100_000).optional(),
+    formula: zod_1.z.string().max(100_000).optional(),
+}).strict().superRefine((cell, context) => {
+    const valid = ((cell.type === 'string' && typeof cell.value === 'string')
+        || (cell.type === 'number' && (typeof cell.value === 'number' || cell.value === null))
+        || (cell.type === 'boolean' && typeof cell.value === 'boolean')
+        || ((cell.type === 'date' || cell.type === 'error') && typeof cell.value === 'string')
+        || (cell.type === 'blank' && cell.value === null));
+    if (!valid)
+        context.addIssue({ code: 'custom', message: `单元格类型 ${cell.type} 与 value 不一致` });
+});
+const sourceRowSchema = zod_1.z.object({
+    rowNumber: zod_1.z.number().int().min(1).max(exports.MAX_SOURCE_ROWS),
+    cells: zod_1.z.array(sourceCellSchema).max(exports.MAX_SOURCE_COLUMNS),
+}).strict();
+const sourceSheetSchema = zod_1.z.object({
+    sheetIndex: zod_1.z.number().int().min(0).max(exports.MAX_SOURCE_SHEETS - 1),
+    sheetName: zod_1.z.string().min(1).max(255),
+    category: zod_1.z.enum(['hot', 'new', 'uncompetitive', 'competitive', 'ads-create', 'ads-optimize', 'ads-track', 'other']),
+    range: zod_1.z.string().max(100).nullable(),
+    headerRowNumber: zod_1.z.number().int().min(1).max(exports.MAX_SOURCE_ROWS).nullable(),
+    rowCount: zod_1.z.number().int().min(0).max(exports.MAX_SOURCE_ROWS),
+    columnCount: zod_1.z.number().int().min(0).max(exports.MAX_SOURCE_COLUMNS),
+    rows: zod_1.z.array(sourceRowSchema).max(exports.MAX_SOURCE_ROWS),
+}).strict();
+function excelColumnNumber(label) {
+    return label.toUpperCase().split('').reduce((value, character) => value * 26 + character.charCodeAt(0) - 64, 0);
+}
+function parseSourceRange(range) {
+    const match = range.match(/^([A-Z]+)([1-9]\d*)(?::([A-Z]+)([1-9]\d*))?$/i);
+    if (!match)
+        return null;
+    const startColumn = excelColumnNumber(match[1]);
+    const startRow = Number(match[2]);
+    const endColumn = excelColumnNumber(match[3] ?? match[1]);
+    const endRow = Number(match[4] ?? match[2]);
+    if (endColumn < startColumn || endRow < startRow)
+        return null;
+    return { startRow, endRow, startColumn, endColumn };
+}
 exports.dailyUploadPayloadSchema = zod_1.z
     .object({
     fileName: zod_1.z.string().trim().min(1, '缺少 fileName').max(exports.MAX_UPLOAD_FILE_NAME_LENGTH),
@@ -55,6 +120,9 @@ exports.dailyUploadPayloadSchema = zod_1.z
     currency: zod_1.z.string().trim().min(1).max(8).nullable().optional(),
     warnings: zod_1.z.array(zod_1.z.string().max(500)).max(100).optional(),
     sheets: zod_1.z.array(sheetSchema, { message: 'sheets 需为工作表数组' }).min(1, '缺少 sheets').max(exports.MAX_UPLOAD_SHEETS),
+    sourceSheets: zod_1.z.array(sourceSheetSchema, { message: 'sourceSheets 需为完整工作表快照数组' })
+        .min(1, '缺少完整工作表快照 sourceSheets')
+        .max(exports.MAX_SOURCE_SHEETS),
 })
     .passthrough();
 /** 结构校验：失败返回可直接用于 400 响应的 detail（首个问题 + 定位信息） */
@@ -70,6 +138,61 @@ function validateDailyUploadPayload(payload) {
     if (totalItems > exports.MAX_UPLOAD_ITEMS_PER_SHEET) {
         return { ok: false, detail: `商品总数超过上限 ${exports.MAX_UPLOAD_ITEMS_PER_SHEET}` };
     }
+    const indexes = new Set();
+    let totalSourceRows = 0;
+    let totalSourceCells = 0;
+    for (const sheet of value.sourceSheets) {
+        if (indexes.has(sheet.sheetIndex)) {
+            return { ok: false, detail: `原始工作表索引重复：${sheet.sheetIndex}` };
+        }
+        indexes.add(sheet.sheetIndex);
+        if (sheet.rows.length !== sheet.rowCount) {
+            return { ok: false, detail: `原始工作表「${sheet.sheetName}」行数声明与实际不一致` };
+        }
+        const sourceRange = sheet.range === null ? null : parseSourceRange(sheet.range);
+        if (sheet.range !== null && sourceRange === null) {
+            return { ok: false, detail: `原始工作表「${sheet.sheetName}」有效区域格式非法` };
+        }
+        if (sourceRange === null) {
+            if (sheet.rowCount !== 0 || sheet.columnCount !== 0 || sheet.rows.length !== 0 || sheet.headerRowNumber !== null) {
+                return { ok: false, detail: `原始工作表「${sheet.sheetName}」空表范围与计数不一致` };
+            }
+        }
+        else {
+            const expectedRows = sourceRange.endRow - sourceRange.startRow + 1;
+            const expectedColumns = sourceRange.endColumn - sourceRange.startColumn + 1;
+            if (sheet.rowCount !== expectedRows || sheet.columnCount !== expectedColumns) {
+                return { ok: false, detail: `原始工作表「${sheet.sheetName}」有效区域与行列计数不一致` };
+            }
+            if (sheet.headerRowNumber !== null
+                && (sheet.headerRowNumber < sourceRange.startRow || sheet.headerRowNumber > sourceRange.endRow)) {
+                return { ok: false, detail: `原始工作表「${sheet.sheetName}」表头行不在有效区域内` };
+            }
+        }
+        totalSourceRows += sheet.rows.length;
+        const rowNumbers = new Set();
+        for (const [rowIndex, row] of sheet.rows.entries()) {
+            if (sourceRange && row.rowNumber !== sourceRange.startRow + rowIndex) {
+                return { ok: false, detail: `原始工作表「${sheet.sheetName}」原始行号不连续` };
+            }
+            if (rowNumbers.has(row.rowNumber)) {
+                return { ok: false, detail: `原始工作表「${sheet.sheetName}」存在重复行号 ${row.rowNumber}` };
+            }
+            rowNumbers.add(row.rowNumber);
+            const columns = new Set();
+            for (const cell of row.cells) {
+                if (columns.has(cell.column)
+                    || (sourceRange !== null && (cell.column < sourceRange.startColumn || cell.column > sourceRange.endColumn))) {
+                    return { ok: false, detail: `原始工作表「${sheet.sheetName}」第 ${row.rowNumber} 行列位置非法或重复` };
+                }
+                columns.add(cell.column);
+                totalSourceCells += 1;
+            }
+        }
+    }
+    if (totalSourceRows > exports.MAX_SOURCE_ROWS || totalSourceCells > exports.MAX_SOURCE_CELLS) {
+        return { ok: false, detail: '原始工作表快照超过安全行数或单元格数量上限' };
+    }
     for (const sheet of value.sheets) {
         for (const [index, item] of sheet.items.entries()) {
             for (const field of productAnalysisAggregation_1.SUMMABLE_FIELDS) {
@@ -84,8 +207,9 @@ function validateDailyUploadPayload(payload) {
                 const raw = item[field];
                 if (raw === undefined || raw === null || raw === '')
                     continue;
-                if (typeof raw === 'number' && !Number.isFinite(raw)) {
-                    return { ok: false, detail: `报表结构非法（sheets.${sheet.sheetKey}.items.${index}.${field}）：数值非法` };
+                const textField = field === 'modelId' || field === 'createdAt' || field === 'priceFlag';
+                if ((textField && typeof raw !== 'string') || (!textField && (typeof raw !== 'number' || !Number.isFinite(raw)))) {
+                    return { ok: false, detail: `报表结构非法（sheets.${sheet.sheetKey}.items.${index}.${field}）：字段类型非法` };
                 }
             }
         }
@@ -99,6 +223,7 @@ function validateDailyUploadPayload(payload) {
             currency: value.currency ?? null,
             warnings: value.warnings ?? [],
             sheets: value.sheets,
+            sourceSheets: value.sourceSheets,
         },
     };
 }

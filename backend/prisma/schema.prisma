@@ -421,15 +421,42 @@ model ProductAnalysisDailyUpload {
   currency  String             @default("MYR")
   itemCount Int                @default(0)
   warnings  Json?
+  version             Int      @default(1)
+  isActive            Boolean  @default(true)
+  sourceSchemaVersion Int      @default(0)
+  sourceHash          String?
+  sourceSheetCount    Int      @default(0)
+  sourceRowCount      Int      @default(0)
+  sourceComplete      Boolean  @default(false)
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   userId    String
   user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     ProductDailyItem[]
+  sourceSheets ProductAnalysisSourceSheet[]
 
-  @@unique([shopId, date])
+  @@unique([shopId, date, version])
   @@index([shopId, date])
+  @@index([shopId, date, isActive])
   @@index([userId])
+}
+
+/// 原始工作表数据快照；每个上传版本保留全部工作表、行列位置、值与公式。
+model ProductAnalysisSourceSheet {
+  id              String                     @id @default(uuid())
+  uploadId        String
+  upload          ProductAnalysisDailyUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  sheetIndex      Int
+  sheetName       String
+  category        String
+  range           String?
+  headerRowNumber Int?
+  rowCount        Int
+  columnCount     Int
+  rows            Json
+
+  @@unique([uploadId, sheetIndex])
+  @@index([uploadId, category])
 }
 
 /// 商品×天 一行；结构化列参与区间聚合，extra 存率类/商品属性，variations 存当日变体

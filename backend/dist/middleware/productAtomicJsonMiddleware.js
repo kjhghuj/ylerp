@@ -8,7 +8,7 @@ const express_1 = __importDefault(require("express"));
 exports.PRODUCT_ATOMIC_RAW_BODY_LIMIT = '2mb';
 exports.LEGACY_JSON_RAW_BODY_LIMIT = '2mb';
 exports.CHROMA_JSON_RAW_BODY_LIMIT = '15mb';
-exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = '22mb';
+exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = '64mb';
 const isBoundedProfitTemplateWriteRequest = (method, path) => {
     const normalizedMethod = method.toUpperCase();
     if (normalizedMethod === 'POST') {

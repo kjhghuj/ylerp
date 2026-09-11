@@ -70,7 +70,7 @@ describe('parseProductAnalysisWorkbook', () => {
             8: '12,422.42', 9: '11,861.86', 10: 167670, 11: 11825, 12: '7.05%',
             15: 163, 17: 166, 18: 159, 34: 1171, 35: '16.57%',
           }),
-          hotRow({ 0: '10001', 1: 'LT820 Keyboard', 3: 'V-1', 4: 'Black', 5: 'Normal', 6: 'M-1', 17: 15, 19: 14, 34: 75 }),
+          hotRow({ 0: '10001', 1: 'LT820 Keyboard', 3: 'V-1', 4: 'Black', 5: 'Normal', 6: 'M-1', 7: 'GLOBAL-1', 8: 69.3, 9: 60.1, 17: 15, 19: 14, 34: 75 }),
           hotRow({ 0: '10001', 1: 'LT820 Keyboard', 3: 'V-2', 4: 'White', 5: 'Normal', 6: 'M-2', 17: 30, 34: 50 }),
           hotRow({ 0: '10002', 1: 'Mouse', 3: '-', 4: '-', 8: '5,774.34', 12: '6.05%', 17: 113, 34: 366 }),
         ],
@@ -95,12 +95,86 @@ describe('parseProductAnalysisWorkbook', () => {
     expect(first.ordersOrdered).toBe(163);
     expect(first.cartUnits).toBe(1171);
     expect(first.variations).toHaveLength(2);
-    expect(first.variations[0]).toMatchObject({ variationName: 'Black', unitsOrdered: 15, buyersOrdered: 14, cartUnits: 75 });
+    expect(first.variations[0]).toMatchObject({ variationName: 'Black', modelId: 'GLOBAL-1', salesOrdered: 69.3, salesConfirmed: 60.1, unitsOrdered: 15, buyersOrdered: 14, cartUnits: 75 });
     expect(first.variations[1]).toMatchObject({ variationName: 'White', unitsOrdered: 30 });
 
     const second = hot.items[1] as ParentProduct;
     expect(second.variations).toHaveLength(0);
     expect(second.salesOrdered).toBe(5774.34);
+  });
+
+  test('keeps every worksheet and cell in sourceSheets while analytics only uses supported sheets', () => {
+    const formulaSheet = XLSX.utils.aoa_to_sheet([['商品编号', '未知指标'], ['A-01', 7]]);
+    formulaSheet.B2 = { t: 'n', v: 7, f: '3+4', w: '7' };
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      HOT_HEADERS,
+      hotRow({ 0: '1', 1: 'A', 3: '-', 4: '-', 24: 12.5 }),
+    ]), '热销商品');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ['商品编号', '商品', '销售额（已下订单） (MYR)'], ['1', 'A', 10],
+    ]), '优化您的广告');
+    XLSX.utils.book_append_sheet(workbook, formulaSheet, '未来新增分类');
+    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+
+    const report = parseProductAnalysisWorkbook(buffer, 'x.20260904.xlsx');
+
+    expect(report.sheets).toHaveLength(1);
+    expect(report.sourceSheets.map((sheet) => sheet.category)).toEqual(['hot', 'ads-optimize', 'other']);
+    expect(report.sourceSheets[1]).toMatchObject({ sheetName: '优化您的广告', rowCount: 2, columnCount: 3 });
+    expect(report.sourceSheets[2].rows[1].cells[1]).toMatchObject({
+      column: 2,
+      type: 'number',
+      value: 7,
+      formula: '3+4',
+      formattedValue: '7',
+    });
+  });
+
+  test('recognizes confirmed AOV alias and keeps price categories separate', () => {
+    const confirmedHeaders = [...NEW_HEADERS];
+    confirmedHeaders[31] = '每笔订单销售额（已确认订单） (MYR)';
+    const buffer = buildWorkbookBuffer([
+      { name: '新上架商品', rows: [confirmedHeaders, newProductRow({ 0: '1', 1: 'A', 31: 63.82 })] },
+      { name: 'Uncompetitive price', rows: [['商品编号', '商品', 'Uncompetitive Variations'], ['1', 'A', 1]] },
+      { name: 'Competitive Price', rows: [['商品编号', '商品', 'Competitive Variations'], ['1', 'A', 4]] },
+    ]);
+    const report = parseProductAnalysisWorkbook(buffer, 'x.20260904.xlsx');
+    expect(report.sheets[0].items[0].aovConfirmed).toBe(63.82);
+    expect(report.sheets[1].items[0].uncompetitiveVariations).toBe(1);
+    expect(report.sheets[2].items[0].competitiveVariations).toBe(4);
+  });
+
+  test('preserves a seven-sheet anonymized export fixture including all ad categories and unknown columns', () => {
+    const fixture = buildWorkbookBuffer([
+      { name: '热销商品', rows: [HOT_HEADERS,
+        hotRow({ 0: 'P-1', 1: 'Product', 3: '-', 4: '-', 8: 100, 9: 90 }),
+        hotRow({ 0: 'P-1', 1: 'Product', 3: 'V-1', 4: 'Blue', 6: 'SKU-1', 8: 40, 9: 35, 15: 2, 16: 1, 17: 3 }),
+      ] },
+      { name: '新上架商品', rows: [[...NEW_HEADERS.slice(0, 31), '每笔订单销售额（已确认订单） (MYR)', ...NEW_HEADERS.slice(32)],
+        newProductRow({ 0: 'P-1', 1: 'Product', 2: '20260904', 3: 1, 31: 45 }),
+      ] },
+      { name: 'Uncompetitive price', rows: [['商品编号', '商品', 'Uncompetitive Variations'], ['P-1', 'Product', 2]] },
+      { name: 'Competitive Price', rows: [['商品编号', '商品', 'Competitive Variations'], ['P-1', 'Product', 5]] },
+      { name: '创建广告', rows: [['商品编号', '商品', '未来未知列'], ['P-1', 'Product', 'raw-create']] },
+      { name: '优化您的广告', rows: [['商品编号', '商品', '未来未知列'], ['P-1', 'Product', 'raw-optimize']] },
+      { name: '追踪广告效果', rows: [['商品编号', '商品', '未来未知列'], ['P-1', 'Product', 'raw-track']] },
+    ]);
+
+    const report = parseProductAnalysisWorkbook(fixture, 'fixture.20260904.xlsx');
+
+    expect(report.sourceSheets.map((sheet) => sheet.category)).toEqual([
+      'hot', 'new', 'uncompetitive', 'competitive', 'ads-create', 'ads-optimize', 'ads-track',
+    ]);
+    expect(report.sheets.map((sheet) => sheet.sheetKey)).toEqual(['hot', 'new', 'uncompetitive', 'competitive']);
+    expect(report.sheets[0].items[0].variations[0]).toMatchObject({
+      variationSku: 'V-1', modelCode: 'SKU-1', salesOrdered: 40, salesConfirmed: 35,
+      ordersOrdered: 2, ordersConfirmed: 1, unitsOrdered: 3,
+    });
+    expect(report.sheets[1].items[0].aovConfirmed).toBe(45);
+    expect(report.sheets[2].items[0].uncompetitiveVariations).toBe(2);
+    expect(report.sheets[3].items[0].competitiveVariations).toBe(5);
+    expect(report.sourceSheets[6].rows[1].cells[2]).toMatchObject({ column: 3, value: 'raw-track' });
   });
 
   test('normalizes raw rate decimals (0.0705 → 7.05) and keeps "-" as null', () => {
@@ -205,7 +279,7 @@ describe('parseProductAnalysisWorkbook', () => {
     expect(merged.clicks).toBe(100);
   });
 
-  test('ignores unrelated sheets (ads) and unrecognized workbooks throw', () => {
+  test('excludes ads from analytics projection while preserving them in source snapshots', () => {
     const adsSheet = {
       name: '创建广告',
       rows: [HOT_HEADERS.slice(0, 5), ['1', 'Ad Item', '-', '-', '-']],
@@ -216,6 +290,7 @@ describe('parseProductAnalysisWorkbook', () => {
     ]);
     const report = parseProductAnalysisWorkbook(withHot, 'x.xlsx');
     expect(report.sheets.map((sheet) => sheet.sheetKey)).toEqual(['hot']);
+    expect(report.sourceSheets.map((sheet) => sheet.category)).toEqual(['hot', 'ads-create']);
 
     const onlyAds = buildWorkbookBuffer([adsSheet]);
     expect(() => parseProductAnalysisWorkbook(onlyAds, 'x.xlsx')).toThrow(ProductAnalysisParseError);

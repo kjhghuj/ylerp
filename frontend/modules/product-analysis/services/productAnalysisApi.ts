@@ -11,6 +11,10 @@ import type {
   PotentialFilters,
   ShopDraft,
   ShopMeta,
+  SourceRowSnapshot,
+  StoredSourceSheetMeta,
+  UploadResult,
+  UploadVersionMeta,
 } from '../types';
 
 const CHAT_TIMEOUT_MS = 130_000;
@@ -70,8 +74,59 @@ export async function uploadDailyReport(
   shopId: string,
   date: string,
   payload: ParsedProductAnalysisReport
-): Promise<{ date: string; itemCount: number }> {
-  const response = await api.post(`/product-analysis/shops/${shopId}/daily-uploads`, { date, payload });
+): Promise<UploadResult> {
+  const response = await api.post<UploadResult>(`/product-analysis/shops/${shopId}/daily-uploads`, { date, payload });
+  return response.data;
+}
+
+export async function fetchDailyUploadVersions(
+  shopId: string,
+  date: string
+): Promise<{ date: string; activeUploadId: string | null; versions: UploadVersionMeta[] }> {
+  const response = await api.get(`/product-analysis/shops/${shopId}/daily-uploads/${date}/versions`);
+  return response.data;
+}
+
+export async function fetchUploadSourceSheets(
+  shopId: string,
+  uploadId: string
+): Promise<{ uploadId: string; version: number; date: string; sourceComplete: boolean; sheets: StoredSourceSheetMeta[] }> {
+  const response = await api.get(`/product-analysis/shops/${shopId}/daily-upload-versions/${uploadId}/source-sheets`);
+  return response.data;
+}
+
+export async function fetchUploadSourceRows(
+  shopId: string,
+  uploadId: string,
+  sheetIndex: number,
+  offset = 0,
+  limit = 200
+): Promise<{ uploadId: string; sheet: StoredSourceSheetMeta; offset: number; limit: number; total: number; rows: SourceRowSnapshot[] }> {
+  const response = await api.get(
+    `/product-analysis/shops/${shopId}/daily-upload-versions/${uploadId}/source-sheets/${sheetIndex}`,
+    { params: { offset, limit } }
+  );
+  return response.data;
+}
+
+export async function fetchUploadStructuredItems<T = unknown>(
+  shopId: string,
+  uploadId: string,
+  offset = 0,
+  limit = 200
+): Promise<{ uploadId: string; version: number; date: string; isActive: boolean; sourceComplete: boolean; offset: number; limit: number; total: number; items: T[] }> {
+  const response = await api.get(
+    `/product-analysis/shops/${shopId}/daily-upload-versions/${uploadId}/items`,
+    { params: { offset, limit } }
+  );
+  return response.data;
+}
+
+export async function activateDailyUploadVersion(
+  shopId: string,
+  uploadId: string
+): Promise<{ uploadId: string; version: number; date: string; isActive: true }> {
+  const response = await api.post(`/product-analysis/shops/${shopId}/daily-upload-versions/${uploadId}/activate`);
   return response.data;
 }
 

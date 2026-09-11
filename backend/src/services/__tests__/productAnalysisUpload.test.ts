@@ -24,6 +24,14 @@ describe('isValidCalendarDate', () => {
 
 describe('validateDailyUploadPayload', () => {
   const validSheets = [{ sheetKey: 'hot' as const, items: [{ itemId: '10001', itemName: 'Keyboard', visitors: 100 }] }];
+  const validSourceSheets = [{
+    sheetIndex: 0, sheetName: '热销商品', category: 'hot', range: 'A1:A2',
+    headerRowNumber: 1, rowCount: 2, columnCount: 1,
+    rows: [
+      { rowNumber: 1, cells: [{ column: 1, type: 'string', value: '商品编号' }] },
+      { rowNumber: 2, cells: [{ column: 1, type: 'string', value: '10001' }] },
+    ],
+  }];
 
   test('accepts a well-formed payload and normalizes optional fields', () => {
     const outcome = validateDailyUploadPayload({
@@ -33,6 +41,14 @@ describe('validateDailyUploadPayload', () => {
       currency: null,
       warnings: ['w'],
       sheets: validSheets,
+      sourceSheets: [{
+        sheetIndex: 0, sheetName: '热销商品', category: 'hot', range: 'A1:B2',
+        headerRowNumber: 1, rowCount: 2, columnCount: 2,
+        rows: [
+          { rowNumber: 1, cells: [{ column: 1, type: 'string', value: '商品编号' }] },
+          { rowNumber: 2, cells: [{ column: 1, type: 'string', value: '10001' }] },
+        ],
+      }],
     });
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
@@ -40,7 +56,37 @@ describe('validateDailyUploadPayload', () => {
       expect(outcome.value.currency).toBeNull();
       expect(outcome.value.warnings).toEqual(['w']);
       expect(outcome.value.sheets[0].items[0].visitors).toBe(100);
+      expect(outcome.value.sourceSheets).toHaveLength(1);
     }
+  });
+
+  test('rejects incomplete or inconsistent source snapshots', () => {
+    const base = {
+      fileName: 'a.xlsx', sheets: validSheets,
+      sourceSheets: [{
+        sheetIndex: 0, sheetName: '热销商品', category: 'hot', range: 'A1:A2',
+        headerRowNumber: 1, rowCount: 2, columnCount: 1,
+        rows: [{ rowNumber: 1, cells: [{ column: 1, type: 'string', value: '商品编号' }] }],
+      }],
+    };
+    const missingRow = validateDailyUploadPayload(base);
+    expect(missingRow.ok).toBe(false);
+    const duplicateSheetIndex = validateDailyUploadPayload({
+      ...base,
+      sourceSheets: [base.sourceSheets[0], { ...base.sourceSheets[0] }],
+    });
+    expect(duplicateSheetIndex.ok).toBe(false);
+    const typeMismatch = validateDailyUploadPayload({
+      ...base,
+      sourceSheets: [{
+        ...validSourceSheets[0],
+        rows: [
+          { rowNumber: 1, cells: [{ column: 1, type: 'number', value: 'not-a-number' }] },
+          validSourceSheets[0].rows[1],
+        ],
+      }],
+    });
+    expect(typeMismatch.ok).toBe(false);
   });
 
   test('rejects null sheet entries, illegal sheet keys and wrong item types with detail', () => {
@@ -49,6 +95,8 @@ describe('validateDailyUploadPayload', () => {
       { fileName: 'a.xlsx', sheets: [{ sheetKey: 'ads', items: [] }] },
       { fileName: 'a.xlsx', sheets: [{ sheetKey: 'hot', items: [{ itemId: 123, itemName: 'x' }] }] },
       { fileName: 'a.xlsx', sheets: [{ sheetKey: 'hot', items: [{ itemId: 'ok', visitors: 'NaN-ish' }] }] },
+      { fileName: 'a.xlsx', sheets: [{ sheetKey: 'hot', items: [{ itemId: 'ok', itemName: 'x', currentPrice: '12.5' }] }] },
+      { fileName: 'a.xlsx', sheets: [{ sheetKey: 'hot', items: [{ itemId: 'ok', itemName: 'x', variations: [{ salesOrdered: '12.5' }] }] }] },
       { fileName: 'a.xlsx', sheets: [] },
       { fileName: '', sheets: validSheets },
       'not-an-object',
@@ -70,6 +118,7 @@ describe('validateDailyUploadPayload', () => {
           { itemId: 'b', itemName: 'Refund', salesOrdered: -12.5 },
         ],
       }],
+      sourceSheets: validSourceSheets,
     });
     expect(outcome.ok).toBe(true);
   });

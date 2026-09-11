@@ -7,7 +7,7 @@ import express, {
 export const PRODUCT_ATOMIC_RAW_BODY_LIMIT = '2mb';
 export const LEGACY_JSON_RAW_BODY_LIMIT = '2mb';
 export const CHROMA_JSON_RAW_BODY_LIMIT = '15mb';
-export const PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = '22mb';
+export const PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = '64mb';
 
 export const isBoundedProfitTemplateWriteRequest = (
   method: string,

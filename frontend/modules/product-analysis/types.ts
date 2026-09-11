@@ -1,6 +1,32 @@
 /** 商品分析模块共享类型。字段键名与后端 services/glm/prompts.ts 的 METRIC_LABELS 保持一致。 */
 
 export type SheetKey = 'hot' | 'new' | 'uncompetitive' | 'competitive';
+export type SourceSheetCategory = SheetKey | 'ads-create' | 'ads-optimize' | 'ads-track' | 'other';
+
+export interface SourceCellSnapshot {
+  column: number;
+  type: 'string' | 'number' | 'boolean' | 'date' | 'error' | 'blank';
+  value: string | number | boolean | null;
+  formattedValue?: string;
+  formula?: string;
+}
+
+export interface SourceRowSnapshot {
+  rowNumber: number;
+  cells: SourceCellSnapshot[];
+}
+
+/** 无损业务数据快照：保留工作表、原始行列位置、值与公式；不包含样式/图片/批注/宏。 */
+export interface SourceSheetSnapshot {
+  sheetIndex: number;
+  sheetName: string;
+  category: SourceSheetCategory;
+  range: string | null;
+  headerRowNumber: number | null;
+  rowCount: number;
+  columnCount: number;
+  rows: SourceRowSnapshot[];
+}
 
 export const SITE_OPTIONS = ['PH', 'MY', 'SG', 'ID', 'TH'] as const;
 export type SiteCode = (typeof SITE_OPTIONS)[number];
@@ -11,6 +37,11 @@ export interface ProductVariation {
   variationName?: string;
   variationStatus?: string;
   modelCode?: string;
+  modelId?: string;
+  salesOrdered?: number | null;
+  salesConfirmed?: number | null;
+  ordersOrdered?: number | null;
+  ordersConfirmed?: number | null;
   unitsOrdered?: number | null;
   unitsConfirmed?: number | null;
   buyersOrdered?: number | null;
@@ -28,6 +59,9 @@ export interface ParentProduct {
   createdAt?: string;
   createdDays?: number | null;
   currentPrice?: number | null;
+  uncompetitiveVariations?: number | null;
+  competitiveVariations?: number | null;
+  /** 历史兼容字段；新上传改用两个明确字段。 */
   priceFlag?: string;
   salesOrdered: number | null;
   salesConfirmed: number | null;
@@ -79,6 +113,7 @@ export interface ParsedProductAnalysisReport {
   /** 报表表头识别到的币种；未识别为 null（由店铺币种兜底并做一致性校验），不再默认 MYR */
   currency: string | null;
   sheets: SheetGroup[];
+  sourceSheets: SourceSheetSnapshot[];
   warnings: string[];
 }
 
@@ -112,8 +147,45 @@ export interface DayMeta {
   itemCount: number;
   currency: string;
   createdAt: string;
+  uploadId?: string;
+  version?: number;
+  sourceSheetCount?: number;
+  sourceRowCount?: number;
+  sourceComplete?: boolean;
   /** 只读排查标记：文件名形如 多日区间（start≠end），提示该日可能混入了区间报表数据 */
   suspectedRange?: boolean;
+}
+
+export interface UploadVersionMeta {
+  id: string;
+  version: number;
+  isActive: boolean;
+  fileName: string;
+  currency: string;
+  itemCount: number;
+  sourceSchemaVersion: number;
+  sourceHash: string | null;
+  sourceSheetCount: number;
+  sourceRowCount: number;
+  sourceComplete: boolean;
+  warnings: string[] | null;
+  createdAt: string;
+}
+
+export type StoredSourceSheetMeta = Omit<SourceSheetSnapshot, 'rows'>;
+
+export interface UploadResult {
+  uploadId: string;
+  version: number;
+  date: string;
+  fileName: string;
+  itemCount: number;
+  derivedItemCount: number;
+  variationCount: number;
+  sourceSheetCount: number;
+  sourceRowCount: number;
+  sourceComplete: boolean;
+  warnings: string[];
 }
 
 export interface AggResponse {

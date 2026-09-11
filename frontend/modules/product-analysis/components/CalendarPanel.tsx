@@ -210,6 +210,14 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
           const isToday = date === today;
           const isFuture = date > today;
           const isSelected = selected.includes(date);
+          const sourceStatus = day?.sourceComplete === false
+            ? ` · ⚠ ${strings.sourceIncomplete}`
+            : day?.sourceComplete === true
+              ? ` · ${strings.sourceSnapshot
+                .replace('{sheets}', String(day.sourceSheetCount ?? 0))
+                .replace('{rows}', String(day.sourceRowCount ?? 0))
+                .replace('{version}', String(day.version ?? 1))}`
+              : '';
 
           if (isBatchMode) {
             return (
@@ -220,6 +228,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 onClick={() => toggleDate(date)}
                 aria-pressed={isSelected}
                 aria-label={date}
+                title={day ? `${day.fileName} · ${day.itemCount}${sourceStatus}` : date}
                 className="aspect-square rounded-lg text-[11px] font-medium border transition-colors"
                 style={{
                   backgroundColor: isSelected ? '#dc2626' : isUploaded ? 'var(--primary)' : 'transparent',
@@ -246,10 +255,19 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 opacity: isFuture && !isUploaded ? 0.55 : 1,
                 boxShadow: isToday ? 'inset 0 0 0 1.5px rgba(59,130,246,0.8)' : undefined,
               }}
-              title={day ? `${day.fileName} · ${day.itemCount}${day.suspectedRange ? ' · ⚠ 疑似区间报表（文件名为多日区间）' : ''}` : date}
+              title={day ? `${day.fileName} · ${day.itemCount}${sourceStatus}${day.suspectedRange ? ' · ⚠ 疑似区间报表（文件名为多日区间）' : ''}` : date}
               aria-label={date}
             >
               {Number(date.slice(8))}
+              {day?.sourceComplete === false && (
+                <span
+                  className="absolute left-0.5 top-0 text-[8px] font-bold"
+                  style={{ color: '#fef3c7' }}
+                  aria-hidden="true"
+                >
+                  !
+                </span>
+              )}
               {isUploaded && canDelete && (
                 <button
                   type="button"

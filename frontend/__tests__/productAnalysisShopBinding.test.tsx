@@ -406,7 +406,7 @@ describe('potential refresh failure hides the stale list (task 3)', () => {
   it('same-day re-upload succeeds then refresh fails: the old list is hidden, retry recovers', async () => {
     mockFetchShops.mockResolvedValue([makeShop('shop-1', 'MY 主店', '2026-09-06')]);
     mockFetchShopDays.mockResolvedValue(SHOP_A_DAYS);
-    mockUpload.mockResolvedValue({ date: '2026-09-06', itemCount: 10 });
+    mockUpload.mockResolvedValue({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 10, derivedItemCount: 10, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 10, sourceComplete: true, warnings: [] });
     mockFetchPotential.mockResolvedValueOnce(potentialResponse(['旧榜单商品']));
 
     render(<ProductAnalysis />);

@@ -165,7 +165,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFetchShops.mockResolvedValue([SHOP]);
   mockFetchShopDays.mockResolvedValue(DAYS);
-  mockUpload.mockResolvedValue({ date: '2026-09-06', itemCount: 12 });
+  mockUpload.mockResolvedValue({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 12, derivedItemCount: 12, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 12, sourceComplete: true, warnings: [] });
 });
 
 async function selectUploadFile(name: string) {
