@@ -1,0 +1,265 @@
+{
+  "scope": "商品分析上传全链路对账（脱敏）",
+  "api": "http://127.0.0.1:4002/api",
+  "shop": "上传对账-马来店",
+  "results": [
+    {
+      "date": "2026-08-28",
+      "file": "parentskudetail.20260828_20260828.xlsx",
+      "dbItems": 109,
+      "expectedItems": 109,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "255b3ec0b8e4e47a",
+      "contentHashAfterReupload": "255b3ec0b8e4e47a"
+    },
+    {
+      "date": "2026-08-29",
+      "file": "parentskudetail.20260829_20260829.xlsx",
+      "dbItems": 110,
+      "expectedItems": 110,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "a5eb246594121c13",
+      "contentHashAfterReupload": "a5eb246594121c13"
+    },
+    {
+      "date": "2026-08-30",
+      "file": "parentskudetail.20260830_20260830.xlsx",
+      "dbItems": 98,
+      "expectedItems": 98,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "6c1e5a8afd39834c",
+      "contentHashAfterReupload": "6c1e5a8afd39834c"
+    },
+    {
+      "date": "2026-08-31",
+      "file": "parentskudetail.20260831_20260831.xlsx",
+      "dbItems": 116,
+      "expectedItems": 116,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "e8032091ed817caf",
+      "contentHashAfterReupload": "e8032091ed817caf"
+    },
+    {
+      "date": "2026-09-01",
+      "file": "parentskudetail.20260901_20260901.xlsx",
+      "dbItems": 108,
+      "expectedItems": 108,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "3c0a3be15b0b3f7e",
+      "contentHashAfterReupload": "3c0a3be15b0b3f7e"
+    },
+    {
+      "date": "2026-09-02",
+      "file": "parentskudetail.20260902_20260902.xlsx",
+      "dbItems": 108,
+      "expectedItems": 108,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "1fee9e5155c6a0ae",
+      "contentHashAfterReupload": "1fee9e5155c6a0ae"
+    },
+    {
+      "date": "2026-09-03",
+      "file": "parentskudetail.20260903_20260903.xlsx",
+      "dbItems": 106,
+      "expectedItems": 106,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "0cdbb8a1f85ce815",
+      "contentHashAfterReupload": "0cdbb8a1f85ce815"
+    },
+    {
+      "date": "2026-09-04",
+      "file": "parentskudetail.20260904_20260904.xlsx",
+      "dbItems": 84,
+      "expectedItems": 84,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "92ab4e5127b0c70c",
+      "contentHashAfterReupload": "92ab4e5127b0c70c"
+    },
+    {
+      "date": "2026-09-05",
+      "file": "parentskudetail.20260905_20260905.xlsx",
+      "dbItems": 90,
+      "expectedItems": 90,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "5e0899489ba0d5de",
+      "contentHashAfterReupload": "5e0899489ba0d5de"
+    },
+    {
+      "date": "2026-09-06",
+      "file": "parentskudetail.20260906_20260906.xlsx",
+      "dbItems": 90,
+      "expectedItems": 90,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 16,
+      "createdAtExpected": 16,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "f4f3865f9dd678d4",
+      "contentHashAfterReupload": "f4f3865f9dd678d4"
+    },
+    {
+      "date": "2026-09-07",
+      "file": "parentskudetail.20260907_20260907.xlsx",
+      "dbItems": 94,
+      "expectedItems": 94,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 20,
+      "createdAtExpected": 20,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "1260c9f0c503ddf6",
+      "contentHashAfterReupload": "1260c9f0c503ddf6"
+    },
+    {
+      "date": "2026-09-08",
+      "file": "parentskudetail.20260908_20260908.xlsx",
+      "dbItems": 94,
+      "expectedItems": 94,
+      "fieldMismatches": [],
+      "v3Mismatches": [],
+      "createdAtPresent": 20,
+      "createdAtExpected": 20,
+      "currentPricePresent": 11,
+      "currentPriceExpected": 11,
+      "crossSheetConflicts": 0,
+      "contentHashBeforeReupload": "7e81904c5547589a",
+      "contentHashAfterReupload": "7e81904c5547589a"
+    }
+  ],
+  "finalDays": [
+    {
+      "date": "2026-08-28",
+      "itemCount": 109
+    },
+    {
+      "date": "2026-08-29",
+      "itemCount": 110
+    },
+    {
+      "date": "2026-08-30",
+      "itemCount": 98
+    },
+    {
+      "date": "2026-08-31",
+      "itemCount": 116
+    },
+    {
+      "date": "2026-09-01",
+      "itemCount": 108
+    },
+    {
+      "date": "2026-09-02",
+      "itemCount": 108
+    },
+    {
+      "date": "2026-09-03",
+      "itemCount": 106
+    },
+    {
+      "date": "2026-09-04",
+      "itemCount": 84
+    },
+    {
+      "date": "2026-09-05",
+      "itemCount": 90
+    },
+    {
+      "date": "2026-09-06",
+      "itemCount": 90
+    },
+    {
+      "date": "2026-09-07",
+      "itemCount": 94
+    },
+    {
+      "date": "2026-09-08",
+      "itemCount": 94
+    }
+  ],
+  "adSheets": {
+    "names": [
+      "创建广告",
+      "优化您的广告",
+      "追踪广告效果"
+    ],
+    "uniqueColumns": [],
+    "perSheetOverlaps": [
+      {
+        "sheet": "创建广告",
+        "items": 0,
+        "metricDiffs": 0,
+        "metricMatches": 0
+      },
+      {
+        "sheet": "优化您的广告",
+        "items": 2,
+        "metricDiffs": 0,
+        "metricMatches": 2
+      },
+      {
+        "sheet": "追踪广告效果",
+        "items": 4,
+        "metricDiffs": 0,
+        "metricMatches": 4
+      }
+    ]
+  }
+}

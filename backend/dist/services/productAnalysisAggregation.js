@@ -31,7 +31,8 @@ exports.EXTRA_FIELDS = [
     'ctr', 'cvrOrdered', 'cvrConfirmed', 'cvrVisitorsOrdered', 'cvrVisitorsConfirmed',
     'aovOrdered', 'aovConfirmed', 'cartRate', 'bounceRate',
     'repeatOrderRate', 'repurchaseRateConfirmed', 'avgReorderDays', 'avgRepurchaseDays',
-    'modelId', 'createdAt', 'createdDays', 'currentPrice', 'priceFlag',
+    'modelId', 'createdAt', 'createdDays', 'currentPrice',
+    'uncompetitiveVariations', 'competitiveVariations', 'priceFlag',
 ];
 function numOrUndef(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -156,7 +157,19 @@ function buildDailySeries(rows) {
         };
     });
 }
-const VARIATION_SUM_FIELDS = ['unitsOrdered', 'unitsConfirmed', 'buyersOrdered', 'buyersConfirmed', 'cartVisitors', 'cartUnits'];
+const VARIATION_SUM_FIELDS = [
+    'salesOrdered',
+    'salesConfirmed',
+    'ordersOrdered',
+    'ordersConfirmed',
+    'unitsOrdered',
+    'unitsConfirmed',
+    'buyersOrdered',
+    'buyersConfirmed',
+    'cartVisitors',
+    'cartUnits',
+];
+const VARIATION_IDENTITY_FIELDS = ['variationSku', 'variationName', 'variationStatus', 'modelCode', 'modelId'];
 /** 变体跨日合并：按 规格编号||规格名称 聚合，数值求和，按已下件数降序 */
 function mergeVariations(rows) {
     const merged = new Map();
@@ -169,11 +182,12 @@ function mergeVariations(rows) {
             const key = String(variation.variationSku || variation.variationName || '');
             if (!key)
                 continue;
-            const existing = merged.get(key) ?? {
-                variationSku: typeof variation.variationSku === 'string' ? variation.variationSku : undefined,
-                variationName: typeof variation.variationName === 'string' ? variation.variationName : undefined,
-                variationStatus: typeof variation.variationStatus === 'string' ? variation.variationStatus : undefined,
-            };
+            const existing = merged.get(key) ?? {};
+            for (const field of VARIATION_IDENTITY_FIELDS) {
+                if (existing[field] === undefined && typeof variation[field] === 'string' && variation[field].trim()) {
+                    existing[field] = variation[field];
+                }
+            }
             for (const field of VARIATION_SUM_FIELDS) {
                 const value = numOrUndef(variation[field]);
                 if (value !== undefined) {
@@ -197,10 +211,113 @@ function buildItemDetail(rows) {
 }
 /** 解析产物（前端 parseProductAnalysisWorkbook 输出）→ 日行。
  *  真实导出中同一商品可能同时出现在多个工作表（如热销 + 竞争力价格），
- *  而入库按 (uploadId, itemId) 唯一，故按类别优先级去重保留一份 */
+ *  而入库按 (uploadId, itemId) 唯一，故按类别优先级取一条主记录。
+ *  跨 sheet 合并规则（2026-09-11 修复字段级丢失）：
+ *  - 主记录 = 类别优先级最高的工作表行（hot > new > uncompetitive > competitive），业务口径以主记录为准；
+ *  - 主记录**缺失**的字段从其他工作表行补齐（缺失 = null/undefined/空串；数值 0 是有效值不视为缺失），
+ *    补齐来源记入 extra.sheetSources；
+ *  - 双方都有值且不一致时不覆盖、不求和（避免有效值被覆盖或指标跨 sheet 重复累加），
+ *    差异记入 extra.sheetConflicts（保留主记录值，最多记录 10 条）；
+ *  - 变体数组同理：主记录有变体则保留；缺失时才整体采用其他 sheet 的变体；都有则记冲突不合并。 */
 const SHEET_PRIORITY = { hot: 0, new: 1, uncompetitive: 2, competitive: 3 };
 function sheetPriority(sheetKey) {
     return SHEET_PRIORITY[sheetKey] ?? 99;
+}
+/** 字段值是否缺失（null / undefined / 空串；数值 0 为有效值，不是缺失） */
+function isAbsentValue(value) {
+    return value === undefined || value === null || (typeof value === 'string' && value.trim() === '');
+}
+function sameValue(left, right) {
+    if (typeof left === 'number' && typeof right === 'number') {
+        return Math.abs(left - right) < 1e-9;
+    }
+    return left === right;
+}
+/** 用一次出现构建主记录行（原单行构建逻辑，抽出复用） */
+function buildRowFromOccurrence(itemId, occurrence) {
+    const item = occurrence.item;
+    const row = {
+        itemId,
+        itemName: String(item.itemName ?? ''),
+        sheetKey: occurrence.sheetKey,
+        status: typeof item.status === 'string' && item.status ? item.status : null,
+        date: '',
+    };
+    const looseRow = row;
+    for (const field of exports.SUMMABLE_FIELDS) {
+        const value = item[field];
+        looseRow[field] = typeof value === 'number' && Number.isFinite(value) ? value : null;
+    }
+    const extra = {};
+    for (const field of exports.EXTRA_FIELDS) {
+        const value = item[field];
+        if (!isAbsentValue(value))
+            extra[field] = value;
+    }
+    row.extra = extra;
+    row.variations = Array.isArray(item.variations) ? item.variations : null;
+    return row;
+}
+/** 用低优先级出现补齐主记录缺失字段（不覆盖、不求和；差异记冲突） */
+function backfillRowFromOccurrence(itemId, row, occurrence, audit) {
+    const item = occurrence.item;
+    const extra = row.extra;
+    const looseRow = row;
+    // 数量指标：主记录缺失(null)时补齐；双方都有且不等时记冲突（保留主记录，绝不相加——
+    // 同商品同日在多表的同一指标是同一口径的重复呈现，相加会双计）
+    for (const field of exports.SUMMABLE_FIELDS) {
+        const incoming = item[field];
+        if (typeof incoming !== 'number' || !Number.isFinite(incoming))
+            continue;
+        const current = looseRow[field];
+        if (current === null) {
+            looseRow[field] = incoming;
+            audit.sources[field] = occurrence.sheetKey;
+        }
+        else if (!sameValue(current, incoming)) {
+            audit.conflicts.push({ field, keep: current, other: incoming, sheet: occurrence.sheetKey });
+        }
+    }
+    // extra 字段（创建日期/创建天数/价格等属性）：缺失补齐；不一致记冲突
+    for (const field of exports.EXTRA_FIELDS) {
+        const incoming = item[field];
+        if (isAbsentValue(incoming))
+            continue;
+        if (extra[field] === undefined) {
+            extra[field] = incoming;
+            audit.sources[field] = occurrence.sheetKey;
+        }
+        else if (!sameValue(extra[field], incoming)) {
+            audit.conflicts.push({ field, keep: extra[field], other: incoming, sheet: occurrence.sheetKey });
+        }
+    }
+    // 名称/状态：主记录为空时补齐
+    if (isAbsentValue(row.itemName) && !isAbsentValue(item.itemName)) {
+        row.itemName = String(item.itemName);
+        audit.sources.itemName = occurrence.sheetKey;
+    }
+    if (isAbsentValue(row.status) && typeof item.status === 'string' && item.status) {
+        row.status = item.status;
+        audit.sources.status = occurrence.sheetKey;
+    }
+    // 变体：主记录缺失时整体采用；都有且非空时记冲突（逐条合并会把同变体 units 双计）
+    const incomingVariations = Array.isArray(item.variations) ? item.variations : null;
+    const hasIncoming = incomingVariations !== null && incomingVariations.length > 0;
+    const currentVariations = Array.isArray(row.variations) ? row.variations : null;
+    const hasCurrent = currentVariations !== null && currentVariations.length > 0;
+    if (hasIncoming && !hasCurrent) {
+        row.variations = incomingVariations;
+        audit.sources.variations = occurrence.sheetKey;
+    }
+    else if (hasIncoming && hasCurrent && incomingVariations !== currentVariations) {
+        audit.conflicts.push({
+            field: 'variations',
+            keep: currentVariations.length,
+            other: incomingVariations.length,
+            sheet: occurrence.sheetKey,
+            note: '主记录变体保留；各表变体未合并（避免件数双计）',
+        });
+    }
 }
 function mapParsedSheetItemsToDailyRows(sheets) {
     const rows = [];
@@ -208,9 +325,10 @@ function mapParsedSheetItemsToDailyRows(sheets) {
     const validSheets = sheets.filter((sheet) => typeof sheet === 'object' && sheet !== null && !Array.isArray(sheet)
         && typeof sheet.sheetKey === 'string' && sheet.sheetKey !== ''
         && Array.isArray(sheet.items));
-    // 先记录每个商品出现过的全部工作表：归属仍按优先级取一行（避免聚合重复累加），
-    // 但 extra.sheetKeys 保留完整归属，供"新商品分析"等按 sheet 基数筛选（如新品同时进热销表的情况）
+    // 每个商品出现过的全部工作表（extra.sheetKeys 保留完整归属，供"新商品分析"等按 sheet 基数筛选）
     const sheetKeysByItem = new Map();
+    // 每个商品的全部出现（跨 sheet 合并的输入；不在此处去重）
+    const occurrencesByItem = new Map();
     for (const sheet of validSheets) {
         for (const raw of sheet.items) {
             if (typeof raw !== 'object' || raw === null)
@@ -222,43 +340,28 @@ function mapParsedSheetItemsToDailyRows(sheets) {
             if (!known.includes(sheet.sheetKey))
                 known.push(sheet.sheetKey);
             sheetKeysByItem.set(itemId, known);
+            const occurrences = occurrencesByItem.get(itemId) ?? [];
+            occurrences.push({ sheetKey: sheet.sheetKey, item: raw });
+            occurrencesByItem.set(itemId, occurrences);
         }
     }
-    const seenItemIds = new Set();
-    const ordered = [...validSheets].sort((a, b) => sheetPriority(a.sheetKey) - sheetPriority(b.sheetKey));
-    for (const sheet of ordered) {
-        for (const raw of sheet.items) {
-            if (typeof raw !== 'object' || raw === null)
-                continue;
-            const item = raw;
-            const itemId = String(item.itemId ?? '').trim();
-            if (!itemId || seenItemIds.has(itemId))
-                continue;
-            seenItemIds.add(itemId);
-            const row = {
-                itemId,
-                itemName: String(item.itemName ?? ''),
-                sheetKey: sheet.sheetKey,
-                status: typeof item.status === 'string' && item.status ? item.status : null,
-                date: '',
-            };
-            const looseRow = row;
-            for (const field of exports.SUMMABLE_FIELDS) {
-                const value = numOrUndef(item[field]);
-                looseRow[field] = value === undefined ? null : value;
-            }
-            const extra = {};
-            for (const field of exports.EXTRA_FIELDS) {
-                const value = item[field];
-                if (value !== null && value !== undefined && value !== '')
-                    extra[field] = value;
-            }
-            const allSheetKeys = sheetKeysByItem.get(itemId) ?? [sheet.sheetKey];
-            extra.sheetKeys = allSheetKeys;
-            row.extra = extra;
-            row.variations = Array.isArray(item.variations) ? item.variations : null;
-            rows.push(row);
+    for (const [itemId, occurrences] of occurrencesByItem) {
+        // 主记录 = 类别优先级最高的出现（同优先级重复出现保持原顺序首个）
+        const ordered = [...occurrences].sort((left, right) => sheetPriority(left.sheetKey) - sheetPriority(right.sheetKey)
+            || occurrences.indexOf(left) - occurrences.indexOf(right));
+        const primary = ordered[0];
+        const row = buildRowFromOccurrence(itemId, primary);
+        const audit = { sources: {}, conflicts: [] };
+        for (const secondary of ordered.slice(1)) {
+            backfillRowFromOccurrence(itemId, row, secondary, audit);
         }
+        const extra = row.extra;
+        extra.sheetKeys = sheetKeysByItem.get(itemId) ?? [primary.sheetKey];
+        if (Object.keys(audit.sources).length > 0)
+            extra.sheetSources = audit.sources;
+        if (audit.conflicts.length > 0)
+            extra.sheetConflicts = audit.conflicts.slice(0, 10);
+        rows.push(row);
     }
     return rows;
 }

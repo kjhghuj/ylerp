@@ -227,12 +227,12 @@ describe('mergeVariations', () => {
       makeRow({
         itemId: '1',
         date: '2026-09-01',
-        variations: [{ variationSku: 'V1', variationName: 'Black', unitsOrdered: 5 }, { variationSku: 'V2', variationName: 'White', unitsOrdered: 50 }],
+        variations: [{ variationSku: 'V1', variationName: 'Black', modelCode: 'SKU-1', modelId: 'G-1', salesConfirmed: 40, ordersConfirmed: 2, unitsOrdered: 5 }, { variationSku: 'V2', variationName: 'White', unitsOrdered: 50 }],
       }),
       makeRow({
         itemId: '1',
         date: '2026-09-02',
-        variations: [{ variationSku: 'V1', variationName: 'Black', unitsOrdered: 10, cartUnits: 3 }],
+        variations: [{ variationSku: 'V1', variationName: 'Black', salesConfirmed: 60, ordersConfirmed: 3, unitsOrdered: 10, cartUnits: 3 }],
       }),
     ];
     const merged = mergeVariations(rows);
@@ -242,6 +242,7 @@ describe('mergeVariations', () => {
     expect(merged[1].variationName).toBe('Black');
     expect(merged[1].unitsOrdered).toBe(15);
     expect(merged[1].cartUnits).toBe(3);
+    expect(merged[1]).toMatchObject({ modelCode: 'SKU-1', modelId: 'G-1', salesConfirmed: 100, ordersConfirmed: 5 });
   });
 });
 
@@ -337,5 +338,123 @@ describe('mapParsedSheetItemsToDailyRows', () => {
     ] as unknown as Parameters<typeof mapParsedSheetItemsToDailyRows>[0]);
     expect(rows).toHaveLength(1);
     expect(rows[0].itemId).toBe('10001');
+  });
+
+  // ---- 跨 sheet 合并字段补齐（2026-09-11 修复字段级丢失） ----
+
+  test('hot+new 重复商品：创建日期/创建天数从 new 行补齐，hot 指标保留且不双计', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      {
+        sheetKey: 'hot',
+        items: [{ itemId: '10001', itemName: 'Keyboard', visitors: 100, unitsOrdered: 20 }],
+      },
+      {
+        sheetKey: 'new',
+        items: [{ itemId: '10001', itemName: 'Keyboard', createdAt: '2026-08-24', createdDays: 14, visitors: 100 }],
+      },
+    ]);
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row.sheetKey).toBe('hot');
+    expect(row.visitors).toBe(100); // hot 值保留；new 行同值不叠加
+    expect(row.unitsOrdered).toBe(20);
+    expect(row.extra).toMatchObject({ createdAt: '2026-08-24', createdDays: 14 });
+    expect(row.extra).toMatchObject({ sheetSources: { createdAt: 'new', createdDays: 'new' } });
+    // 同值不产生冲突记录
+    expect(row.extra?.sheetConflicts).toBeUndefined();
+  });
+
+  test('createdDays=0 是有效值：不当作缺失，也不被其他 sheet 覆盖', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      {
+        sheetKey: 'hot',
+        items: [{ itemId: '10001', itemName: 'Keyboard' }],
+      },
+      {
+        sheetKey: 'new',
+        items: [{ itemId: '10001', itemName: 'Keyboard', createdAt: '2026-09-08', createdDays: 0 }],
+      },
+    ]);
+    expect(rows[0].extra).toMatchObject({ createdAt: '2026-09-08', createdDays: 0 });
+  });
+
+  test('主记录缺失的数量指标从其他 sheet 补齐；不一致时保留主值并记录冲突（不求和）', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      {
+        sheetKey: 'hot',
+        items: [{ itemId: '10001', itemName: 'Keyboard', visitors: 100, clicks: null }],
+      },
+      {
+        sheetKey: 'uncompetitive',
+        items: [{ itemId: '10001', itemName: 'Keyboard', currentPrice: 65.9, priceFlag: '1', visitors: 90, clicks: 12 }],
+      },
+    ]);
+    const row = rows[0];
+    // hot 缺 clicks(null) → 补齐 uncompetitive 的 12
+    expect(row.clicks).toBe(12);
+    expect(row.extra).toMatchObject({ currentPrice: 65.9, priceFlag: '1' });
+    expect(row.extra).toMatchObject({ sheetSources: expect.objectContaining({ clicks: 'uncompetitive', currentPrice: 'uncompetitive' }) });
+    // visitors 双方都有且不等 → 保留 hot 值，不覆盖不求和，记冲突
+    expect(row.visitors).toBe(100);
+    const conflicts = row.extra?.sheetConflicts as Array<Record<string, unknown>>;
+    expect(conflicts).toEqual([expect.objectContaining({ field: 'visitors', keep: 100, other: 90, sheet: 'uncompetitive' })]);
+  });
+
+  test('uncompetitive 与 competitive 同现：priceFlag 语义冲突被记录（两个不同口径列映射同名字段）', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'hot', items: [{ itemId: '10001', itemName: 'Keyboard' }] },
+      { sheetKey: 'uncompetitive', items: [{ itemId: '10001', itemName: 'Keyboard', currentPrice: 65.9, priceFlag: '1' }] },
+      { sheetKey: 'competitive', items: [{ itemId: '10001', itemName: 'Keyboard', currentPrice: 65.9, priceFlag: '4' }] },
+    ]);
+    const extra = rows[0].extra as Record<string, unknown>;
+    // currentPrice 两表一致 → 无冲突；priceFlag 口径不同 → 保留高优先级(uncompetitive)并记录
+    expect(extra.priceFlag).toBe('1');
+    const conflicts = extra.sheetConflicts as Array<Record<string, unknown>>;
+    expect(conflicts).toEqual([
+      expect.objectContaining({ field: 'priceFlag', keep: '1', other: '4', sheet: 'competitive' }),
+    ]);
+  });
+
+  test('新格式分别保存两种价格竞争变体数，跨表补齐后不会互相覆盖', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'hot', items: [{ itemId: '10001', itemName: 'Keyboard' }] },
+      { sheetKey: 'uncompetitive', items: [{ itemId: '10001', itemName: 'Keyboard', uncompetitiveVariations: 1 }] },
+      { sheetKey: 'competitive', items: [{ itemId: '10001', itemName: 'Keyboard', competitiveVariations: 4 }] },
+    ]);
+    expect(rows[0].extra).toMatchObject({ uncompetitiveVariations: 1, competitiveVariations: 4 });
+    expect((rows[0].extra as Record<string, unknown>).sheetConflicts).toBeUndefined();
+  });
+
+  test('变体数组：主记录缺失时整体采用其他 sheet；都有时保留主记录并记冲突（不逐条合并防双计）', () => {
+    const hotVariations = [{ variationSku: 'V1', unitsOrdered: 5 }];
+    const otherVariations = [{ variationSku: 'V2', unitsOrdered: 7 }];
+    // 商品 10001 同时在 new（优先级高，无变体列）与 competitive（有变体列）→ 主记录 new 缺变体，整体采用 competitive 行
+    const backfilled = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'new', items: [{ itemId: '10001', itemName: 'New item' }] },
+      { sheetKey: 'competitive', items: [{ itemId: '10001', itemName: 'New item', variations: otherVariations }] },
+    ]);
+    expect(backfilled).toHaveLength(1);
+    expect(backfilled[0].sheetKey).toBe('new');
+    expect(backfilled[0].variations).toEqual([{ variationSku: 'V2', unitsOrdered: 7 }]);
+    expect((backfilled[0].extra as Record<string, unknown>).sheetSources).toMatchObject({ variations: 'competitive' });
+
+    // 主记录有变体、其他 sheet 也有 → 保留主记录，不合并，记冲突
+    const conflictRows = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'hot', items: [{ itemId: '30003', itemName: 'Hot', variations: hotVariations }] },
+      { sheetKey: 'new', items: [{ itemId: '30003', itemName: 'Hot', variations: otherVariations }] },
+    ]);
+    expect(conflictRows[0].variations).toEqual(hotVariations);
+    const conflicts = (conflictRows[0].extra as Record<string, unknown>).sheetConflicts as Array<Record<string, unknown>>;
+    expect(conflicts).toEqual([expect.objectContaining({ field: 'variations', keep: 1, other: 1, sheet: 'new' })]);
+  });
+
+  test('sheetKeys/sheetSources/sheetConflicts 管理键不参与补齐，不会互相污染', () => {
+    const rows = mapParsedSheetItemsToDailyRows([
+      { sheetKey: 'hot', items: [{ itemId: '10001', itemName: 'K' }] },
+      { sheetKey: 'new', items: [{ itemId: '10001', itemName: 'K', createdAt: '2026-08-24' }] },
+    ]);
+    const extra = rows[0].extra as Record<string, unknown>;
+    expect(extra.sheetKeys).toEqual(['hot', 'new']);
+    expect(Array.isArray(extra.sheetSources)).toBe(false);
   });
 });
