@@ -1351,8 +1351,8 @@ describe('restockV2Routes', () => {
     await handler(req as Request, res as Response, jest.fn());
 
     expect(mockExternalMappingUpsert).toHaveBeenCalledWith(expect.objectContaining({
-      where: { userId_site_externalSku: { userId: 'owner-1', site: 'PH', externalSku: 'PLATFORM-1' } },
-      create: { userId: 'owner-1', site: 'PH', externalSku: 'PLATFORM-1', targetSku: 'ERP-1' },
+      where: { userId_site_externalSku_externalSkuType: { userId: 'owner-1', site: 'PH', externalSku: 'PLATFORM-1', externalSkuType: 'legacy' } },
+      create: { userId: 'owner-1', site: 'PH', externalSku: 'PLATFORM-1', externalSkuType: 'legacy', targetSku: 'ERP-1' },
     }));
     expect(mockSalesItemUpdate).toHaveBeenCalledWith({
       where: { id: 'item-1' }, data: { targetSku: 'ERP-1' },
@@ -1568,13 +1568,13 @@ describe('restockV2Routes', () => {
     }));
     expect(mockExternalMappingUpsert).toHaveBeenCalledWith({
       where: {
-        userId_site_externalSku: {
-          userId: 'owner-1', site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK',
+        userId_site_externalSku_externalSkuType: {
+          userId: 'owner-1', site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK', externalSkuType: 'legacy',
         },
       },
       create: {
         userId: 'owner-1', site: 'MY', externalSku: 'FPG_KEYBOARD_BLACK',
-        targetSku: 'FPG_KEYBOARD_BLACK',
+        externalSkuType: 'legacy', targetSku: 'FPG_KEYBOARD_BLACK',
       },
       update: { targetSku: 'FPG_KEYBOARD_BLACK' },
     });

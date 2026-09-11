@@ -462,7 +462,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const [savedMappings, inventoryItems] = await Promise.all([
                 externalSkus.length > 0
                     ? index_1.prisma.externalSkuMapping.findMany({
-                        where: { userId, site, externalSku: { in: externalSkus } },
+                        // V2 无编号类型概念：只读 legacy 身份的行（V3 按类型保存的映射不作用于 V2）
+                        where: { userId, site, externalSku: { in: externalSkus }, externalSkuType: 'legacy' },
                     })
                     : Promise.resolve([]),
                 index_1.prisma.inventoryItem.findMany({ where: { userId }, select: { sku: true } }),
@@ -486,8 +487,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
             const items = (0, restockSalesImport_1.aggregateSalesImportRows)(req.body.rows, reusableMappings);
             const created = await (0, usageEvents_1.withUsageEvent)(index_1.prisma, req, { module: 'restock-v2', action: 'restock_sales_import', objectType: 'RestockSalesImport', affectedCount: items.length, metadata: { site, inputRows: req.body.rows.length } }, async (tx) => {
                 await Promise.all(exactFallbackMappings.map(({ externalSku, targetSku }) => tx.externalSkuMapping.upsert({
-                    where: { userId_site_externalSku: { userId, site, externalSku } },
-                    create: { userId, site, externalSku, targetSku },
+                    where: { userId_site_externalSku_externalSkuType: { userId, site, externalSku, externalSkuType: 'legacy' } },
+                    create: { userId, site, externalSku, externalSkuType: 'legacy', targetSku },
                     update: { targetSku },
                 })));
                 return tx.restockSalesImport.create({
@@ -711,8 +712,8 @@ const createRestockV2Router = ({ ycClient, ycClientFactory, } = {}) => {
                 }
                 if (externalSku) {
                     await tx.externalSkuMapping.upsert({
-                        where: { userId_site_externalSku: { userId, site: salesImport.site, externalSku } },
-                        create: { userId, site: salesImport.site, externalSku, targetSku: normalizedTargetSku },
+                        where: { userId_site_externalSku_externalSkuType: { userId, site: salesImport.site, externalSku, externalSkuType: 'legacy' } },
+                        create: { userId, site: salesImport.site, externalSku, externalSkuType: 'legacy', targetSku: normalizedTargetSku },
                         update: { targetSku: normalizedTargetSku },
                     });
                 }

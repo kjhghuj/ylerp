@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Trash2, Loader2, Search, Store, Calendar, X } from 'lucide-react';
+import { AlertTriangle, Trash2, Loader2, Search, Store, Calendar, PackageCheck, X } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../AuthContext';
 import { hasPermission } from '../../components/PermissionTree';
@@ -93,7 +93,12 @@ export const loadPotentialFilters = (): PotentialFilters => {
 
 type ContentTab = 'list' | 'potential';
 
-export const ProductAnalysis: React.FC = () => {
+interface ProductAnalysisProps {
+  /** 「生成补货建议」入口：携带当前店铺与区间跳转到补货工作台（补货V3） */
+  onGenerateRestock?: (shopId: string, from: string, to: string) => void;
+}
+
+export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRestock }) => {
   const { showToast } = useToast();
   const strings = useProductAnalysisStrings();
   const { user } = useAuth();
@@ -536,6 +541,23 @@ export const ProductAnalysis: React.FC = () => {
               <Store size={12} />
               {strings.shop.manage}
             </button>
+            {onGenerateRestock && activeShopId && (
+              <button
+                type="button"
+                onClick={() => {
+                  onGenerateRestock(activeShopId, range.from, range.to);
+                }}
+                disabled={!activeShop?.latestUploadDate}
+                title={activeShop?.latestUploadDate
+                  ? `带当前店铺与区间（${range.from} ~ ${range.to}）进入补货工作台`
+                  : '该店铺还没有上传数据，无法生成补货建议'}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-colors duration-200 disabled:opacity-40"
+                style={{ backgroundColor: 'var(--primary)' }}
+              >
+                <PackageCheck size={12} />
+                生成补货建议
+              </button>
+            )}
             {activeShop && (
               <span className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
                 {activeShop.latestUploadDate

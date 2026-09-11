@@ -153,12 +153,14 @@ model ExternalSkuMapping {
   site        String
   externalSku String
   targetSku   String
+  /// 编号类型（补货V3 人工映射绑定的身份）：modelCode/variationSku/item；legacy=历史字符串映射（身份未知）
+  externalSkuType String @default("legacy")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, site, externalSku])
+  @@unique([userId, site, externalSku, externalSkuType])
   @@index([userId, site, targetSku])
 }
 
@@ -175,6 +177,108 @@ model RestockSkuRule {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, site, sku])
+  @@index([userId, site])
+}
+
+/// 补货V3：店铺专属 SKU 映射（店铺作用域，优先于站点级 ExternalSkuMapping；V2 读写不受影响）
+model RestockShopSkuMapping {
+  id          String                @id @default(uuid())
+  userId      String
+  shopId      String
+  site        String
+  externalSku String
+  /// 编号类型（人工映射绑定的身份）：modelCode/variationSku/item；legacy=历史字符串映射（身份未知）
+  externalSkuType String            @default("legacy")
+  targetSku   String
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop        ProductAnalysisShop   @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shopId, externalSku, externalSkuType])
+  @@index([userId, shopId])
+  @@index([userId, site])
+}
+
+/// 补货V3：店铺专属 SKU 参数规则（字段级覆盖：店铺规则 > 站点规则 > 全局参数）
+model RestockShopRule {
+  id            String              @id @default(uuid())
+  userId        String
+  shopId        String
+  sku           String
+  leadTimeDays  Int?
+  safetyDays    Int?
+  growthPercent Float?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop          ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shopId, sku])
+  @@index([userId, shopId])
+}
+
+/// 补货V3：库存池（命名的仓库范围；店铺=需求来源，池=供应来源）
+model RestockStockPool {
+  id             String   @id @default(uuid())
+  userId         String
+  name           String
+  site           String
+  warehouseCodes String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, site])
+}
+
+/// 补货V3：计算结果暂存（resultId 与用户/条件/源数据绑定；保存计划时服务端据此重建不可变快照）
+model RestockComputeResult {
+  id               String   @id @default(uuid())
+  userId           String
+  fingerprint      String
+  sourceSnapshotId String
+  payload          Json
+  createdAt        DateTime @default(now())
+  expiresAt        DateTime
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+}
+
+/// 补货V3：补货计划快照（草稿→已确认→已作废；确认后修改生成新版本，历史保留）
+model RestockPlanSnapshot {
+  id             String    @id @default(uuid())
+  userId         String
+  name           String
+  status         String    @default("draft")
+  revision       Int       @default(1)
+  version        Int       @default(1)
+  resultId       String?
+  idempotencyKey String?
+  site           String
+  shopIds        String[]
+  poolId         String?
+  warehouseCodes String[]
+  rangeFrom      String
+  rangeTo        String
+  salesMetric    String    @default("unitsOrdered")
+  parameters     Json
+  items          Json
+  summary        Json
+  snapshotMeta   Json
+  supersedesId   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  confirmedAt    DateTime?
+  voidedAt       DateTime?
+  voidReason     String?
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, status, createdAt])
   @@index([userId, site])
 }
 
@@ -300,12 +404,14 @@ model ProductAnalysisShop {
   userId    String
   user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   days      ProductAnalysisDailyUpload[]
+  restockShopSkuMappings RestockShopSkuMapping[]
+  restockShopRules       RestockShopRule[]
 
   @@unique([userId, name])
   @@index([userId])
 }
 
-/// 店铺单日上传（同日重传整体替换）
+/// 店铺单日上传版本；同日重传追加不可变版本，仅一个版本处于 active。
 model ProductAnalysisDailyUpload {
   id        String             @id @default(uuid())
   shopId    String
@@ -398,6 +504,11 @@ model User {
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]
   restockSkuRules     RestockSkuRule[]
+  restockShopSkuMappings RestockShopSkuMapping[]
+  restockShopRules       RestockShopRule[]
+  restockStockPools      RestockStockPool[]
+  restockPlanSnapshots   RestockPlanSnapshot[]
+  restockComputeResults  RestockComputeResult[]
   scheduleItems       ScheduleItem[]
   skuGroups           SkuGroup[]
   parent              User?                    @relation("SubAccounts", fields: [parentId], references: [id])

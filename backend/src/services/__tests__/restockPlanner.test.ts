@@ -175,6 +175,34 @@ describe('buildRestockPlan target-date planning', () => {
     expect(plan.items.find(item => item.sku === 'SKU-2')?.inTransit).toBe(0);
   });
 
+  it('counts two distinct inbound details of one order even with identical SKU/quantity/ETA (V2 behavior change 2026-09)', () => {
+    // 修改前：明细按「SKU+数量+ETA」去重 → 只计 30，suggestedQty = 280−30 = 250。
+    // 修改后：不同明细身份（不同 detailId，或无明细 ID 时保守保留）不得误删 → 计 60，suggestedQty = 220。
+    // 这是共享引擎的显式兼容性变化：同单多批次明细不再被误判为重复。
+    const plan = buildRestockPlan({
+      site: 'MY',
+      planningDate: '2026-09-10',
+      targetDate: '2026-10-10',
+      leadTimeDays: 2,
+      safetyDays: 0,
+      growthPercent: 0,
+      products: [product],
+      inventoryItems: [{ ...inventory, dailySales: 10 }],
+      remoteStockRows: [{ customerSku: 'SKU-1', siteCode: 'MY', available: 0 }],
+      inboundOrders: [{
+        warehouseOrderNo: 'ORD-MULTI',
+        status: 2,
+        estimatedArrivalDate: '2026-09-15',
+        details: [
+          { customerSku: 'SKU-1', quantity: 30, shiftNum: 0, estimatedArrivalDate: '2026-09-15' },
+          { customerSku: 'SKU-1', quantity: 30, shiftNum: 0, estimatedArrivalDate: '2026-09-15' },
+        ],
+      }],
+    });
+    expect(plan.items[0].inTransitDuringCoverage).toBe(60);
+    expect(plan.items[0].suggestedQty).toBe(220);
+  });
+
   it.each([
     [{ planningDate: 'not-a-date', targetDate: '2026-10-01' }, 'planningDate'],
     [{ planningDate: '2026-07-01', targetDate: 'not-a-date' }, 'targetDate'],

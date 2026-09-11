@@ -26,7 +26,7 @@ class YcClientError extends Error {
     }
 }
 exports.YcClientError = YcClientError;
-const DEFAULT_BASE_URL = 'https://yc-client.anestcang.com';
+const DEFAULT_BASE_URL = 'https://api.yc-client.anestcang.com';
 const SUCCESS_STATE = '000001';
 const TOKEN_REFRESH_WINDOW_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_PAGE_SIZE = 100;

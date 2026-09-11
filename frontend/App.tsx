@@ -1,20 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { StoreProvider, useStore } from './StoreContext';
 import { AuthProvider, useAuth } from './AuthContext';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './modules/Dashboard';
 import { ProfitCalculator } from './modules/ProfitCalculator';
 import { FinanceManager } from './modules/FinanceManager';
-import { RestockV2 } from './modules/RestockV2';
-import { RestockV3 } from './modules/RestockV3';
-import { ProductList } from './modules/ProductList';
 import { LoginPage } from './modules/LoginPage';
-import { UserManagement } from './modules/UserManagement';
-import { PersonalCenter } from './modules/PersonalCenter';
-import { ChromaAdapt } from './modules/chroma-adapt/ChromaAdapt';
-import { ScheduleManager } from './modules/ScheduleManager';
-import { ProductAnalysis } from './modules/product-analysis/ProductAnalysis';
-import { UsageStats } from './modules/UsageStats';
+
+// 重组件按需加载：减小主 JS 包（首屏无需全部模块代码）
+const RestockV2 = lazy(() => import('./modules/RestockV2').then(module => ({ default: module.RestockV2 })));
+const RestockV3 = lazy(() => import('./modules/RestockV3'));
+const ProductList = lazy(() => import('./modules/ProductList').then(module => ({ default: module.ProductList })));
+const UserManagement = lazy(() => import('./modules/UserManagement').then(module => ({ default: module.UserManagement })));
+const PersonalCenter = lazy(() => import('./modules/PersonalCenter').then(module => ({ default: module.PersonalCenter })));
+const ChromaAdapt = lazy(() => import('./modules/chroma-adapt/ChromaAdapt').then(module => ({ default: module.ChromaAdapt })));
+const ScheduleManager = lazy(() => import('./modules/ScheduleManager').then(module => ({ default: module.ScheduleManager })));
+const ProductAnalysis = lazy(() => import('./modules/product-analysis/ProductAnalysis').then(module => ({ default: module.ProductAnalysis })));
+const UsageStats = lazy(() => import('./modules/UsageStats').then(module => ({ default: module.UsageStats })));
 import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
@@ -23,6 +25,8 @@ import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
   const [currentView, setCurrentView] = React.useState<AppState['currentView']>(() => window.location.hash.startsWith('#shopee') ? 'personal-center' : 'dashboard');
+  /** 跨模块导航参数：商品分析「生成补货建议」带入店铺与区间 */
+  const [restockEntry, setRestockEntry] = React.useState<{ shopId: string; from: string; to: string } | null>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
@@ -73,13 +77,20 @@ const MainContent: React.FC = () => {
       case 'profit': return <ProfitCalculator />;
       case 'finance': return <FinanceManager />;
       case 'restock-v2': return <RestockV2 />;
-      case 'restock-v3': return <RestockV3 />;
+      case 'restock-v3': return <RestockV3 key={restockEntry ? `entry-${restockEntry.shopId}-${restockEntry.from}` : 'default'} initialParams={restockEntry ?? undefined} />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
       case 'personal-center': return <PersonalCenter />;
       case 'chroma-adapt': return <ChromaAdapt />;
       case 'schedule': return <ScheduleManager />;
-      case 'product-analysis': return <ProductAnalysis />;
+      case 'product-analysis': return (
+        <ProductAnalysis
+          onGenerateRestock={(shopId, from, to) => {
+            setRestockEntry({ shopId, from, to });
+            setCurrentView('restock-v3');
+          }}
+        />
+      );
       case 'usage-stats': return <UsageStats />;
       default: return <Dashboard />;
     }
@@ -90,8 +101,8 @@ const MainContent: React.FC = () => {
       case 'dashboard': return strings.sidebar.dashboard;
       case 'profit': return strings.sidebar.profit;
       case 'finance': return strings.sidebar.finance;
-      case 'restock-v2': return strings.sidebar.restockV2 || '补货V2';
-      case 'restock-v3': return strings.sidebar.restockV3 || '补货V3';
+      case 'restock-v2': return strings.sidebar.restockV2 || '表格补货';
+      case 'restock-v3': return strings.sidebar.restockV3 || '店铺补货';
       case 'product-list': return strings.sidebar.productList;
       case 'user-management': return '用户管理';
       case 'personal-center': return '个人中心';
@@ -141,7 +152,15 @@ const MainContent: React.FC = () => {
 
         <div ref={contentRef} className={`flex-1 min-h-0 overflow-auto ${currentView === 'profit' ? 'profit-scroll-surface p-3 lg:p-4' : 'p-4 lg:p-6'}`}>
           <div className="h-full">
-            {renderView()}
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+                </div>
+              }
+            >
+              {renderView()}
+            </Suspense>
           </div>
         </div>
       </main>
