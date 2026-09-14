@@ -1,0 +1,66 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Configure SSH
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          test -n "$SERVER_HOST"
+          test -n "$SERVER_USER"
+          test -n "$SERVER_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_KEY" | tr -d '\r' > ~/.ssh/ylerp_deploy
+          chmod 600 ~/.ssh/ylerp_deploy
+          ssh-keyscan -H "$SERVER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          ssh -i ~/.ssh/ylerp_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 "$SERVER_USER@$SERVER_HOST" 'bash -se' <<'REMOTE'
+            set -euo pipefail
+            cd /opt/ylerp
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+
+            export COMPOSE_PARALLEL_LIMIT=1
+            docker compose -f docker-compose.prod.yml build api
+            docker compose -f docker-compose.prod.yml build web
+            docker compose -f docker-compose.prod.yml run --rm --no-deps api npx prisma migrate deploy
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+            healthy=false
+            for attempt in $(seq 1 20); do
+              if docker compose -f docker-compose.prod.yml exec -T api node -e 'fetch("http://127.0.0.1:3002/health").then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))'; then
+                healthy=true
+                break
+              fi
+              sleep 3
+            done
+
+            if [ "$healthy" != true ]; then
+              docker compose -f docker-compose.prod.yml logs --tail=100 api
+              exit 1
+            fi
+
+            docker compose -f docker-compose.prod.yml ps
+          REMOTE
