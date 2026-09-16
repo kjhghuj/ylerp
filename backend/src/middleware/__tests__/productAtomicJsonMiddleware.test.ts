@@ -4,6 +4,8 @@ import { AddressInfo } from 'net';
 import { gzipSync } from 'zlib';
 import {
   configureJsonBodyParsing,
+  getProductAnalysisUploadRawBodyBytes,
+  productAnalysisUploadJsonParser,
   productAtomicRouteErrorHandler,
 } from '../productAtomicJsonMiddleware';
 
@@ -275,5 +277,45 @@ describe('atomic product raw JSON body limits', () => {
     expect(ordinaryHandlerCalls).toBe(0);
     expect(atomicHandlerCalls).toBe(0);
     expect(atomicTransactionCalls).toBe(0);
+  });
+});
+
+describe('product analysis upload body accounting', () => {
+  let server: Server;
+  let port: number;
+
+  beforeEach(async () => {
+    const app = express();
+    configureJsonBodyParsing(app);
+    app.use('/api/product-analysis', productAnalysisUploadJsonParser);
+    app.post('/api/product-analysis/shops/:id/daily-uploads', (req, res) => {
+      res.json({ rawBodyBytes: getProductAnalysisUploadRawBodyBytes(req) });
+    });
+    server = http.createServer(app);
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => resolve());
+    });
+    port = (server.address() as AddressInfo).port;
+  });
+
+  afterEach(async () => {
+    await new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+    });
+  });
+
+  it('records the raw UTF-8 byte length while parsing the upload once', async () => {
+    const body = JSON.stringify({ value: '商品分析' });
+    const result = await sendRaw(
+      port,
+      'POST',
+      '/api/product-analysis/shops/shop-1/daily-uploads',
+      [body],
+      true,
+    );
+
+    expect(result.status).toBe(200);
+    expect(JSON.parse(result.body)).toEqual({ rawBodyBytes: Buffer.byteLength(body, 'utf8') });
   });
 });

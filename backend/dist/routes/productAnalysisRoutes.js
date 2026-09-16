@@ -2,7 +2,6 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 const client_1 = require("@prisma/client");
-const node_crypto_1 = require("node:crypto");
 const index_1 = require("../index");
 const glmConfig_1 = require("../services/glm/glmConfig");
 const glmClient_1 = require("../services/glm/glmClient");
@@ -11,8 +10,10 @@ const aiUserConfig_1 = require("../services/aiUserConfig");
 const prompts_1 = require("../services/glm/prompts");
 const usageEvents_1 = require("../services/usageEvents");
 const aiUsage_1 = require("../services/aiUsage");
+const productAtomicJsonMiddleware_1 = require("../middleware/productAtomicJsonMiddleware");
 const productAnalysisAggregation_1 = require("../services/productAnalysisAggregation");
 const productAnalysisPotential_1 = require("../services/productAnalysisPotential");
+const productAnalysisSourceHash_1 = require("../services/productAnalysisSourceHash");
 const productAnalysisUpload_1 = require("../services/productAnalysisUpload");
 const router = (0, express_1.Router)();
 const MAX_UPLOAD_JSON_LENGTH = 60 * 1024 * 1024;
@@ -66,15 +67,6 @@ function parsePageNumber(value, fallback, max) {
         return null;
     const parsed = Number(value);
     return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : null;
-}
-/** Object keys are sorted recursively so equivalent validated snapshots hash identically. */
-function canonicalJson(value) {
-    if (Array.isArray(value))
-        return `[${value.map(canonicalJson).join(',')}]`;
-    if (isRecord(value)) {
-        return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-    }
-    return JSON.stringify(value);
 }
 function isRetryableSerializationError(error) {
     if (!isRecord(error))
@@ -509,7 +501,7 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
             return res.status(400).json({ detail: 'date 需为真实存在的 YYYY-MM-DD 日期' });
         }
         // 在深度 Zod 校验前按 UTF-8 字节数拒绝超限 JSON，避免解析超大对象且绝不进入写事务。
-        if (Buffer.byteLength(JSON.stringify(body), 'utf8') > MAX_UPLOAD_JSON_LENGTH) {
+        if (((0, productAtomicJsonMiddleware_1.getProductAnalysisUploadRawBodyBytes)(req) ?? 0) > MAX_UPLOAD_JSON_LENGTH) {
             return res.status(413).json({ detail: 'Report payload too large (limit 60MB)' });
         }
         // 结构校验（Zod）：fileName / sheets / sheetKey / items 类型、长度与数量上限；非法一律 400 而非 500
@@ -553,7 +545,7 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
         };
         const sourceRowCount = sourceSheets.reduce((total, sheet) => total + sheet.rows.filter((row) => row.cells.length > 0 && (sheet.headerRowNumber === null || row.rowNumber > sheet.headerRowNumber)).length, 0);
         const variationCount = rows.reduce((total, row) => total + (Array.isArray(row.variations) ? row.variations.length : 0), 0);
-        const sourceHash = (0, node_crypto_1.createHash)('sha256').update(canonicalJson(sourceSheets)).digest('hex');
+        const sourceHash = (0, productAnalysisSourceHash_1.hashCanonicalJson)(sourceSheets);
         // 每次同日上传创建不可变版本；全部数据写入成功后才切换 active。
         let created;
         for (let attempt = 0; attempt < 3; attempt += 1) {

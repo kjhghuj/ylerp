@@ -577,12 +577,13 @@ describe('daily upload version and snapshot APIs', () => {
 
   test('rejects an over-limit UTF-8 payload before validation or transaction work', async () => {
     mockShopFindFirst.mockResolvedValueOnce(SHOP);
-    const oversized = '界'.repeat(21 * 1024 * 1024);
-    const { res, status } = makeRes();
-    await runRoute('/shops/:id/daily-uploads', 'post', makeReq({
+    const req = makeReq({
       params: { id: SHOP.id },
-      body: { date: '2026-09-06', payload: { fileName: 'a.20260906.xlsx', sheets: PARSED_SHEETS, padding: oversized } },
-    }) as Request, res as Response);
+      body: { date: '2026-09-06', payload: { fileName: 'a.20260906.xlsx', sheets: PARSED_SHEETS } },
+    }) as Request & { productAnalysisRawBodyBytes?: number };
+    req.productAnalysisRawBodyBytes = 60 * 1024 * 1024 + 1;
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', req, res as Response);
     expect(status).toHaveBeenCalledWith(413);
     expect(mockTransaction).not.toHaveBeenCalled();
     expect(mockUploadCreate).not.toHaveBeenCalled();

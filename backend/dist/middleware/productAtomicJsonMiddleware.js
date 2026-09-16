@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.configureJsonBodyParsing = exports.chromaJsonErrorHandler = exports.productAtomicRouteErrorHandler = exports.productAtomicJsonErrorHandler = exports.legacyJsonParserWithAtomicSkip = exports.productAtomicJsonParser = exports.productAnalysisUploadJsonParser = exports.chromaJsonParser = exports.isProductAtomicWriteRequest = exports.isBoundedProfitTemplateWriteRequest = exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = exports.CHROMA_JSON_RAW_BODY_LIMIT = exports.LEGACY_JSON_RAW_BODY_LIMIT = exports.PRODUCT_ATOMIC_RAW_BODY_LIMIT = void 0;
+exports.configureJsonBodyParsing = exports.chromaJsonErrorHandler = exports.productAtomicRouteErrorHandler = exports.productAtomicJsonErrorHandler = exports.legacyJsonParserWithAtomicSkip = exports.productAtomicJsonParser = exports.productAnalysisUploadJsonParser = exports.getProductAnalysisUploadRawBodyBytes = exports.chromaJsonParser = exports.isProductAtomicWriteRequest = exports.isBoundedProfitTemplateWriteRequest = exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT = exports.CHROMA_JSON_RAW_BODY_LIMIT = exports.LEGACY_JSON_RAW_BODY_LIMIT = exports.PRODUCT_ATOMIC_RAW_BODY_LIMIT = void 0;
 const express_1 = __importDefault(require("express"));
 exports.PRODUCT_ATOMIC_RAW_BODY_LIMIT = '2mb';
 exports.LEGACY_JSON_RAW_BODY_LIMIT = '2mb';
@@ -31,7 +31,14 @@ exports.chromaJsonParser = express_1.default.json({ limit: exports.CHROMA_JSON_R
 const isChromaRequest = (path) => /^\/api\/chroma-(?:adapt|data)(?:\/|$)/i.test(path);
 const isProductAnalysisUploadRequest = (method, path) => (method.toUpperCase() === 'POST'
     && /^\/(?:api\/product-analysis\/)?shops\/[^/]+\/daily-uploads\/?$/i.test(path));
-const productAnalysisUploadParser = express_1.default.json({ limit: exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT });
+const getProductAnalysisUploadRawBodyBytes = (req) => (req.productAnalysisRawBodyBytes);
+exports.getProductAnalysisUploadRawBodyBytes = getProductAnalysisUploadRawBodyBytes;
+const productAnalysisUploadParser = express_1.default.json({
+    limit: exports.PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT,
+    verify: (req, _res, buffer) => {
+        req.productAnalysisRawBodyBytes = buffer.length;
+    },
+});
 const productAnalysisUploadJsonParser = (req, res, next) => {
     if (!isProductAnalysisUploadRequest(req.method, req.path))
         return next();

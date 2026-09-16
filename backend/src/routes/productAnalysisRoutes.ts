@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
-import { createHash } from 'node:crypto';
 import { prisma } from '../index';
 import { GlmApiError } from '../services/glm/glmConfig';
 import { glmChat, glmChatStream, GlmChatMessage } from '../services/glm/glmClient';
@@ -13,6 +12,7 @@ import {
 } from '../services/glm/prompts';
 import { withUsageEvent } from '../services/usageEvents';
 import { runAiCall } from '../services/aiUsage';
+import { getProductAnalysisUploadRawBodyBytes } from '../middleware/productAtomicJsonMiddleware';
 import {
   SUMMABLE_FIELDS,
   aggregateItems,
@@ -22,6 +22,7 @@ import {
   type DailyItemRow,
 } from '../services/productAnalysisAggregation';
 import { rankPotentialItems, type PotentialFilterOptions } from '../services/productAnalysisPotential';
+import { hashCanonicalJson } from '../services/productAnalysisSourceHash';
 import {
   isSuspectedRangeFileName,
   isValidCalendarDate,
@@ -85,15 +86,6 @@ function parsePageNumber(value: unknown, fallback: number, max: number): number 
   if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : null;
-}
-
-/** Object keys are sorted recursively so equivalent validated snapshots hash identically. */
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (isRecord(value)) {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
 }
 
 function isRetryableSerializationError(error: unknown): boolean {
@@ -531,7 +523,7 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
       return res.status(400).json({ detail: 'date 需为真实存在的 YYYY-MM-DD 日期' });
     }
     // 在深度 Zod 校验前按 UTF-8 字节数拒绝超限 JSON，避免解析超大对象且绝不进入写事务。
-    if (Buffer.byteLength(JSON.stringify(body), 'utf8') > MAX_UPLOAD_JSON_LENGTH) {
+    if ((getProductAnalysisUploadRawBodyBytes(req) ?? 0) > MAX_UPLOAD_JSON_LENGTH) {
       return res.status(413).json({ detail: 'Report payload too large (limit 60MB)' });
     }
     // 结构校验（Zod）：fileName / sheets / sheetKey / items 类型、长度与数量上限；非法一律 400 而非 500
@@ -580,7 +572,7 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
     ).length, 0);
     const variationCount = rows.reduce((total, row) =>
       total + (Array.isArray(row.variations) ? row.variations.length : 0), 0);
-    const sourceHash = createHash('sha256').update(canonicalJson(sourceSheets)).digest('hex');
+    const sourceHash = hashCanonicalJson(sourceSheets);
 
     // 每次同日上传创建不可变版本；全部数据写入成功后才切换 active。
     let created: {

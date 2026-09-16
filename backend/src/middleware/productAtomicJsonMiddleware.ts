@@ -1,6 +1,7 @@
 import express, {
   Application,
   ErrorRequestHandler,
+  Request,
   RequestHandler,
 } from 'express';
 
@@ -42,7 +43,19 @@ const isProductAnalysisUploadRequest = (method: string, path: string): boolean =
   method.toUpperCase() === 'POST'
   && /^\/(?:api\/product-analysis\/)?shops\/[^/]+\/daily-uploads\/?$/i.test(path)
 );
-const productAnalysisUploadParser = express.json({ limit: PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT });
+
+type ProductAnalysisUploadRequest = Request & { productAnalysisRawBodyBytes?: number };
+
+export const getProductAnalysisUploadRawBodyBytes = (req: Request): number | undefined => (
+  (req as ProductAnalysisUploadRequest).productAnalysisRawBodyBytes
+);
+
+const productAnalysisUploadParser = express.json({
+  limit: PRODUCT_ANALYSIS_UPLOAD_RAW_BODY_LIMIT,
+  verify: (req, _res, buffer) => {
+    (req as ProductAnalysisUploadRequest).productAnalysisRawBodyBytes = buffer.length;
+  },
+});
 
 export const productAnalysisUploadJsonParser: RequestHandler = (req, res, next) => {
   if (!isProductAnalysisUploadRequest(req.method, req.path)) return next();

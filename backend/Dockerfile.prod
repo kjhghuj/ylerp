@@ -43,4 +43,4 @@ COPY --from=build /app/package.json ./package.json
 
 EXPOSE 3002
 
-CMD ["node", "--max-old-space-size=256", "dist/index.js"]
+CMD ["node", "--max-old-space-size=768", "dist/index.js"]
