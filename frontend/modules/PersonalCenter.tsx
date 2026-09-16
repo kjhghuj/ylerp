@@ -29,7 +29,7 @@ const AI_KEY_MASK = '••••••••';
 const AI_CHAT_PROVIDERS = [
     { key: 'glm', label: '智谱 GLM · Coding Plan', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4', defaultModel: 'glm-5.3', models: ['glm-5.3', 'glm-5.3-flash', 'glm-4.6'] },
     { key: 'glm-open', label: '智谱 GLM · 开放平台（按量付费）', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', defaultModel: 'glm-5.3', models: ['glm-5.3', 'glm-5.2', 'glm-4.6'] },
-    { key: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-chat', models: ['deepseek-chat', 'deepseek-reasoner'] },
+    { key: 'deepseek', label: 'DeepSeek', baseUrl: 'https://api.deepseek.com', defaultModel: 'deepseek-flash', models: ['deepseek-flash'] },
     { key: 'kimi', label: 'Kimi（月之暗面）', baseUrl: 'https://api.moonshot.cn/v1', defaultModel: 'kimi-k2-turbo-preview', models: ['kimi-k2-turbo-preview', 'kimi-k2-0711-preview'] },
     { key: 'ark', label: '火山方舟（豆包）', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', defaultModel: 'doubao-seed-1-6-250615', models: ['doubao-seed-1-6-250615', 'doubao-seed-1-6-flash-250815'] },
     { key: 'custom', label: '自定义', baseUrl: '', defaultModel: '', models: [] },
@@ -39,7 +39,7 @@ type AiChatProviderKey = (typeof AI_CHAT_PROVIDERS)[number]['key'];
 const AI_CHAT_PROVIDER_HINTS: Record<string, string> = {
     glm: 'GLM Coding Plan 套餐 Key 的专用端点（系统默认）；套餐额度只在此端点生效',
     'glm-open': '适用于开放平台按量付费 Key；Coding Plan 套餐 Key 在此端点会提示余额不足',
-    deepseek: 'deepseek-chat 为对话模型，deepseek-reasoner 为深度推理模型',
+    deepseek: 'deepseek-flash 为当前 V4.1 Flash API 模型，支持文本与视觉理解',
     kimi: '国内站 Key 使用默认域名；国际站 Key 需把 Base URL 改为 https://api.moonshot.ai/v1（Key 与域名必须匹配）',
     ark: '与「图片生成」卡片共用火山方舟账号的 API Key；模型名也可填 ep- 开头的接入点 ID',
     custom: '填写任意 OpenAI 兼容服务的 Base URL、API Key 与模型名',
@@ -697,10 +697,11 @@ export const PersonalCenter: React.FC = () => {
                                         placeholder="默认 glm-5.3-flash"
                                     />
                                     <datalist id="ai-chat-model-options">
-                                        {(aiChatProvider && aiChatProvider !== 'custom'
-                                            ? AI_CHAT_PROVIDERS.find((preset) => preset.key === aiChatProvider)?.models ?? []
-                                            : AI_CHAT_PROVIDERS.flatMap((preset) => [...preset.models])
-                                        ).map((model) => (
+                                        {Array.from(new Set(
+                                            aiChatProvider && aiChatProvider !== 'custom'
+                                                ? AI_CHAT_PROVIDERS.find((preset) => preset.key === aiChatProvider)?.models ?? []
+                                                : AI_CHAT_PROVIDERS.flatMap((preset) => [...preset.models])
+                                        )).map((model) => (
                                             <option key={model} value={model} />
                                         ))}
                                     </datalist>

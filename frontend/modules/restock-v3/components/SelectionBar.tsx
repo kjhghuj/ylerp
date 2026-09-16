@@ -1,4 +1,4 @@
-/** 底部选中操作栏：已选 SKU 与数量（建议量 vs 确认量）、保存计划、计划列表、导出（全部/所选可执行） */
+/** 表格上方计划操作区：选择摘要与计划操作分组，正常文档流布局避免遮挡分页。 */
 import { useState } from 'react';
 import { ClipboardCopy, Download, History, Save } from 'lucide-react';
 import type { ComputeResult, ConfirmEdit } from '../types';
@@ -43,9 +43,13 @@ export default function SelectionBar(props: SelectionBarProps) {
 
   return (
     <div
-      className="sticky bottom-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 border-t"
+      role="region"
+      aria-label="补货计划操作"
+      className="mx-4 mb-3 min-w-0 shrink-0 rounded-xl border"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
     >
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 border-b" style={{ borderColor: 'var(--border-light)' }}>
+      <span className="text-xs font-semibold" style={{ color: 'var(--text-tertiary)' }}>计划汇总</span>
       <span className="text-[13px]" style={{ color: 'var(--text-primary)' }}>
         已选 <b>{selectedSkus.size}</b> 个 SKU
       </span>
@@ -64,19 +68,24 @@ export default function SelectionBar(props: SelectionBarProps) {
         )}
       </span>
 
-      <div className="flex-1" />
+      </div>
+
+      <div className="px-4 empty:hidden">
 
       {stale && (
-        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(217, 119, 6, 0.12)', color: '#b45309' }} role="status">
+        <span className="block text-xs px-3 py-2 mt-3 rounded-lg" style={{ backgroundColor: 'rgba(217, 119, 6, 0.12)', color: '#b45309' }} role="status">
           条件已变化，结果过期 —— 保存/导出/复制已禁用
         </span>
       )}
       {!stale && refreshFailed && (
-        <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(220, 38, 38, 0.1)', color: '#b91c1c' }} role="status">
+        <span className="block text-xs px-3 py-2 mt-3 rounded-lg" style={{ backgroundColor: 'rgba(220, 38, 38, 0.1)', color: '#b91c1c' }} role="status">
           刷新失败：当前展示的是旧快照，保存/导出/复制已禁用
         </span>
       )}
 
+      </div>
+      <div className="flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+      <div role="group" aria-label="导出与复制" className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={onCopySelected}
@@ -87,26 +96,6 @@ export default function SelectionBar(props: SelectionBarProps) {
       >
         <ClipboardCopy size={13} />
         复制
-      </button>
-      <button
-        type="button"
-        onClick={() => { setPlanName(`补货计划 ${result.metadata.from}~${result.metadata.to}`); setNameDialogOpen(true); }}
-        disabled={!canSave}
-        className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-        style={{ backgroundColor: 'var(--primary)' }}
-        title={stale ? '条件已变化，请先重新计算' : refreshFailed ? '刷新失败期间不能保存' : '保存为计划快照（草稿），可继续确认/作废/导出'}
-      >
-        <Save size={13} />
-        {planSaving ? '保存中…' : '保存计划'}
-      </button>
-      <button
-        type="button"
-        onClick={onOpenPlans}
-        className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs"
-        style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
-      >
-        <History size={13} />
-        计划列表
       </button>
       <button
         type="button"
@@ -130,6 +119,29 @@ export default function SelectionBar(props: SelectionBarProps) {
         <Download size={13} />
         导出所选（可执行）
       </button>
+      </div>
+      <div role="group" aria-label="计划管理" className="flex flex-wrap items-center gap-2 xl:justify-end">
+        {selectedSkus.size === 0 && <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>勾选下方商品后保存计划</span>}
+        <button
+          type="button"
+          onClick={onOpenPlans}
+          className="flex items-center gap-1 rounded-lg border px-3 py-2 text-xs"
+          style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+        >
+          <History size={13} />计划列表
+        </button>
+        <button
+          type="button"
+          onClick={() => { setPlanName(`补货计划 ${result.metadata.from}~${result.metadata.to}`); setNameDialogOpen(true); }}
+          disabled={!canSave}
+          className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-medium text-white disabled:opacity-40"
+          style={{ backgroundColor: 'var(--primary)' }}
+          title={stale ? '条件已变化，请先重新计算' : refreshFailed ? '刷新失败期间不能保存' : '保存为计划快照（草稿），可继续确认/作废/导出'}
+        >
+          <Save size={14} />{planSaving ? '保存中…' : '保存计划'}
+        </button>
+      </div>
+      </div>
 
       {nameDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-label="保存补货计划">

@@ -1,6 +1,6 @@
 /**
  * 补货工作台（补货V3）：店铺（需求源）× 库存池（供应源）× 元仓直连。
- * 布局：顶部工具栏 → 数据状态条 → 紧凑摘要 → 异常处理区（可折叠）→ 主表格 → 底部选中操作栏；
+ * 布局：顶部工具栏 → 数据状态条 → 紧凑摘要 → 异常处理区 → 计划操作区 → 主表格 → 分页；
  * 详情/参数/计划/库存池为抽屉。结果绑定条件指纹，条件变化即过期（禁导出/保存/复制）；
  * 刷新失败保留旧快照但标记禁用；可执行状态前后端双重校验。
  */
@@ -226,6 +226,26 @@ export default function RestockV3({ initialParams }: RestockV3Props) {
               }}
             />
             <ResultsTable
+              actions={
+                <SelectionBar
+                  result={workbench.result}
+                  stale={workbench.isStale}
+                  refreshFailed={workbench.refreshFailed}
+                  canBatch={workbench.canBatch}
+                  selectedSkus={workbench.selectedSkus}
+                  selectedExecutableSkus={workbench.result.items
+                    .filter(item => workbench.selectedSkus.has(item.sku) && item.executable)
+                    .map(item => item.sku)}
+                  edits={workbench.edits}
+                  planSaving={workbench.planSaving}
+                  canEdit={canEdit}
+                  onSavePlan={name => void handleSavePlan(name)}
+                  onOpenPlans={() => setPlansOpen(true)}
+                  onExportAll={handleExportAll}
+                  onExportSelected={handleExportSelected}
+                  onCopySelected={() => void handleCopySelected()}
+                />
+              }
               result={workbench.result}
               filter={tableFilter}
               onFilterChange={setTableFilter}
@@ -249,24 +269,6 @@ export default function RestockV3({ initialParams }: RestockV3Props) {
               onOpenDetail={item => setDetailSku(item.sku)}
             />
           </div>
-          <SelectionBar
-            result={workbench.result}
-            stale={workbench.isStale}
-            refreshFailed={workbench.refreshFailed}
-            canBatch={workbench.canBatch}
-            selectedSkus={workbench.selectedSkus}
-            selectedExecutableSkus={workbench.result.items
-              .filter(item => workbench.selectedSkus.has(item.sku) && item.executable)
-              .map(item => item.sku)}
-            edits={workbench.edits}
-            planSaving={workbench.planSaving}
-            canEdit={canEdit}
-            onSavePlan={name => void handleSavePlan(name)}
-            onOpenPlans={() => setPlansOpen(true)}
-            onExportAll={handleExportAll}
-            onExportSelected={handleExportSelected}
-            onCopySelected={() => void handleCopySelected()}
-          />
         </>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20 text-center px-6">

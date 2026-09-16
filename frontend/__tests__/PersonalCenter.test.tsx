@@ -223,13 +223,13 @@ describe('PersonalCenter AI chat provider presets', () => {
 
         fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'deepseek' } });
         expect(screen.getByLabelText('对话模型 Base URL')).toHaveValue('https://api.deepseek.com');
-        expect(screen.getByLabelText('模型名称')).toHaveValue('deepseek-chat');
-        expect(screen.getByText('deepseek-chat 为对话模型，deepseek-reasoner 为深度推理模型')).toBeInTheDocument();
+        expect(screen.getByLabelText('模型名称')).toHaveValue('deepseek-flash');
+        expect(screen.getByText('deepseek-flash 为当前 V4.1 Flash API 模型，支持文本与视觉理解')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
         await waitFor(() => {
             expect(api.put).toHaveBeenCalledWith('/users/me/ai-config', expect.objectContaining({
-                chat: expect.objectContaining({ provider: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' }),
+                chat: expect.objectContaining({ provider: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' }),
             }));
         });
     });
@@ -241,6 +241,17 @@ describe('PersonalCenter AI chat provider presets', () => {
         fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'custom' } });
         expect(screen.getByLabelText('对话模型 Base URL')).toHaveValue('https://open.bigmodel.cn/api/coding/paas/v4');
         expect(screen.getByLabelText('模型名称')).toHaveValue('glm-5.3');
+    });
+
+    it('renders each model suggestion once when showing models from all providers', async () => {
+        const { container } = render(<PersonalCenter />);
+        fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
+        await screen.findByLabelText('模型名称');
+
+        const values = Array.from(container.querySelectorAll<HTMLDataListElement>('#ai-chat-model-options option'))
+            .map((option) => option.value);
+        expect(values.length).toBeGreaterThan(0);
+        expect(new Set(values).size).toBe(values.length);
     });
 
     it('infers the provider from a stored Base URL when provider is empty', async () => {

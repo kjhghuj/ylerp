@@ -1,5 +1,5 @@
 /** 主结果表：需补货/断货风险/库存未知/全部筛选、搜索、排序、分页、密度切换、批量选择、固定表头与商品列 */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
 import type { ComputeResult, ConfirmEdit, RestockResultItem } from '../types';
 import { MATCH_TYPE_LABELS, QUALITY_LABELS, RESTOCK_STATUS_META, formatInt, formatNumber } from '../labels';
@@ -9,6 +9,7 @@ type SortKey = 'sku' | 'dailySales' | 'availableStock' | 'inTransit' | 'stockout
 type SortDirection = 'asc' | 'desc';
 
 interface ResultsTableProps {
+  actions?: ReactNode;
   result: ComputeResult;
   filter: TableFilter;
   onFilterChange: (filter: TableFilter) => void;
@@ -99,7 +100,8 @@ export default function ResultsTable(props: ResultsTableProps) {
   const rowStyle = { fontSize: dense ? 12.5 : 13 };
 
   return (
-    <div className="flex flex-col min-h-0">
+    <section className="flex flex-col min-h-0 min-w-0" aria-label="补货结果">
+      {props.actions}
       {/* 表格工具行 */}
       <div className="flex flex-wrap items-center gap-2 px-4 py-2">
         <div
@@ -321,13 +323,14 @@ export default function ResultsTable(props: ResultsTableProps) {
       </div>
 
       {/* 分页 */}
-      <div className="flex items-center justify-end gap-2 px-4 pb-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-        <span>第 {currentPage} / {pageCount} 页</span>
+      <nav aria-label="补货结果分页" className="mx-4 mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-xs" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-card)' }}>
+        <span className="mr-auto">共 {sortedItems.length} 项 · 每页 {PAGE_SIZE} 项</span>
+        <span className="tabular-nums">第 {currentPage} / {pageCount} 页</span>
         <button
           type="button"
           disabled={currentPage <= 1}
           onClick={() => setPage(currentPage - 1)}
-          className="rounded-lg border px-2 py-0.5 disabled:opacity-40"
+          className="rounded-lg border px-3 py-2 disabled:opacity-40"
           style={{ borderColor: 'var(--border-light)' }}
         >
           上一页
@@ -336,12 +339,12 @@ export default function ResultsTable(props: ResultsTableProps) {
           type="button"
           disabled={currentPage >= pageCount}
           onClick={() => setPage(currentPage + 1)}
-          className="rounded-lg border px-2 py-0.5 disabled:opacity-40"
+          className="rounded-lg border px-3 py-2 disabled:opacity-40"
           style={{ borderColor: 'var(--border-light)' }}
         >
           下一页
         </button>
-      </div>
-    </div>
+      </nav>
+    </section>
   );
 }
