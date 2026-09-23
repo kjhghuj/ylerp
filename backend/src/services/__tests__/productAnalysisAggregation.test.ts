@@ -147,6 +147,21 @@ describe('pairwise effective-sample rates (same-name metric parity)', () => {
 });
 
 describe('buildDailySeries', () => {
+  test('returns daily sales, traffic, orders and derived rates without borrowing latest extra values', () => {
+    const series = buildDailySeries([
+      makeRow({ itemId: '1', date: '2026-09-01', salesOrdered: 120, salesConfirmed: 80, ordersOrdered: 4, ordersConfirmed: 2, visitors: 20, impressions: 100, clicks: 10, cartVisitors: 5, bounceVisitors: 2, unitsConfirmed: 3, buyersOrdered: 3, cartUnits: 7, extra: { repeatOrderRate: 12, avgReorderDays: 4 } }),
+      makeRow({ itemId: '1', date: '2026-09-02', salesOrdered: 0, ordersOrdered: 0, visitors: 10, impressions: 0, clicks: 0, extra: { repeatOrderRate: 30, avgReorderDays: 'invalid' } }),
+    ]);
+    expect(series[0]).toMatchObject({ salesOrdered: 120, salesConfirmed: 80, aovOrdered: 30, aovConfirmed: 40, ctr: 10, cvrOrdered: 20, cvrConfirmed: 10, cartRate: 25, bounceRate: 10, unitsConfirmed: 3, buyersOrdered: 3, cartUnits: 7, repeatOrderRate: 12, avgReorderDays: 4 });
+    expect(series[1]).toMatchObject({ salesOrdered: 0, aovOrdered: null, ctr: null, cvrOrdered: 0, cartRate: null, repeatOrderRate: 30, avgReorderDays: null, repurchaseRateConfirmed: null });
+    expect(series[0].uniqueClicks).toBeNull();
+  });
+
+  test('new fields preserve missing, zero and invalid values', () => {
+    const [point] = buildDailySeries([makeRow({ itemId: '1', date: '2026-09-01', salesOrdered: Number.NaN, unitsConfirmed: 0, pageViews: Infinity, extra: { avgRepurchaseDays: 0, repurchaseRateConfirmed: Infinity } })]);
+    expect(point).toMatchObject({ salesOrdered: null, unitsConfirmed: 0, pageViews: null, avgRepurchaseDays: 0, repurchaseRateConfirmed: null });
+  });
+
   test('sorts by date and computes daily visitor-based cvr', () => {
     const series = buildDailySeries([
       makeRow({ itemId: '1', date: '2026-09-02', ordersConfirmed: 3, visitors: 300 }),

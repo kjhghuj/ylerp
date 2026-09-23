@@ -22,7 +22,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currency, w
     { icon: Percent, label: strings.summary.weightedCvr, value: formatPercent(weightedCvr), title: strings.summary.cvrNote },
   ];
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="pa-summary grid gap-3">
       {cards.map(({ icon: Icon, label, value, title }) => (
         <div
           key={label}

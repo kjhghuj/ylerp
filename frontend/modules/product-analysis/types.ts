@@ -209,7 +209,16 @@ export interface SheetEffectiveSummary {
   weightedCvr: number | null;
 }
 
-export interface DailySeriesPoint {
+export type DailyTrendMetricKey =
+  | 'salesOrdered' | 'salesConfirmed' | 'aovOrdered' | 'aovConfirmed'
+  | 'impressions' | 'clicks' | 'uniqueImpressions' | 'uniqueClicks' | 'visitors'
+  | 'pageViews' | 'bounceVisitors' | 'searchClicks' | 'likes'
+  | 'ordersOrdered' | 'ordersConfirmed' | 'unitsOrdered' | 'unitsConfirmed' | 'buyersOrdered' | 'buyersConfirmed'
+  | 'cartVisitors' | 'cartUnits' | 'ctr' | 'cvrOrdered' | 'cvrConfirmed' | 'cartRate' | 'bounceRate'
+  | 'repeatOrderRate' | 'repurchaseRateConfirmed' | 'avgReorderDays' | 'avgRepurchaseDays';
+
+/** New daily fields are optional while an older backend is still serving requests. */
+export interface DailySeriesPoint extends Partial<Record<DailyTrendMetricKey, number | null>> {
   date: string;
   /** 当日指标；缺失为 null（未知 ≠ 0，趋势图显示断点） */
   ordersOrdered: number | null;

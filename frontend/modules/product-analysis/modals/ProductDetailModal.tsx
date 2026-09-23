@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import '../product-analysis.css';
+import { ChartStateProvider } from '../components/charts/ChartControls';
 import { X, Loader2 } from 'lucide-react';
 import { ConversionFunnelChart } from '../components/charts/ConversionFunnelChart';
 import { DailyTrendChart } from '../components/charts/DailyTrendChart';
@@ -39,7 +41,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
   const [activeTab, setActiveTab] = useState<ModalTab>('overview');
   const [detail, setDetail] = useState<ItemDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
@@ -55,15 +56,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
     let cancelled = false;
     setDetail(null);
     setError(null);
-    setIsLoading(true);
     (async () => {
       try {
         const response = await fetchShopItem(shopId, itemId, from, to);
         if (!cancelled) setDetail(response);
       } catch (err) {
         if (!cancelled) setError(getApiErrorDetail(err));
-      } finally {
-        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {
@@ -99,6 +97,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
   const variations: ProductVariation[] = detail?.variations ?? [];
 
   return (
+    <ChartStateProvider key={`${shopId}|${itemId}|${from}|${to}`}>
     <div
       className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
       onClick={onClose}
@@ -106,7 +105,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
       aria-modal="true"
     >
       <div
-        className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+        className="pa-detail-modal rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
         {/* 头部 */}
@@ -116,7 +115,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
               <p className="text-sm font-bold line-clamp-2 leading-5" style={{ color: 'var(--text-primary)' }} title={itemName}>
                 {itemName}
               </p>
-              <p className="text-xs mt-1 font-mono" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-xs mt-1 font-mono break-words" style={{ color: 'var(--text-tertiary)' }}>
                 #{itemId}
                 {status ? ` · ${status}` : ''}
                 {` · ${from} ~ ${to}`}
@@ -151,7 +150,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
         </div>
 
         {/* 内容：加载 / 错误（含币种异常，附重试）/ 成功 三态 */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <div className="pa-detail-content flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">
           {error ? (
             <div className="py-10 flex flex-col items-center gap-3 text-center">
               <p className="text-sm break-all" style={{ color: '#dc2626' }}>{error}</p>
@@ -171,10 +170,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
           ) : (
             <>
               {activeTab === 'overview' && <OverviewTab item={displayItem} currency={currency} days={detail.item.days} />}
-              {activeTab === 'trend' && <DailyTrendChart series={detail.series} />}
+              {activeTab === 'trend' && <DailyTrendChart series={detail.series} currency={currency} />}
               {activeTab === 'charts' && (
                 <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="pa-detail-chart-grid">
                     <ConversionFunnelChart item={displayItem} />
                     <OrderStatusCompareChart item={displayItem} />
                   </div>
@@ -195,6 +194,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
         </div>
       </div>
     </div>
+    </ChartStateProvider>
   );
 };
 

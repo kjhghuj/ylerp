@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import './product-analysis.css';
 import { AlertTriangle, Trash2, Loader2, Search, Store, Calendar, PackageCheck, X } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../AuthContext';
@@ -490,7 +491,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
   const hasAnyData = days.length > 0;
   const emptyBox = (
     <div
-      className="flex-1 rounded-2xl border flex items-center justify-center text-sm"
+      className="pa-empty flex-1 rounded-2xl border flex items-center justify-center text-sm"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
     >
       {activeShopId ? strings.noData : strings.shop.emptyHint}
@@ -498,14 +499,14 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
   );
 
   return (
-    <div className="h-full flex gap-4 min-h-0">
+    <div className="pa-layout">
       {/* 左栏：店铺 + 上传 + 数据日历 */}
-      <aside className="w-72 shrink-0 flex flex-col gap-3 min-h-0">
+      <aside className="pa-sidebar">
         <div
           className="rounded-2xl border p-3 flex flex-col gap-2"
           style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs font-medium shrink-0" style={{ color: 'var(--text-secondary)' }} htmlFor="shop-select">
               {strings.shop.label}
             </label>
@@ -531,7 +532,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
               <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{strings.shop.emptyHint}</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setShopManagerOpen(true)}
@@ -585,10 +586,10 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
 
         {/* 数据日历：数据绑定所属店铺——加载中 / 加载失败 / 数据属于其他店铺时隐藏日历，
             使单日与批量删除入口不可达，避免用旧店铺的日期误删新店铺数据 */}
-        <div className="flex-1 min-h-0">
+        <div className="pa-calendar">
           {isCalendarLoading ? (
             <div
-              className="h-full rounded-2xl border flex items-center justify-center"
+              className="pa-calendar-state rounded-2xl border flex items-center justify-center"
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
               role="status"
               aria-label="calendar-loading"
@@ -597,7 +598,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
             </div>
           ) : daysError ? (
             <div
-              className="h-full rounded-2xl border flex flex-col items-center justify-center gap-2 text-xs text-center px-4"
+              className="pa-calendar-state rounded-2xl border flex flex-col items-center justify-center gap-2 text-xs text-center px-4"
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
               role="alert"
             >
@@ -615,7 +616,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
             />
           ) : (
             <div
-              className="h-full rounded-2xl border flex items-center justify-center text-xs text-center px-4"
+              className="pa-calendar-state rounded-2xl border flex items-center justify-center text-xs text-center px-4"
               style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
             >
               {strings.noData}
@@ -625,7 +626,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
       </aside>
 
       {/* 主区：日期区间 + 内容 */}
-      <section className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
+      <section className="pa-report">
         {activeShopId && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {(['7d', '30d', '90d'] as const).map((preset) => {
@@ -649,7 +650,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
               );
             })}
             {rangePreset === 'custom' ? (
-              <div className="flex items-center gap-1.5">
+              <div className="pa-custom-range flex flex-wrap items-center gap-1.5">
                 <Calendar size={13} style={{ color: 'var(--text-tertiary)' }} />
                 <input
                   type="date"
@@ -756,8 +757,8 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
                 })}
 
               {contentTab === 'list' && activeSheet && (
-                <div className="flex items-center gap-2 ml-auto min-w-0">
-                  <div className="relative w-52">
+                <div className="pa-search flex items-center gap-2 min-w-0">
+                  <div className="relative flex-1 min-w-0">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
                     <input
                       value={searchInput}
@@ -779,7 +780,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
             </div>
 
             {contentTab === 'potential' ? (
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
+              <div className="pa-report-scroll flex flex-col gap-3">
                 <PotentialFiltersPanel
                   value={potentialFiltersDraft}
                   onChange={setPotentialFiltersDraft}
@@ -815,11 +816,11 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
                 )}
               </div>
             ) : isLoadingAgg ? (
-              <div className="flex-1 flex items-center justify-center">
+              <div className="pa-empty flex-1 flex items-center justify-center">
                 <Loader2 size={26} className="animate-spin" style={{ color: 'var(--primary)' }} />
               </div>
             ) : aggError ? (
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1 flex flex-col gap-3">
+              <div className="pa-report-scroll flex flex-col gap-3">
                 <div
                   className="flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm"
                   style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
@@ -856,7 +857,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
               summary && activeSheet ? (
                 <>
                   <SummaryCards summary={summary} currency={agg.currency} weightedCvr={activeSheet?.summary?.weightedCvr ?? null} />
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                  <div className="pa-list-slot">
                     <ProductList
                       items={filteredItems}
                       currency={agg.currency}

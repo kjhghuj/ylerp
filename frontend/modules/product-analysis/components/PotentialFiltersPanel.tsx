@@ -68,7 +68,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
       className="rounded-2xl border p-3 flex flex-col gap-3"
       style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Filter size={13} style={{ color: 'var(--primary)' }} />
         <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
           {strings.potential.filters}
@@ -92,7 +92,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
           {strings.potential.reset}
         </button>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="pa-potential-filters grid gap-2">
         <NumberFilter
           id="potential-min-ctr"
           label={strings.potential.minCtr}

@@ -1,0 +1,191 @@
+/* Natural page scrolling is the default for narrow or short windows. */
+.pa-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.pa-sidebar,
+.pa-report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pa-sidebar > *,
+.pa-report > *,
+.pa-report-scroll > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.pa-calendar {
+  width: 100%;
+  max-width: 360px;
+}
+
+.pa-calendar-state {
+  min-height: 160px;
+}
+
+.pa-report {
+  container-type: inline-size;
+}
+
+.pa-layout .pa-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+
+.pa-layout .pa-potential-filters {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+}
+
+.pa-layout .pa-potential-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr));
+}
+
+.pa-layout .pa-search {
+  width: 100%;
+}
+
+@container (min-width: 760px) {
+  .pa-layout .pa-search {
+    width: 280px;
+    margin-left: auto;
+  }
+}
+
+.pa-custom-range {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pa-custom-range input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pa-list-slot,
+.pa-product-list,
+.pa-report-scroll {
+  min-width: 0;
+}
+
+.pa-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pa-layout .pa-pagination {
+  flex-shrink: 0;
+}
+
+.pa-layout .pa-empty {
+  min-height: 160px;
+  padding: 16px;
+  text-align: center;
+}
+
+@media (min-width: 1200px) {
+  .pa-layout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .pa-sidebar {
+    width: clamp(260px, 20vw, 288px);
+    flex-shrink: 0;
+  }
+
+  .pa-report {
+    flex: 1;
+  }
+}
+
+/* A single table viewport owns both axes; pagination stays outside it. */
+@media (min-width: 1200px) and (min-height: 700px) {
+  .pa-layout {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .pa-sidebar {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .pa-report {
+    min-height: 0;
+  }
+
+  .pa-layout .pa-list-slot,
+  .pa-layout .pa-report-scroll {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .pa-report-scroll {
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .pa-product-list {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .pa-table-scroll {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* Detail size is independent of its active tab or loading state. */
+.pa-detail-modal {
+  width: min(1200px, calc(100vw - 32px));
+  height: min(800px, calc(100vh - 32px));
+  height: min(800px, calc(100dvh - 32px));
+  min-width: 0;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.pa-detail-content { scrollbar-gutter: stable; overscroll-behavior: contain; }
+.pa-detail-chart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.pa-chart-card { min-width: 0; padding: 20px; border: 1px solid var(--border-default); border-radius: 20px; background: var(--bg-card); color: var(--text-secondary); }
+.pa-chart-card h3 { margin-bottom: 16px; color: var(--text-primary); font-size: 14px; font-weight: 700; }
+.pa-chart-groups, .pa-chart-legend-items, .pa-chart-actions, .pa-trend-range { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pa-chart-groups { margin-bottom: 16px; }
+.pa-chart-groups button { border-radius: 8px; padding: 6px 12px; background: var(--bg-primary); font-size: 12px; }
+.pa-chart-groups button[aria-pressed='true'] { background: var(--primary); color: white; }
+.pa-chart-legend { margin-bottom: 14px; }
+.pa-legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; font-size: 12px; text-align: left; }
+.pa-legend-item > span { width: 9px; height: 9px; flex-shrink: 0; border-radius: 50%; }
+.pa-legend-item[aria-pressed='false'] { color: var(--text-tertiary); text-decoration: line-through; }
+.pa-legend-item[aria-pressed='false'] > span { filter: grayscale(1); opacity: .45; }
+.pa-chart-card button:focus-visible, .pa-funnel-row:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.pa-chart-actions { margin-top: 8px; font-size: 11px; color: var(--primary); }
+.pa-chart-actions button { padding: 3px 6px; }
+.pa-chart-empty { display: flex; align-items: center; justify-content: center; min-height: 180px; padding: 16px; font-size: 13px; color: var(--text-tertiary); text-align: center; }
+.pa-trend-range { font-size: 12px; margin-bottom: 12px; }
+.pa-trend-range input { min-width: 0; max-width: 100%; border: 1px solid var(--border-default); background: var(--bg-primary); color: var(--text-primary); padding: 4px 6px; border-radius: 6px; }
+.pa-axis-units { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; color: var(--text-tertiary); }
+.pa-trend-canvas { position: relative; height: 320px; min-width: 0; }
+.pa-trend-brush { height: 40px; min-width: 0; }
+.pa-comparison-canvas { position: relative; min-width: 0; }
+.pa-chart-no-data { position: absolute; z-index: 1; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; color: var(--text-tertiary); font-size: 13px; text-align: center; pointer-events: none; }
+.pa-chart-tooltip { border-radius: 10px; padding: 10px 12px; background: var(--bg-card); color: var(--text-secondary); border: 1px solid var(--border-default); box-shadow: var(--shadow-lg); font-size: 12px; max-width: min(400px, calc(100vw - 64px)); overflow-wrap: anywhere; }
+.pa-chart-tooltip > p:first-child { color: var(--text-primary); }
+.pa-funnel-row { display: flex; justify-content: space-between; gap: 8px; position: relative; padding: 7px 4px; font-size: 12px; border-bottom: 1px solid var(--border-light); }
+.pa-stage-rate { flex-shrink: 0; color: var(--text-tertiary); }
+.pa-stage-popover { position: absolute; bottom: 100%; left: 0; max-width: 100%; z-index: 20; pointer-events: none; }
+.pa-chart-note { margin-top: 12px; font-size: 11px; color: var(--text-tertiary); }
+@media (max-width: 767px) {
+  .pa-detail-chart-grid { grid-template-columns: minmax(0, 1fr); }
+  .pa-chart-card { padding: 12px; border-radius: 14px; }
+  .pa-trend-canvas { height: 240px; }
+  .pa-trend-range > span:first-child { width: 100%; }
+}

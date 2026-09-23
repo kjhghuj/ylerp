@@ -2,6 +2,14 @@
 import { useStore } from '../../StoreContext';
 
 const zh = {
+  visualization: {
+    legend: '图例', showAll: '全部显示', reset: '恢复默认', selectMetrics: '请点击图例选择要显示的指标',
+    groups: { sales: '销售', traffic: '流量', orders: '订单', cart: '加购', conversion: '转化', repurchase: '复购' },
+    counts: '数量', rate: '比例 (%)', days: '天', aov: '客单价',
+    range: '显示日期范围', rangeStart: '显示开始日期', rangeEnd: '显示结束日期',
+    originalPrevious: '相对原始上一阶段', funnelNote: '阶段沿用原始业务顺序；各指标统计口径不同，数值可能不递减。',
+    noFunnelShape: '所选阶段均为 0 或无数据，无法绘制漏斗形状；下方仍显示实际数值。',
+  },
   uploadTitle: '上传每日数据',
   uploadHint: '拖拽或选择 .xlsx 文件（支持多选，单文件≤25MB，日期取自文件名）',
   uploading: '解析并保存中…',
@@ -207,6 +215,14 @@ const zh = {
 };
 
 const en: typeof zh = {
+  visualization: {
+    legend: 'Legend', showAll: 'Show all', reset: 'Reset defaults', selectMetrics: 'Select metrics using the legend',
+    groups: { sales: 'Sales', traffic: 'Traffic', orders: 'Orders', cart: 'Cart', conversion: 'Conversion', repurchase: 'Repurchase' },
+    counts: 'Count', rate: 'Rate (%)', days: 'days', aov: 'Average order value',
+    range: 'Visible date range', rangeStart: 'Visible start date', rangeEnd: 'Visible end date',
+    originalPrevious: 'Relative to original previous stage', funnelNote: 'Stages keep their business order. Different metric definitions may produce non-decreasing values.',
+    noFunnelShape: 'Selected stages are zero or have no data, so there is no funnel shape to draw. Actual values remain below.',
+  },
   uploadTitle: 'Upload Daily Data',
   uploadHint: 'Pick the data date first, then drop or select .xlsx files (multi-select allowed, ≤25MB each)',
   uploading: 'Parsing & saving…',

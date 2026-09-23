@@ -87,7 +87,7 @@ export interface AggregatedItem {
   variations: never[];
 }
 
-export interface DailySeriesPoint {
+export interface DailySeriesPoint extends Record<SummableField, number | null> {
   date: string;
   /** 当日已下订单；缺失为 null（未知，不是 0） */
   ordersOrdered: number | null;
@@ -97,6 +97,16 @@ export interface DailySeriesPoint {
   unitsOrdered: number | null;
   /** 访客口径日转化率（%）；订单或访客缺失、访客为 0 时 null */
   cvrConfirmed: number | null;
+  ctr: number | null;
+  cvrOrdered: number | null;
+  cartRate: number | null;
+  bounceRate: number | null;
+  aovOrdered: number | null;
+  aovConfirmed: number | null;
+  repeatOrderRate: number | null;
+  repurchaseRateConfirmed: number | null;
+  avgReorderDays: number | null;
+  avgRepurchaseDays: number | null;
 }
 
 export interface MergedVariation {
@@ -244,11 +254,9 @@ export function buildDailySeries(rows: DailyItemRow[]): DailySeriesPoint[] {
     const ordersConfirmed = numOrUndef(row.ordersConfirmed) ?? null;
     const ordersOrdered = numOrUndef(row.ordersOrdered) ?? null;
     // 当日成对样本：订单与访客均有效且访客 > 0 才有转化率
-    const cvrConfirmed =
-      ordersConfirmed !== null && visitors !== null && visitors > 0
-        ? (ordersConfirmed / visitors) * 100
-        : null;
+    const cvrConfirmed = dailyRatio(row, 'ordersConfirmed', 'visitors', 100);
     return {
+      ...Object.fromEntries(SUMMABLE_FIELDS.map((field) => [field, numOrUndef(row[field]) ?? null])) as Record<SummableField, number | null>,
       date: row.date,
       ordersOrdered,
       ordersConfirmed,
@@ -256,8 +264,24 @@ export function buildDailySeries(rows: DailyItemRow[]): DailySeriesPoint[] {
       clicks: numOrUndef(row.clicks) ?? null,
       unitsOrdered: numOrUndef(row.unitsOrdered) ?? null,
       cvrConfirmed,
+      ctr: dailyRatio(row, 'clicks', 'impressions', 100),
+      cvrOrdered: dailyRatio(row, 'ordersOrdered', 'visitors', 100),
+      cartRate: dailyRatio(row, 'cartVisitors', 'visitors', 100),
+      bounceRate: dailyRatio(row, 'bounceVisitors', 'visitors', 100),
+      aovOrdered: dailyRatio(row, 'salesOrdered', 'ordersOrdered'),
+      aovConfirmed: dailyRatio(row, 'salesConfirmed', 'ordersConfirmed'),
+      repeatOrderRate: numOrUndef(row.extra?.repeatOrderRate) ?? null,
+      repurchaseRateConfirmed: numOrUndef(row.extra?.repurchaseRateConfirmed) ?? null,
+      avgReorderDays: numOrUndef(row.extra?.avgReorderDays) ?? null,
+      avgRepurchaseDays: numOrUndef(row.extra?.avgRepurchaseDays) ?? null,
     };
   });
+}
+
+function dailyRatio(row: DailyItemRow, numerator: SummableField, denominator: SummableField, scale = 1): number | null {
+  const ratio = pairwiseRatio([row as unknown as Record<string, unknown>], numerator, denominator);
+  const value = ratio === null ? null : ratio * scale;
+  return value !== null && Number.isFinite(value) ? value : null;
 }
 
 const VARIATION_SUM_FIELDS = [

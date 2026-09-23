@@ -100,9 +100,9 @@ export const ProductList: React.FC<ProductListProps> = ({
   });
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="pa-product-list flex flex-col gap-3">
       <div
-        className="rounded-2xl border overflow-auto"
+        className="pa-table-scroll rounded-2xl border overflow-auto"
         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
       >
         <table className="w-full min-w-[720px] text-sm">
@@ -131,7 +131,7 @@ export const ProductList: React.FC<ProductListProps> = ({
         </table>
       </div>
       {/* 分页器（Element 风格）：共 X 条 · 每页条数 · 上一页 · 页码（省略号快捷跳转）· 下一页 · 快速跳转 */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+      <div className="pa-pagination flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
         <span className="tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
           {strings.pagination.total.replace('{total}', String(items.length))}
         </span>

@@ -58,14 +58,14 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
                 <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
                   {item.itemName}
                 </p>
-                <p className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-tertiary)' }}>#{item.itemId}</p>
+                <p className="text-xs mt-0.5 font-mono break-all" style={{ color: 'var(--text-tertiary)' }}>#{item.itemId}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{strings.potential.score}</p>
                 <p className="text-base font-bold" style={{ color: 'var(--primary)' }}>{item.score.toFixed(1)}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-xs">
+            <div className="pa-potential-metrics grid gap-x-4 gap-y-1.5 text-xs">
               <Metric label={strings.card.orders} value={formatCount(item.metrics.ordersOrdered)} />
               <Metric label={strings.card.visitors} value={formatCount(item.metrics.visitors)} />
               <Metric label={strings.potential.cvrOrdered} value={formatPercent(item.metrics.cvrOrdered)} />
@@ -82,7 +82,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
               />
             </div>
             {/* 环比覆盖度：窗口日历天数 vs 有效订单观测天数；覆盖不完整时明确提示 */}
-            <div className="flex items-center gap-2 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
               <span
                 title={strings.potential.growthScope}
                 className="font-mono"
