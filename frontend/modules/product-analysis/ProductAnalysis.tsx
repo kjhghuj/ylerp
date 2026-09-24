@@ -1,15 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './product-analysis.css';
-import { AlertTriangle, Trash2, Loader2, Search, Store, Calendar, PackageCheck, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Search, Store, PackageCheck, X, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../AuthContext';
 import { hasPermission } from '../../components/PermissionTree';
 import { UploadZone } from './components/UploadZone';
 import { CalendarPanel } from './components/CalendarPanel';
 import { SummaryCards } from './components/SummaryCards';
+import { OverviewCards, WeightedCvrCard } from './components/OverviewCards';
+import { SalesCompareChart } from './components/SalesCompareChart';
+import { ProductRanking } from './components/ProductRanking';
 import { ProductList, type ProductSortKey } from './components/ProductList';
 import { PotentialList } from './components/PotentialList';
 import { ShopManager } from './components/ShopManager';
+import { ThemeMenu } from './components/ThemeMenu';
+import { PaThemeProvider, usePaTheme } from './themeContext';
 import { ProductDetailModal } from './modals/ProductDetailModal';
 import {
   batchDeleteDailyUploads,
@@ -92,16 +97,25 @@ export const loadPotentialFilters = (): PotentialFilters => {
   }
 };
 
-type ContentTab = 'list' | 'potential';
+/** 四个页面视图：概览 / 商品列表 / 潜力商品 / 数据日历 */
+type ViewKey = 'overview' | 'list' | 'potential' | 'calendar';
+const VIEW_KEYS: ViewKey[] = ['overview', 'list', 'potential', 'calendar'];
 
 interface ProductAnalysisProps {
   /** 「生成补货建议」入口：携带当前店铺与区间跳转到补货工作台（补货V3） */
   onGenerateRestock?: (shopId: string, from: string, to: string) => void;
 }
 
-export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRestock }) => {
+export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRestock }) => (
+  <PaThemeProvider>
+    <ProductAnalysisViews onGenerateRestock={onGenerateRestock} />
+  </PaThemeProvider>
+);
+
+const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestock }) => {
   const { showToast } = useToast();
   const strings = useProductAnalysisStrings();
+  const { theme } = usePaTheme();
   const { user } = useAuth();
   // 与 AiChatPanel 的 aiChat 权限判断同构：owner 直通，未加载完成（!user）先放行
   const hasUploadPermission =
@@ -116,7 +130,7 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
   const [rangePreset, setRangePreset] = useState<RangePreset>('7d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [contentTab, setContentTab] = useState<ContentTab>('list');
+  const [view, setView] = useState<ViewKey>('overview');
   const [agg, setAgg] = useState<AggResponse | null>(null);
   const [aggError, setAggError] = useState<string | null>(null);
   const [aggErrorCode, setAggErrorCode] = useState<string | null>(null);
@@ -220,6 +234,8 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
   // 渲染口径：仅当数据归属当前店铺时才展示；否则视为加载中（旧数据立即隐藏）
   const daysBelongToActiveShop = daysState !== null && daysState.shopId === activeShopId;
   const days = daysBelongToActiveShop ? daysState.days : [];
+  // 接口当前按日期倒序返回；这里仍统一排序，兼容缓存或测试传入的其它顺序。
+  const newestDays = useMemo(() => [...days].sort((a, b) => b.date.localeCompare(a.date)), [days]);
   const isCalendarLoading = isDaysLoading || (daysState !== null && !daysBelongToActiveShop);
   // 币种异常排查（仅提示人工处理）：当前店铺日期列表中币种与店铺币种不一致的记录
   const currencyMismatchedDays = activeShop
@@ -483,92 +499,255 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
   if (isInitialLoading) {
     return (
       <div className="h-full flex items-center justify-center">
-        <Loader2 size={32} className="animate-spin" style={{ color: 'var(--primary)' }} />
+        <Loader2 size={32} className="animate-spin" style={{ color: 'var(--pa-accent, var(--primary))' }} />
       </div>
     );
   }
 
   const hasAnyData = days.length > 0;
+  const emptyHint = activeShopId ? strings.noData : strings.shop.emptyHint;
   const emptyBox = (
-    <div
-      className="pa-empty flex-1 rounded-2xl border flex items-center justify-center text-sm"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
-    >
-      {activeShopId ? strings.noData : strings.shop.emptyHint}
+    <div className="pa-empty flex-1" role="status">
+      {emptyHint}
     </div>
   );
 
-  return (
-    <div className="pa-layout">
-      {/* 左栏：店铺 + 上传 + 数据日历 */}
-      <aside className="pa-sidebar">
-        <div
-          className="rounded-2xl border p-3 flex flex-col gap-2"
-          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-xs font-medium shrink-0" style={{ color: 'var(--text-secondary)' }} htmlFor="shop-select">
-              {strings.shop.label}
-            </label>
-            {shops.length > 0 ? (
-              <select
-                id="shop-select"
-                value={activeShopId}
-                onChange={(event) => setActiveShopId(event.target.value)}
-                className="flex-1 min-w-0 rounded-lg border px-2 py-1 text-sm truncate"
-                style={{
-                  backgroundColor: 'var(--bg-primary)',
-                  borderColor: 'var(--border-light)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {shops.map((shop) => (
-                  <option key={shop.id} value={shop.id}>
-                    {shop.name}（{shop.site}）
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{strings.shop.emptyHint}</span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShopManagerOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors duration-200"
-              style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
-            >
-              <Store size={12} />
-              {strings.shop.manage}
-            </button>
-            {onGenerateRestock && activeShopId && (
-              <button
-                type="button"
-                onClick={() => {
-                  onGenerateRestock(activeShopId, range.from, range.to);
-                }}
-                disabled={!activeShop?.latestUploadDate}
-                title={activeShop?.latestUploadDate
-                  ? `带当前店铺与区间（${range.from} ~ ${range.to}）进入补货工作台`
-                  : '该店铺还没有上传数据，无法生成补货建议'}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-white transition-colors duration-200 disabled:opacity-40"
-                style={{ backgroundColor: 'var(--primary)' }}
-              >
-                <PackageCheck size={12} />
-                生成补货建议
-              </button>
-            )}
-            {activeShop && (
-              <span className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
-                {activeShop.latestUploadDate
-                  ? `${strings.shop.latest} ${activeShop.latestUploadDate} · ${activeShop.dayCount} ${strings.shop.dayUnit}`
-                  : strings.noData}
-              </span>
-            )}
-          </div>
+  /** 数据日历卡片（概览紧凑版与数据日历视图共用；批量管理/删除功能保持一致） */
+  const renderCalendarCard = () => {
+    if (isCalendarLoading) {
+      return (
+        <div className="pa-card pa-calendar-state" role="status" aria-label="calendar-loading">
+          <Loader2 size={22} className="animate-spin" style={{ color: 'var(--pa-accent-text)' }} />
         </div>
+      );
+    }
+    if (daysError) {
+      return (
+        <div
+          className="pa-card pa-calendar-state flex-col gap-2 text-xs text-center px-4"
+          style={{ borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+          role="alert"
+        >
+          <AlertTriangle size={18} />
+          <span className="break-all">{daysError}</span>
+          <span style={{ color: 'var(--text-tertiary)' }}>{strings.calendarLoadFailed}</span>
+        </div>
+      );
+    }
+    if (hasAnyData) {
+      return (
+        <CalendarPanel
+          key={activeShopId}
+          days={days}
+          canDelete={hasUploadPermission}
+          onDeleteDay={(date) => void handleDeleteDay(date)}
+          onBatchDelete={(dates) => void handleBatchDeleteDays(dates)}
+        />
+      );
+    }
+    return (
+      <div className="pa-card pa-calendar-state text-xs text-center px-4" style={{ color: 'var(--text-tertiary)' }}>
+        {strings.noData}
+      </div>
+    );
+  };
 
+  /** 聚合接口错误横幅 + 币种异常排查卡（保留原有处理逻辑） */
+  const renderAggError = () => (
+    <div className="flex flex-col gap-3">
+      <div
+        className="flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm"
+        style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+      >
+        <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+        <span className="break-all">{strings.refreshFailed.replace('{detail}', aggError ?? '')}</span>
+      </div>
+      {/* 币种异常排查：复用日历的日期列表（含上传币种/文件名），只提示人工处理，不自动删除/改标签/换算 */}
+      {aggErrorCode === 'CURRENCY_MISMATCH' && activeShop && (
+        <div className="rounded-2xl border p-4 flex flex-col gap-3" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {strings.currencyAuditTitle.replace('{currency}', activeShop.currency)}
+          </p>
+          <div className="flex flex-col gap-1.5 text-xs">
+            {currencyMismatchedDays.length > 0 ? (
+              currencyMismatchedDays.map((day) => (
+                <div key={day.date} className="flex flex-wrap items-center gap-2 font-mono" style={{ color: 'var(--text-secondary)' }}>
+                  <span style={{ color: '#b45309' }}>{day.date}</span>
+                  <span>{day.currency}</span>
+                  <span className="truncate" style={{ color: 'var(--text-tertiary)' }} title={day.fileName}>{day.fileName}</span>
+                </div>
+              ))
+            ) : (
+              <span style={{ color: 'var(--text-tertiary)' }}>{strings.currencyAuditEmpty}</span>
+            )}
+          </div>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+            {strings.currencyAuditHint}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const sheetChips = (agg?.sheets ?? []).map((sheet) => {
+    const isActive = sheet.sheetKey === activeSheetKey;
+    return (
+      <button
+        key={sheet.sheetKey}
+        type="button"
+        onClick={() => setActiveSheetKey(sheet.sheetKey)}
+        aria-pressed={isActive}
+        className="pa-chip"
+      >
+        {strings.sheets[sheet.sheetKey] || sheet.sheetKey}（{sheet.items.length}）
+      </button>
+    );
+  });
+
+  /** 概览视图：全宽指标、销售对比与转化率、排行榜与最新数据。 */
+  const renderOverview = () => {
+    if (isLoadingAgg) return (
+      <div className="pa-card flex items-center justify-center" style={{ minHeight: 180 }} role="status">
+        <Loader2 size={26} className="animate-spin" style={{ color: 'var(--pa-accent-text)' }} />
+      </div>
+    );
+    if (aggError) return renderAggError();
+    if (!agg || agg.sheets.length === 0 || !summary || !activeSheet) return emptyBox;
+    const openItem = (item: typeof activeSheet.items[number]) =>
+      setSelectedItem({ itemId: item.itemId, itemName: item.itemName, status: item.status });
+    return (
+      <div className="pa-ov-grid">
+        <div className="pa-list-toolbar">{sheetChips}</div>
+        <OverviewCards summary={summary} currency={agg.currency} />
+        <div className="pa-ov-primary">
+          <SalesCompareChart items={activeSheet.items} currency={agg.currency} onSelect={openItem} />
+          <WeightedCvrCard summary={activeSheet.summary ?? null} />
+        </div>
+        <div className="pa-ov-secondary">
+          <ProductRanking items={activeSheet.items} currency={agg.currency} onSelect={openItem} />
+          {hasAnyData && (
+            <div className="pa-card pa-recent-card">
+              <div className="pa-card-head">
+                <h3 className="pa-card-title">{strings.overview.recentUploads}</h3>
+              </div>
+              <div className="pa-recent-list">
+                {newestDays.slice(0, 6).map((day) => (
+                  <div key={day.date} className="pa-recent-row" title={day.fileName}>
+                    <span className="pa-recent-date">{day.date.slice(5)}</span>
+                    <span className="pa-recent-count">
+                      {strings.overview.itemCountUnit.replace('{count}', String(day.itemCount))} · {day.currency}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className="pa-btn pa-btn-soft self-start" onClick={() => setView('calendar')}>
+                {strings.overview.viewAllDays}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /** 商品列表视图：汇总卡 + sheet 切换 + 搜索排序 + 分页表格 */
+  const renderList = () => (
+    <>
+      {isLoadingAgg ? (
+        <div className="pa-card flex-1 flex items-center justify-center" role="status">
+          <Loader2 size={26} className="animate-spin" style={{ color: 'var(--pa-accent-text)' }} />
+        </div>
+      ) : aggError ? (
+        renderAggError()
+      ) : agg && agg.sheets.length > 0 ? (
+        summary && activeSheet ? (
+          <>
+            <SummaryCards summary={summary} currency={agg.currency} weightedCvr={activeSheet?.summary?.weightedCvr ?? null} />
+            <div className="pa-list-toolbar">
+              {sheetChips}
+              <div className="pa-search flex items-center gap-2 min-w-0">
+                <div className="relative flex-1 min-w-0">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
+                  <input
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder={strings.searchPlaceholder}
+                    className="pa-chip w-full rounded-full pl-8 pr-3 py-2 text-sm"
+                    style={{
+                      backgroundColor: 'var(--pa-card)',
+                      borderColor: 'var(--pa-card-border)',
+                      color: 'var(--text-primary)',
+                    }}
+                  />
+                </div>
+                <span className="text-xs shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                  {filteredItems.length} {strings.resultCount}
+                </span>
+              </div>
+            </div>
+            <div className="pa-list-slot">
+              <ProductList
+                items={filteredItems}
+                currency={agg.currency}
+                page={listPage}
+                onPageChange={setListPage}
+                sortKey={sortKey}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+                onSelect={(item) => setSelectedItem({ itemId: item.itemId, itemName: item.itemName, status: item.status })}
+              />
+            </div>
+          </>
+        ) : null
+      ) : (
+        emptyBox
+      )}
+    </>
+  );
+
+  /** 潜力商品视图：筛选面板 + 榜单（状态绑定查询标识） */
+  const renderPotential = () => (
+    <div className="pa-report-scroll flex flex-col gap-3">
+      <PotentialFiltersPanel
+        value={potentialFiltersDraft}
+        onChange={setPotentialFiltersDraft}
+        onReset={() => setPotentialFiltersDraft(DEFAULT_POTENTIAL_FILTERS)}
+      />
+      {potentialViewForCurrentQuery.status === 'error' ? (
+        <div
+          className="flex items-start gap-2 rounded-xl border px-3 py-2 text-xs"
+          style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+        >
+          <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+          {/* 失败（含同查询写入后刷新失败）仅展示错误与重试，不回退旧榜单 */}
+          <span className="break-all">{strings.refreshFailed.replace('{detail}', potentialViewForCurrentQuery.detail)}</span>
+          <button
+            type="button"
+            onClick={() => setPotentialRetryToken((token) => token + 1)}
+            className="ml-auto shrink-0 font-medium underline"
+          >
+            {strings.potential.retry}
+          </button>
+        </div>
+      ) : potentialViewForCurrentQuery.status === 'loading' ? (
+        <div className="flex-1 flex items-center justify-center py-10">
+          <Loader2 size={26} className="animate-spin" style={{ color: 'var(--pa-accent-text)' }} />
+        </div>
+      ) : (
+        <PotentialList
+          items={potentialViewForCurrentQuery.response.items}
+          onSelect={(item) => {
+            setSelectedItem({ itemId: item.itemId, itemName: item.itemName });
+          }}
+        />
+      )}
+    </div>
+  );
+
+  /** 数据日历视图：上传 + 完整日历 + 数据记录表 */
+  const renderCalendarView = () => (
+    <div className="pa-calendar-view">
+      <div className="pa-calendar-col">
         {activeShopId && (
           <UploadZone
             onFilesSelected={handleFilesSelected}
@@ -583,96 +762,165 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
             }
           />
         )}
+        {activeShopId ? renderCalendarCard() : emptyBox}
+      </div>
+      <div className="pa-card pa-records-card">
+        <div className="pa-card-head">
+          <h3 className="pa-card-title">{strings.overview.recordsTitle}</h3>
+          <span className="pa-card-sub">
+            {activeShop ? `${activeShop.name} · ${activeShop.dayCount} ${strings.shop.dayUnit}` : ''}
+          </span>
+        </div>
+        {days.length === 0 ? (
+          <div className="pa-chart-empty" role="status">{emptyHint}</div>
+        ) : (
+          <div className="pa-records-scroll">
+            <table className="pa-records">
+              <thead>
+                <tr>
+                  <th>{strings.overview.recordsColumns.date}</th>
+                  <th>{strings.overview.recordsColumns.file}</th>
+                  <th>{strings.overview.recordsColumns.items}</th>
+                  <th>{strings.overview.recordsColumns.currency}</th>
+                  <th>{strings.overview.recordsColumns.version}</th>
+                  <th>{strings.overview.recordsColumns.createdAt}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {newestDays.map((day) => (
+                  <tr key={day.date}>
+                    <td className="pa-records-date">{day.date}</td>
+                    <td title={day.fileName}>
+                      <span className="inline-flex items-center gap-1.5 font-mono">
+                        <FileSpreadsheet size={12} style={{ color: 'var(--text-tertiary)' }} />
+                        <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', verticalAlign: 'bottom' }}>
+                          {day.fileName}
+                        </span>
+                      </span>
+                    </td>
+                    <td>{day.itemCount}</td>
+                    <td>{day.currency}</td>
+                    <td>v{day.version ?? 1}</td>
+                    <td title={day.createdAt}>{day.createdAt.slice(0, 16).replace('T', ' ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {currencyMismatchedDays.length > 0 && (
+          <p className="text-[11px]" style={{ color: '#b45309' }}>
+            ⚠ {currencyMismatchedDays.map((day) => day.date).join('、')} {activeShop ? `≠ ${activeShop.currency}` : ''}
+          </p>
+        )}
+      </div>
+    </div>
+  );
 
-        {/* 数据日历：数据绑定所属店铺——加载中 / 加载失败 / 数据属于其他店铺时隐藏日历，
-            使单日与批量删除入口不可达，避免用旧店铺的日期误删新店铺数据 */}
-        <div className="pa-calendar">
-          {isCalendarLoading ? (
-            <div
-              className="pa-calendar-state rounded-2xl border flex items-center justify-center"
-              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
-              role="status"
-              aria-label="calendar-loading"
-            >
-              <Loader2 size={22} className="animate-spin" style={{ color: 'var(--primary)' }} />
-            </div>
-          ) : daysError ? (
-            <div
-              className="pa-calendar-state rounded-2xl border flex flex-col items-center justify-center gap-2 text-xs text-center px-4"
-              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
-              role="alert"
-            >
-              <AlertTriangle size={18} />
-              <span className="break-all">{daysError}</span>
-              <span style={{ color: 'var(--text-tertiary)' }}>{strings.calendarLoadFailed}</span>
-            </div>
-          ) : hasAnyData ? (
-            <CalendarPanel
-              key={activeShopId}
-              days={days}
-              canDelete={hasUploadPermission}
-              onDeleteDay={(date) => void handleDeleteDay(date)}
-              onBatchDelete={(dates) => void handleBatchDeleteDays(dates)}
-            />
+  return (
+    <div className="pa-shell" style={theme.cssVars as React.CSSProperties}>
+      {/* 工具栏：店铺与操作（左） + 主题颜色菜单（右上角） */}
+      <div className="pa-toolbar">
+        <div className="pa-toolbar-group">
+          {shops.length > 0 ? (
+            <>
+              <label className="text-xs font-medium shrink-0" style={{ color: 'var(--text-secondary)' }} htmlFor="shop-select">
+                {strings.shop.label}
+              </label>
+              <select
+                id="shop-select"
+                value={activeShopId}
+                onChange={(event) => setActiveShopId(event.target.value)}
+                className="pa-shop-select truncate"
+              >
+                {shops.map((shop) => (
+                  <option key={shop.id} value={shop.id}>
+                    {shop.name}（{shop.site}）
+                  </option>
+                ))}
+              </select>
+            </>
           ) : (
-            <div
-              className="pa-calendar-state rounded-2xl border flex items-center justify-center text-xs text-center px-4"
-              style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{strings.shop.emptyHint}</span>
+          )}
+          <button type="button" onClick={() => setShopManagerOpen(true)} className="pa-btn pa-btn-ghost">
+            <Store size={13} />
+            {strings.shop.manage}
+          </button>
+          {onGenerateRestock && activeShopId && (
+            <button
+              type="button"
+              onClick={() => {
+                onGenerateRestock(activeShopId, range.from, range.to);
+              }}
+              disabled={!activeShop?.latestUploadDate}
+              title={activeShop?.latestUploadDate
+                ? `带当前店铺与区间（${range.from} ~ ${range.to}）进入补货工作台`
+                : '该店铺还没有上传数据，无法生成补货建议'}
+              className="pa-btn pa-btn-accent"
             >
-              {strings.noData}
-            </div>
+              <PackageCheck size={13} />
+              生成补货建议
+            </button>
+          )}
+          {activeShop && (
+            <span className="pa-shop-meta truncate">
+              {activeShop.latestUploadDate
+                ? `${strings.shop.latest} ${activeShop.latestUploadDate} · ${activeShop.dayCount} ${strings.shop.dayUnit}`
+                : strings.noData}
+            </span>
           )}
         </div>
-      </aside>
+        <div className="pa-toolbar-spacer" />
+        <ThemeMenu />
+      </div>
 
-      {/* 主区：日期区间 + 内容 */}
-      <section className="pa-report">
+      {/* 视图导航（左） + 日期区间筛选（右） */}
+      <nav className="pa-viewbar" aria-label={strings.views.overview}>
+        <div className="pa-view-tabs">
+          {VIEW_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-current={view === key ? 'page' : undefined}
+              onClick={() => setView(key)}
+              className="pa-view-tab"
+            >
+              {strings.views[key]}
+            </button>
+          ))}
+        </div>
         {activeShopId && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            {(['7d', '30d', '90d'] as const).map((preset) => {
-              const active = rangePreset === preset;
-              const label = preset === '7d' ? strings.date.last7 : preset === '30d' ? strings.date.last30 : strings.date.last90;
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => setRangePreset(preset)}
-                  className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors duration-200"
-                  style={{
-                    backgroundColor: active ? 'var(--primary)' : 'var(--bg-card)',
-                    borderColor: active ? 'var(--primary)' : 'var(--border-light)',
-                    color: active ? '#fff' : 'var(--text-secondary)',
-                    boxShadow: active ? 'var(--shadow-sm)' : undefined,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+          <div className="pa-viewbar-right">
+            {(['7d', '30d', '90d'] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setRangePreset(preset)}
+                aria-pressed={rangePreset === preset}
+                className="pa-chip"
+              >
+                {preset === '7d' ? strings.date.last7 : preset === '30d' ? strings.date.last30 : strings.date.last90}
+              </button>
+            ))}
             {rangePreset === 'custom' ? (
-              <div className="pa-custom-range flex flex-wrap items-center gap-1.5">
-                <Calendar size={13} style={{ color: 'var(--text-tertiary)' }} />
+              <div className="pa-custom-range">
                 <input
                   type="date"
                   value={customFrom}
                   onChange={(event) => setCustomFrom(event.target.value)}
-                  className="rounded-lg border px-2 py-1 text-xs"
-                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--primary)', color: 'var(--text-primary)' }}
+                  className="pa-chip text-xs"
+                  style={{ color: 'var(--text-primary)' }}
                 />
                 <span style={{ color: 'var(--text-tertiary)' }}>~</span>
                 <input
                   type="date"
                   value={customTo}
                   onChange={(event) => setCustomTo(event.target.value)}
-                  className="rounded-lg border px-2 py-1 text-xs"
-                  style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--primary)', color: 'var(--text-primary)' }}
+                  className="pa-chip text-xs"
+                  style={{ color: 'var(--text-primary)' }}
                 />
-                <button
-                  type="button"
-                  onClick={handleApplyCustomRange}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium"
-                  style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
-                >
+                <button type="button" onClick={handleApplyCustomRange} className="pa-chip" aria-pressed>
                   {strings.date.apply}
                 </button>
                 <button
@@ -693,190 +941,25 @@ export const ProductAnalysis: React.FC<ProductAnalysisProps> = ({ onGenerateRest
                   setCustomTo(range.to);
                   setRangePreset('custom');
                 }}
-                className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors duration-200"
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  borderColor: 'var(--border-light)',
-                  color: 'var(--text-secondary)',
-                }}
+                className="pa-chip"
               >
                 {strings.date.custom}
               </button>
             )}
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <span className="pa-range-label">
               {range.from} ~ {range.to}
             </span>
           </div>
         )}
+      </nav>
 
-        {activeShopId && hasAnyData && (
-          <>
-            {/* 控制行：内容 tab +（列表页）sheet 切换与搜索合并，压缩纵向空间 */}
-            <div className="flex flex-wrap items-center gap-2">
-              {([
-                { key: 'list', label: strings.tabs.list },
-                { key: 'potential', label: strings.tabs.potential },
-              ] as const).map(({ key, label }) => {
-                const active = contentTab === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setContentTab(key)}
-                    className="px-3.5 py-1.5 rounded-xl text-sm font-medium border transition-colors duration-200"
-                    style={{
-                      backgroundColor: active ? 'var(--primary)' : 'var(--bg-card)',
-                      borderColor: active ? 'var(--primary)' : 'var(--border-light)',
-                      color: active ? '#fff' : 'var(--text-secondary)',
-                      boxShadow: active ? 'var(--shadow-sm)' : undefined,
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-
-              {contentTab === 'list'
-                && agg?.sheets.map((sheet) => {
-                  const isActive = sheet.sheetKey === activeSheetKey;
-                  return (
-                    <button
-                      key={sheet.sheetKey}
-                      type="button"
-                      onClick={() => setActiveSheetKey(sheet.sheetKey)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors duration-200"
-                      style={{
-                        backgroundColor: isActive ? 'var(--primary)' : 'var(--bg-card)',
-                        borderColor: isActive ? 'var(--primary)' : 'var(--border-light)',
-                        color: isActive ? '#fff' : 'var(--text-secondary)',
-                      }}
-                    >
-                      {strings.sheets[sheet.sheetKey] || sheet.sheetKey}（{sheet.items.length}）
-                    </button>
-                  );
-                })}
-
-              {contentTab === 'list' && activeSheet && (
-                <div className="pa-search flex items-center gap-2 min-w-0">
-                  <div className="relative flex-1 min-w-0">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                    <input
-                      value={searchInput}
-                      onChange={(event) => setSearchInput(event.target.value)}
-                      placeholder={strings.searchPlaceholder}
-                      className="w-full rounded-lg border pl-8 pr-3 py-1.5 text-sm"
-                      style={{
-                        backgroundColor: 'var(--bg-card)',
-                        borderColor: 'var(--border-light)',
-                        color: 'var(--text-primary)',
-                      }}
-                    />
-                  </div>
-                  <span className="text-xs shrink-0" style={{ color: 'var(--text-tertiary)' }}>
-                    {filteredItems.length} {strings.resultCount}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {contentTab === 'potential' ? (
-              <div className="pa-report-scroll flex flex-col gap-3">
-                <PotentialFiltersPanel
-                  value={potentialFiltersDraft}
-                  onChange={setPotentialFiltersDraft}
-                  onReset={() => setPotentialFiltersDraft(DEFAULT_POTENTIAL_FILTERS)}
-                />
-                {potentialViewForCurrentQuery.status === 'error' ? (
-                  <div
-                    className="flex items-start gap-2 rounded-xl border px-3 py-2 text-xs"
-                    style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
-                  >
-                    <AlertTriangle size={13} className="shrink-0 mt-0.5" />
-                    {/* 失败（含同查询写入后刷新失败）仅展示错误与重试，不回退旧榜单 */}
-                    <span className="break-all">{strings.refreshFailed.replace('{detail}', potentialViewForCurrentQuery.detail)}</span>
-                    <button
-                      type="button"
-                      onClick={() => setPotentialRetryToken((token) => token + 1)}
-                      className="ml-auto shrink-0 font-medium underline"
-                    >
-                      {strings.potential.retry}
-                    </button>
-                  </div>
-                ) : potentialViewForCurrentQuery.status === 'loading' ? (
-                  <div className="flex-1 flex items-center justify-center py-10">
-                    <Loader2 size={26} className="animate-spin" style={{ color: 'var(--primary)' }} />
-                  </div>
-                ) : (
-                  <PotentialList
-                    items={potentialViewForCurrentQuery.response.items}
-                    onSelect={(item) => {
-                      setSelectedItem({ itemId: item.itemId, itemName: item.itemName });
-                    }}
-                  />
-                )}
-              </div>
-            ) : isLoadingAgg ? (
-              <div className="pa-empty flex-1 flex items-center justify-center">
-                <Loader2 size={26} className="animate-spin" style={{ color: 'var(--primary)' }} />
-              </div>
-            ) : aggError ? (
-              <div className="pa-report-scroll flex flex-col gap-3">
-                <div
-                  className="flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm"
-                  style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
-                >
-                  <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-                  <span className="break-all">{strings.refreshFailed.replace('{detail}', aggError)}</span>
-                </div>
-                {/* 币种异常排查：复用日历的日期列表（含上传币种/文件名），只提示人工处理，不自动删除/改标签/换算 */}
-                {aggErrorCode === 'CURRENCY_MISMATCH' && activeShop && (
-                  <div className="rounded-2xl border p-4 flex flex-col gap-3" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}>
-                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {strings.currencyAuditTitle.replace('{currency}', activeShop.currency)}
-                    </p>
-                    <div className="flex flex-col gap-1.5 text-xs">
-                      {currencyMismatchedDays.length > 0 ? (
-                        currencyMismatchedDays.map((day) => (
-                          <div key={day.date} className="flex flex-wrap items-center gap-2 font-mono" style={{ color: 'var(--text-secondary)' }}>
-                            <span style={{ color: '#b45309' }}>{day.date}</span>
-                            <span>{day.currency}</span>
-                            <span className="truncate" style={{ color: 'var(--text-tertiary)' }} title={day.fileName}>{day.fileName}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <span style={{ color: 'var(--text-tertiary)' }}>{strings.currencyAuditEmpty}</span>
-                      )}
-                    </div>
-                    <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
-                      {strings.currencyAuditHint}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : agg && agg.sheets.length > 0 ? (
-              summary && activeSheet ? (
-                <>
-                  <SummaryCards summary={summary} currency={agg.currency} weightedCvr={activeSheet?.summary?.weightedCvr ?? null} />
-                  <div className="pa-list-slot">
-                    <ProductList
-                      items={filteredItems}
-                      currency={agg.currency}
-                      page={listPage}
-                      onPageChange={setListPage}
-                      sortKey={sortKey}
-                      sortDirection={sortDirection}
-                      onSortChange={handleSortChange}
-                      onSelect={(item) => setSelectedItem({ itemId: item.itemId, itemName: item.itemName, status: item.status })}
-                    />
-                  </div>
-                </>
-              ) : null
-            ) : emptyBox}
-          </>
-        )}
-
-        {(activeShopId && !hasAnyData || !activeShopId) && emptyBox}
-      </section>
+      {/* 视图内容 */}
+      <div className="pa-view-body">
+        {view === 'overview' && (activeShopId ? renderOverview() : emptyBox)}
+        {view === 'list' && (activeShopId && hasAnyData ? renderList() : emptyBox)}
+        {view === 'potential' && (activeShopId && hasAnyData ? renderPotential() : emptyBox)}
+        {view === 'calendar' && renderCalendarView()}
+      </div>
 
       {shopManagerOpen && (
         <ShopManager

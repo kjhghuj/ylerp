@@ -6,12 +6,15 @@ import type { DailySeriesPoint, DailyTrendMetricKey } from '../../types';
 import { formatCount, formatMoney, formatPercent } from '../../utils/format';
 import { ChartCard, ChartEmptySelection, ChartLegend, ChartTooltipRows } from './ChartControls';
 import { fillTrendDateGaps, isDayMetric, isMoneyMetric, isRateMetric, isRightAxis, metricColor, TREND_GROUPS, type TrendGroupKey } from './trendMetrics';
+import { usePaTheme } from '../../themeContext';
 
 interface DailyTrendChartProps { series: DailySeriesPoint[]; currency?: string }
 
 export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, currency = '' }) => {
   const strings = useProductAnalysisStrings();
   const words = strings.visualization;
+  const { theme } = usePaTheme();
+  const chartSeries = theme.chart.series;
   const [groupKey, setGroupKey] = useChartState<TrendGroupKey>('trend-group', 'sales');
   const [selections, setSelections] = useChartState<Record<string, string[]>>('trend-selections', {});
   const [range, setRange] = useChartState<{ start: number; end: number } | null>('trend-range', null);
@@ -43,7 +46,7 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
     <div className="pa-chart-groups" role="group" aria-label={strings.trend.title}>
       {TREND_GROUPS.map(({ key }) => <button key={key} type="button" aria-pressed={groupKey === key} onClick={() => setGroupKey(key)}>{words.groups[key]}</button>)}
     </div>
-    <ChartLegend items={group.metrics.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key) }))}
+    <ChartLegend items={group.metrics.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key, chartSeries) }))}
       selected={selected} defaults={group.defaults} onChange={(keys) => setSelections((old) => ({ ...old, [groupKey]: keys }))} />
     {data.length === 0 ? <div className="pa-chart-empty">{strings.chart.noData}</div> : <>
       <div className="pa-trend-range">
@@ -68,10 +71,10 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
                 if (!active || label == null) return null;
                 const point = plotData.find((row) => row.date === String(label));
                 if (!point) return null;
-                return <ChartTooltipRows testId="trend-tooltip" title={point.date} rows={visible.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key), value: formatValue(key, finiteMetric(point[key])), missing: finiteMetric(point[key]) === null }))} />;
+                return <ChartTooltipRows testId="trend-tooltip" title={point.date} rows={visible.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key, chartSeries), value: formatValue(key, finiteMetric(point[key])), missing: finiteMetric(point[key]) === null }))} />;
               }} />
               {visible.map((key) => {
-                const color = metricColor(group, key);
+                const color = metricColor(group, key, chartSeries);
                 const props = { dataKey: key, name: strings.metrics[key], yAxisId: isRightAxis(key) ? 'right' : 'left', isAnimationActive: false };
                 if (key.startsWith('sales')) return <Area key={key} {...props} fill={color} fillOpacity={0.12} stroke={color} strokeWidth={2} connectNulls={false} dot={plotData.length < 3} />;
                 if (groupKey === 'orders' || groupKey === 'cart') return <Bar key={key} {...props} fill={color} maxBarSize={28} radius={[3, 3, 0, 0]} />;
@@ -85,7 +88,7 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
         {data.length > 1 && <div className="pa-trend-brush">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-              <Brush key={brushResetKey} dataKey="date" height={28} stroke="var(--text-tertiary)" fill="var(--bg-card)" travellerWidth={10}
+              <Brush key={brushResetKey} dataKey="date" height={28} stroke="var(--text-tertiary)" fill="var(--pa-card)" travellerWidth={10}
                 startIndex={startIndex} endIndex={endIndex} tickFormatter={(date: string) => date.slice(5)}
                 onChange={(next) => { if (next.startIndex !== undefined && next.endIndex !== undefined && (next.startIndex !== startIndex || next.endIndex !== endIndex)) setRange({ start: next.startIndex, end: next.endIndex }); }} />
             </ComposedChart>

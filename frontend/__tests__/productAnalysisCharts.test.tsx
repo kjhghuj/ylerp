@@ -99,7 +99,7 @@ describe('daily trend groups and selection', () => {
   it('breaks the traffic line on missing observations but includes real zeros', () => {
     const { container, rerender } = render(<DailyTrendChart series={[point({ visitors: 10 }), point({ date: '2026-09-02', visitors: null }), point({ date: '2026-09-03', visitors: 8 })]} />);
     fireEvent.click(screen.getByRole('button', { name: '流量' }));
-    const visitorPath = () => container.querySelector('path.recharts-curve[stroke="#06b6d4"]')?.getAttribute('d') ?? '';
+    const visitorPath = () => container.querySelector('path.recharts-curve[stroke="#432B8E"]')?.getAttribute('d') ?? '';
     expect(visitorPath().split('M').length - 1).toBeGreaterThanOrEqual(2);
     rerender(<DailyTrendChart series={[point({ visitors: 10 }), point({ date: '2026-09-02', visitors: 0 }), point({ date: '2026-09-03', visitors: 8 })]} />);
     expect(visitorPath().split('M').length - 1).toBe(1);

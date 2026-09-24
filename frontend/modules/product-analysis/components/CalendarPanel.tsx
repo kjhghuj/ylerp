@@ -102,7 +102,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
           )
         }
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
       >
         {strings.batchSelectMonth}
       </button>
@@ -110,7 +110,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
         type="button"
         onClick={() => setSelectedDates([])}
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
       >
         {strings.batchDeselectAll}
       </button>
@@ -120,8 +120,8 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
         disabled={selected.length === 0}
         className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium border transition-colors"
         style={{
-          backgroundColor: selected.length === 0 ? 'var(--bg-card)' : '#dc2626',
-          borderColor: selected.length === 0 ? 'var(--border-light)' : '#dc2626',
+          backgroundColor: selected.length === 0 ? 'var(--pa-card)' : '#dc2626',
+          borderColor: selected.length === 0 ? 'var(--pa-card-border)' : '#dc2626',
           color: selected.length === 0 ? 'var(--text-tertiary)' : '#fff',
           cursor: selected.length === 0 ? 'not-allowed' : 'pointer',
         }}
@@ -136,7 +136,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
           setSelectedDates([]);
         }}
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
       >
         {strings.batchExit}
       </button>
@@ -146,7 +146,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
   return (
     <div
       className="rounded-2xl border flex flex-col"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
+      style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
     >
       <div className="flex items-center justify-between px-3 pt-3">
         <div className="flex items-center gap-0.5">
@@ -180,7 +180,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
               setIsBatchMode(true);
             }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors"
-            style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+            style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
           >
             <ListChecks size={11} />
             {strings.batchManage}
@@ -190,7 +190,10 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
 
       <div className="flex items-center gap-3 px-3 pt-1 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
         <span className="inline-flex items-center gap-1">
-          <span className="w-2 h-2 rounded-sm inline-block" style={{ backgroundColor: 'var(--primary)' }} />
+          <span
+            className="w-2.5 h-2.5 rounded-sm inline-block"
+            style={{ backgroundColor: 'var(--pa-accent-soft)', border: '1px solid var(--pa-border-soft)' }}
+          />
           {strings.calendarUploaded}
         </span>
         <span>{strings.calendarMissing}</span>
@@ -229,14 +232,14 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 aria-pressed={isSelected}
                 aria-label={date}
                 title={day ? `${day.fileName} · ${day.itemCount}${sourceStatus}` : date}
-                className="aspect-square rounded-lg text-[11px] font-medium border transition-colors"
+                className="aspect-square rounded-lg text-[11px] font-semibold border transition-colors"
                 style={{
-                  backgroundColor: isSelected ? '#dc2626' : isUploaded ? 'var(--primary)' : 'transparent',
-                  borderColor: isSelected ? '#dc2626' : isUploaded ? 'var(--primary)' : 'transparent',
-                  color: isSelected || isUploaded ? '#fff' : 'var(--text-tertiary)',
+                  backgroundColor: isSelected ? '#dc2626' : isUploaded ? 'var(--pa-accent-soft)' : 'transparent',
+                  borderColor: isSelected ? '#dc2626' : isUploaded ? 'var(--pa-border-soft)' : 'transparent',
+                  color: isSelected ? '#fff' : isUploaded ? 'var(--pa-accent-text)' : 'var(--text-tertiary)',
                   opacity: isUploaded ? 1 : 0.45,
                   cursor: isUploaded ? 'pointer' : 'default',
-                  boxShadow: isToday ? 'inset 0 0 0 1.5px rgba(59,130,246,0.8)' : undefined,
+                  boxShadow: isToday ? 'inset 0 0 0 1.5px var(--pa-accent-ui)' : undefined,
                 }}
               >
                 {Number(date.slice(8))}
@@ -249,11 +252,12 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
               key={date}
               className="group relative aspect-square rounded-lg text-[11px] flex items-center justify-center border transition-colors"
               style={{
-                backgroundColor: isUploaded ? 'var(--primary)' : 'transparent',
-                borderColor: isUploaded ? 'var(--primary)' : 'transparent',
-                color: isUploaded ? '#fff' : isFuture ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                backgroundColor: isUploaded ? 'var(--pa-accent-soft)' : 'transparent',
+                borderColor: isUploaded ? 'var(--pa-border-soft)' : 'transparent',
+                color: isUploaded ? 'var(--pa-accent-text)' : isFuture ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                fontWeight: isUploaded ? 600 : undefined,
                 opacity: isFuture && !isUploaded ? 0.55 : 1,
-                boxShadow: isToday ? 'inset 0 0 0 1.5px rgba(59,130,246,0.8)' : undefined,
+                boxShadow: isToday ? 'inset 0 0 0 1.5px var(--pa-accent-ui)' : undefined,
               }}
               title={day ? `${day.fileName} · ${day.itemCount}${sourceStatus}${day.suspectedRange ? ' · ⚠ 疑似区间报表（文件名为多日区间）' : ''}` : date}
               aria-label={date}

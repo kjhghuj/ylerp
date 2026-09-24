@@ -84,7 +84,7 @@ export const ProductList: React.FC<ProductListProps> = ({
     return (
       <div
         className="rounded-2xl border p-10 flex flex-col items-center gap-3"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
       >
         <PackageX size={36} />
         <p className="text-sm">{strings.noMatch}</p>
@@ -103,11 +103,11 @@ export const ProductList: React.FC<ProductListProps> = ({
     <div className="pa-product-list flex flex-col gap-3">
       <div
         className="pa-table-scroll rounded-2xl border overflow-auto"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
       >
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 z-10" style={{ backgroundColor: 'var(--bg-card)' }}>
-            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+          <thead className="sticky top-0 z-10" style={{ backgroundColor: 'var(--pa-card)' }}>
+            <tr style={{ borderBottom: '1px solid var(--pa-card-border)' }}>
               <th className="text-left px-3 py-2.5 font-medium whitespace-nowrap" style={headerCellStyle}>
                 {strings.table.product}
               </th>
@@ -147,7 +147,7 @@ export const ProductList: React.FC<ProductListProps> = ({
             onPageChange(Math.min(page, nextTotalPages));
           }}
           className="px-1.5 py-1 rounded-lg border cursor-pointer outline-none"
-          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+          style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
@@ -198,7 +198,7 @@ export const ProductList: React.FC<ProductListProps> = ({
                 }
                 style={
                   item === safePage
-                    ? { backgroundColor: 'var(--primary)', color: '#fff' }
+                    ? { backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }
                     : { color: 'var(--text-secondary)' }
                 }
               >
@@ -230,7 +230,7 @@ export const ProductList: React.FC<ProductListProps> = ({
             onBlur={commitJump}
             placeholder={String(safePage)}
             className="w-11 px-1 py-1 text-center rounded-lg border outline-none tabular-nums"
-            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-primary)' }}
+            style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-primary)' }}
           />
           {strings.pagination.jumpSuffix && (
             <span style={{ color: 'var(--text-tertiary)' }}>{strings.pagination.jumpSuffix}</span>
@@ -259,7 +259,7 @@ function SortableHeader({
   return (
     <th
       className="px-3 py-2.5 font-medium whitespace-nowrap"
-      style={active ? { color: 'var(--primary)' } : { color: 'var(--text-tertiary)' }}
+      style={active ? { color: 'var(--pa-accent-text)' } : { color: 'var(--text-tertiary)' }}
       aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button
@@ -290,7 +290,7 @@ const ProductRow = React.memo<{
       }
     }}
     className="cursor-pointer transition-colors duration-150 outline-none focus-visible:bg-black/[0.04] hover:bg-black/[0.02]"
-    style={{ borderBottom: '1px solid var(--border-light)' }}
+    style={{ borderBottom: '1px solid var(--pa-card-border)' }}
   >
     <td className="px-3 py-2.5 max-w-[320px]">
       <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
@@ -315,7 +315,7 @@ const ProductRow = React.memo<{
     <td className="px-3 py-2.5 text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
       {formatCount(item.variations?.length ?? 0)}
     </td>
-    <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: 'var(--primary)' }}>
+    <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: 'var(--pa-accent-text)' }}>
       {formatMoney(item.salesOrdered, currency)}
     </td>
     <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>

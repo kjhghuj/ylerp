@@ -43,8 +43,8 @@ function NumberFilter({ id, label, placeholder, value, min = 0, onChange }: Numb
         placeholder={placeholder}
         className="w-full px-2 py-1.5 rounded-lg border text-xs tabular-nums outline-none transition-colors"
         style={{
-          backgroundColor: 'var(--bg-primary)',
-          borderColor: 'var(--border-light)',
+          backgroundColor: 'var(--pa-canvas)',
+          borderColor: 'var(--pa-card-border)',
           color: 'var(--text-primary)',
         }}
       />
@@ -58,18 +58,18 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
   const isDefault = JSON.stringify(value) === JSON.stringify(DEFAULT_POTENTIAL_FILTERS);
 
   const inputStyle = (checked: boolean): React.CSSProperties => ({
-    backgroundColor: 'var(--bg-card)',
-    borderColor: checked ? 'var(--primary)' : 'var(--border-light)',
-    color: checked ? 'var(--primary)' : 'var(--text-secondary)',
+    backgroundColor: 'var(--pa-card)',
+    borderColor: checked ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
+    color: checked ? 'var(--pa-accent-text)' : 'var(--text-secondary)',
   });
 
   return (
     <div
       className="rounded-2xl border p-3 flex flex-col gap-3"
-      style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
+      style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <Filter size={13} style={{ color: 'var(--primary)' }} />
+        <Filter size={13} style={{ color: 'var(--pa-accent-text)' }} />
         <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
           {strings.potential.filters}
         </span>
@@ -77,7 +77,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
           {strings.potential.base}
         </span>
         {!isDefault && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: 'rgba(59,130,246,0.12)', color: 'var(--primary)' }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: 'var(--pa-accent-soft)', color: 'var(--pa-accent)' }}>
             自定义
           </span>
         )}

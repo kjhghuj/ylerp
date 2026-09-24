@@ -153,8 +153,14 @@ function potentialResponse(itemNames: string[], from = '2026-08-31', to = '2026-
 }
 
 async function openPotentialTab() {
-  // 内容 tab 在店铺与日历数据就绪后才渲染，需等待出现
-  const tab = await screen.findByRole('button', { name: '新商品分析' });
+  // 视图 tab 在店铺与日历数据就绪后才渲染，需等待出现
+  const tab = await screen.findByRole('button', { name: '潜力商品' });
+  fireEvent.click(tab);
+}
+
+/** 上传入口位于「数据日历」视图：切换过去上传，再切回原视图断言 */
+async function openCalendarView() {
+  const tab = await screen.findByRole('button', { name: '数据日历' });
   fireEvent.click(tab);
 }
 
@@ -179,6 +185,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     );
 
     render(<ProductAnalysis />);
+    await openCalendarView();
     await waitFor(() => expect(isUploadedCell(screen.getByLabelText('2026-09-06'))).toBe(true));
 
     fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
@@ -204,6 +211,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     );
 
     render(<ProductAnalysis />);
+    await openCalendarView();
     await waitFor(() => expect(screen.getByLabelText('2026-09-06')).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
@@ -223,6 +231,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<ProductAnalysis />);
+    await openCalendarView();
     await waitFor(() => expect(screen.getByLabelText('2026-09-06')).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
@@ -250,6 +259,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     );
 
     render(<ProductAnalysis />);
+    await openCalendarView();
     await waitFor(() => expect(pending).toHaveLength(1)); // A 初始请求
     pending[0].resolve(SHOP_A_DAYS);
     await waitFor(() => expect(isUploadedCell(screen.getByLabelText('2026-09-06'))).toBe(true));
@@ -415,8 +425,10 @@ describe('potential refresh failure hides the stale list (task 3)', () => {
 
     // 同日重传成功 → 写入后统一刷新触发的新品榜请求失败：旧榜单必须隐藏（可能已过期）
     mockFetchPotential.mockRejectedValueOnce(new Error('刷新失败'));
+    await openCalendarView();
     await selectUploadFile('parentskudetail.20260906.xlsx');
     await waitFor(() => expect(mockUpload).toHaveBeenCalledTimes(1));
+    await openPotentialTab();
     expect(await screen.findByText(/刷新失败/)).toBeTruthy();
     expect(screen.queryByText('旧榜单商品')).toBeNull();
 
@@ -439,12 +451,14 @@ describe('potential refresh failure hides the stale list (task 3)', () => {
     await waitFor(() => expect(screen.getByText('将被删除的商品')).toBeTruthy());
 
     mockFetchPotential.mockRejectedValueOnce(new Error('删除后刷新失败'));
+    await openCalendarView();
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
     await waitFor(() => expect(mockDeleteDailyUpload).toHaveBeenCalledWith('shop-1', '2026-09-06'));
 
     // 刷新失败：已删除商品不可见（不回退旧榜单），错误可见
+    await openPotentialTab();
     expect(await screen.findByText(/删除后刷新失败/)).toBeTruthy();
     expect(screen.queryByText('将被删除的商品')).toBeNull();
     confirmSpy.mockRestore();
@@ -485,10 +499,10 @@ describe('potential item detail loads independently of the aggregation (task 4)'
     // 详情明确反馈币种异常原因，不静默无响应
     expect(await screen.findByText(/不一致的上传数据（PHP）/)).toBeTruthy();
 
-    // 重试成功恢复当前查询的详情
+    // 重试成功恢复当前查询的详情（弹窗头部显示商品编号即详情内容已渲染）
     mockFetchShopItem.mockResolvedValueOnce(makeDetail('item-币种异常店铺的商品', '币种异常店铺的商品'));
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
-    await waitFor(() => expect(screen.getByText('概览')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('#item-币种异常店铺的商品')).toBeTruthy());
   });
 
   it('switching to another item does not leak the previous error or content', async () => {

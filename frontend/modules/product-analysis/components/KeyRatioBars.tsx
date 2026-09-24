@@ -2,6 +2,7 @@ import { useChartState } from './charts/chartState';
 import React from 'react';
 import { formatCount, formatPercent } from '../utils/format';
 import { useProductAnalysisStrings } from '../i18n';
+import { usePaTheme } from '../themeContext';
 import type { ParentProduct } from '../types';
 import { ChartCard, ChartEmptySelection, ChartLegend } from './charts/ChartControls';
 
@@ -19,12 +20,14 @@ interface RatioDefinition {
 /** 关键比率进度条 ×5 + 平均复购天数数值卡 ×2（纯 div，无图表库） */
 export const KeyRatioBars: React.FC<KeyRatioBarsProps> = ({ item }) => {
   const strings = useProductAnalysisStrings();
+  const { theme } = usePaTheme();
+  const { chart } = theme;
   const ratios: RatioDefinition[] = [
-    { key: 'ctr', label: strings.metrics.ctr, value: item.ctr, color: '#4f46e5' },
-    { key: 'cvrConfirmed', label: strings.metrics.cvrConfirmed, value: item.cvrConfirmed, color: '#10b981' },
-    { key: 'cartRate', label: strings.metrics.cartRate, value: item.cartRate, color: '#f59e0b' },
-    { key: 'bounceRate', label: strings.metrics.bounceRate, value: item.bounceRate, color: '#ef4444' },
-    { key: 'repurchase', label: strings.metrics.repurchaseRateConfirmed, value: item.repurchaseRateConfirmed, color: '#64748b' },
+    { key: 'ctr', label: strings.metrics.ctr, value: item.ctr, color: chart.primary },
+    { key: 'cvrConfirmed', label: strings.metrics.cvrConfirmed, value: item.cvrConfirmed, color: chart.secondary },
+    { key: 'cartRate', label: strings.metrics.cartRate, value: item.cartRate, color: chart.ratioCart },
+    { key: 'bounceRate', label: strings.metrics.bounceRate, value: item.bounceRate, color: chart.ratioBounce },
+    { key: 'repurchase', label: strings.metrics.repurchaseRateConfirmed, value: item.repurchaseRateConfirmed, color: chart.ratioRepurchase },
   ];
   const defaults = ratios.map(({ key }) => key);
   const [selected, setSelected] = useChartState<string[]>('ratios', defaults);

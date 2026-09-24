@@ -51,8 +51,8 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
       }}
       className="rounded-2xl border border-dashed p-3 flex items-center gap-3 transition-colors duration-200"
       style={{
-        backgroundColor: isDragging ? 'var(--bg-card-hover)' : 'var(--bg-card)',
-        borderColor: isDragging ? 'var(--primary)' : 'var(--border-light)',
+        backgroundColor: isDragging ? 'var(--bg-card-hover)' : 'var(--pa-card)',
+        borderColor: isDragging ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
         opacity: locked ? 0.7 : 1,
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
@@ -70,11 +70,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         }}
       />
       {isUploading ? (
-        <Loader2 size={20} className="animate-spin shrink-0" style={{ color: 'var(--primary)' }} />
+        <Loader2 size={20} className="animate-spin shrink-0" style={{ color: 'var(--pa-accent-text)' }} />
       ) : disabled ? (
         <Lock size={20} className="shrink-0" style={{ color: 'var(--text-tertiary)' }} />
       ) : (
-        <Upload size={20} className="shrink-0" style={{ color: 'var(--primary)' }} />
+        <Upload size={20} className="shrink-0" style={{ color: 'var(--pa-accent-text)' }} />
       )}
       <div className="min-w-0 flex-1">
         <p className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>

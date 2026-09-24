@@ -137,7 +137,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     return (
       <div
         className="rounded-2xl border p-10 flex flex-col items-center gap-3"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
       >
         <Lock size={28} />
         <p className="text-sm">{strings.aiDisabled}</p>
@@ -146,10 +146,10 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   }
 
   return (
-    <div className="flex flex-col rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}>
+    <div className="flex flex-col rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
       {/* 上下文指示 + 深度思考开关 */}
-      <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}>
-        <Sparkles size={13} style={{ color: 'var(--primary)' }} />
+      <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}>
+        <Sparkles size={13} style={{ color: 'var(--pa-accent-text)' }} />
         <span className="truncate">
           {itemId
             ? `${strings.ai.contextItem}：${(itemTitle ?? '').slice(0, ITEM_NAME_SNIPPET_LENGTH)}`
@@ -168,8 +168,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           title={strings.ai.deepThinkingHint}
           className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full border transition-colors"
           style={{
-            borderColor: deepThinking ? 'var(--primary)' : 'var(--border-light)',
-            color: deepThinking ? 'var(--primary)' : 'var(--text-tertiary)',
+            borderColor: deepThinking ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
+            color: deepThinking ? 'var(--pa-accent-text)' : 'var(--text-tertiary)',
           }}
         >
           <Brain size={12} />
@@ -189,7 +189,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                   type="button"
                   onClick={() => sendMessage(suggestion)}
                   className="px-3 py-1.5 rounded-full border text-xs transition-colors duration-200"
-                  style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+                  style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
                 >
                   {suggestion}
                 </button>
@@ -210,7 +210,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
               {reasoningExpanded ? (
                 <div
                   className="rounded-xl border px-3 py-2"
-                  style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)' }}
+                  style={{ borderColor: 'var(--pa-card-border)', backgroundColor: 'var(--pa-canvas)' }}
                 >
                   <button
                     type="button"
@@ -237,7 +237,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                   type="button"
                   onClick={() => setExpandedReasoning((prev) => ({ ...prev, [index]: true }))}
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors"
-                  style={{ borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+                  style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
                 >
                   <Brain size={11} />
                   {strings.ai.thoughtFor.replace(
@@ -255,8 +255,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             <div
               className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
               style={{
-                backgroundColor: message.role === 'user' ? 'var(--primary)' : 'var(--border-light)',
-                color: message.role === 'user' ? '#fff' : 'var(--text-secondary)',
+                backgroundColor: message.role === 'user' ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
+                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'var(--text-secondary)',
               }}
             >
               {message.role === 'user' ? <User size={13} /> : <Bot size={13} />}
@@ -268,8 +268,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                   : 'px-3.5 py-2.5 break-words min-w-0'
               }`}
               style={{
-                backgroundColor: message.role === 'user' ? 'var(--primary)' : 'var(--bg-card-hover)',
-                color: message.role === 'user' ? '#fff' : 'var(--text-primary)',
+                backgroundColor: message.role === 'user' ? 'var(--pa-accent-ui)' : 'var(--bg-card-hover)',
+                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'var(--text-primary)',
                 borderBottomRightRadius: message.role === 'user' ? 6 : undefined,
                 borderBottomLeftRadius: message.role === 'assistant' ? 6 : undefined,
               }}
@@ -317,8 +317,8 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           disabled={isSending}
           className="flex-1 rounded-xl border px-3 py-2 text-sm resize-none"
           style={{
-            backgroundColor: 'var(--bg-primary)',
-            borderColor: 'var(--border-light)',
+            backgroundColor: 'var(--pa-canvas)',
+            borderColor: 'var(--pa-card-border)',
             color: 'var(--text-primary)',
           }}
         />
@@ -327,7 +327,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           onClick={() => sendMessage(input)}
           disabled={isSending || !input.trim()}
           className="p-2.5 rounded-xl shrink-0 transition-opacity duration-200 disabled:opacity-40"
-          style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+          style={{ backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }}
           aria-label={strings.ai.send}
         >
           {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}

@@ -73,8 +73,8 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
   };
 
   const inputStyle = {
-    backgroundColor: 'var(--bg-primary)',
-    borderColor: 'var(--border-light)',
+    backgroundColor: 'var(--pa-canvas)',
+    borderColor: 'var(--pa-card-border)',
     color: 'var(--text-primary)',
   } as const;
 
@@ -89,9 +89,9 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
         className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+        <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--pa-card-border)' }}>
           <p className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
-            <Store size={16} style={{ color: 'var(--primary)' }} />
+            <Store size={16} style={{ color: 'var(--pa-accent-text)' }} />
             {strings.shop.manage}
           </p>
           <button type="button" onClick={onClose} className="p-1.5 rounded-lg" style={{ color: 'var(--text-tertiary)' }} aria-label="close">
@@ -131,7 +131,7 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
               onClick={handleCreate}
               disabled={creating || !name.trim()}
               className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40"
-              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+              style={{ backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }}
             >
               <Plus size={14} />
               {strings.shop.createBtn}
@@ -144,7 +144,7 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
               <div
                 key={shop.id}
                 className="flex items-center gap-3 rounded-xl border px-3 py-2.5"
-                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-light)' }}
+                style={{ backgroundColor: 'var(--pa-canvas)', borderColor: 'var(--pa-card-border)' }}
               >
                 <div className="min-w-0 flex-1">
                   {renamingId === shop.id ? (

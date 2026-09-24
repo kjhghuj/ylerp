@@ -19,23 +19,23 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
       li: ({ children }) => <li className="leading-relaxed">{children}</li>,
       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
       a: ({ children, href }) => (
-        <a href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)' }} className="underline underline-offset-2">
+        <a href={href} target="_blank" rel="noreferrer" style={{ color: 'var(--pa-accent-text)' }} className="underline underline-offset-2">
           {children}
         </a>
       ),
       blockquote: ({ children }) => (
-        <blockquote className="my-1.5 pl-2.5 border-l-2" style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}>
+        <blockquote className="my-1.5 pl-2.5 border-l-2" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}>
           {children}
         </blockquote>
       ),
-      hr: () => <hr className="my-2" style={{ borderColor: 'var(--border-light)' }} />,
+      hr: () => <hr className="my-2" style={{ borderColor: 'var(--pa-card-border)' }} />,
       code: ({ className, children }) => {
         // 有 language- 类名的是代码块内的 <code>，交给 pre 统一着色
         if (className) return <code className="font-mono text-xs">{children}</code>;
         return (
           <code
             className="font-mono text-xs px-1 py-0.5 rounded"
-            style={{ backgroundColor: 'var(--bg-primary)' }}
+            style={{ backgroundColor: 'var(--pa-canvas)' }}
           >
             {children}
           </code>
@@ -44,7 +44,7 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
       pre: ({ children }) => (
         <pre
           className="my-1.5 p-2.5 rounded-lg overflow-x-auto text-xs leading-relaxed"
-          style={{ backgroundColor: 'var(--bg-primary)' }}
+          style={{ backgroundColor: 'var(--pa-canvas)' }}
         >
           {children}
         </pre>
@@ -55,12 +55,12 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
         </div>
       ),
       th: ({ children }) => (
-        <th className="px-2 py-1 text-left font-semibold border" style={{ borderColor: 'var(--border-light)' }}>
+        <th className="px-2 py-1 text-left font-semibold border" style={{ borderColor: 'var(--pa-card-border)' }}>
           {children}
         </th>
       ),
       td: ({ children }) => (
-        <td className="px-2 py-1 border" style={{ borderColor: 'var(--border-light)' }}>
+        <td className="px-2 py-1 border" style={{ borderColor: 'var(--pa-card-border)' }}>
           {children}
         </td>
       ),

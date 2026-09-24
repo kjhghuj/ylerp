@@ -115,6 +115,13 @@ function fakeFile(name: string): File {
   return { name, size: 128, arrayBuffer: async () => new ArrayBuffer(8) } as unknown as File;
 }
 
+
+/** 上传区与完整日历位于「数据日历」视图：先切换过去再操作 */
+async function openCalendarView() {
+  const tab = await screen.findByRole('button', { name: '数据日历' });
+  fireEvent.click(tab);
+}
+
 /** UploadZone 的文件入口：真实组件通过隐藏 input 触发，这里直接派发 change */
 async function selectFiles(files: File[]) {
   const input = await waitFor(() => {
@@ -144,6 +151,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     await waitFor(() => expect(mockFetchPotential).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mockFetchShopDays).toHaveBeenCalledTimes(1));
 
+    await openCalendarView();
     await selectFiles([fakeFile('parentskudetail.20260906.xlsx')]);
     await waitFor(() => expect(mockUpload).toHaveBeenCalledTimes(1));
 
@@ -161,6 +169,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     render(<ProductAnalysis />);
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(1));
 
+    await openCalendarView();
     await selectFiles([
       fakeFile('parentskudetail.20260905.xlsx'),
       fakeFile('parentskudetail.20260906.xlsx'),
@@ -179,6 +188,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     render(<ProductAnalysis />);
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(1));
 
+    await openCalendarView();
     await selectFiles([fakeFile('parentskudetail.20260807_20260905.xlsx')]);
     await waitFor(() =>
       expect(toastSpy).toHaveBeenCalledWith(
@@ -210,6 +220,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledWith('shop-1', '2026-08-31', '2026-09-06'));
 
     // 上传悬挂期间切换店铺
+    await openCalendarView();
     await selectFiles([fakeFile('parentskudetail.20260906.xlsx')]);
     fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
     await waitFor(() =>
@@ -229,6 +240,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     render(<ProductAnalysis />);
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(1));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await openCalendarView();
 
     // 悬停删除按钮位于日历单元格内（2026-09-06 有数据）
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));

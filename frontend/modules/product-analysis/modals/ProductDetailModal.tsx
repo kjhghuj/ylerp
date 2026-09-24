@@ -109,7 +109,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
         onClick={(event) => event.stopPropagation()}
       >
         {/* 头部 */}
-        <div className="px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-light)' }}>
+        <div className="px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--pa-card-border)' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-bold line-clamp-2 leading-5" style={{ color: 'var(--text-primary)' }} title={itemName}>
@@ -131,21 +131,30 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
               <X size={18} />
             </button>
           </div>
-          <div className="flex gap-1 mt-3 flex-wrap">
-            {MODAL_TABS.map(({ key, labelKey }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-200"
-                style={{
-                  backgroundColor: activeTab === key ? 'var(--primary)' : 'transparent',
-                  color: activeTab === key ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                {strings.modal[labelKey]}
-              </button>
-            ))}
+          {/* 分段式胶囊标签：浅色软底 + 主题色激活 */}
+          <div
+            className="flex gap-1 mt-3 p-1 rounded-xl w-fit max-w-full overflow-x-auto"
+            style={{ backgroundColor: 'var(--pa-accent-soft)' }}
+          >
+            {MODAL_TABS.map(({ key, labelKey }) => {
+              const active = activeTab === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-current={active ? 'true' : undefined}
+                  onClick={() => setActiveTab(key)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors duration-200"
+                  style={{
+                    backgroundColor: active ? 'var(--pa-card)' : 'transparent',
+                    color: active ? 'var(--pa-accent-text)' : 'var(--text-secondary)',
+                    boxShadow: active ? 'var(--shadow-sm)' : undefined,
+                  }}
+                >
+                  {strings.modal[labelKey]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -158,14 +167,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
                 type="button"
                 onClick={() => setRetryToken((token) => token + 1)}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium"
-                style={{ backgroundColor: 'var(--primary)', color: '#fff' }}
+                style={{ backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }}
               >
                 {strings.potential.retry}
               </button>
             </div>
           ) : !detail ? (
             <div className="h-60 flex items-center justify-center" role="status" aria-label="detail-loading">
-              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--primary)' }} />
+              <Loader2 size={28} className="animate-spin" style={{ color: 'var(--pa-accent-text)' }} />
             </div>
           ) : (
             <>
@@ -306,9 +315,9 @@ function OverviewTab({ item, currency, days }: { item: ParentProduct; currency: 
 
 function MetricGroup({ title, entries }: { title: string; entries: MetricEntry[] }) {
   return (
-    <div className="rounded-2xl border p-4" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}>
+    <div className="rounded-2xl border p-4" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
       <div className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
-        <div className="w-1 h-3.5 bg-indigo-500 rounded-full"></div>
+        <div className="w-1 h-3.5 rounded-full" style={{ backgroundColor: 'var(--pa-accent-ui)' }}></div>
         <span className="truncate" title={title}>{title}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2.5">

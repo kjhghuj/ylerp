@@ -10,7 +10,7 @@ interface SummaryCardsProps {
   weightedCvr: number | null;
 }
 
-/** 报告级 KPI 卡 ×6 */
+/** 列表视图报告级 KPI 卡 ×6（概览视图使用 OverviewCards） */
 export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currency, weightedCvr }) => {
   const strings = useProductAnalysisStrings();
   const cards = [
@@ -26,15 +26,16 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ summary, currency, w
       {cards.map(({ icon: Icon, label, value, title }) => (
         <div
           key={label}
-          className="rounded-2xl border p-3.5 min-w-0"
-          style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
+          className="pa-card pa-metric-card"
           title={title}
         >
-          <div className="flex items-center gap-1.5" style={{ color: 'var(--text-tertiary)' }}>
-            <Icon size={14} />
-            <span className="text-xs font-medium truncate">{label}</span>
+          <div className="pa-metric-head">
+            <span className="pa-metric-icon">
+              <Icon size={15} />
+            </span>
+            <span className="pa-metric-label">{label}</span>
           </div>
-          <p className="text-base font-bold mt-1.5 truncate" style={{ color: 'var(--text-primary)' }} title={value}>
+          <p className="pa-metric-value" title={value}>
             {value}
           </p>
         </div>

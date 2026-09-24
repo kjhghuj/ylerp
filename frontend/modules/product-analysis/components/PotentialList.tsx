@@ -17,7 +17,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
     return (
       <div
         className="rounded-2xl border p-10 flex flex-col items-center gap-3 text-center"
-        style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)', color: 'var(--text-tertiary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
       >
         <Trophy size={36} />
         <p className="text-sm">{strings.potential.empty}</p>
@@ -45,7 +45,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
             type="button"
             onClick={() => onSelect(item)}
             className="text-left rounded-2xl border p-4 flex flex-col gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md w-full"
-            style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-light)' }}
+            style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
           >
             <div className="flex items-center gap-3">
               <span
@@ -62,7 +62,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
               </div>
               <div className="text-right shrink-0">
                 <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{strings.potential.score}</p>
-                <p className="text-base font-bold" style={{ color: 'var(--primary)' }}>{item.score.toFixed(1)}</p>
+                <p className="text-base font-bold" style={{ color: 'var(--pa-accent-text)' }}>{item.score.toFixed(1)}</p>
               </div>
             </div>
             <div className="pa-potential-metrics grid gap-x-4 gap-y-1.5 text-xs">
@@ -109,7 +109,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
                   style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
                 >
-                  <Sparkles size={10} style={{ color: 'var(--primary)' }} />
+                  <Sparkles size={10} style={{ color: 'var(--pa-accent-text)' }} />
                   {reason}
                 </span>
               ))}

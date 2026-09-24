@@ -168,6 +168,13 @@ beforeEach(() => {
   mockUpload.mockResolvedValue({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 12, derivedItemCount: 12, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 12, sourceComplete: true, warnings: [] });
 });
 
+
+/** 上传区与完整日历位于「数据日历」视图；概览指标在「概览」视图断言 */
+async function openView(name: '数据日历' | '概览') {
+  const tab = await screen.findByRole('button', { name });
+  fireEvent.click(tab);
+}
+
 async function selectUploadFile(name: string) {
   const input = await waitFor(() => {
     const zone = screen.getByText(/拖拽|选择/);
@@ -186,14 +193,16 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     render(<ProductAnalysis />);
 
     // 初始：汇总卡显示后端成对样本转化率，商品可见
-    expect(await screen.findByText('验收商品')).toBeTruthy();
+    expect((await screen.findAllByText('验收商品')).length).toBeGreaterThan(0);
     expect(screen.getByText('10.00%')).toBeTruthy();
 
     // 单日报表上传（同日覆盖）：写入成功后刷新，指标更新为 12%（新数据由后端同口径返回）
     mockFetchShopAgg.mockResolvedValueOnce(reproAgg(12, 2000));
     mockFetchPotential.mockResolvedValueOnce({ ...reproPotential(), items: [{ ...reproPotential().items[0], metrics: { ...reproPotential().items[0].metrics, cvrOrdered: 12 } }] });
+    await openView('数据日历');
     await selectUploadFile('parentskudetail.20260906.xlsx');
     await waitFor(() => expect(mockUpload).toHaveBeenCalledWith('shop-1', '2026-09-06', expect.anything()));
+    await openView('概览');
     await waitFor(() => expect(screen.getByText('12.00%')).toBeTruthy());
     await waitFor(() => expect(screen.getAllByText('MYR 2,000.00').length).toBeGreaterThanOrEqual(1));
 
@@ -201,10 +210,12 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     mockFetchShopAgg.mockResolvedValueOnce({ ...reproAgg(null, 0), sheets: [], itemCount: 0, days: 0 });
     mockFetchPotential.mockResolvedValueOnce({ from: '2026-08-31', to: '2026-09-06', items: [] });
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    await openView('数据日历');
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('shop-1', '2026-09-06'));
+    await openView('概览');
     await waitFor(() => expect(screen.queryByText('验收商品')).toBeNull());
     confirmSpy.mockRestore();
   });
@@ -216,10 +227,10 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     const mockFetchShopItem = vi.mocked(fetchShopItem);
     mockFetchShopItem.mockResolvedValue(reproDetail());
     render(<ProductAnalysis />);
-    expect(await screen.findByText('验收商品')).toBeTruthy();
+    expect((await screen.findAllByText('验收商品')).length).toBeGreaterThan(0);
 
     // 新品榜打开详情：详情自行请求（不依赖聚合），展示与汇总/新品一致的 10%
-    fireEvent.click(screen.getByRole('button', { name: '新商品分析' }));
+    fireEvent.click(screen.getByRole('button', { name: '潜力商品' }));
     const potentialItem = await screen.findByText('验收新品');
     fireEvent.click(potentialItem);
     expect(mockFetchShopItem).toHaveBeenCalledWith('shop-1', 'new-1', '2026-08-31', '2026-09-06');
@@ -244,7 +255,7 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     mockFetchShopAgg.mockResolvedValue(reproAgg(null, 1500));
     mockFetchPotential.mockResolvedValue(reproPotential());
     render(<ProductAnalysis />);
-    expect(await screen.findByText('验收商品')).toBeTruthy();
+    expect((await screen.findAllByText('验收商品')).length).toBeGreaterThan(0);
     // 无有效成对样本 → 加权转化率卡显示「—」（不是 0%）
     const cvrCardValue = screen.getByText('加权转化率')!.closest('div')!.parentElement!.querySelector('p')!;
     expect(cvrCardValue.textContent).toBe('—');

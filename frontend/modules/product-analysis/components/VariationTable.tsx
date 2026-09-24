@@ -36,12 +36,12 @@ export const VariationTable: React.FC<VariationTableProps> = ({ variations }) =>
   return (
     <div
       className="rounded-2xl border border-white/50 bg-white/70 backdrop-blur-xl overflow-hidden"
-      style={{ borderColor: 'var(--border-light)' }}
+      style={{ borderColor: 'var(--pa-card-border)' }}
     >
       <div className="max-h-[420px] overflow-auto">
         <table className="w-full text-xs">
-          <thead className="sticky top-0" style={{ backgroundColor: 'var(--bg-card)' }}>
-            <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
+          <thead className="sticky top-0" style={{ backgroundColor: 'var(--pa-card)' }}>
+            <tr style={{ borderBottom: '1px solid var(--pa-card-border)' }}>
               <th className="text-left px-3 py-2.5 font-medium" style={headerCellStyle}>{strings.variationTable.name}</th>
               <th className="text-left px-3 py-2.5 font-medium" style={headerCellStyle}>{strings.variationTable.sku}</th>
               <th className="text-left px-3 py-2.5 font-medium" style={headerCellStyle}>{strings.variationTable.status}</th>
@@ -49,7 +49,7 @@ export const VariationTable: React.FC<VariationTableProps> = ({ variations }) =>
                 <th
                   key={column}
                   className="text-right px-3 py-2.5 font-medium cursor-pointer select-none whitespace-nowrap"
-                  style={{ ...headerCellStyle, color: sortColumn === column ? 'var(--primary)' : undefined }}
+                  style={{ ...headerCellStyle, color: sortColumn === column ? 'var(--pa-accent-text)' : undefined }}
                   onClick={() => setSortColumn(column)}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -64,7 +64,7 @@ export const VariationTable: React.FC<VariationTableProps> = ({ variations }) =>
             {sorted.map((variation, index) => (
               <tr
                 key={variation.variationSku ?? `${variation.variationName ?? 'v'}-${index}`}
-                style={{ borderBottom: '1px solid var(--border-light)' }}
+                style={{ borderBottom: '1px solid var(--pa-card-border)' }}
                 className="hover:bg-black/[0.02]"
               >
                 <td className="px-3 py-2 max-w-[220px] truncate font-medium" style={{ color: 'var(--text-primary)' }} title={variation.variationName}>

@@ -15,7 +15,9 @@ export const TREND_GROUPS: TrendGroup[] = [
   { key: 'repurchase', metrics: ['repeatOrderRate', 'repurchaseRateConfirmed', 'avgReorderDays', 'avgRepurchaseDays'], defaults: ['repeatOrderRate', 'repurchaseRateConfirmed'] },
 ];
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#f43f5e', '#84cc16', '#d946ef', '#64748b'];
-export const metricColor = (group: TrendGroup, key: string) => COLORS[group.metrics.indexOf(key as DailyTrendMetricKey) % COLORS.length];
+/** 主题未注入（独立渲染/测试）时的默认色阶 = 默认紫主题的派生色阶 */
+export const metricColor = (group: TrendGroup, key: string, series?: string[]) =>
+  (series ?? COLORS)[group.metrics.indexOf(key as DailyTrendMetricKey) % (series ?? COLORS).length];
 export const isRightAxis = (key: string) => key.startsWith('aov') || key === 'avgReorderDays' || key === 'avgRepurchaseDays';
 export const isMoneyMetric = (key: string) => key.startsWith('sales') || key.startsWith('aov');
 export const isDayMetric = (key: string) => key === 'avgReorderDays' || key === 'avgRepurchaseDays';
