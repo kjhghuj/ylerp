@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { LayoutDashboard, Calculator, Wallet, PackagePlus, PackageCheck, List, Users, Image, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Calculator, Wallet, PackagePlus, PackageCheck, List, Users, Image, UserCircle, LogOut, ChevronDown, X, ShieldCheck, Shield, Eye, Menu, Calendar, Activity, BarChart3, Globe, Sun, Moon } from 'lucide-react';
 import { AppState } from '../types';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
@@ -9,10 +9,12 @@ import { version } from '../package.json';
 interface SidebarProps {
   currentView: AppState['currentView'];
   onChangeView: (view: AppState['currentView']) => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) => {
-  const { strings } = useStore();
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, darkMode, onToggleDarkMode }) => {
+  const { strings, language, setLanguage } = useStore();
   const { user, logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -89,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
         }}>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => setDrawerOpen(true)} className="lg:hidden p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5" style={{ color: 'var(--text-secondary)' }}>
+          <button onClick={() => setDrawerOpen(true)} className="2xl:hidden p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5" style={{ color: 'var(--text-secondary)' }}>
             <Menu size={20} />
           </button>
 
@@ -99,7 +101,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded hidden sm:inline" style={{ color: 'var(--text-tertiary)', backgroundColor: 'var(--bg-card-hover)' }}>v{version}</span>
           </div>
 
-          <nav className="hidden lg:flex items-center gap-1 ml-4">
+          <nav className="hidden 2xl:flex items-center gap-1 ml-4">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const isActive = currentView === item.id;
@@ -189,6 +191,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView }) =
               </div>
             )}
           </div>
+          <button
+            onClick={onToggleDarkMode}
+            className="p-1.5 rounded-lg transition-colors duration-200 hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ color: 'var(--text-tertiary)' }}
+            title={darkMode ? '切换到浅色模式' : '切换到深色模式'}
+            aria-label={darkMode ? '切换到浅色模式' : '切换到深色模式'}
+          >
+            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+          <button
+            onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors duration-200 hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ color: 'var(--text-tertiary)' }}
+            aria-label={language === 'zh' ? 'Switch to English' : '切换到中文'}
+          >
+            <Globe size={14} />
+            <span className="hidden sm:inline">{language === 'zh' ? 'EN' : '中'}</span>
+          </button>
         </div>
       </header>
 

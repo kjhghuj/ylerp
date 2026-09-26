@@ -75,6 +75,7 @@ const shopeeAuthorizationRoutes_1 = require("./routes/shopeeAuthorizationRoutes"
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
 const productRoutes_1 = __importDefault(require("./routes/productRoutes"));
+const productDisplayGroupRoutes_1 = __importDefault(require("./routes/productDisplayGroupRoutes"));
 const financeRoutes_1 = __importDefault(require("./routes/financeRoutes"));
 const nodeGraphRoutes_1 = __importDefault(require("./routes/nodeGraphRoutes"));
 const templateRoutes_1 = __importDefault(require("./routes/templateRoutes"));
@@ -95,6 +96,7 @@ const shopeeAuthorization = new shopeeAuthorization_1.ShopeeAuthorizationService
 app.use('/api/shopee/manage', authMiddleware_1.authenticate, (0, authMiddleware_1.authorize)('owner'), (0, shopeeAuthorizationRoutes_1.createShopeeManagementRoutes)(shopeeAuthorization));
 app.use('/api/users', userRoutes_1.default);
 app.use('/api/products', authMiddleware_1.authenticate, productRoutes_1.default);
+app.use('/api/product-display-groups', authMiddleware_1.authenticate, productDisplayGroupRoutes_1.default);
 app.use(productAtomicJsonMiddleware_1.productAtomicRouteErrorHandler);
 app.use('/api/finance', authMiddleware_1.authenticate, financeRoutes_1.default);
 app.use('/api/templates', authMiddleware_1.authenticate, templateRoutes_1.default);

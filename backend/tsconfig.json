@@ -3,14 +3,17 @@
     "target": "es2022",
     "module": "commonjs",
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "..",
+    "baseUrl": ".",
+    "paths": {"xlsx": ["./node_modules/xlsx"]},
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "../shared/productAnalysis/**/*"
   ],
   "exclude": [
     "src/**/__tests__/**"

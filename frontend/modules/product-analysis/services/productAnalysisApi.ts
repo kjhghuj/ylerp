@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   ChatResult,
   DayMeta,
+  EstablishedTrendsResponse,
   ItemDetailResponse,
   ParsedProductAnalysisReport,
   PotentialResponse,
@@ -170,6 +171,13 @@ export async function fetchPotential(
         limit: filters.limit,
       } : {}),
     },
+  });
+  return response.data;
+}
+
+export async function fetchEstablishedTrends(shopId: string, from: string, to: string): Promise<EstablishedTrendsResponse> {
+  const response = await api.get<EstablishedTrendsResponse>(`/product-analysis/shops/${shopId}/established-trends`, {
+    params: { from, to },
   });
   return response.data;
 }

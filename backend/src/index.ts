@@ -7,6 +7,8 @@ import { parseTrustedProxyCidrs } from './services/trustedProxy';
 import { assertJwtSecretConfigured } from './services/jwtSecret';
 import { guardAiRequest } from './middleware/aiRequestGuard';
 import shopeeRoutes from './routes/shopeeRoutes';
+import productAnalysisCollectionRoutes from './routes/productAnalysisCollectionRoutes';
+import productAnalysisImportRoutes, {startProductAnalysisImportWorker} from './routes/productAnalysisImportRoutes';
 import {
   configureJsonBodyParsing,
   chromaJsonErrorHandler,
@@ -70,6 +72,7 @@ import { configureShopeeAuthorization, createShopeeManagementRoutes } from './ro
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import productRoutes from './routes/productRoutes';
+import productDisplayGroupRoutes from './routes/productDisplayGroupRoutes';
 import financeRoutes from './routes/financeRoutes';
 import nodeGraphRoutes from './routes/nodeGraphRoutes';
 import templateRoutes from './routes/templateRoutes';
@@ -92,6 +95,7 @@ configureShopeeAuthorization(shopeeAuthorization);
 app.use('/api/shopee/manage', authenticate, authorize('owner'), createShopeeManagementRoutes(shopeeAuthorization));
 app.use('/api/users', userRoutes);
 app.use('/api/products', authenticate, productRoutes);
+app.use('/api/product-display-groups', authenticate, productDisplayGroupRoutes);
 app.use(productAtomicRouteErrorHandler);
 app.use('/api/finance', authenticate, financeRoutes);
 app.use('/api/templates', authenticate, templateRoutes);
@@ -104,6 +108,8 @@ app.use('/api/chroma-data', authenticate, authorizeAnyPermission('chroma-adapt.t
 app.use('/api/usage', usageRoutes);
 app.use('/api/dashboard', authenticate, dashboardRoutes);
 app.use('/api/product-analysis', authenticate, productAnalysisUploadJsonParser, chromaJsonErrorHandler, guardAiRequest, productAnalysisRoutes);
+app.use('/api/product-analysis', authenticate, productAnalysisCollectionRoutes);
+app.use('/api/imports', productAnalysisImportRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
@@ -111,6 +117,7 @@ app.get('/health', (req, res) => {
 
 startFinanceBackup();
 startShopeeTokenRefresh(shopeeAuthorization);
+startProductAnalysisImportWorker();
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

@@ -1,6 +1,9 @@
 backend/backups/
 backend/coverage/
 frontend/coverage/
+backend/dist/backend/
+backend/dist/shared/
+backend/import-spool/
 .claude/
 .tmp/
 .vite/

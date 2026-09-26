@@ -31,8 +31,8 @@ services:
 
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.prod
+      context: .
+      dockerfile: backend/Dockerfile.prod
     restart: always
     env_file:
       - ./backend/.env
@@ -41,11 +41,17 @@ services:
       - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-yangling_erp}?schema=public
       - REDIS_URL=redis://redis:6379
       - PORT=3002
+      - PRODUCT_ANALYSIS_IMPORT_DIR=/app/import-spool
+    volumes:
+      - importspool:/app/import-spool
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
+    networks:
+      - default
+      - collector-private
     deploy:
       resources:
         limits:
@@ -53,9 +59,11 @@ services:
 
   web:
     build:
-      context: ./frontend
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         VITE_API_URL: /api
+        VITE_COLLECTOR_GATEWAY_URL: ${COLLECTOR_GATEWAY_URL:-}
     restart: always
     ports:
       - "80:80"
@@ -69,3 +77,8 @@ services:
 volumes:
   pgdata:
   redisdata:
+  importspool:
+
+networks:
+  collector-private:
+    name: yangling-collector-private

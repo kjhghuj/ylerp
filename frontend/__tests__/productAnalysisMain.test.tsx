@@ -38,6 +38,7 @@ vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
   fetchShopDays: vi.fn(),
   fetchShopAgg: vi.fn(),
   fetchPotential: vi.fn(),
+  fetchEstablishedTrends: vi.fn(async () => ({ from: '2026-08-31', to: '2026-09-06', windowDays: 3, items: [] })),
   uploadDailyReport: vi.fn(),
   deleteDailyUpload: vi.fn(async () => undefined),
   batchDeleteDailyUploads: vi.fn(async () => 1),

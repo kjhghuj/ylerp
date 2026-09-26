@@ -301,6 +301,16 @@ describe('POST /shops/:id/daily-uploads', () => {
     expect(status).toHaveBeenCalledWith(400);
   });
 
+  test('rejects a report currency that differs from its bound shop', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const req = makeReq({ params: { id: 'shop-1' }, body: { date: '2026-09-06',
+      payload: { fileName: 'a.20260906.xlsx', currency: 'PHP', sheets: PARSED_SHEETS } } });
+    const { res, status } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', req as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(400);
+    expect(mockUploadCreate).not.toHaveBeenCalled();
+  });
+
   test('creates an immutable same-day version and switches active in one transaction', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
     mockTransaction.mockImplementationOnce(async callback => callback(prisma));
@@ -899,6 +909,27 @@ describe('GET /shops/:id/agg', () => {
       query: { from: '2024-01-01', to: '2026-09-06' },
     }) as Request, res as Response);
     expect(status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('GET /shops/:id/established-trends', () => {
+  test('returns the monitored hot product with the correct range and excludes new arrivals', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const day = (date: string) => new Date(`${date}T00:00:00.000Z`);
+    mockUploadFindMany.mockResolvedValue([
+      { id: 'u-1', date: day('2026-09-01'), currency: 'MYR' },
+      { id: 'u-2', date: day('2026-09-02'), currency: 'MYR' },
+    ]);
+    mockItemFindMany.mockResolvedValue([
+      { itemId: 'old', itemName: 'Old', sheetKey: 'hot', extra: { sheetKeys: ['hot'] }, upload: { date: day('2026-09-01') }, ordersOrdered: 4 },
+      { itemId: 'old', itemName: 'Old', sheetKey: 'hot', extra: { sheetKeys: ['hot'] }, upload: { date: day('2026-09-02') }, ordersOrdered: 2 },
+      { itemId: 'new', itemName: 'New', sheetKey: 'hot', extra: { sheetKeys: ['hot', 'new'] }, upload: { date: day('2026-09-01') }, ordersOrdered: 10 },
+      { itemId: 'new', itemName: 'New', sheetKey: 'hot', extra: { sheetKeys: ['hot'] }, upload: { date: day('2026-09-02') }, ordersOrdered: 10 },
+    ]);
+    const { res, json } = makeRes();
+    await runRoute('/shops/:id/established-trends', 'get', makeReq({ params: { id: 'shop-1' }, query: { from: '2026-09-01', to: '2026-09-02' } }) as Request, res as Response);
+    expect(json.mock.calls[0][0]).toMatchObject({ from: '2026-09-01', to: '2026-09-02', windowDays: 1 });
+    expect(json.mock.calls[0][0].items.map((item: { itemId: string }) => item.itemId)).toEqual(['old']);
   });
 });
 

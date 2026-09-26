@@ -248,7 +248,7 @@ describe('PersonalCenter AI chat provider presets', () => {
         fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
         await screen.findByLabelText('模型名称');
 
-        const values = Array.from(container.querySelectorAll<HTMLDataListElement>('#ai-chat-model-options option'))
+        const values = Array.from(container.querySelectorAll<HTMLOptionElement>('#ai-chat-model-options option'))
             .map((option) => option.value);
         expect(values.length).toBeGreaterThan(0);
         expect(new Set(values).size).toBe(values.length);

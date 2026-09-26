@@ -10,15 +10,16 @@ RUN sed -i \
   && apt-get install -y --no-install-recommends openssl \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+WORKDIR /app/backend
 
-COPY package*.json ./
+COPY backend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --registry=https://registry.npmmirror.com
 
-COPY tsconfig.json ./
-COPY src ./src
-COPY prisma ./prisma
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
+COPY backend/prisma ./prisma
+COPY shared /app/shared
 
 RUN npx prisma generate
 RUN npm run build
@@ -36,11 +37,11 @@ RUN sed -i \
 
 WORKDIR /app
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/backend/dist ./dist
+COPY --from=build /app/backend/prisma ./prisma
+COPY --from=build /app/backend/node_modules ./node_modules
+COPY --from=build /app/backend/package.json ./package.json
 
 EXPOSE 3002
 
-CMD ["node", "--max-old-space-size=768", "dist/index.js"]
+CMD ["node", "--max-old-space-size=768", "dist/backend/src/index.js"]

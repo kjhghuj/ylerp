@@ -22,7 +22,9 @@ import {
   type DailyItemRow,
 } from '../services/productAnalysisAggregation';
 import { rankPotentialItems, type PotentialFilterOptions } from '../services/productAnalysisPotential';
+import { buildEstablishedTrends } from '../services/productAnalysisEstablishedTrends';
 import { hashCanonicalJson } from '../services/productAnalysisSourceHash';
+import { ingestDailyReport } from '../services/productAnalysisDailyIngest';
 import {
   isSuspectedRangeFileName,
   isValidCalendarDate,
@@ -550,112 +552,11 @@ router.post('/shops/:id/daily-uploads', requireProductAnalysisPermission('produc
       return res.status(400).json({ detail: 'Report contains no product items' });
     }
 
-    const toDailyItemCreate = (row: DailyItemRow): Prisma.ProductDailyItemUncheckedCreateWithoutUploadInput => {
-      const data: Prisma.ProductDailyItemUncheckedCreateWithoutUploadInput = {
-        itemId: row.itemId,
-        itemName: row.itemName,
-        sheetKey: row.sheetKey,
-        status: row.status ?? null,
-        extra: (row.extra ?? undefined) as Prisma.InputJsonValue | undefined,
-        variations: (row.variations ?? undefined) as Prisma.InputJsonValue | undefined,
-      };
-      const loose = row as unknown as Record<string, unknown>;
-      for (const field of SUMMABLE_FIELDS) {
-        const value = loose[field];
-        data[field] = typeof value === 'number' && Number.isFinite(value) ? value : null;
-      }
-      return data;
-    };
-
-    const sourceRowCount = sourceSheets.reduce((total, sheet) => total + sheet.rows.filter((row) =>
-      row.cells.length > 0 && (sheet.headerRowNumber === null || row.rowNumber > sheet.headerRowNumber)
-    ).length, 0);
-    const variationCount = rows.reduce((total, row) =>
-      total + (Array.isArray(row.variations) ? row.variations.length : 0), 0);
-    const sourceHash = hashCanonicalJson(sourceSheets);
-
-    // 每次同日上传创建不可变版本；全部数据写入成功后才切换 active。
-    let created: {
-      id: string;
-      version: number;
-      date: Date;
-      fileName: string;
-      itemCount: number;
-      sourceSheetCount: number;
-      sourceRowCount: number;
-      sourceComplete: boolean;
-    } | undefined;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      try {
-        created = await withUsageEvent(prisma, req, {
-          module: 'product-analysis', action: 'product_analysis_daily_upload', objectType: 'ProductAnalysisDailyUpload',
-          affectedCount: rows.length, metadata: { shopId: shop.id, date },
-        }, async tx => {
-          const latest = await tx.productAnalysisDailyUpload.findFirst({
-            where: { shopId: shop.id, date: uploadDate },
-            orderBy: { version: 'desc' },
-            select: { version: true },
-          });
-          const version = (latest?.version ?? 0) + 1;
-          await tx.productAnalysisDailyUpload.updateMany({
-            where: { shopId: shop.id, date: uploadDate, isActive: true },
-            data: { isActive: false },
-          });
-          return tx.productAnalysisDailyUpload.create({
-        data: {
-          shopId: shop.id,
-          date: uploadDate,
-          fileName,
-          currency,
-          itemCount: rows.length,
-          warnings: warnings as unknown as object,
-          version,
-          isActive: true,
-          sourceSchemaVersion: 1,
-          sourceHash,
-          sourceSheetCount: sourceSheets.length,
-          sourceRowCount,
-          sourceComplete: true,
-          userId: req.user!.id,
-          items: { create: rows.map(toDailyItemCreate) },
-          sourceSheets: {
-            create: sourceSheets.map((sheet) => ({
-              sheetIndex: sheet.sheetIndex,
-              sheetName: sheet.sheetName,
-              category: sheet.category,
-              range: sheet.range,
-              headerRowNumber: sheet.headerRowNumber,
-              rowCount: sheet.rowCount,
-              columnCount: sheet.columnCount,
-              rows: sheet.rows as unknown as Prisma.InputJsonValue,
-            })),
-          },
-        },
-        select: {
-          id: true, version: true, date: true, fileName: true, itemCount: true,
-          sourceSheetCount: true, sourceRowCount: true, sourceComplete: true,
-        },
-          });
-        }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-        break;
-      } catch (error) {
-        if (attempt === 2 || !isRetryableSerializationError(error)) throw error;
-      }
-    }
-    if (!created) throw new Error('Upload transaction did not return a result');
-    return res.status(201).json({
-      uploadId: created.id,
-      version: created.version,
-      date,
-      fileName,
-      itemCount: rows.length,
-      derivedItemCount: rows.length,
-      variationCount,
-      sourceSheetCount: created.sourceSheetCount,
-      sourceRowCount: created.sourceRowCount,
-      sourceComplete: created.sourceComplete,
-      warnings,
+    const created = await ingestDailyReport({
+      shop, date, payload: validated.value,
+      actor: { id: req.user!.id, username: req.user!.username, role: req.user!.role },
     });
+    return res.status(201).json(created);
   } catch (error) {
     return errorResponse(error, res);
   }
@@ -845,6 +746,20 @@ router.get('/shops/:id/potential', async (req: Request, res: Response) => {
     }
     const items = rankPotentialItems([...byItem.values()], { ...filters, range });
     return res.json({ from: range.from, to: range.to, items });
+  } catch (error) {
+    return errorResponse(error, res);
+  }
+});
+
+router.get('/shops/:id/established-trends', async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.id ?? ''), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const range = parseRange(req.query as Record<string, unknown>);
+    if (!range) return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
+    // 读取工作表归属与日指标，不加载规格等详情页大字段。
+    const { rows } = await fetchRangeRows(shop.id, range.from, range.to, { includeExtra: true });
+    return res.json({ from: range.from, to: range.to, ...buildEstablishedTrends(rows, range) });
   } catch (error) {
     return errorResponse(error, res);
   }

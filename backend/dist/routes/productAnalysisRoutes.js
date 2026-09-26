@@ -13,6 +13,7 @@ const aiUsage_1 = require("../services/aiUsage");
 const productAtomicJsonMiddleware_1 = require("../middleware/productAtomicJsonMiddleware");
 const productAnalysisAggregation_1 = require("../services/productAnalysisAggregation");
 const productAnalysisPotential_1 = require("../services/productAnalysisPotential");
+const productAnalysisEstablishedTrends_1 = require("../services/productAnalysisEstablishedTrends");
 const productAnalysisSourceHash_1 = require("../services/productAnalysisSourceHash");
 const productAnalysisUpload_1 = require("../services/productAnalysisUpload");
 const router = (0, express_1.Router)();
@@ -815,6 +816,22 @@ router.get('/shops/:id/potential', async (req, res) => {
         }
         const items = (0, productAnalysisPotential_1.rankPotentialItems)([...byItem.values()], { ...filters, range });
         return res.json({ from: range.from, to: range.to, items });
+    }
+    catch (error) {
+        return errorResponse(error, res);
+    }
+});
+router.get('/shops/:id/established-trends', async (req, res) => {
+    try {
+        const shop = await findOwnedShop(String(req.params.id ?? ''), req.user.id);
+        if (!shop)
+            return res.status(404).json({ detail: 'Shop not found' });
+        const range = parseRange(req.query);
+        if (!range)
+            return res.status(400).json({ detail: `from/to 需为合法的 YYYY-MM-DD、from ≤ to 且跨度不超过 ${MAX_QUERY_RANGE_DAYS} 天` });
+        // 读取工作表归属与日指标，不加载规格等详情页大字段。
+        const { rows } = await fetchRangeRows(shop.id, range.from, range.to, { includeExtra: true });
+        return res.json({ from: range.from, to: range.to, ...(0, productAnalysisEstablishedTrends_1.buildEstablishedTrends)(rows, range) });
     }
     catch (error) {
         return errorResponse(error, res);

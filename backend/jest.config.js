@@ -4,5 +4,6 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js', 'json'],
+  moduleNameMapper: { '^xlsx$': '<rootDir>/node_modules/xlsx' },
   clearMocks: true,
 };

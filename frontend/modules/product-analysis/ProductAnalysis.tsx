@@ -1,24 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './product-analysis.css';
-import { AlertTriangle, Loader2, Search, Store, PackageCheck, X, FileSpreadsheet } from 'lucide-react';
+import { AlertTriangle, Loader2, Search, Store, PackageCheck, X, FileSpreadsheet, CloudDownload } from 'lucide-react';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../../AuthContext';
 import { hasPermission } from '../../components/PermissionTree';
 import { UploadZone } from './components/UploadZone';
 import { CalendarPanel } from './components/CalendarPanel';
 import { SummaryCards } from './components/SummaryCards';
-import { OverviewCards, WeightedCvrCard } from './components/OverviewCards';
-import { SalesCompareChart } from './components/SalesCompareChart';
-import { ProductRanking } from './components/ProductRanking';
+import { OverviewCards } from './components/OverviewCards';
+import { EstablishedTrendCard, NewPotentialCard } from './components/OverviewInsights';
 import { ProductList, type ProductSortKey } from './components/ProductList';
 import { PotentialList } from './components/PotentialList';
 import { ShopManager } from './components/ShopManager';
+import { CollectionModal } from './components/CollectionModal';
+import { fetchCollectionRun, listCollectionRuns } from './services/collectionApi';
 import { ThemeMenu } from './components/ThemeMenu';
 import { PaThemeProvider, usePaTheme } from './themeContext';
 import { ProductDetailModal } from './modals/ProductDetailModal';
 import {
   batchDeleteDailyUploads,
   deleteDailyUpload,
+  fetchEstablishedTrends,
   fetchPotential,
   fetchShopAgg,
   fetchShopDays,
@@ -48,10 +50,12 @@ import {
 } from './utils/range';
 import { PotentialFiltersPanel } from './components/PotentialFiltersPanel';
 import { useProductAnalysisStrings } from './i18n';
+import { overviewPageSize } from './utils/overviewPageSize';
 import {
   DEFAULT_POTENTIAL_FILTERS,
   type AggResponse,
   type DayMeta,
+  type EstablishedTrendsResponse,
   type PotentialFilters,
   type PotentialResponse,
   type SelectedItemDescriptor,
@@ -63,6 +67,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 const POTENTIAL_FILTERS_STORAGE_KEY = 'yl-pa-potential-filters';
 /** 与后端 MAX_QUERY_RANGE_DAYS 对齐：查询区间封顶，防止无界拉取 */
 const MAX_QUERY_RANGE_DAYS = 366;
+const OVERVIEW_RANKING_LIMIT = 100;
 
 /** 从 localStorage 恢复筛选条件；仅缺失/非法字段回退默认值——合法的 null（不限）必须原样保留 */
 export const loadPotentialFilters = (): PotentialFilters => {
@@ -143,13 +148,37 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     | null
   >(null);
   const [potentialRetryToken, setPotentialRetryToken] = useState(0);
+  const [establishedView, setEstablishedView] = useState<
+    | { key: string; status: 'loading' }
+    | { key: string; status: 'success'; response: EstablishedTrendsResponse }
+    | { key: string; status: 'error'; detail: string }
+    | null
+  >(null);
+  const [establishedRetryToken, setEstablishedRetryToken] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const insightsRef = useRef<HTMLDivElement>(null);
+  const [overviewRowsPerPage, setOverviewRowsPerPage] = useState(1);
+  useEffect(() => {
+    if (view !== 'overview' || isInitialLoading || isLoadingAgg || aggError) return;
+    const card = insightsRef.current?.firstElementChild as HTMLElement | null;
+    if (!card) return;
+    const update = () => setOverviewRowsPerPage(overviewPageSize(card.getBoundingClientRect().height));
+    update();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(card);
+    window.addEventListener('resize', update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [view, isInitialLoading, isLoadingAgg, aggError, agg]);
   // 潜力商品筛选：draft 承接面板输入，防抖后提交为 potentialFilters 并触发重新拉取
   const [potentialFilters, setPotentialFilters] = useState<PotentialFilters>(loadPotentialFilters);
   const [potentialFiltersDraft, setPotentialFiltersDraft] = useState<PotentialFilters>(potentialFilters);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [shopManagerOpen, setShopManagerOpen] = useState(false);
+  const [collectionOpen, setCollectionOpen] = useState(false);
   // 写入后的统一刷新令牌：上传/删除成功后自增，日历与统计类请求据此重拉，
   // 解决「区间依赖未变化时页面保留旧数据」的问题（同日重传、删除非最新日等场景）
   const [dataRefreshToken, setDataRefreshToken] = useState(0);
@@ -292,19 +321,21 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   // 状态机：loading（旧榜单隐藏）→ success（展示） / error（仅错误+重试）。
   // 同一查询的写入后刷新同样走 loading：刷新失败不展示旧榜单（可能已是已删除数据）。
   const potentialQueryKey = activeShopId
-    ? `${activeShopId}|${range.from}|${range.to}|${JSON.stringify(potentialFilters)}`
+    ? `${activeShopId}|${range.from}|${range.to}|${JSON.stringify(potentialFilters)}|${dataRefreshToken}`
     : '';
   useEffect(() => {
     if (!activeShopId) {
       setPotentialView(null);
       return;
     }
-    const queryKey = `${activeShopId}|${range.from}|${range.to}|${JSON.stringify(potentialFilters)}`;
+    const queryKey = `${activeShopId}|${range.from}|${range.to}|${JSON.stringify(potentialFilters)}|${dataRefreshToken}`;
     let isCancelled = false;
     setPotentialView({ key: queryKey, status: 'loading' });
     (async () => {
       try {
-        const potentialResponse = await fetchPotential(activeShopId, range.from, range.to, potentialFilters);
+        const potentialResponse = await fetchPotential(activeShopId, range.from, range.to, {
+          ...potentialFilters, limit: OVERVIEW_RANKING_LIMIT,
+        });
         if (isCancelled) return;
         setPotentialView({ key: queryKey, status: 'success', response: potentialResponse });
       } catch (error) {
@@ -320,6 +351,28 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   // 渲染口径：状态绑定当前查询标识；标识不匹配（请求即将/正在发出）按加载中处理，绝不渲染旧查询结果
   const potentialViewForCurrentQuery =
     potentialView?.key === potentialQueryKey ? potentialView : ({ status: 'loading' } as const);
+
+  const establishedQueryKey = activeShopId ? `${activeShopId}|${range.from}|${range.to}|${dataRefreshToken}` : '';
+  useEffect(() => {
+    if (!activeShopId) {
+      setEstablishedView(null);
+      return;
+    }
+    const queryKey = `${activeShopId}|${range.from}|${range.to}|${dataRefreshToken}`;
+    let cancelled = false;
+    setEstablishedView({ key: queryKey, status: 'loading' });
+    (async () => {
+      try {
+        const response = await fetchEstablishedTrends(activeShopId, range.from, range.to);
+        if (!cancelled) setEstablishedView({ key: queryKey, status: 'success', response });
+      } catch (error) {
+        if (!cancelled) setEstablishedView({ key: queryKey, status: 'error', detail: getApiErrorDetail(error) });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeShopId, range.from, range.to, dataRefreshToken, establishedRetryToken]);
+  const establishedViewForCurrentQuery =
+    establishedView?.key === establishedQueryKey ? establishedView : ({ status: 'loading' } as const);
 
   // 筛选输入防抖：停止输入后提交，持久化并触发上方 effect 重新拉取
   useEffect(() => {
@@ -345,6 +398,27 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     }
     setDataRefreshToken((token) => token + 1);
   }, [refreshShops, showToast, strings]);
+  const onCollectionImported = React.useCallback(() => { void refreshAfterWrite(); }, [refreshAfterWrite]);
+  const collectionCounts = useRef<Record<string,number>>({});
+  useEffect(() => {
+    if (!activeShopId || !hasUploadPermission) return;
+    let live = true;
+    const check = async () => {
+      try {
+        const runs = await listCollectionRuns(activeShopId);
+        const current = runs.find(run => ['ACTIVE','PAUSED','STARTING'].includes(run.status)) || runs[0];
+        if (!current) return;
+        const data = await fetchCollectionRun(activeShopId,current.id,1);
+        if (!live) return;
+        const count = data.batch?.counts.IMPORTED || 0;
+        const previous = collectionCounts.current[current.id] || 0;
+        collectionCounts.current[current.id] = count;
+        if (count > previous) void refreshAfterWrite();
+      } catch { /* 弹窗中会显示可操作的错误 */ }
+    };
+    void check(); const timer = window.setInterval(() => void check(), 15_000);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [activeShopId, hasUploadPermission, refreshAfterWrite]);
 
   const handleShopsChanged = async () => {
     const list = await refreshShops();
@@ -604,7 +678,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     );
   });
 
-  /** 概览视图：全宽指标、销售对比与转化率、排行榜与最新数据。 */
+  /** 概览视图：核心指标与两个按可用高度分页的榜单。 */
   const renderOverview = () => {
     if (isLoadingAgg) return (
       <div className="pa-card flex items-center justify-center" style={{ minHeight: 180 }} role="status">
@@ -613,38 +687,28 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     );
     if (aggError) return renderAggError();
     if (!agg || agg.sheets.length === 0 || !summary || !activeSheet) return emptyBox;
-    const openItem = (item: typeof activeSheet.items[number]) =>
-      setSelectedItem({ itemId: item.itemId, itemName: item.itemName, status: item.status });
     return (
       <div className="pa-ov-grid">
         <div className="pa-list-toolbar">{sheetChips}</div>
-        <OverviewCards summary={summary} currency={agg.currency} />
-        <div className="pa-ov-primary">
-          <SalesCompareChart items={activeSheet.items} currency={agg.currency} onSelect={openItem} />
-          <WeightedCvrCard summary={activeSheet.summary ?? null} />
-        </div>
-        <div className="pa-ov-secondary">
-          <ProductRanking items={activeSheet.items} currency={agg.currency} onSelect={openItem} />
-          {hasAnyData && (
-            <div className="pa-card pa-recent-card">
-              <div className="pa-card-head">
-                <h3 className="pa-card-title">{strings.overview.recentUploads}</h3>
-              </div>
-              <div className="pa-recent-list">
-                {newestDays.slice(0, 6).map((day) => (
-                  <div key={day.date} className="pa-recent-row" title={day.fileName}>
-                    <span className="pa-recent-date">{day.date.slice(5)}</span>
-                    <span className="pa-recent-count">
-                      {strings.overview.itemCountUnit.replace('{count}', String(day.itemCount))} · {day.currency}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <button type="button" className="pa-btn pa-btn-soft self-start" onClick={() => setView('calendar')}>
-                {strings.overview.viewAllDays}
-              </button>
-            </div>
-          )}
+        <OverviewCards summary={summary} currency={agg.currency} effectiveSummary={activeSheet.summary ?? null} />
+        <div ref={insightsRef} className="pa-ov-insights">
+          <NewPotentialCard
+            pageSize={overviewRowsPerPage}
+            state={potentialViewForCurrentQuery.status === 'success'
+              ? { status: 'success', data: potentialViewForCurrentQuery.response.items }
+              : potentialViewForCurrentQuery}
+            onRetry={() => setPotentialRetryToken((token) => token + 1)}
+            onMore={() => setView('potential')}
+            onSelect={(item) => setSelectedItem({ itemId: item.itemId, itemName: item.itemName })}
+          />
+          <EstablishedTrendCard
+            pageSize={overviewRowsPerPage}
+            state={establishedViewForCurrentQuery.status === 'success'
+              ? { status: 'success', data: establishedViewForCurrentQuery.response }
+              : establishedViewForCurrentQuery}
+            onRetry={() => setEstablishedRetryToken((token) => token + 1)}
+            onSelect={(item) => setSelectedItem({ itemId: item.itemId, itemName: item.itemName })}
+          />
         </div>
       </div>
     );
@@ -735,7 +799,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
         </div>
       ) : (
         <PotentialList
-          items={potentialViewForCurrentQuery.response.items}
+          items={potentialViewForCurrentQuery.response.items.slice(0, potentialFilters.limit)}
           onSelect={(item) => {
             setSelectedItem({ itemId: item.itemId, itemName: item.itemName });
           }}
@@ -818,7 +882,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   );
 
   return (
-    <div className="pa-shell" style={theme.cssVars as React.CSSProperties}>
+    <div className={`pa-shell${view === 'overview' ? ' pa-shell-overview' : ''}`} style={theme.cssVars as React.CSSProperties}>
       {/* 工具栏：店铺与操作（左） + 主题颜色菜单（右上角） */}
       <div className="pa-toolbar">
         <div className="pa-toolbar-group">
@@ -847,6 +911,9 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
             <Store size={13} />
             {strings.shop.manage}
           </button>
+          {activeShop && hasUploadPermission && <button type="button" onClick={() => setCollectionOpen(true)} className="pa-btn pa-btn-ghost">
+            <CloudDownload size={13} />采集店铺数据
+          </button>}
           {onGenerateRestock && activeShopId && (
             <button
               type="button"
@@ -954,7 +1021,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
       </nav>
 
       {/* 视图内容 */}
-      <div className="pa-view-body">
+      <div className={`pa-view-body${view === 'overview' ? ' pa-view-body-overview' : ''}`}>
         {view === 'overview' && (activeShopId ? renderOverview() : emptyBox)}
         {view === 'list' && (activeShopId && hasAnyData ? renderList() : emptyBox)}
         {view === 'potential' && (activeShopId && hasAnyData ? renderPotential() : emptyBox)}
@@ -968,6 +1035,8 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
           onRefresh={handleShopsChanged}
         />
       )}
+      {collectionOpen && activeShop && <CollectionModal key={activeShop.id} shop={activeShop}
+        onClose={() => setCollectionOpen(false)} onImported={onCollectionImported} />}
 
       {selectedItem && activeShopId && (
         <ProductDetailModal

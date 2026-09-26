@@ -35,6 +35,7 @@ model Product {
   user                      User                    @relation(fields: [userId], references: [id])
   templates                 ProfitTemplate[]        @relation("LegacyProductTemplates")
   productTemplates          ProductProfitTemplate[]
+  displayGroupMembership    ProductDisplayGroupMember?
 
   @@unique([userId, sku])
 }
@@ -404,6 +405,9 @@ model ProductAnalysisShop {
   userId    String
   user      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   days      ProductAnalysisDailyUpload[]
+  collectorBinding ProductAnalysisCollectorBinding?
+  collectionRuns ProductAnalysisCollectionRun[]
+  collectorImports ProductAnalysisCollectorImport[]
   restockShopSkuMappings RestockShopSkuMapping[]
   restockShopRules       RestockShopRule[]
 
@@ -439,6 +443,98 @@ model ProductAnalysisDailyUpload {
   @@index([shopId, date])
   @@index([shopId, date, isActive])
   @@index([userId])
+}
+
+model ProductAnalysisCredentialSource {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectionId String @unique
+  accountKey String @unique
+  name String
+  createdAt DateTime @default(now())
+  binding ProductAnalysisCollectorBinding?
+}
+
+model ProductAnalysisCollectorBinding {
+  shopId String @id
+  shop ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceId String @unique
+  source ProductAnalysisCredentialSource @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  site String
+  shopeeShopId String
+  createdAt DateTime @default(now())
+  @@unique([site, shopeeShopId])
+  @@index([userId])
+}
+
+model ProductAnalysisCollectionRun {
+  id String @id @default(uuid())
+  shopId String
+  shop ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestId String
+  collectorBatchId Int?
+  fromDate DateTime @db.Date
+  toDate DateTime @db.Date
+  recollectExisting Boolean @default(false)
+  status String @default("STARTING")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  imports ProductAnalysisCollectorImport[]
+  @@unique([shopId, requestId])
+  @@index([shopId, status])
+}
+
+model ProductAnalysisCollectorImport {
+  id String @id @default(uuid())
+  runId String
+  run ProductAnalysisCollectionRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  shopId String
+  shop ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportDate DateTime @db.Date
+  checksum String
+  idempotencyKey String @unique
+  filePath String
+  fileName String
+  status String @default("PENDING")
+  rowCount Int?
+  uploadId String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([runId, reportDate, checksum])
+  @@index([status, createdAt])
+}
+
+/// 商品明细表的展示分组。商品业务数据仍保存在 Product，此模型只保存折叠展示关系。
+model ProductDisplayGroup {
+  id        String                      @id @default(uuid())
+  name      String
+  userId    String
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+  user      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members   ProductDisplayGroupMember[]
+
+  @@index([userId, updatedAt])
+}
+
+model ProductDisplayGroupMember {
+  id        String              @id @default(uuid())
+  groupId   String
+  productId String              @unique
+  createdAt DateTime            @default(now())
+  group     ProductDisplayGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, productId])
+  @@index([groupId, createdAt])
 }
 
 /// 原始工作表数据快照；每个上传版本保留全部工作表、行列位置、值与公式。
@@ -523,10 +619,15 @@ model User {
   inventoryItems      InventoryItem[]
   nodeGraphTemplates  NodeGraphTemplate[]
   products            Product[]
+  productDisplayGroups ProductDisplayGroup[]
   profitTemplates     ProfitTemplate[]
   productAnalysisReports ProductAnalysisReport[]
   productAnalysisShops   ProductAnalysisShop[]
   productAnalysisDailyUploads ProductAnalysisDailyUpload[]
+  productAnalysisCredentialSources ProductAnalysisCredentialSource[]
+  productAnalysisCollectorBindings ProductAnalysisCollectorBinding[]
+  productAnalysisCollectionRuns ProductAnalysisCollectionRun[]
+  productAnalysisCollectorImports ProductAnalysisCollectorImport[]
   restockRecords      RestockRecord[]
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]

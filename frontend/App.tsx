@@ -20,7 +20,7 @@ const UsageStats = lazy(() => import('./modules/UsageStats').then(module => ({ d
 import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
-import { Globe, Lock, Sun, Moon } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
@@ -31,7 +31,7 @@ const MainContent: React.FC = () => {
   const [darkMode, setDarkMode] = useState(() => {
     try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
   });
-  const { language, setLanguage, strings, loading } = useStore();
+  const { loading } = useStore();
   const { user } = useAuth();
 
   useEffect(() => {
@@ -96,60 +96,16 @@ const MainContent: React.FC = () => {
     }
   };
 
-  const getHeaderTitle = (view: AppState['currentView']) => {
-    switch (view) {
-      case 'dashboard': return strings.sidebar.dashboard;
-      case 'profit': return strings.sidebar.profit;
-      case 'finance': return strings.sidebar.finance;
-      case 'restock-v2': return strings.sidebar.restockV2 || '表格补货';
-      case 'restock-v3': return strings.sidebar.restockV3 || '店铺补货';
-      case 'product-list': return strings.sidebar.productList;
-      case 'user-management': return '用户管理';
-      case 'personal-center': return '个人中心';
-      case 'chroma-adapt': return strings.sidebar.chromaAdapt || '图片制作';
-      case 'schedule': return strings.sidebar.schedule || '日程管理';
-      case 'product-analysis': return strings.sidebar.productAnalysis || '商品分析';
-      case 'usage-stats': return strings.sidebar.usageStats || '使用统计';
-      default: return view;
-    }
-  };
-
   return (
     <div className="h-screen overflow-hidden font-sans" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <Sidebar
         currentView={currentView}
         onChangeView={handleViewChange}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(value => !value)}
       />
 
       <main className="h-full overflow-hidden flex flex-col w-full pt-14">
-        <div className="flex items-center justify-between px-4 lg:px-8 h-10 shrink-0">
-          <h2 className="font-semibold text-base truncate" style={{ color: 'var(--text-primary)' }}>
-            {getHeaderTitle(currentView)}
-          </h2>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setDarkMode(!darkMode)}
-              className="p-1.5 rounded-lg transition-colors duration-200"
-              style={{ color: 'var(--text-tertiary)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-              title={darkMode ? '切换到浅色模式' : '切换到深色模式'}
-            >
-              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            <button
-              onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors duration-200"
-              style={{ color: 'var(--text-tertiary)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-            >
-              <Globe size={14} />
-              <span className="hidden sm:inline">{language === 'zh' ? 'EN' : '中'}</span>
-            </button>
-          </div>
-        </div>
-
         <div ref={contentRef} className={`flex-1 min-h-0 overflow-auto ${currentView === 'profit' ? 'profit-scroll-surface p-3 lg:p-4' : 'p-4 lg:p-6'}`}>
           <div className="h-full">
             <Suspense

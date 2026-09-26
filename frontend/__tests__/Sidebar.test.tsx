@@ -2,8 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
-const { mockLogout, mockUseAuth } = vi.hoisted(() => {
+const { mockLogout, mockSetLanguage, mockUseAuth } = vi.hoisted(() => {
   const mockLogout = vi.fn();
+  const mockSetLanguage = vi.fn();
   const mockUseAuth = () => ({
     user: {
       id: '1',
@@ -15,11 +16,13 @@ const { mockLogout, mockUseAuth } = vi.hoisted(() => {
     },
     logout: mockLogout,
   });
-  return { mockLogout, mockUseAuth };
+  return { mockLogout, mockSetLanguage, mockUseAuth };
 });
 
 vi.mock('../StoreContext', () => ({
   useStore: () => ({
+    language: 'zh',
+    setLanguage: mockSetLanguage,
     strings: {
       sidebar: {
         dashboard: '仪表盘',
@@ -44,7 +47,25 @@ describe('Sidebar', () => {
   const defaultProps = {
     currentView: 'dashboard' as const,
     onChangeView: vi.fn(),
+    darkMode: false,
+    onToggleDarkMode: vi.fn(),
   };
+
+  it('should keep appearance and language controls beside the user menu', () => {
+    const onToggleDarkMode = vi.fn();
+    render(<SidebarComponent {...defaultProps} onToggleDarkMode={onToggleDarkMode} />);
+
+    const userButton = screen.getByText('Test User').closest('button');
+    const themeButton = screen.getByRole('button', { name: '切换到深色模式' });
+    const languageButton = screen.getByRole('button', { name: 'Switch to English' });
+    expect(userButton?.parentElement?.nextElementSibling).toBe(themeButton);
+    expect(themeButton.nextElementSibling).toBe(languageButton);
+
+    fireEvent.click(themeButton);
+    fireEvent.click(languageButton);
+    expect(onToggleDarkMode).toHaveBeenCalledOnce();
+    expect(mockSetLanguage).toHaveBeenCalledWith('en');
+  });
 
   it('should render the logo and app title', () => {
     render(<SidebarComponent {...defaultProps} />);

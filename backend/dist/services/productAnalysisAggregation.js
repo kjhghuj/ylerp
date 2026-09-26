@@ -143,10 +143,9 @@ function buildDailySeries(rows) {
         const ordersConfirmed = numOrUndef(row.ordersConfirmed) ?? null;
         const ordersOrdered = numOrUndef(row.ordersOrdered) ?? null;
         // 当日成对样本：订单与访客均有效且访客 > 0 才有转化率
-        const cvrConfirmed = ordersConfirmed !== null && visitors !== null && visitors > 0
-            ? (ordersConfirmed / visitors) * 100
-            : null;
+        const cvrConfirmed = dailyRatio(row, 'ordersConfirmed', 'visitors', 100);
         return {
+            ...Object.fromEntries(exports.SUMMABLE_FIELDS.map((field) => [field, numOrUndef(row[field]) ?? null])),
             date: row.date,
             ordersOrdered,
             ordersConfirmed,
@@ -154,8 +153,23 @@ function buildDailySeries(rows) {
             clicks: numOrUndef(row.clicks) ?? null,
             unitsOrdered: numOrUndef(row.unitsOrdered) ?? null,
             cvrConfirmed,
+            ctr: dailyRatio(row, 'clicks', 'impressions', 100),
+            cvrOrdered: dailyRatio(row, 'ordersOrdered', 'visitors', 100),
+            cartRate: dailyRatio(row, 'cartVisitors', 'visitors', 100),
+            bounceRate: dailyRatio(row, 'bounceVisitors', 'visitors', 100),
+            aovOrdered: dailyRatio(row, 'salesOrdered', 'ordersOrdered'),
+            aovConfirmed: dailyRatio(row, 'salesConfirmed', 'ordersConfirmed'),
+            repeatOrderRate: numOrUndef(row.extra?.repeatOrderRate) ?? null,
+            repurchaseRateConfirmed: numOrUndef(row.extra?.repurchaseRateConfirmed) ?? null,
+            avgReorderDays: numOrUndef(row.extra?.avgReorderDays) ?? null,
+            avgRepurchaseDays: numOrUndef(row.extra?.avgRepurchaseDays) ?? null,
         };
     });
+}
+function dailyRatio(row, numerator, denominator, scale = 1) {
+    const ratio = pairwiseRatio([row], numerator, denominator);
+    const value = ratio === null ? null : ratio * scale;
+    return value !== null && Number.isFinite(value) ? value : null;
 }
 const VARIATION_SUM_FIELDS = [
     'salesOrdered',

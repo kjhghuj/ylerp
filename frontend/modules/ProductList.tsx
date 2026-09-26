@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import { hasPermission } from '../components/PermissionTree';
 import {
     Search, FileSpreadsheet, Eye, Trash2,
-    ChevronLeft, ChevronRight, X, List, ArrowUpRight, Package, Layers,
-    Upload, Download, ArrowUpDown, ArrowDown, ArrowUp, RefreshCw
+    ChevronLeft, ChevronRight, ChevronDown, X, List, ArrowUpRight, Package, Layers,
+    Upload, Download, ArrowUpDown, ArrowDown, ArrowUp, RefreshCw, FolderPlus,
+    Pencil, Users, Unlink,
 } from 'lucide-react';
 import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
@@ -52,6 +53,13 @@ import {
     YcProductSyncModal,
     type YcProductSyncItem,
 } from './product-list/YcProductSyncModal';
+import {
+    buildProductDisplayItems,
+    summarizeProductDisplayGroup,
+    type NumberRange,
+    type ProductDisplayGroup,
+    type ProductDisplayItem,
+} from './product-list/productDisplayGroups';
 
 interface LinkedTemplate extends LinkedProductTemplate {
     createdAt: string;
@@ -85,6 +93,12 @@ const formatStockNumber = (value: number | undefined) => {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return '-';
     return parsed.toLocaleString();
+};
+
+const formatRange = (range: NumberRange | null, formatter: (value: number) => string) => {
+    if (!range) return '-';
+    if (range.min === range.max) return formatter(range.min);
+    return `${formatter(range.min)}～${formatter(range.max)}`;
 };
 
 const ycStockSortLabels: Record<YcStockSortDirection, string> = {
@@ -133,6 +147,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const te = t.errors;
     const siteNames = strings.profit.matrix.sites;
     const { showToast } = useToast();
+    const showToastRef = useRef(showToast);
     const { rates: exchangeRates } = useExchangeRates();
     const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +157,24 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const setCurrentPage = setProductListCurrentPage;
     const [searchTerm, setSearchTerm] = useState('');
     const itemsPerPage = 20;
+    const viewModeStorageKey = `yl-product-list-view-mode:${user?.id || 'anonymous'}`;
+    const [viewMode, setViewMode] = useState<'grouped' | 'sku'>(() => (
+        localStorage.getItem(viewModeStorageKey) === 'sku' ? 'sku' : 'grouped'
+    ));
+    const [productGroups, setProductGroups] = useState<ProductDisplayGroup[]>([]);
+    const [groupsLoading, setGroupsLoading] = useState(true);
+    const [groupLoadError, setGroupLoadError] = useState(false);
+    const resumeGroupedOnLoadRef = useRef(false);
+    const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+    const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+    const [collapsedSearchGroupIds, setCollapsedSearchGroupIds] = useState<Set<string>>(new Set());
+    const [showGroupDialog, setShowGroupDialog] = useState(false);
+    const [groupDialogMode, setGroupDialogMode] = useState<'create' | 'existing'>('create');
+    const [newGroupName, setNewGroupName] = useState('');
+    const [targetGroupId, setTargetGroupId] = useState('');
+    const [savingGroup, setSavingGroup] = useState(false);
+    const [managingGroup, setManagingGroup] = useState<ProductDisplayGroup | null>(null);
+    const [showGroupManager, setShowGroupManager] = useState(false);
 
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<ProductCalcData | null>(null);
@@ -163,40 +196,122 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         selectedProduct ? createProductSiteViewModel(selectedProduct, activeTab) : null
     ), [selectedProduct, activeTab]);
 
-    const filteredProducts = useMemo(() => products.filter(p => {
-        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            p.sku?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCountry = normalizeProductSiteMembership(p).some(site => site === activeTab);
-        return matchesSearch && matchesCountry;
-    }), [products, searchTerm, activeTab]);
+    const siteProducts = useMemo(() => products.filter(p => (
+        normalizeProductSiteMembership(p).some(site => site === activeTab)
+    )), [products, activeTab]);
+    const groupedProductIds = useMemo(() => new Set(
+        productGroups.flatMap(group => group.members.map(member => member.productId)),
+    ), [productGroups]);
+    const groupedResult = useMemo(() => (
+        buildProductDisplayItems(siteProducts, productGroups, searchTerm)
+    ), [siteProducts, productGroups, searchTerm]);
+    const skuFilteredProducts = useMemo(() => {
+        const query = searchTerm.trim().toLocaleLowerCase();
+        return siteProducts.filter(p => !query || (
+            p.name.toLocaleLowerCase().includes(query) || p.sku.toLocaleLowerCase().includes(query)
+        ));
+    }, [siteProducts, searchTerm]);
+    const filteredProducts = viewMode === 'grouped' ? groupedResult.products : skuFilteredProducts;
     const ycStockBySku = useMemo(() => {
         return new Map(ycStockItems.map(item => [normalizeSku(item.sku), item]));
     }, [ycStockItems]);
-    const sortedProducts = useMemo(() => {
-        if (ycStockSortDirection === 'none') return filteredProducts;
-
-        return [...filteredProducts].sort((a, b) => {
-            const stockA = ycStockBySku.get(normalizeSku(a.sku));
-            const stockB = ycStockBySku.get(normalizeSku(b.sku));
-
+    const displayItems = useMemo<ProductDisplayItem[]>(() => (
+        viewMode === 'grouped'
+            ? groupedResult.items
+            : skuFilteredProducts.map(product => ({
+                type: 'product',
+                key: `product:${product.id}`,
+                product,
+                products: [product],
+                matchedMemberCount: 1,
+                totalMemberCount: 1,
+                autoExpand: false,
+            }))
+    ), [viewMode, groupedResult.items, skuFilteredProducts]);
+    const sortedDisplayItems = useMemo(() => {
+        if (ycStockSortDirection === 'none') return displayItems;
+        const totals = (item: ProductDisplayItem) => {
+            const uniqueSkus = new Set(item.products.map(product => normalizeSku(product.sku)));
+            const matched = Array.from(uniqueSkus)
+                .map(sku => ycStockBySku.get(sku))
+                .filter((stock): stock is YcStockSnapshotItem => Boolean(stock));
+            if (matched.length === 0) return null;
+            return matched.reduce((sum, stock) => ({
+                available: sum.available + (Number(stock.available) || 0),
+                inventory: sum.inventory + (Number(stock.inventory) || 0),
+            }), { available: 0, inventory: 0 });
+        };
+        return [...displayItems].sort((a, b) => {
+            const stockA = totals(a);
+            const stockB = totals(b);
             if (!stockA && !stockB) return 0;
             if (!stockA) return 1;
             if (!stockB) return -1;
-
             const direction = ycStockSortDirection === 'asc' ? 1 : -1;
-            const availableDiff = (Number(stockA.available) || 0) - (Number(stockB.available) || 0);
+            const availableDiff = stockA.available - stockB.available;
             if (availableDiff !== 0) return availableDiff * direction;
-
-            const inventoryDiff = (Number(stockA.inventory) || 0) - (Number(stockB.inventory) || 0);
-            if (inventoryDiff !== 0) return inventoryDiff * direction;
-
-            return a.name.localeCompare(b.name, 'zh-Hans');
+            return (stockA.inventory - stockB.inventory) * direction;
         });
-    }, [filteredProducts, ycStockBySku, ycStockSortDirection]);
+    }, [displayItems, ycStockBySku, ycStockSortDirection]);
 
-    const totalPages = Math.ceil(sortedProducts.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedDisplayItems.length / itemsPerPage);
+    const visiblePageCount = Math.min(5, totalPages);
+    const firstVisiblePage = Math.max(1, Math.min(currentPage - 2, totalPages - visiblePageCount + 1));
+    const visiblePages = Array.from({ length: visiblePageCount }, (_, index) => firstVisiblePage + index);
     const startIndex = (currentPage - 1) * itemsPerPage;
-    const currentProducts = sortedProducts.slice(startIndex, startIndex + itemsPerPage);
+    const currentDisplayItems = sortedDisplayItems.slice(startIndex, startIndex + itemsPerPage);
+
+    const loadProductGroups = useCallback(async () => {
+        setGroupsLoading(true);
+        try {
+            const response = await api.get('/product-display-groups');
+            if (!Array.isArray(response.data)) throw new Error('Invalid product group response');
+            setProductGroups(response.data);
+            setManagingGroup(previous => previous
+                ? response.data.find((group: ProductDisplayGroup) => group.id === previous.id) || null
+                : null);
+            setGroupLoadError(false);
+            if (resumeGroupedOnLoadRef.current) {
+                setViewMode('grouped');
+                resumeGroupedOnLoadRef.current = false;
+            }
+            return true;
+        } catch (error: any) {
+            setProductGroups([]);
+            setGroupLoadError(true);
+            setViewMode(previous => {
+                if (previous === 'grouped') resumeGroupedOnLoadRef.current = true;
+                return 'sku';
+            });
+            showToastRef.current(error.response?.data?.error || '商品分组加载失败，已切换到 SKU 视图', 'error');
+            return false;
+        } finally {
+            setGroupsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadProductGroups();
+    }, [loadProductGroups]);
+
+    useEffect(() => {
+        showToastRef.current = showToast;
+    }, [showToast]);
+
+    useEffect(() => {
+        localStorage.setItem(viewModeStorageKey, viewMode);
+    }, [viewMode, viewModeStorageKey]);
+
+    useEffect(() => {
+        setSelectedProductIds(new Set());
+        setCollapsedSearchGroupIds(new Set());
+        setCurrentPage(1);
+    }, [activeTab, searchTerm, viewMode]);
+
+    useEffect(() => {
+        if (totalPages === 0 && currentPage !== 1) setCurrentPage(1);
+        else if (totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+    }, [currentPage, totalPages]);
 
     useEffect(() => {
         let cancelled = false;
@@ -234,6 +349,97 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const toggleYcStockSort = () => {
         setYcStockSortDirection(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none');
         setCurrentPage(1);
+    };
+
+    const toggleProductSelection = (productId: string) => {
+        setSelectedProductIds(previous => {
+            const next = new Set(previous);
+            if (next.has(productId)) next.delete(productId);
+            else next.add(productId);
+            return next;
+        });
+    };
+
+    const toggleGroupExpanded = (groupId: string, autoExpand: boolean) => {
+        if (autoExpand) {
+            setCollapsedSearchGroupIds(previous => {
+                const next = new Set(previous);
+                if (next.has(groupId)) next.delete(groupId);
+                else next.add(groupId);
+                return next;
+            });
+            return;
+        }
+        setExpandedGroupIds(previous => {
+            const next = new Set(previous);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    };
+
+    const openGroupDialog = () => {
+        setGroupDialogMode(selectedProductIds.size >= 2 ? 'create' : 'existing');
+        setNewGroupName('');
+        setTargetGroupId(productGroups[0]?.id || '');
+        setShowGroupDialog(true);
+    };
+
+    const handleSaveGroup = async () => {
+        const productIds = Array.from(selectedProductIds);
+        if (groupDialogMode === 'create' && (productIds.length < 2 || !newGroupName.trim())) return;
+        if (groupDialogMode === 'existing' && (!targetGroupId || productIds.length < 1)) return;
+        setSavingGroup(true);
+        try {
+            if (groupDialogMode === 'create') {
+                await api.post('/product-display-groups', { name: newGroupName.trim(), productIds });
+            } else {
+                await api.post(`/product-display-groups/${targetGroupId}/members`, { productIds });
+            }
+            const refreshed = await loadProductGroups();
+            setSelectedProductIds(new Set());
+            setShowGroupDialog(false);
+            if (refreshed) showToast('商品归组已保存', 'success');
+        } catch (error: any) {
+            const message = error.response?.status === 409
+                ? '所选商品中有 SKU 已经归入其他商品组'
+                : error.response?.data?.error || '商品归组保存失败';
+            showToast(message, 'error');
+        } finally {
+            setSavingGroup(false);
+        }
+    };
+
+    const handleRenameGroup = async (group: ProductDisplayGroup) => {
+        const name = window.prompt('请输入新的商品组名称', group.name)?.trim();
+        if (!name || name === group.name) return;
+        try {
+            await api.put(`/product-display-groups/${group.id}`, { name });
+            if (await loadProductGroups()) showToast('商品组已重命名', 'success');
+        } catch {
+            showToast('商品组重命名失败', 'error');
+        }
+    };
+
+    const handleDisbandGroup = async (group: ProductDisplayGroup) => {
+        if (!window.confirm(`确定解散商品组“${group.name}”吗？SKU 商品数据不会被删除。`)) return;
+        try {
+            await api.delete(`/product-display-groups/${group.id}`);
+            const refreshed = await loadProductGroups();
+            if (managingGroup?.id === group.id) setManagingGroup(null);
+            if (refreshed) showToast('商品组已解散', 'success');
+        } catch {
+            showToast('解散商品组失败', 'error');
+        }
+    };
+
+    const handleRemoveGroupMember = async (group: ProductDisplayGroup, productId: string) => {
+        try {
+            await api.delete(`/product-display-groups/${group.id}/members/${productId}`);
+            if (await loadProductGroups()) showToast('SKU 已移出商品组', 'success');
+        } catch {
+            showToast('移出商品组失败', 'error');
+        }
     };
 
     const handleOpenYcSync = async () => {
@@ -455,9 +661,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         }
     };
 
-    const handleDelete = (product: ProductCalcData) => {
+    const handleDelete = async (product: ProductCalcData) => {
         if (window.confirm(t.confirmDelete)) {
-            deleteProduct(product.id, activeTab);
+            await deleteProduct(product.id, activeTab);
+            await loadProductGroups();
         }
     };
 
@@ -672,6 +879,87 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         </div>
     );
 
+    const renderProductRow = (
+        product: ProductCalcData,
+        options: { grouped?: boolean; group?: ProductDisplayGroup; selectable?: boolean } = {},
+    ) => {
+        const productSite = createProductSiteViewModel(product, activeTab);
+        const currency = countryCurrencyMap[activeTab] || activeTab;
+        const rate = parseCanonicalPositiveRate(exchangeRates[currency]);
+        const priceCNY = productSite.siteInputs.totalRevenue;
+        const calculatedPriceLocal = rate.ok ? priceCNY * rate.value : null;
+        const priceLocal = calculatedPriceLocal !== null && Number.isFinite(calculatedPriceLocal)
+            ? calculatedPriceLocal
+            : null;
+        const ycStock = ycStockBySku.get(normalizeSku(product.sku));
+        return (
+            <tr
+                key={`${options.group?.id || 'product'}:${product.id}`}
+                className={`hover:bg-indigo-50/30 transition-colors group cursor-pointer ${options.grouped ? 'bg-slate-50/40' : ''}`}
+                onDoubleClick={() => handleView(product)}
+            >
+                <td className="p-3 pl-4 font-bold text-slate-800 max-w-[210px]">
+                    <div className={`flex items-center gap-2 ${options.grouped ? 'pl-7' : ''}`}>
+                        {options.selectable && canEditPrimaryTemplate && (
+                            <input
+                                type="checkbox"
+                                aria-label={`归组选中 ${product.sku}`}
+                                checked={selectedProductIds.has(product.id)}
+                                onClick={event => event.stopPropagation()}
+                                onChange={() => toggleProductSelection(product.id)}
+                                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                            />
+                        )}
+                        <span className="truncate">{product.name}</span>
+                    </div>
+                </td>
+                <td className="p-3 text-slate-500 font-mono text-xs">{product.sku}</td>
+                <td className="p-3 text-right">
+                    {ycStockLoading ? (
+                        <span className="text-xs text-slate-400">加载中...</span>
+                    ) : ycStock ? (
+                        <div className="space-y-0.5">
+                            <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(ycStock.available)}</div>
+                            <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(ycStock.inventory)}</div>
+                            <div className="text-[11px] text-slate-400">
+                                占用 {formatStockNumber(ycStock.occupy)} / 未发 {formatStockNumber(ycStock.unshipped)}
+                            </div>
+                            <div className="text-[11px] text-slate-400 truncate max-w-[140px] ml-auto">
+                                {ycStock.warehouseCodes.length ? ycStock.warehouseCodes.join(', ') : '-'}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-0.5">
+                            <div className="text-xs font-bold text-slate-400">
+                                {ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}
+                            </div>
+                            <div className="text-[11px] text-slate-300">-</div>
+                        </div>
+                    )}
+                </td>
+                <td className="p-3 text-right text-slate-700 font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</td>
+                <td className="p-3 text-right text-slate-600">{productSite.globalInputs.productWeight}g</td>
+                <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
+                <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : formatCurrencyAmount(priceLocal, currency as CurrencyCode)}</td>
+                <td className="p-3 text-right text-slate-600 font-mono">{productSite.siteInputs.adROI}</td>
+                <td className="p-3">
+                    <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => handleView(product)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="View"><Eye size={15} /></button>
+                        <button onClick={() => { void handleQuickImport(product); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
+                        {options.group && canEditPrimaryTemplate && (
+                            <button
+                                onClick={() => { void handleRemoveGroupMember(options.group!, product.id); }}
+                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                                title="移出商品组"
+                            ><Unlink size={15} /></button>
+                        )}
+                        <button onClick={() => { void handleDelete(product); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
+                    </div>
+                </td>
+            </tr>
+        );
+    };
+
     return (
         <div className="space-y-6 h-full flex flex-col">
             {showYcSyncModal && (
@@ -685,6 +973,133 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     onClose={() => setShowYcSyncModal(false)}
                     onSync={handleSyncYcProducts}
                 />
+            )}
+            {showGroupDialog && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="商品归组">
+                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                            <div>
+                                <h3 className="font-bold text-slate-800">商品归组</h3>
+                                <p className="mt-1 text-xs text-slate-500">已选择 {selectedProductIds.size} 个 SKU，归组关系对所有站点生效</p>
+                            </div>
+                            <button onClick={() => setShowGroupDialog(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+                        </div>
+                        <div className="space-y-4 p-5">
+                            <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                                <button
+                                    onClick={() => setGroupDialogMode('create')}
+                                    disabled={selectedProductIds.size < 2}
+                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'create' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'} disabled:opacity-40`}
+                                >创建新组</button>
+                                <button
+                                    onClick={() => setGroupDialogMode('existing')}
+                                    disabled={productGroups.length === 0}
+                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'existing' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'} disabled:opacity-40`}
+                                >加入已有组</button>
+                            </div>
+                            {groupDialogMode === 'create' ? (
+                                <label className="block text-sm font-medium text-slate-700">
+                                    商品组名称
+                                    <input
+                                        autoFocus
+                                        maxLength={120}
+                                        value={newGroupName}
+                                        onChange={event => setNewGroupName(event.target.value)}
+                                        placeholder="例如：保温杯"
+                                        className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-indigo-500"
+                                    />
+                                </label>
+                            ) : (
+                                <label className="block text-sm font-medium text-slate-700">
+                                    选择商品组
+                                    <select
+                                        value={targetGroupId}
+                                        onChange={event => setTargetGroupId(event.target.value)}
+                                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none focus:border-indigo-500"
+                                    >
+                                        {productGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
+                                    </select>
+                                </label>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-slate-100 p-4">
+                            <button onClick={() => setShowGroupDialog(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600">取消</button>
+                            <button
+                                onClick={() => { void handleSaveGroup(); }}
+                                disabled={savingGroup || (groupDialogMode === 'create' ? selectedProductIds.size < 2 || !newGroupName.trim() : !targetGroupId)}
+                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
+                            >{savingGroup ? '保存中...' : '保存归组'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {managingGroup && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="管理商品组成员">
+                    <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                            <div>
+                                <h3 className="font-bold text-slate-800">{managingGroup.name}</h3>
+                                <p className="mt-1 text-xs text-slate-500">所有站点共用此成员关系</p>
+                            </div>
+                            <button onClick={() => setManagingGroup(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+                        </div>
+                        <div className="max-h-[55vh] overflow-y-auto p-5">
+                            <div className="mb-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                                如需添加成员，请关闭窗口，在商品视图勾选未归组 SKU，再选择“加入已有组”。
+                            </div>
+                            <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+                                {managingGroup.members.map(member => {
+                                    const product = products.find(item => item.id === member.productId);
+                                    if (!product) return null;
+                                    return (
+                                        <div key={member.productId} className="flex items-center justify-between gap-4 p-3">
+                                            <div className="min-w-0">
+                                                <div className="truncate text-sm font-bold text-slate-700">{product.name}</div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                                    <span className="font-mono">{product.sku}</span>
+                                                    <span>{normalizeProductSiteMembership(product).join(' / ') || '-'}</span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => { void handleRemoveGroupMember(managingGroup, product.id); }}
+                                                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50"
+                                            >移出组</button>
+                                        </div>
+                                    );
+                                })}
+                                {managingGroup.members.length === 0 && <div className="p-8 text-center text-sm text-slate-400">此商品组暂无成员</div>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showGroupManager && (
+                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="管理商品组">
+                    <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                            <div>
+                                <h3 className="font-bold text-slate-800">管理商品组</h3>
+                                <p className="mt-1 text-xs text-slate-500">所有站点共用商品组</p>
+                            </div>
+                            <button onClick={() => setShowGroupManager(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="关闭商品组管理"><X size={18} /></button>
+                        </div>
+                        <div className="max-h-[60vh] space-y-2 overflow-y-auto p-5">
+                            {productGroups.map(group => (
+                                <div key={group.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                                    <div className="min-w-0">
+                                        <div className="truncate text-sm font-bold text-slate-800">{group.name}</div>
+                                        <div className="mt-1 text-xs text-slate-400">{group.members.length} 个 SKU</div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                        <button onClick={() => { setShowGroupManager(false); setManagingGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50" aria-label={`管理 ${group.name}`}>管理</button>
+                                        <button onClick={() => { void handleRenameGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100" aria-label={`重命名 ${group.name}`}>重命名</button>
+                                        <button onClick={() => { void handleDisbandGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50" aria-label={`解散 ${group.name}`}>解散</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             )}
             {showDetailModal && selectedProduct && (
                 <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
@@ -922,6 +1337,43 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         <List className="text-indigo-600" size={20} /> {t.title}
                     </h2>
                     <div className="flex flex-wrap gap-3 items-center w-full md:w-auto">
+                        <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="商品列表视图">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('grouped')}
+                                disabled={groupsLoading || groupLoadError}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'grouped' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
+                            >商品视图</button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('sku')}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'sku' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
+                            >SKU 视图</button>
+                        </div>
+                        {groupLoadError && (
+                            <button
+                                type="button"
+                                onClick={() => { void loadProductGroups(); }}
+                                disabled={groupsLoading}
+                                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
+                            >重试加载商品组</button>
+                        )}
+                        {viewMode === 'grouped' && canEditPrimaryTemplate && productGroups.length > 0 && (
+                            <button
+                                type="button"
+                                onClick={() => setShowGroupManager(true)}
+                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                            >管理商品组</button>
+                        )}
+                        {viewMode === 'grouped' && canEditPrimaryTemplate && selectedProductIds.size > 0 && (selectedProductIds.size >= 2 || productGroups.length > 0) && (
+                            <button
+                                type="button"
+                                onClick={openGroupDialog}
+                                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
+                            >
+                                <FolderPlus size={16} /> 归组（{selectedProductIds.size}）
+                            </button>
+                        )}
                         <div className="relative flex-1 md:w-60">
                             <input
                                 type="text"
@@ -1024,60 +1476,81 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                            {currentProducts.map(p => {
-                                const productSite = createProductSiteViewModel(p, activeTab);
+                            {currentDisplayItems.map(item => {
+                                if (item.type === 'product' && item.product) {
+                                    return renderProductRow(item.product, {
+                                        selectable: viewMode === 'grouped' && !groupedProductIds.has(item.product.id),
+                                    });
+                                }
+                                const group = item.group!;
                                 const currency = countryCurrencyMap[activeTab] || activeTab;
-                                const rate = parseCanonicalPositiveRate(exchangeRates[currency]);
-                                const priceCNY = productSite.siteInputs.totalRevenue;
-                                const calculatedPriceLocal = rate.ok ? priceCNY * rate.value : null;
-                                const priceLocal = calculatedPriceLocal !== null && Number.isFinite(calculatedPriceLocal)
-                                    ? calculatedPriceLocal
-                                    : null;
-                                const adROI = productSite.siteInputs.adROI;
-                                const ycStock = ycStockBySku.get(normalizeSku(p.sku));
+                                const exchangeRate = parseCanonicalPositiveRate(exchangeRates[currency]);
+                                const summary = summarizeProductDisplayGroup(
+                                    item.products,
+                                    activeTab,
+                                    ycStockBySku,
+                                    item.products.length,
+                                    exchangeRate.ok ? exchangeRate.value : undefined,
+                                );
+                                const expanded = item.autoExpand
+                                    ? !collapsedSearchGroupIds.has(group.id)
+                                    : expandedGroupIds.has(group.id);
                                 return (
-                                    <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group cursor-pointer" onDoubleClick={() => handleView(p)}>
-                                        <td className="p-3 pl-4 font-bold text-slate-800 truncate max-w-[180px]">{p.name}</td>
-                                        <td className="p-3 text-slate-500 font-mono text-xs">{p.sku}</td>
-                                        <td className="p-3 text-right">
-                                            {ycStockLoading ? (
-                                                <span className="text-xs text-slate-400">加载中...</span>
-                                            ) : ycStock ? (
-                                                <div className="space-y-0.5">
-                                                    <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(ycStock.available)}</div>
-                                                    <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(ycStock.inventory)}</div>
-                                                    <div className="text-[11px] text-slate-400">
-                                                        占用 {formatStockNumber(ycStock.occupy)} / 未发 {formatStockNumber(ycStock.unshipped)}
+                                    <Fragment key={item.key}>
+                                        <tr className="bg-indigo-50/45 hover:bg-indigo-50/70 transition-colors">
+                                            <td className="p-3 pl-4 font-bold text-slate-800 max-w-[210px]">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleGroupExpanded(group.id, item.autoExpand)}
+                                                    className="flex w-full items-center gap-2 text-left"
+                                                    aria-expanded={expanded}
+                                                >
+                                                    {expanded ? <ChevronDown size={16} className="shrink-0 text-indigo-600" /> : <ChevronRight size={16} className="shrink-0 text-indigo-600" />}
+                                                    <span className="truncate">{group.name}</span>
+                                                </button>
+                                            </td>
+                                            <td className="p-3 text-xs font-bold text-indigo-700">
+                                                {item.totalMemberCount} 个 SKU
+                                                {item.matchedMemberCount < item.totalMemberCount && (
+                                                    <div className="mt-1 font-normal text-slate-400">匹配 {item.matchedMemberCount}/{item.totalMemberCount}</div>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-right">
+                                                {ycStockLoading ? (
+                                                    <span className="text-xs text-slate-400">加载中...</span>
+                                                ) : summary.stock ? (
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(summary.stock.available)}</div>
+                                                        <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(summary.stock.inventory)}</div>
+                                                        <div className="text-[11px] text-slate-400">占用 {formatStockNumber(summary.stock.occupy)} / 未发 {formatStockNumber(summary.stock.unshipped)}</div>
+                                                        {summary.matchedStockCount < summary.totalStockCount && (
+                                                            <div className="text-[11px] text-amber-600">已匹配 {summary.matchedStockCount}/{summary.totalStockCount} 个 SKU</div>
+                                                        )}
                                                     </div>
-                                                    <div className="text-[11px] text-slate-400 truncate max-w-[140px] ml-auto">
-                                                        {ycStock.warehouseCodes.length ? ycStock.warehouseCodes.join(', ') : '-'}
+                                                ) : (
+                                                    <div className="text-xs font-bold text-slate-400">{ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}</div>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-right font-mono text-slate-700">{formatRange(summary.cost, value => value.toFixed(2))}</td>
+                                            <td className="p-3 text-right text-slate-400">-</td>
+                                            <td className="p-3 text-right font-mono text-slate-700">{formatRange(summary.priceCNY, value => `¥${value.toFixed(2)}`)}</td>
+                                            <td className="p-3 text-right font-mono text-slate-600">{formatRange(summary.priceLocal, value => formatCurrencyAmount(value, currency as CurrencyCode))}</td>
+                                            <td className="p-3 text-right text-slate-400">-</td>
+                                            <td className="p-3">
+                                                {canEditPrimaryTemplate && (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <button onClick={() => setManagingGroup(group)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg" title="管理成员"><Users size={15} /></button>
+                                                        <button onClick={() => { void handleRenameGroup(group); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg" title="重命名"><Pencil size={15} /></button>
+                                                        <button onClick={() => { void handleDisbandGroup(group); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg" title="解散商品组"><Trash2 size={15} /></button>
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-0.5">
-                                                    <div className="text-xs font-bold text-slate-400">
-                                                        {ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}
-                                                    </div>
-                                                    <div className="text-[11px] text-slate-300">-</div>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="p-3 text-right text-slate-700 font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-slate-600">{productSite.globalInputs.productWeight}g</td>
-                                        <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : formatCurrencyAmount(priceLocal, currency as CurrencyCode)}</td>
-                                        <td className="p-3 text-right text-slate-600 font-mono">{adROI}</td>
-                                        <td className="p-3">
-                                            <div className="flex items-center justify-center gap-1">
-                                                <button onClick={() => handleView(p)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="View"><Eye size={15} /></button>
-                                                <button onClick={() => { void handleQuickImport(p); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
-                                                <button onClick={() => handleDelete(p)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
+                                                )}
+                                            </td>
+                                        </tr>
+                                        {expanded && item.products.map(product => renderProductRow(product, { grouped: true, group }))}
+                                    </Fragment>
                                 );
                             })}
-                            {currentProducts.length === 0 && (
+                            {currentDisplayItems.length === 0 && (
                                 <tr>
                                     <td colSpan={9} className="p-12 text-center text-slate-400 italic text-sm">{t.noProducts}</td>
                                 </tr>
@@ -1088,7 +1561,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
                 <div className="p-3 border-t border-slate-100 flex justify-between items-center bg-white/50 rounded-b-2xl">
                     <div className="text-xs text-slate-500 font-medium">
-                        {t.pagination.showing} <span className="font-bold text-slate-700">{filteredProducts.length > 0 ? startIndex + 1 : 0}</span> {t.pagination.to} <span className="font-bold text-slate-700">{Math.min(startIndex + itemsPerPage, filteredProducts.length)}</span> {t.pagination.of} <span className="font-bold text-slate-700">{filteredProducts.length}</span> {t.pagination.items}
+                        {t.pagination.showing} <span className="font-bold text-slate-700">{sortedDisplayItems.length > 0 ? startIndex + 1 : 0}</span> {t.pagination.to} <span className="font-bold text-slate-700">{Math.min(startIndex + itemsPerPage, sortedDisplayItems.length)}</span> {t.pagination.of} <span className="font-bold text-slate-700">{sortedDisplayItems.length}</span> {viewMode === 'grouped' ? '项' : t.pagination.items}
+                        {viewMode === 'grouped' && <span className="ml-2 text-slate-400">（{filteredProducts.length} 个 SKU）</span>}
                     </div>
                     <div className="flex gap-1">
                         <button
@@ -1098,21 +1572,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         >
                             <ChevronLeft size={14} />
                         </button>
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                            let pNum = i + 1;
-                            if (totalPages > 5 && currentPage > 3) {
-                                pNum = currentPage - 2 + i;
-                                if (pNum > totalPages) pNum = i + 1;
-                            }
-                            if (totalPages <= 5) pNum = i + 1;
-                            return (
-                                <button key={pNum} onClick={() => setCurrentPage(pNum)}
-                                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${currentPage === pNum ? 'bg-indigo-600 text-white' : 'bg-white border text-slate-600 hover:bg-slate-50'}`}
+                        {visiblePages.map(pageNumber => (
+                                <button key={pageNumber} onClick={() => setCurrentPage(pageNumber)}
+                                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${currentPage === pageNumber ? 'bg-indigo-600 text-white' : 'bg-white border text-slate-600 hover:bg-slate-50'}`}
                                 >
-                                    {pNum}
+                                    {pageNumber}
                                 </button>
-                            );
-                        })}
+                        ))}
                         <button
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                             disabled={currentPage === totalPages || totalPages === 0}

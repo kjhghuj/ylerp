@@ -23,7 +23,9 @@ services:
       - "6379:6379"
 
   api:
-    build: .
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     ports:
       - "3002:3002"
     env_file:
@@ -32,6 +34,9 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/yangling_erp?schema=public
       - REDIS_URL=redis://redis:6379
       - PORT=3002
+      - PRODUCT_ANALYSIS_IMPORT_DIR=/app/backend/import-spool
+    volumes:
+      - importspool:/app/backend/import-spool
     depends_on:
       db:
         condition: service_healthy
@@ -40,7 +45,8 @@ services:
 
   web:
     build:
-      context: ../frontend
+      context: ..
+      dockerfile: frontend/Dockerfile
       args:
         VITE_API_URL: /api
     ports:
@@ -50,3 +56,4 @@ services:
 
 volumes:
   pgdata:
+  importspool:

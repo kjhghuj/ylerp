@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '.'),
+      'xlsx': path.resolve(__dirname, 'node_modules/xlsx'),
     },
   },
   test: {

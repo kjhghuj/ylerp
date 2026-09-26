@@ -26,6 +26,7 @@ vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
   fetchShopDays: vi.fn(),
   fetchShopAgg: vi.fn(),
   fetchPotential: vi.fn(),
+  fetchEstablishedTrends: vi.fn(async () => ({ from: '2026-08-31', to: '2026-09-06', windowDays: 3, items: [] })),
   uploadDailyReport: vi.fn(),
   deleteDailyUpload: vi.fn(async () => undefined),
   batchDeleteDailyUploads: vi.fn(async () => 1),
@@ -43,6 +44,7 @@ vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
 
 import {
   deleteDailyUpload,
+  fetchEstablishedTrends,
   fetchPotential,
   fetchShopAgg,
   fetchShopDays,
@@ -57,6 +59,7 @@ const mockFetchShops = vi.mocked(fetchShops);
 const mockFetchShopDays = vi.mocked(fetchShopDays);
 const mockFetchShopAgg = vi.mocked(fetchShopAgg);
 const mockFetchPotential = vi.mocked(fetchPotential);
+const mockFetchEstablishedTrends = vi.mocked(fetchEstablishedTrends);
 const mockUpload = vi.mocked(uploadDailyReport);
 const mockDelete = vi.mocked(deleteDailyUpload);
 const mockStream = vi.mocked(sendProductAnalysisChatStream);
@@ -165,6 +168,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFetchShops.mockResolvedValue([SHOP]);
   mockFetchShopDays.mockResolvedValue(DAYS);
+  mockFetchEstablishedTrends.mockResolvedValue({
+    from: '2026-08-31', to: '2026-09-06', windowDays: 3,
+    items: [{ itemId: '10001', itemName: '验收商品', previousDailyOrders: 5, recentDailyOrders: 3,
+      changePercent: -40, previousObservedDays: 1, recentObservedDays: 1,
+      dailyOrders: [{ date: '2026-09-01', orders: 5 }, { date: '2026-09-06', orders: 3 }] }],
+  });
   mockUpload.mockResolvedValue({ uploadId: 'upload-1', version: 1, date: '2026-09-06', fileName: 'parentskudetail.xlsx', itemCount: 12, derivedItemCount: 12, variationCount: 0, sourceSheetCount: 4, sourceRowCount: 12, sourceComplete: true, warnings: [] });
 });
 
@@ -187,6 +196,22 @@ async function selectUploadFile(name: string) {
 }
 
 describe('business acceptance (isolated, mocked data, simulated AI)', () => {
+  it('shows new potential and established trends on the overview without the former sales panels', async () => {
+    mockFetchShopAgg.mockResolvedValue(reproAgg(10, 1500));
+    mockFetchPotential.mockResolvedValue(reproPotential());
+    render(<ProductAnalysis />);
+    expect(await screen.findByRole('region', { name: '新品潜力榜' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: '老商品趋势监控' })).toBeTruthy();
+    expect(await screen.findByText('验收新品')).toBeTruthy();
+    expect(await screen.findByText('-40%')).toBeTruthy();
+    expect(mockFetchPotential).toHaveBeenCalledWith('shop-1', '2026-08-31', '2026-09-06', expect.objectContaining({ limit: 100 }));
+    expect(screen.queryByText('商品销售对比')).toBeNull();
+    expect(screen.queryByText('商品排行榜')).toBeNull();
+    expect(screen.queryByText('最近报表日期')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '查看全部' }));
+    expect(await screen.findByText('筛选条件')).toBeTruthy();
+  });
+
   it('upload → same-day overwrite updates metrics → delete clears list and potential board', async () => {
     mockFetchShopAgg.mockResolvedValueOnce(reproAgg(10, 1000));
     mockFetchPotential.mockResolvedValueOnce(reproPotential());
