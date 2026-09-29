@@ -1,24 +1,43 @@
-# 商品分析店铺日期采集部署与联调
+# ERP 内置商品分析采集
 
-ERP 商品分析工具栏的“采集店铺数据”使用独立的 `shopee-collector` 服务。ERP 保存店铺归属、任务和导入记录；采集器保存 Cookie、SQLite、原报表与加密密钥。
+商品分析的采集功能由 ERP API 进程内的任务队列执行。启动 ERP 后端即可使用，不再依赖相邻的 shopee-collector 项目、7790 端口或 COLLECTOR_PRIVATE_URL / COLLECTOR_SERVICE_TOKEN。
 
-## 服务配置
+## 使用
 
-1. 在 ERP `backend/.env` 配置 `COLLECTOR_PRIVATE_URL=http://collector:7790`、`COLLECTOR_SERVICE_TOKEN` 和 `ERP_IMPORT_SERVICE_TOKEN`。后两个值分别与采集器的 `ERP_COLLECTOR_SERVICE_TOKEN`、`ERP_IMPORT_SERVICE_TOKEN` 一致，使用两枚独立随机值。
-2. 用 `docker-compose.prod.yml` 启动 ERP，运行 `prisma migrate deploy`。`importspool` 卷保存已经接收、仍待导入的原文件。部署脚本会在更新 API 容器前执行迁移。
-3. 在采集器 `.env` 配置 `COLLECTOR_MODE=real`、上述两枚服务令牌、`ERP_IMPORT_BASE_URL=http://api:3002`。用 `docker compose -f docker-compose.yml -f docker-compose.erp.yml up -d --build` 启动。同主机部署时，ERP Compose 创建 `yangling-collector-private` 网络，采集器加入该网络。采集器的 `data/real/` 须随 SQLite、报表与 `credential.key` 一起备份。
-4. HTTPS 网关仅对外转发采集器的 `/api/extension/pair`、`/api/extension/sync`（含 OPTIONS）。不要把采集器管理页面、`/api/erp/*` 或其他 `/api/*` 开到公网。前端构建参数 `COLLECTOR_GATEWAY_URL` 填网关根地址，弹窗会展示给扩展使用者。
+1. 在商品分析中选择 ERP 店铺，打开“采集店铺数据”。粘贴 Cookie-Editor JSON、单独填写 SPC_CDS 和 Shopee 店铺 ID，停止输入约 0.8 秒后自动保存。店铺 ID 按 ERP 店铺分别记忆。
+2. 选择日期并开始采集。当前支持 PH、MY、SG 的商品表现日报，最多 366 天，截止站点当地昨天。默认跳过 ERP 已有日报的日期。
+3. 采集直接用提供的凭据请求 Shopee 导出接口，不请求店铺身份接口。每个站点提交导出至少间隔 70 秒。
+4. 下载后校验 XLSX 与 SHA-256，再直接交给 ERP 入库队列。只有确认入库成功才显示“已入库”。在概览、商品列表和数据日历查看对应店铺及日期的数据。
+5. 在采集任务的日期行点击“下载原始报表”，由 ERP 登录权限、店铺归属与文件校验保护下载。失败但有原报表的任务可“仅重试入库”。
 
-ERP 接收 `/api/imports` 文件时会用私网接口再次确认采集器批次、任务、店铺、日期及原文件 SHA-256；因此两服务之间的私网和 `COLLECTOR_SERVICE_TOKEN` 在整个导入期间都必须可用。采集器暂时不可达时，原报表保留在采集器持久卷中，可用“仅重试入库”恢复。
+## 代码与存储
 
-## 真实会话身份校验
+- backend/src/collector/：Shopee HTTP 适配器、加密凭据、SQLite 队列、限速、文件校验、批次和后台执行器。没有独立 HTTP 服务器、管理页面、浏览器扩展或 Playwright 依赖。
+- backend/src/services/productAnalysisCollectorClient.ts：调用内置采集模块。保留原业务调用接口，避免影响现有店铺绑定和任务记录。
+- backend/src/services/productAnalysisImportService.ts：内部采集与原 HTTP 兼容端点共享的入库验证、幂等受理和解析逻辑。内部入库不经过 HTTP，不需要服务令牌。
+- 原始 Excel、任务数据库和 credential.key 默认保存在 backend/data/product-analysis-collector/。分析数据和 ERP 导入记录仍保存在 ERP PostgreSQL 数据库。
+- 入库暂存目录仍为 backend/import-spool/，可用 PRODUCT_ANALYSIS_IMPORT_DIR 指定。
 
-采集器要求 `SHOPEE_IDENTITY_PATH` 指向经过真实浏览器会话验证的 Shopee **只读店铺列表**接口，响应须包含 `data.shops` 或 `data.shop_list`，每项有 `shop_id` 与 `region`。采集器用 Cookie 请求该接口，并核对绑定的 ID 与站点。当前仓库没有可证明稳定的官方内部接口路径；在 PH、MY、SG 实际会话中确认并填写此路径以前，真实批次会拒绝启动。不要以页面 URL、目标 ID 回显或店名推断代替此检查。
+本机请在 backend 目录启动 npm run dev。运行时需 Node.js 22.5 或以上版本。可以用 PRODUCT_ANALYSIS_COLLECTOR_DIR 指定采集数据目录；启动后不要在任务执行中切换该目录。
 
-## 验收顺序
+Docker Compose 为 API 挂载 collectordata 卷到 /app/collector-data，并保留 importspool 卷。只需部署 ERP，不需要采集器容器或额外私网。采集模块按单个 ERP API 实例运行，同一数据目录有进程锁，避免两个后端同时领取任务。
 
-1. 在每个站点建立 ERP 店铺，创建凭据来源，在扩展弹窗输入 ERP 页面地址、采集网关地址及一次性配对码，确认状态“已同步，待真实请求验证”。
-2. 分别用 PH、MY、SG 各一份真实单日报表，对比自动解析与手工上传的商品、币种、日期和原始工作表快照。随后验证多日采集、已有日期跳过、重采内容不变、失败文件单独补传、入库后概览刷新。
-3. 停启采集器与 ERP API，确认批次和 `PENDING` 导入任务恢复；检查原文件与 `importspool` 卷未丢失。
+原 /api/imports HTTP 端点保留兼容能力；只有需要外部调用该端点时才配置 ERP_IMPORT_SERVICE_TOKEN。ERP 内部采集与入库不使用它。
 
-自动测试覆盖代码路径，不代替上述真实 Shopee 请求和生产网络联调。
+## 从旧采集器迁移
+
+在切换 ERP 内置采集代码之前，从 backend 目录执行：
+
+```powershell
+npm run collector:migrate -- C:/Users/admin/Desktop/shopee-collector/data/erp-local/real
+```
+
+第二个参数可指定 ERP 目标目录，默认读取 PRODUCT_ANALYSIS_COLLECTOR_DIR 或使用 backend/data/product-analysis-collector。只迁移 ERP 原来使用的 real 数据目录，避免混入独立采集器的其他任务。
+
+迁移工具会暂停旧队列、拒绝迁移执行中的任务、生成包含 WAL 内容的数据库快照、复制密钥与报表、验证凭据解密和报表 SHA-256、修正 tasks/downloads 的文件路径。连接 ID、批次 ID、任务 ID、导入引用保持不变，因此不需要重新粘贴凭据或重新导入已完成日报。目标目录已存在时拒绝覆盖。失败时恢复原队列的暂停状态，并保留迁移暂存目录便于排查。
+
+迁移成功后旧队列保持暂停，停止旧采集服务，再启动 ERP 内置队列。旧项目的数据保留作为回退副本；不要让两套队列同时运行。备份时应一起备份 ERP PostgreSQL、collectordata（包括 credential.key）与 importspool。
+
+## 验证
+
+自动测试覆盖直接凭据导出、内部入库接口、任务控制、文件下载归属、数据迁移与凭据解密。部署后再用实际单日报表验证商品、日期、币种及入库结果。采集提交结果不明且没有 report_id 时，仍需要人工核实；不会盲目重复导出。

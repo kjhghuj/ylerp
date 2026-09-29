@@ -1141,6 +1141,8 @@
   background:var(--bg-primary,#fff);color:var(--text-primary,#17212f);
 }
 .pa-collection-section textarea {width:100%;min-height:90px;font:12px monospace}
+.pa-collection-section .pa-collection-cookie-field {display:grid;gap:8px}
+.pa-collection-cookie-field textarea {min-height:130px;box-sizing:border-box;resize:vertical}
 .pa-collection-section button, .pa-collection-pages button {
   width:fit-content;padding:7px 12px;border:1px solid var(--border-light,#ccd);border-radius:7px;
   background:var(--bg-primary,#fff);color:var(--text-primary,#17212f);cursor:pointer;

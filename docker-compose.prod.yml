@@ -42,16 +42,15 @@ services:
       - REDIS_URL=redis://redis:6379
       - PORT=3002
       - PRODUCT_ANALYSIS_IMPORT_DIR=/app/import-spool
+      - PRODUCT_ANALYSIS_COLLECTOR_DIR=/app/collector-data
     volumes:
       - importspool:/app/import-spool
+      - collectordata:/app/collector-data
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    networks:
-      - default
-      - collector-private
     deploy:
       resources:
         limits:
@@ -78,7 +77,4 @@ volumes:
   pgdata:
   redisdata:
   importspool:
-
-networks:
-  collector-private:
-    name: yangling-collector-private
+  collectordata:

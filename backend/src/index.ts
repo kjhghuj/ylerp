@@ -9,6 +9,7 @@ import { guardAiRequest } from './middleware/aiRequestGuard';
 import shopeeRoutes from './routes/shopeeRoutes';
 import productAnalysisCollectionRoutes from './routes/productAnalysisCollectionRoutes';
 import productAnalysisImportRoutes, {startProductAnalysisImportWorker} from './routes/productAnalysisImportRoutes';
+import {getCollector,stopCollector} from './collector/runtime';
 import {
   configureJsonBodyParsing,
   chromaJsonErrorHandler,
@@ -118,6 +119,11 @@ app.get('/health', (req, res) => {
 startFinanceBackup();
 startShopeeTokenRefresh(shopeeAuthorization);
 startProductAnalysisImportWorker();
+getCollector();
+
+for (const signal of ['SIGINT','SIGTERM'] as const) {
+  process.once(signal,()=>{void stopCollector().finally(()=>process.exit(0));});
+}
 
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);

@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {Router, type Request, type Response} from 'express';
 import {prisma} from '../index';
-import {collectorRequest} from '../services/productAnalysisCollectorClient';
+import {collectorRequest,collectorReportFile} from '../services/productAnalysisCollectorClient';
 import {isValidCalendarDate} from '../services/productAnalysisUpload';
 
 const router=Router();
@@ -114,10 +114,14 @@ router.post('/shops/:id/credential-sources/:sourceId/manual',async(req,res)=>{
   const shop=await shopFor(req);if(!shop)return res.status(404).json({detail:'Shop not found'});
   const source=await prisma.productAnalysisCredentialSource.findFirst({where:{id:String(req.params.sourceId),userId:req.user!.id}});
   if(!source)return res.status(404).json({detail:'Credential source not found'});
-  if(!Array.isArray(req.body?.cookies)||req.body.cookies.length>300||typeof req.body?.spcCds!=='string')
+  if(!Array.isArray(req.body?.cookies)||req.body.cookies.length===0||req.body.cookies.length>300||
+    req.body.cookies.some((cookie:unknown)=>!cookie||typeof cookie!=='object'||
+      !('name' in cookie)||typeof cookie.name!=='string'||!cookie.name.trim()||
+      !('value' in cookie)||typeof cookie.value!=='string')||
+    typeof req.body?.spcCds!=='string'||!req.body.spcCds.trim())
     return res.status(400).json({detail:'Cookie-Editor JSON 或 SPC_CDS 无效'});
   try {return res.json(await collectorRequest(`/api/erp/connections/${source.connectionId}/manual`,
-    {method:'POST',body:{cookies:req.body.cookies,spcCds:req.body.spcCds}}));}
+    {method:'POST',body:{cookies:req.body.cookies,spcCds:req.body.spcCds.trim()}}));}
   catch(error){return safeError(res,error);}
 });
 
@@ -233,6 +237,25 @@ for(const action of ['pause','resume','cancel','retry'] as const) {
     }catch(error){return safeError(res,error);}
   });
 }
+
+router.get('/shops/:id/collection-runs/:runId/tasks/:taskId/download',async(req,res)=>{
+  if(!(await allowed(req,res)))return;
+  const shop=await shopFor(req);if(!shop)return res.status(404).json({detail:'Shop not found'});
+  const run=await prisma.productAnalysisCollectionRun.findFirst({where:{id:String(req.params.runId),shopId:shop.id}});
+  if(!run?.collectorBatchId)return res.status(404).json({detail:'Run not found'});
+  const taskId=Number(req.params.taskId);
+  if(!/^[0-9]+$/.test(String(req.params.taskId))||!Number.isSafeInteger(taskId)||taskId<=0)
+    return res.status(400).json({detail:'Task ID 无效'});
+  try{
+    const file=await collectorReportFile(run.collectorBatchId,taskId);
+    res.setHeader('Cache-Control','private, no-store');
+    return res.download(file.path,file.fileName);
+  }catch(error){
+    const status=error&&typeof error==='object'&&'status'in error?Number(error.status):0;
+    if(status===404||status===409)return res.status(status).json({detail:error instanceof Error?error.message:'报表不可用'});
+    return safeError(res,error);
+  }
+});
 
 router.post('/shops/:id/collection-runs/:runId/tasks/:taskId/retry-upload',async(req,res)=>{
   if(!(await allowed(req,res)))return;

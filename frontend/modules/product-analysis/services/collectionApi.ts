@@ -42,3 +42,12 @@ export async function actOnCollectionRun(shopId:string,runId:string,action:'paus
 export async function retryCollectionUpload(shopId:string,runId:string,taskId:number):Promise<void>{
   await api.post(`${path(shopId)}/collection-runs/${runId}/tasks/${taskId}/retry-upload`);
 }
+
+export async function downloadCollectionReport(shopId:string,runId:string,taskId:number,reportDate:string):Promise<void>{
+  const response=await api.get<Blob>(`${path(shopId)}/collection-runs/${runId}/tasks/${taskId}/download`,{responseType:'blob'});
+  const url=URL.createObjectURL(response.data);
+  const link=document.createElement('a');
+  link.href=url;link.download=`shopee_${reportDate}.xlsx`;
+  document.body.appendChild(link);
+  try{link.click();}finally{link.remove();setTimeout(()=>URL.revokeObjectURL(url),1_000);}
+}

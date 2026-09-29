@@ -8,3 +8,5 @@ git
 *.xlsx
 *.local
 **/.env
+backend/data
+backend/import-spool
