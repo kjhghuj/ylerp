@@ -5,6 +5,7 @@ export interface CollectionBinding {site:string;shopeeShopId:string;sourceId:str
 export interface ConnectionState {paired:boolean;lastSync:string|null;detail:string|null;
   credential:{status:'missing'|'pending'|'valid'|'invalid';last_validated_at:string|null;last_error:string|null}}
 export interface BindingState {binding:CollectionBinding|null;sources:CollectionSource[];connection:ConnectionState|null}
+export interface SharedCredentialsState {cookies:Record<string,unknown>[];spcCds:string;credential:ConnectionState['credential']}
 export interface CollectionRun {id:string;shopId:string;fromDate:string;toDate:string;recollectExisting:boolean;
   status:string;collectorBatchId:number|null;createdAt:string}
 export interface CollectionTask {id:number|null;report_date:string;status:string;stage_detail?:string|null;last_error?:string|null;hasFile?:boolean}
@@ -12,6 +13,12 @@ export interface RunDetail {run:CollectionRun;batch:{counts:Record<string,number
   tasks:CollectionTask[];page:number;pages:number}
 
 const path=(shopId:string)=>`/product-analysis/shops/${encodeURIComponent(shopId)}`;
+export async function fetchSharedCredentials():Promise<SharedCredentialsState>{
+  return (await api.get<SharedCredentialsState>('/product-analysis/collector-credentials')).data;
+}
+export async function submitSharedCookies(cookies:unknown,spcCds:string):Promise<void>{
+  await api.post('/product-analysis/collector-credentials',{cookies,spcCds});
+}
 export async function fetchBinding(shopId:string):Promise<BindingState>{
   return (await api.get<BindingState>(`${path(shopId)}/collector-binding`)).data;
 }

@@ -88,9 +88,21 @@ export class CollectorRuntime {
   }
 
   private dispatch(route: string, method: string, body: Record<string, any>, query: URLSearchParams): unknown {
+    if (route === 'shared-credentials' && (method === 'GET' || method === 'POST')) {
+      const scopeKey = String(body.scopeKey ?? '');
+      if (!Array.isArray(body.accountKeys) || body.accountKeys.some((key: unknown) => typeof key !== 'string')) fail(400, '凭据来源无效');
+      this.credentials.registerScope(scopeKey, body.accountKeys);
+      if (method === 'POST') {
+        this.credentials.save(scopeKey, body.cookies, body.spcCds);
+        for (const key of this.credentials.relatedAccounts(scopeKey)) this.queue.resumeAccountTasks(key);
+      }
+      const payload = this.credentials.get(scopeKey);
+      return {cookies: payload?.cookies ?? [], spcCds: payload?.spcCds ?? '', credential: this.credentials.view(scopeKey)};
+    }
     if (route === 'connections' && method === 'POST') {
       const accountKey = String(body.accountKey ?? '');
       if (!/^erp-[0-9a-f-]{36}$/i.test(accountKey)) fail(400, '凭据来源 ID 无效');
+      if (body.credentialScopeKey) this.credentials.registerScope(String(body.credentialScopeKey), [accountKey]);
       const id = crypto.randomUUID(), now = new Date().toISOString();
       this.db.prepare("INSERT OR IGNORE INTO accounts(account_key,mode,site,profile_dir,status,updated_at) VALUES(?,'real','','','WAITING_AUTH',?)").run(accountKey, now);
       this.db.prepare("INSERT INTO browser_connections(id,account_key,name,mode,created_at) VALUES(?,?,?,'real',?)")
@@ -104,7 +116,7 @@ export class CollectorRuntime {
       if (!row) fail(404, '凭据连接不存在');
       if (method === 'POST' && connectionMatch[2]) {
         this.credentials.save(row.account_key, body.cookies, body.spcCds);
-        this.queue.resumeAccountTasks(row.account_key);
+        for (const key of this.credentials.relatedAccounts(row.account_key)) this.queue.resumeAccountTasks(key);
         return {ok: true, credential: this.credentials.view(row.account_key)};
       }
       if (method === 'GET' && !connectionMatch[2]) return {ok: true, connectionId: row.id, paired: false, credential: this.credentials.view(row.account_key)};

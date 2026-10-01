@@ -8,6 +8,7 @@ import {migrateCollectorData} from '../migrate';
 import {TaskStatus} from '../states';
 import {checksumOf} from '../validate';
 import {workbookFixture} from './workbookFixture';
+import {CredentialInputError} from '../credentials';
 
 const runId='11111111-1111-4111-8111-111111111111';
 const accountKey='erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -129,4 +130,68 @@ test('migration does not copy an active queue or leave its pause state changed a
   expect(()=>migrateCollectorData(source.cfg.dataDir,path.join(root,'target'))).toThrow('执行中的任务');
   expect(source.worker.isPaused()).toBe(false);
   expect(fs.existsSync(path.join(root,'target'))).toBe(false);
+});
+
+test('shared credentials apply across existing and new shop connections, with user isolation and restart persistence',async()=>{
+  const directory=path.join(root,'erp-data');
+  const runtime=createRuntime(directory);
+  const first=await bind(runtime);
+  const secondKey='erp-'+crypto.randomUUID();
+  const second=await runtime.request<{connectionId:string}>('/api/erp/connections',{method:'POST',body:{accountKey:secondKey,name:'PH 店'}});
+  await runtime.request('/api/erp/bind-shop',{method:'POST',body:{site:'PH',shopId:'87654321',connectionId:second.connectionId}});
+  const scopeKey='erp-user:user-a';
+  const migrated=await runtime.request<any>('/api/erp/shared-credentials',{body:{scopeKey,accountKeys:[accountKey,secondKey]}});
+  expect(migrated.spcCds).toBe('manual-cds');
+  expect(runtime.credentials.get(secondKey)).toEqual(runtime.credentials.get(accountKey));
+  await runtime.request('/api/erp/shared-credentials',{method:'POST',body:{scopeKey,accountKeys:[accountKey,secondKey],
+    cookies:[{name:'SPC_ST',value:'renewed-session',domain:'.seller.shopee.cn',path:'/'}],spcCds:'renewed-cds'}});
+  const task=await runtime.request<any>('/api/erp/batches',{method:'POST',body:{erpRunId:crypto.randomUUID(),site:'PH',shopId:'87654321',
+    connectionId:second.connectionId,from:'2026-09-28',to:'2026-09-28'}});
+  expect(task.taskIds).toHaveLength(1);
+  expect(runtime.credentials.get(accountKey)?.spcCds).toBe('renewed-cds');
+  runtime.credentials.markInvalid(accountKey,'Login expired');
+  expect(runtime.credentials.view(secondKey).status).toBe('invalid');
+  const firstBatch=await batch(runtime,first).catch(()=>null);
+  expect(firstBatch).toBeNull();
+  runtime.queue.updateStatus(task.taskIds[0],TaskStatus.WAITING_AUTH);
+  await runtime.request('/api/erp/shared-credentials',{method:'POST',body:{scopeKey,accountKeys:[accountKey,secondKey],
+    cookies:[{name:'SPC_ST',value:'latest-session',domain:'.seller.shopee.cn',path:'/'}],spcCds:'latest-cds'}});
+  expect(runtime.credentials.view(secondKey).status).toBe('pending');
+  expect(runtime.queue.getTask(task.taskIds[0])?.status).toBe(TaskStatus.PENDING);
+  runtime.credentials.markValid(secondKey);
+  expect(runtime.credentials.view(accountKey).status).toBe('valid');
+  const newKey='erp-'+crypto.randomUUID();
+  const third=await runtime.request<any>('/api/erp/connections',{method:'POST',body:{accountKey:newKey,name:'New',credentialScopeKey:scopeKey}});
+  expect((await runtime.request<any>(`/api/erp/connections/${third.connectionId}`)).credential.status).toBe('valid');
+  expect(runtime.credentials.get(newKey)?.spcCds).toBe('latest-cds');
+  const otherKey='erp-'+crypto.randomUUID();
+  await runtime.request('/api/erp/connections',{method:'POST',body:{accountKey:otherKey,name:'Other',credentialScopeKey:'erp-user:user-b'}});
+  expect(runtime.credentials.get(otherKey)).toBeNull();
+  await expect(runtime.request('/api/erp/shared-credentials',{body:{scopeKey:'erp-user:user-b',accountKeys:[accountKey]}})).rejects.toThrow('其他账号');
+  expect(fs.readFileSync(runtime.cfg.dbPath).includes(Buffer.from('latest-session'))).toBe(false);
+  await runtime.stop();runtimes=runtimes.filter(item=>item!==runtime);
+  const restored=createRuntime(directory);
+  expect(restored.credentials.get(secondKey)?.spcCds).toBe('latest-cds');
+  expect(restored.credentials.get(otherKey)).toBeNull();
+});
+
+test('invalid shared credentials return 400 and preserve the encrypted credentials already saved',async()=>{
+  const runtime=createRuntime(path.join(root,'erp-data'));
+  await bind(runtime);
+  const scopeKey='erp-user:user-a';
+  await runtime.request('/api/erp/shared-credentials',{body:{scopeKey,accountKeys:[accountKey]}});
+  const previous=runtime.credentials.get(accountKey);
+  const inputs=[
+    {cookies:[{name:'SPC_ST',value:'test',domain:'invalid.example'}],spcCds:'cds'},
+    {cookies:[{name:'SPC_ST',value:'bad;value',domain:'.shopee.cn'}],spcCds:'cds'},
+    {cookies:[{name:'SPC_ST',value:42,domain:'.shopee.cn'}],spcCds:'cds'},
+    {cookies:[{name:'SPC_ST',value:'test',domain:'.shopee.cn'}],spcCds:'bad\r\ncds'},
+    {cookies:[{name:'SPC_ST',value:'test',domain:'.shopee.cn'}],spcCds:'x'.repeat(4097)},
+    {cookies:[],spcCds:'cds'},
+  ];
+  for(const input of inputs){
+    await expect(runtime.request('/api/erp/shared-credentials',{method:'POST',body:{scopeKey,accountKeys:[accountKey],...input}}))
+      .rejects.toMatchObject({name:CredentialInputError.name,status:400});
+    expect(runtime.credentials.get(accountKey)).toEqual(previous);
+  }
 });

@@ -1,0 +1,10 @@
+{
+  "name": "ylerp-shopee-cookie-sync",
+  "version": "1.0.5",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "build": "node scripts/build.mjs"
+  }
+}

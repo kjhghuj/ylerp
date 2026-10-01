@@ -12,6 +12,7 @@ import type {Request,Response} from 'express';
 import router from '../productAnalysisCollectionRoutes';
 import {prisma} from '../../index';
 import {collectorRequest,collectorReportFile} from '../../services/productAnalysisCollectorClient';
+import {CredentialInputError} from '../../collector/credentials';
 
 const shop={id:'shop-a',userId:'user-a',name:'PH 店',site:'PH',currency:'PHP'};
 const owner={id:'user-a',username:'owner',role:'owner',permissions:[]};
@@ -38,6 +39,7 @@ const runUpdate=prisma.productAnalysisCollectionRun.update as jest.Mock;
 const dailyFind=prisma.productAnalysisDailyUpload.findMany as jest.Mock;
 
 beforeEach(()=>{jest.clearAllMocks();shopFind.mockResolvedValue(shop);runFind.mockResolvedValue(null);activeFind.mockResolvedValue(null);
+  (prisma.productAnalysisCredentialSource.findMany as jest.Mock).mockResolvedValue([{accountKey:'erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}]);
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({permissions:[],isActive:true});});
 
 test('upload permission is required before reading a shop or a credential',async()=>{
@@ -118,8 +120,8 @@ test('manual credentials preserve Cookie-Editor metadata and trim the separate S
   const cookies=[{name:'SPC_EC',value:'test-session',domain:'.shopee.ph',path:'/',httpOnly:true,secure:true}];
   await invoke('/shops/:id/credential-sources/:sourceId/manual','post',{
     params:{id:shop.id,sourceId:'source-a'},body:{cookies,spcCds:' test-cds '}});
-  expect(collectorRequest).toHaveBeenCalledWith('/api/erp/connections/connection-a/manual',{
-    method:'POST',body:{cookies,spcCds:'test-cds'}});
+  expect(collectorRequest).toHaveBeenCalledWith('/api/erp/shared-credentials',{
+    method:'POST',body:{scopeKey:'erp-user:user-a',accountKeys:['erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],cookies,spcCds:'test-cds'}});
 });
 
 test('manual credentials cannot update a source owned by another account',async()=>{
@@ -127,6 +129,48 @@ test('manual credentials cannot update a source owned by another account',async(
   const result=await invoke('/shops/:id/credential-sources/:sourceId/manual','post',{
     params:{id:shop.id,sourceId:'foreign'},body:{cookies:[{name:'SPC_EC',value:'test'}],spcCds:'test-cds'}});
   expect(result.status).toHaveBeenCalledWith(404);expect(collectorRequest).not.toHaveBeenCalled();
+});
+
+test.each(['get','post'])('shared credentials require collection permissions before %s access',async method=>{
+  const result=await invoke('/collector-credentials',method,{user:{id:'user-a',role:'viewer',permissions:[]}});
+  expect(result.status).toHaveBeenCalledWith(403);
+  expect(prisma.productAnalysisCredentialSource.findMany).not.toHaveBeenCalled();
+  expect(collectorRequest).not.toHaveBeenCalled();
+});
+
+test('shared credential reads only use the authenticated user scope and cannot be cached',async()=>{
+  const shared={cookies:[{name:'SPC_ST',value:'test'}],spcCds:'cds',credential:{status:'pending'}};
+  (collectorRequest as jest.Mock).mockResolvedValueOnce(shared);
+  const result=await invoke('/collector-credentials','get',{body:{scopeKey:'erp-user:foreign',accountKeys:['foreign']}});
+  expect(prisma.productAnalysisCredentialSource.findMany).toHaveBeenCalledWith({where:{userId:owner.id},select:{accountKey:true}});
+  expect(collectorRequest).toHaveBeenCalledWith('/api/erp/shared-credentials',{body:{scopeKey:'erp-user:user-a',
+    accountKeys:['erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']}});
+  expect(result.setHeader).toHaveBeenCalledWith('Cache-Control','private, no-store');
+  expect(result.json).toHaveBeenCalledWith(shared);
+});
+
+test('shared credentials can save without a shop binding and ignore client supplied scopes',async()=>{
+  const cookies=[{name:'SPC_ST',value:'test',domain:'.seller.shopee.cn',path:'/'}];
+  (collectorRequest as jest.Mock).mockResolvedValueOnce({credential:{status:'pending'}});
+  const result=await invoke('/collector-credentials','post',{body:{cookies,spcCds:' cds ',scopeKey:'erp-user:foreign',accountKeys:['foreign']}});
+  expect(shopFind).not.toHaveBeenCalled();
+  expect(collectorRequest).toHaveBeenCalledWith('/api/erp/shared-credentials',{method:'POST',body:{scopeKey:'erp-user:user-a',
+    accountKeys:['erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],cookies,spcCds:'cds'}});
+  expect(result.json).toHaveBeenCalledWith({ok:true,syncedAt:expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),credential:{status:'pending'}});
+  expect(result.setHeader).toHaveBeenCalledWith('Cache-Control','private, no-store');
+});
+
+test.each([{cookies:[],spcCds:'cds'},{cookies:[{name:'SPC_ST',value:'test'}],spcCds:' '}])('shared credentials reject incomplete input',async body=>{
+  expect((await invoke('/collector-credentials','post',{body})).status).toHaveBeenCalledWith(400);
+  expect(collectorRequest).not.toHaveBeenCalled();
+});
+
+test('collector normalization errors return 400 while service errors return 502',async()=>{
+  const body={cookies:[{name:'SPC_ST',value:'test',domain:'invalid.example'}],spcCds:'cds'};
+  (collectorRequest as jest.Mock).mockRejectedValueOnce(new CredentialInputError('未找到 seller.shopee.cn 可用 Cookie'));
+  expect((await invoke('/collector-credentials','post',{body})).status).toHaveBeenCalledWith(400);
+  (collectorRequest as jest.Mock).mockRejectedValueOnce(new Error('采集服务不可用'));
+  expect((await invoke('/collector-credentials','post',{body})).status).toHaveBeenCalledWith(502);
 });
 
 test('unsupported site and invalid date boundaries never reach the collector',async()=>{

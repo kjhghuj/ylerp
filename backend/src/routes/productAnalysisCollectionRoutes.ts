@@ -3,6 +3,7 @@ import {Router, type Request, type Response} from 'express';
 import {prisma} from '../index';
 import {collectorRequest,collectorReportFile} from '../services/productAnalysisCollectorClient';
 import {isValidCalendarDate} from '../services/productAnalysisUpload';
+import {CredentialInputError} from '../collector/credentials';
 
 const router=Router();
 const SUPPORTED=new Set(['PH','MY','SG']);
@@ -33,12 +34,41 @@ function range(input:Record<string,unknown>,site:string):{from:string;to:string}
   return days<=366?{from,to}:null;
 }
 function safeError(res:Response,error:unknown) {
+  if(error instanceof CredentialInputError)return res.status(400).json({detail:error.message});
   console.error('Collection error:',error instanceof Error?error.message:String(error));
   const code=error && typeof error==='object' && 'code' in error ? String(error.code) : '';
   const remoteStatus=error && typeof error==='object' && 'status' in error ? Number(error.status) : 0;
   const status=code==='P2002'||remoteStatus===400||remoteStatus===409?409:502;
   return res.status(status).json({detail:error instanceof Error?error.message:'采集服务不可用'});
 }
+async function sharedCredentialScope(req:Request) {
+  const sources=await prisma.productAnalysisCredentialSource.findMany({where:{userId:req.user!.id},select:{accountKey:true}});
+  return {scopeKey:`erp-user:${req.user!.id}`,accountKeys:sources.map(source=>source.accountKey)};
+}
+function validCredentials(body:Record<string,unknown>|undefined):boolean {
+  return Array.isArray(body?.cookies)&&body.cookies.length>0&&body.cookies.length<=300&&
+    body.cookies.every((cookie:unknown)=>cookie&&typeof cookie==='object'&&
+      'name' in cookie&&typeof cookie.name==='string'&&Boolean(cookie.name.trim())&&
+      'value' in cookie&&typeof cookie.value==='string')&&
+    typeof body.spcCds==='string'&&Boolean(body.spcCds.trim());
+}
+
+router.get('/collector-credentials',async(req,res)=>{
+  if(!(await allowed(req,res)))return;
+  res.setHeader('Cache-Control','private, no-store');
+  try {return res.json(await collectorRequest('/api/erp/shared-credentials',{body:await sharedCredentialScope(req)}));}
+  catch(error){return safeError(res,error);}
+});
+router.post('/collector-credentials',async(req,res)=>{
+  if(!(await allowed(req,res)))return;
+  if(!validCredentials(req.body))return res.status(400).json({detail:'Cookie-Editor JSON 或 SPC_CDS 无效'});
+  res.setHeader('Cache-Control','private, no-store');
+  try {
+    const result=await collectorRequest<{credential:unknown}>('/api/erp/shared-credentials',{
+      method:'POST',body:{...await sharedCredentialScope(req),cookies:req.body.cookies,spcCds:req.body.spcCds.trim()}});
+    return res.json({ok:true,syncedAt:new Date().toISOString(),credential:result.credential});
+  }catch(error){return safeError(res,error);}
+});
 async function syncRunStatus(run:{id:string;status:string;collectorBatchId:number|null}) {
   if(!run.collectorBatchId)return run.status;
   const data=await collectorRequest<{batch:{counts:Record<string,number>;total:number}}>(`/api/erp/batches/${run.collectorBatchId}`);
@@ -82,7 +112,7 @@ router.post('/shops/:id/credential-sources',async(req,res)=>{
   const id=randomUUID(),accountKey=`erp-${id}`;
   try {
     const created=await collectorRequest<{connectionId:string;pairingCode:string;expiresInSeconds:number}>('/api/erp/connections',
-      {method:'POST',body:{accountKey,name}});
+      {method:'POST',body:{accountKey,name,credentialScopeKey:`erp-user:${req.user!.id}`}});
     const source=await prisma.productAnalysisCredentialSource.create({data:{id,userId:req.user!.id,
       connectionId:created.connectionId,accountKey,name}});
     return res.status(201).json({sourceId:source.id,connectionId:created.connectionId,
@@ -114,14 +144,13 @@ router.post('/shops/:id/credential-sources/:sourceId/manual',async(req,res)=>{
   const shop=await shopFor(req);if(!shop)return res.status(404).json({detail:'Shop not found'});
   const source=await prisma.productAnalysisCredentialSource.findFirst({where:{id:String(req.params.sourceId),userId:req.user!.id}});
   if(!source)return res.status(404).json({detail:'Credential source not found'});
-  if(!Array.isArray(req.body?.cookies)||req.body.cookies.length===0||req.body.cookies.length>300||
-    req.body.cookies.some((cookie:unknown)=>!cookie||typeof cookie!=='object'||
-      !('name' in cookie)||typeof cookie.name!=='string'||!cookie.name.trim()||
-      !('value' in cookie)||typeof cookie.value!=='string')||
-    typeof req.body?.spcCds!=='string'||!req.body.spcCds.trim())
+  if(!validCredentials(req.body))
     return res.status(400).json({detail:'Cookie-Editor JSON 或 SPC_CDS 无效'});
-  try {return res.json(await collectorRequest(`/api/erp/connections/${source.connectionId}/manual`,
-    {method:'POST',body:{cookies:req.body.cookies,spcCds:req.body.spcCds.trim()}}));}
+  try {
+    const result=await collectorRequest<{credential:unknown}>('/api/erp/shared-credentials',
+      {method:'POST',body:{...await sharedCredentialScope(req),cookies:req.body.cookies,spcCds:req.body.spcCds.trim()}});
+    return res.json({ok:true,credential:result.credential});
+  }
   catch(error){return safeError(res,error);}
 });
 

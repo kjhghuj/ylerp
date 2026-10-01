@@ -7,7 +7,7 @@ import * as api from '../modules/product-analysis/services/collectionApi';
 
 vi.mock('../modules/product-analysis/services/collectionApi',()=>({
   fetchBinding:vi.fn(),listCollectionRuns:vi.fn(),createSource:vi.fn(),bindCollectorShop:vi.fn(),
-  submitManualCookies:vi.fn(),createCollectionRun:vi.fn(),fetchCollectionRun:vi.fn(),
+  fetchSharedCredentials:vi.fn(),submitSharedCookies:vi.fn(),createCollectionRun:vi.fn(),fetchCollectionRun:vi.fn(),
   actOnCollectionRun:vi.fn(),retryCollectionUpload:vi.fn(),downloadCollectionReport:vi.fn(),
 }));
 
@@ -16,6 +16,7 @@ const shopB={id:'shop-b',name:'PH 店铺 B',site:'PH',currency:'PHP'} as ShopMet
 const cookies=[{name:'SPC_EC',value:'test-session',domain:'.shopee.ph',path:'/',secure:true,httpOnly:true}];
 const storageKey=(id:string)=>`product-analysis:collector-shop-id:${id}`;
 let states:Record<string,api.BindingState>;
+let shared:api.SharedCredentialsState;
 const empty=():api.BindingState=>({binding:null,sources:[],connection:null});
 const onClose=vi.fn(),onImported=vi.fn();
 function view(shop=shopA){return <CollectionModal shop={shop} onClose={onClose} onImported={onImported}/>;}
@@ -30,15 +31,17 @@ const waitForAutoSave=()=>act(async()=>{await new Promise(resolve=>setTimeout(re
 
 beforeEach(()=>{
   vi.resetAllMocks();localStorage.clear();states={'shop-a':empty(),'shop-b':empty()};
+  shared={cookies:[],spcCds:'',credential:{status:'missing',last_validated_at:null,last_error:null}};
+  vi.mocked(api.fetchSharedCredentials).mockImplementation(async()=>shared);
   vi.mocked(api.fetchBinding).mockImplementation(async id=>states[id]);
   vi.mocked(api.listCollectionRuns).mockResolvedValue([]);
   vi.mocked(api.createSource).mockResolvedValue({sourceId:'manual-source',connectionId:'connection-a',pairingCode:'unused',expiresInSeconds:600});
   vi.mocked(api.bindCollectorShop).mockImplementation(async(id,sourceId,shopeeShopId)=>{
     states[id]={...states[id],binding:{site:'PH',sourceId,shopeeShopId,connectionId:'connection-a',sourceName:'手动 Cookie'}};
   });
-  vi.mocked(api.submitManualCookies).mockImplementation(async id=>{
-    states[id]={...states[id],connection:{paired:false,lastSync:null,detail:null,
-      credential:{status:'pending',last_validated_at:null,last_error:null}}};
+  vi.mocked(api.submitSharedCookies).mockImplementation(async(cookies,spcCds)=>{
+    shared={cookies:cookies as Record<string,unknown>[],spcCds,
+      credential:{status:'pending',last_validated_at:null,last_error:null}};
   });
 });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();});
@@ -67,7 +70,7 @@ describe('manual collection credentials',()=>{
     await screen.findByText(/采集凭据已自动保存/);
     expect(api.createSource).toHaveBeenCalledWith(shopA.id,'PH 店铺 A 手动 Cookie');
     expect(api.bindCollectorShop).toHaveBeenCalledWith(shopA.id,'manual-source','12345678');
-    expect(api.submitManualCookies).toHaveBeenCalledWith(shopA.id,'manual-source',cookies,'test-cds');
+    expect(api.submitSharedCookies).toHaveBeenCalledWith(cookies,'test-cds');
     expect((screen.getByLabelText('Cookie-Editor JSON') as HTMLTextAreaElement).value).toBe(JSON.stringify(cookies));
     expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe(' test-cds ');
     expect(localStorage.length).toBe(1);
@@ -80,33 +83,40 @@ describe('manual collection credentials',()=>{
   it.each(['{"secret":','{}','[]','[null]','[{"name":"x","value":1}]'])('rejects malformed Cookie-Editor input before creating a source: %s',async json=>{
     render(view());await ready();fill('12345678',json);await waitForAutoSave();
     expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(api.createSource).not.toHaveBeenCalled();expect(api.submitManualCookies).not.toHaveBeenCalled();
+    expect(api.createSource).not.toHaveBeenCalled();expect(api.submitSharedCookies).not.toHaveBeenCalled();
     expect(screen.getByRole('alert').textContent).not.toContain('secret');
   });
 
   it('requires a separate SPC_CDS value and validates the shop ID',async()=>{
     render(view());await ready();fill('invalid',JSON.stringify(cookies),'   ');
     await waitForAutoSave();
-    expect(api.submitManualCookies).not.toHaveBeenCalled();
+    expect(api.submitSharedCookies).not.toHaveBeenCalled();
     expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'cds'}});await waitForAutoSave();
     expect((await screen.findByRole('alert')).textContent).toContain('店铺 ID');
     expect(api.createSource).not.toHaveBeenCalled();
   });
 
-  it('remembers IDs per shop across switching and reopening, without carrying credentials over',async()=>{
-    const rendered=render(view());await ready();fill('11111111');
+  it('shares saved credentials across switching and reopening while remembering IDs per shop',async()=>{
+    const rendered=render(view());await ready();fill('11111111');await waitForAutoSave();
+    await screen.findByText(/采集凭据已自动保存/);
     rendered.rerender(view(shopB));await ready();
     expect((screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).value).toBe('');
-    expect((screen.getByLabelText('Cookie-Editor JSON') as HTMLTextAreaElement).value).toBe('');
-    expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe('');
-    fill('22222222');rendered.rerender(view(shopA));await ready();
+    expect(JSON.parse((screen.getByLabelText('Cookie-Editor JSON') as HTMLTextAreaElement).value)).toEqual(cookies);
+    expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe('test-cds');
+    fireEvent.change(screen.getByLabelText('Shopee 店铺 ID'),{target:{value:'22222222'}});
+    await waitForAutoSave();
+    expect(api.bindCollectorShop).toHaveBeenCalledWith(shopB.id,'manual-source','22222222');
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
+    rendered.rerender(view(shopA));await ready();
     expect((screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).value).toBe('11111111');
     rendered.unmount();render(view(shopB));await ready();
     expect((screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).value).toBe('22222222');
     expect(localStorage.length).toBe(2);
     await waitForAutoSave();
-    expect(api.createSource).not.toHaveBeenCalled();
+    expect(api.createSource).toHaveBeenCalledTimes(2);
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('restores the server binding over a local draft and reuses its source',async()=>{
@@ -117,27 +127,26 @@ describe('manual collection credentials',()=>{
     expect((screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).readOnly).toBe(true);
     fill();await waitForAutoSave();await screen.findByText(/采集凭据已自动保存/);
     expect(api.createSource).not.toHaveBeenCalled();expect(api.bindCollectorShop).not.toHaveBeenCalled();
-    expect(api.submitManualCookies).toHaveBeenCalledWith(shopA.id,'existing',cookies,'test-cds');
+    expect(api.submitSharedCookies).toHaveBeenCalledWith(cookies,'test-cds');
   });
 
   it('does not automatically use another shop’s existing cookie source',async()=>{
     states[shopA.id].sources=[{id:'other-shop-source',name:'其他店铺',connectionId:'other',createdAt:''}];
     render(view());await ready();fill();await waitForAutoSave();await screen.findByText(/采集凭据已自动保存/);
     expect(api.createSource).toHaveBeenCalledTimes(1);
-    expect(api.submitManualCookies).toHaveBeenCalledWith(shopA.id,'manual-source',cookies,'test-cds');
+    expect(api.submitSharedCookies).toHaveBeenCalledWith(cookies,'test-cds');
   });
 
-  it('retains input after a failed submission and retries the successful binding without duplicating sources',async()=>{
-    vi.mocked(api.submitManualCookies).mockRejectedValueOnce(new Error('采集服务暂时不可用'));
+  it('retains input after a failed submission and retries without duplicating sources',async()=>{
+    vi.mocked(api.submitSharedCookies).mockRejectedValueOnce(new Error('采集服务暂时不可用'));
     render(view());await ready();fill();await waitForAutoSave();
     await screen.findByText('采集服务暂时不可用');
-    expect((screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).readOnly).toBe(true);
     expect((screen.getByLabelText('Cookie-Editor JSON') as HTMLTextAreaElement).value).toBe(JSON.stringify(cookies));
-    await waitForAutoSave();expect(api.submitManualCookies).toHaveBeenCalledTimes(1);
+    await waitForAutoSave();expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button',{name:'重试'}));
     await waitForAutoSave();await screen.findByText(/采集凭据已自动保存/);
     expect(api.createSource).toHaveBeenCalledTimes(1);expect(api.bindCollectorShop).toHaveBeenCalledTimes(1);
-    expect(api.submitManualCookies).toHaveBeenCalledTimes(2);
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(2);
   });
 
   it('ignores a previous shop’s late binding response',async()=>{
@@ -155,16 +164,44 @@ describe('manual collection credentials',()=>{
     fill();await act(async()=>{await vi.advanceTimersByTimeAsync(500);});
     fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'latest-cds'}});
     await act(async()=>{await vi.advanceTimersByTimeAsync(799);});
-    expect(api.submitManualCookies).not.toHaveBeenCalled();
+    expect(api.submitSharedCookies).not.toHaveBeenCalled();
     await act(async()=>{await vi.advanceTimersByTimeAsync(1);});
-    expect(api.submitManualCookies).toHaveBeenCalledWith(shopA.id,'manual-source',cookies,'latest-cds');
+    expect(api.submitSharedCookies).toHaveBeenCalledWith(cookies,'latest-cds');
     await act(async()=>{await vi.advanceTimersByTimeAsync(3000);});
-    expect(api.submitManualCookies).toHaveBeenCalledTimes(1);
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'updated-cds'}});
     expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(true);
     await act(async()=>{await vi.advanceTimersByTimeAsync(800);});
-    expect(api.submitManualCookies).toHaveBeenLastCalledWith(shopA.id,'manual-source',cookies,'updated-cds');
-    expect(api.submitManualCookies).toHaveBeenCalledTimes(2);
+    expect(api.submitSharedCookies).toHaveBeenLastCalledWith(cookies,'updated-cds');
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(2);
     expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('saves shared credentials before a shop ID is entered and reuses them when binding',async()=>{
+    render(view());await ready();
+    fireEvent.change(screen.getByLabelText('Cookie-Editor JSON'),{target:{value:JSON.stringify(cookies)}});
+    fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'shared-cds'}});
+    await waitForAutoSave();
+    expect(api.submitSharedCookies).toHaveBeenCalledWith(cookies,'shared-cds');
+    expect(api.createSource).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Shopee 店铺 ID'),{target:{value:'12345678'}});
+    await waitForAutoSave();
+    expect(api.bindCollectorShop).toHaveBeenCalledWith(shopA.id,'manual-source','12345678');
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the latest shared update in another shop without storing credentials in localStorage',async()=>{
+    states[shopB.id].binding={site:'PH',shopeeShopId:'22222222',sourceId:'existing-b',connectionId:'connection-b',sourceName:'B'};
+    const rendered=render(view());await ready();fill();await waitForAutoSave();
+    fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'renewed-cds'}});
+    await waitForAutoSave();
+    rendered.rerender(view(shopB));await ready();
+    expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe('renewed-cds');
+    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
+    expect(api.submitSharedCookies).toHaveBeenCalledTimes(2);
+    for(let index=0;index<localStorage.length;index++){
+      expect(localStorage.getItem(localStorage.key(index)!)).not.toContain('test-session');
+      expect(localStorage.getItem(localStorage.key(index)!)).not.toContain('renewed-cds');
+    }
   });
 });

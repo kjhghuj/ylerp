@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>阳零 ERP · Shopee 凭据同步</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><div class="logo" aria-hidden="true">YL</div><div><h1>阳零 ERP</h1><p>Shopee 凭据同步</p></div><span class="version">v1.0.5</span></header>
+  <main>
+    <div class="destination"><span class="destination-dot"></span><span id="destination-name">ERP 接口</span><span id="destination-url"></span></div>
+    <form id="environment-form" class="environment-form">
+      <label for="environment-select">上传环境</label>
+      <div class="environment-controls"><select id="environment-select" disabled><option value="development">开发环境</option><option value="production">生产环境</option></select><button id="environment-button" class="text-button" type="submit" disabled>切换环境</button></div>
+      <p class="privacy">切换环境后需要重新登录。</p>
+    </form>
+    <p id="loading" class="muted" role="status">正在读取登录状态…</p>
+    <div id="notice" class="notice" role="alert" hidden></div>
+    <section id="login-section" hidden>
+      <h2>登录你的 ERP 账号</h2><p class="intro">登录后，点击同步即可更新所有店铺共用的采集凭据。</p>
+      <form id="login-form">
+        <label for="username">用户名</label><input id="username" name="username" autocomplete="username" maxlength="128" required placeholder="ERP 用户名">
+        <label for="password">密码</label><input id="password" name="password" type="password" autocomplete="off" maxlength="1024" required placeholder="ERP 密码">
+        <button id="login-button" class="primary" type="submit">登录 ERP</button>
+      </form>
+      <p class="privacy">插件只记住登录状态，不保存密码。</p>
+    </section>
+    <section id="sync-section" hidden>
+      <div class="account"><div><span class="eyebrow">已登录 ERP</span><strong id="account-name"></strong><span id="account-username" class="muted"></span></div><button id="logout-button" class="text-button" type="button">退出登录</button></div>
+      <div class="capture-card"><div class="capture-title"><span id="capture-dot" class="capture-dot"></span><strong id="capture-title">等待卖家中心请求</strong></div><p id="capture-detail"></p><a href="https://seller.shopee.cn/" target="_blank" rel="noopener noreferrer">打开 Shopee 卖家中心 ↗</a></div>
+      <button id="sync-button" class="primary" type="button">开始同步</button>
+      <div id="last-result" class="last-result" role="status" hidden><span id="result-title"></span><p id="result-detail"></p></div>
+      <p class="privacy">Cookie 和 SPC_CDS 上传后由所有店铺共用，登录有效性将在 ERP 采集时验证。</p>
+    </section>
+  </main>
+  <footer>仅点击同步时上传 · 当前浏览器的登录凭据</footer>
+  <script type="module" src="popup.mjs"></script>
+</body>
+</html>
