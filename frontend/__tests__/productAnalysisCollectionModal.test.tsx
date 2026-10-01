@@ -44,7 +44,26 @@ beforeEach(()=>{
       credential:{status:'pending',last_validated_at:null,last_error:null}};
   });
 });
-afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();});
+afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
+
+it('HTTP 页面没有 randomUUID 时仍能使用共用凭据创建采集任务',async()=>{
+  const browserCrypto=globalThis.crypto;
+  vi.stubGlobal('crypto',{getRandomValues:(values:Uint8Array)=>browserCrypto.getRandomValues(values)});
+  vi.stubGlobal('isSecureContext',false);
+  states[shopA.id]={...empty(),binding:{site:'PH',sourceId:'manual-source',shopeeShopId:'12345678',
+    connectionId:'connection-a',sourceName:'手动 Cookie'}};
+  shared={cookies,spcCds:'test-cds',credential:{status:'pending',last_validated_at:null,last_error:null}};
+  const run={id:'run-http',shopId:shopA.id,fromDate:'2026-09-01',toDate:'2026-09-07',
+    recollectExisting:false,status:'ACTIVE',collectorBatchId:1,createdAt:''};
+  vi.mocked(api.createCollectionRun).mockResolvedValue(run);
+  vi.mocked(api.fetchCollectionRun).mockResolvedValue({run,batch:null,tasks:[],page:1,pages:1});
+  render(view());await ready();
+  fireEvent.click(screen.getByRole('button',{name:'开始采集'}));
+  await waitFor(()=>expect(api.createCollectionRun).toHaveBeenCalledTimes(1));
+  expect(vi.mocked(api.createCollectionRun).mock.calls[0][4]).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  expect(screen.queryByText('crypto.randomUUID is not a function')).toBeNull();
+});
 
 describe('manual collection credentials',()=>{
   it('downloads an original report from the selected ERP shop and collection run',async()=>{

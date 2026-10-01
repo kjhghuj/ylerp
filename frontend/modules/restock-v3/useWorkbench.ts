@@ -1,3 +1,4 @@
+import { createUuid } from '../../src/uuid';
 /**
  * 补货工作台状态机：条件 → 计算 → 结果版本（stale 失效）→ 确认编辑 → 计划保存。
  *
@@ -305,9 +306,7 @@ export function useWorkbench(initial?: InitialWorkbenchParams) {
     setPlanSaving(true);
     try {
       // 幂等键：组件会话内唯一，双击/重试由后端幂等处理
-      const idempotencyKey = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
-        ? crypto.randomUUID()
-        : `v3-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      const idempotencyKey = createUuid();
       const payload = await restockApi.savePlan({
         resultId: result.resultId,
         name,

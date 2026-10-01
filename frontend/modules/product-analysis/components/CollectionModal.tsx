@@ -1,3 +1,4 @@
+import { createUuid } from '../../../src/uuid';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {X} from 'lucide-react';
 import type {ShopMeta} from '../types';
@@ -183,7 +184,7 @@ function CollectionModalContent({shop,onClose,onImported}:CollectionModalProps){
           <label>结束 <input type="date" max={maxTo} value={to} onChange={e=>setTo(e.target.value)}/></label></div>
           <label><input type="checkbox" checked={recollect} onChange={e=>setRecollect(e.target.checked)}/> 重新采集已有日期</label>
           <button type="button" disabled={busy||credentialsDirty||!binding?.binding||status==='invalid'||(!saved&&status!=='valid'&&status!=='pending')||!from||!to||from>to||to>maxTo}
-            onClick={()=>void action(async()=>{const run=await createCollectionRun(shop.id,from,to,recollect,crypto.randomUUID());
+            onClick={()=>void action(async()=>{const run=await createCollectionRun(shop.id,from,to,recollect,createUuid());
               setRunId(run.id);setPage(1);importedCount.current=0;})}>开始采集</button>
         </div>
         <div className="pa-collection-section"><strong>任务进度</strong>

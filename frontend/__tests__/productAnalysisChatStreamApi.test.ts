@@ -40,6 +40,8 @@ describe('sendProductAnalysisChatStream', () => {
     });
 
     it('streams deltas, reports done, and sends stream flag with auth header', async () => {
+        const browserCrypto = globalThis.crypto;
+        vi.stubGlobal('crypto', { getRandomValues: (bytes: Uint8Array) => browserCrypto.getRandomValues(bytes) });
         fetchMock.mockResolvedValueOnce(
             sseResponse([
                 'data: {"delta":"你"}\n\n',

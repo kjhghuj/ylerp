@@ -1,3 +1,4 @@
+import { createUuid } from '../../../src/uuid';
 /** 商品分析后端 API 封装（Express /api/product-analysis/*，Bearer 由 src/api.ts 拦截器附加） */
 import api from '../../../src/api';
 import type {
@@ -212,8 +213,8 @@ export interface ChatRequest {
 export async function sendProductAnalysisChat(request: ChatRequest): Promise<ChatResult> {
   const response = await api.post<ChatResult>('/product-analysis/chat', {
     ...request,
-    requestKey: request.requestKey || crypto.randomUUID(),
-    operationId: request.operationId || crypto.randomUUID(),
+    requestKey: request.requestKey || createUuid(),
+    operationId: request.operationId || createUuid(),
   }, {
     timeout: CHAT_TIMEOUT_MS,
   });
@@ -267,8 +268,8 @@ export async function sendProductAnalysisChatStream(
     body: JSON.stringify({
       ...request,
       stream: true,
-      requestKey: request.requestKey || crypto.randomUUID(),
-      operationId: request.operationId || crypto.randomUUID(),
+      requestKey: request.requestKey || createUuid(),
+      operationId: request.operationId || createUuid(),
     }),
     signal: options.signal,
   });

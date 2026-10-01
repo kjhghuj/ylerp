@@ -1,3 +1,4 @@
+import { createUuid } from '../../../src/uuid';
 import { StyleConfig, TargetFont, ChromaRecord, ChromaImageInfo, CostSummary } from '../chromaTypes';
 import { resizeImage } from '../utils/imageHelpers';
 import api from '../../../src/api';
@@ -5,10 +6,10 @@ import api from '../../../src/api';
 const CHROMA_ADAPT = '/chroma-adapt';
 const DATA_URL = '/chroma-data';
 
-export const newAiOperationId = () => crypto.randomUUID();
+export const newAiOperationId = () => createUuid();
 // Network retries reuse the exact body; a new UI action creates a new key.
 async function postAi(url: string, payload: Record<string, unknown>, operationId: string = newAiOperationId()) {
-  const body = { ...payload, operationId, requestKey: crypto.randomUUID() };
+  const body = { ...payload, operationId, requestKey: createUuid() };
   let response;
   try { response = await api.post(url, body); }
   catch (error: any) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../src/api', () => ({ default: { post: vi.fn(), get: vi.fn() } }));
 vi.mock('../modules/chroma-adapt/utils/imageHelpers', () => ({ resizeImage: async (image: string) => image }));
 import api from '../src/api';
@@ -7,12 +7,16 @@ import { generateImageEdit, generateImageTranslation, generateSecondaryImage, ge
 const post = vi.mocked(api.post);
 const output = 'data:image/png;base64,b3V0cHV0';
 const result = { data: { callId: 'server-call', data: [{ url: output }], result: { data: [{ url: output }] } } };
+afterEach(() => vi.unstubAllGlobals());
 describe('Chroma caller-owned request identity and server-owned statistics', () => {
   beforeEach(() => { vi.resetAllMocks(); });
   it('reuses a key on a network retry and creates a new key on a new user action', async () => {
+    const browserCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', { getRandomValues: (bytes: Uint8Array) => browserCrypto.getRandomValues(bytes) });
     post.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(result).mockResolvedValueOnce({ data: { id: 'image1' } });
     await generateImageEdit('original', 'edit', 'doubao-seedream-4.5', 'batch');
     expect(post.mock.calls[0][1]).toEqual(post.mock.calls[1][1]);
+    expect((post.mock.calls[0][1] as any).requestKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(post.mock.calls[2]).toEqual(['/chroma-data/images', { image: output, mode: 'IMAGE_EDIT', model: 'doubao-seedream-4.5', callId: 'server-call', outputIndex: 0 }]);
     post.mockResolvedValueOnce(result).mockResolvedValueOnce({ data: { id: 'image2' } });
     await generateImageEdit('original', 'edit', 'doubao-seedream-4.5', 'batch');
