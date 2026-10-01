@@ -48,12 +48,12 @@ jobs:
             export COMPOSE_PARALLEL_LIMIT=1
             docker compose -f docker-compose.prod.yml build api
             docker compose -f docker-compose.prod.yml build web
-            docker compose -f docker-compose.prod.yml run --rm --no-deps api npx prisma migrate deploy
+            docker compose -f docker-compose.prod.yml run --rm --no-deps api npx prisma migrate deploy </dev/null
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
 
             healthy=false
             for attempt in $(seq 1 20); do
-              if docker compose -f docker-compose.prod.yml exec -T api node -e 'fetch("http://127.0.0.1:3002/health").then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))'; then
+              if docker compose -f docker-compose.prod.yml exec -T api node -e 'fetch("http://127.0.0.1:3002/health").then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))' </dev/null; then
                 healthy=true
                 break
               fi
