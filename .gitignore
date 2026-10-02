@@ -10,3 +10,9 @@ backend/data/
 .vite/
 .worktrees/
 *.log
+
+# 本地会话与构建产物
+.zcode/
+.zcodeignore
+.DS_Store
+*.tsbuildinfo
