@@ -15,6 +15,9 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
   const words = strings.visualization;
   const { theme } = usePaTheme();
   const chartSeries = theme.chart.series;
+  // 面积图渐变 id 需要实例级唯一（列表视图与详情弹窗可能同时挂载）
+  const gradientScope = React.useId().replace(/[^a-zA-Z0-9]/g, '');
+  const areaGradientId = (key: string) => `pa-area-${gradientScope}-${key}`;
   const [groupKey, setGroupKey] = useChartState<TrendGroupKey>('trend-group', 'sales');
   const [selections, setSelections] = useChartState<Record<string, string[]>>('trend-selections', {});
   const [range, setRange] = useChartState<{ start: number; end: number } | null>('trend-range', null);
@@ -73,10 +76,22 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
                 if (!point) return null;
                 return <ChartTooltipRows testId="trend-tooltip" title={point.date} rows={visible.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key, chartSeries), value: formatValue(key, finiteMetric(point[key])), missing: finiteMetric(point[key]) === null }))} />;
               }} />
+              {visible.filter((key) => key.startsWith('sales')).map((key) => {
+                const color = metricColor(group, key, chartSeries);
+                return (
+                  <defs key={key}>
+                    {/* 面积填充：主题色 → 透明垂直渐变 */}
+                    <linearGradient id={areaGradientId(key)} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                      <stop offset="100%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                );
+              })}
               {visible.map((key) => {
                 const color = metricColor(group, key, chartSeries);
                 const props = { dataKey: key, name: strings.metrics[key], yAxisId: isRightAxis(key) ? 'right' : 'left', isAnimationActive: false };
-                if (key.startsWith('sales')) return <Area key={key} {...props} fill={color} fillOpacity={0.12} stroke={color} strokeWidth={2} connectNulls={false} dot={plotData.length < 3} />;
+                if (key.startsWith('sales')) return <Area key={key} {...props} fill={`url(#${areaGradientId(key)})`} stroke={color} strokeWidth={2} connectNulls={false} dot={plotData.length < 3} />;
                 if (groupKey === 'orders' || groupKey === 'cart') return <Bar key={key} {...props} fill={color} maxBarSize={28} radius={[3, 3, 0, 0]} />;
                 return <Line key={key} {...props} stroke={color} strokeWidth={2} dot={plotData.length < 3} connectNulls={false} />;
               })}

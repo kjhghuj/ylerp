@@ -51,19 +51,11 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
       ),
       table: ({ children }) => (
         <div className="my-1.5 overflow-x-auto">
-          <table className="w-full text-xs border-collapse">{children}</table>
+          <table className="pa-md-table">{children}</table>
         </div>
       ),
-      th: ({ children }) => (
-        <th className="px-2 py-1 text-left font-semibold border" style={{ borderColor: 'var(--pa-card-border)' }}>
-          {children}
-        </th>
-      ),
-      td: ({ children }) => (
-        <td className="px-2 py-1 border" style={{ borderColor: 'var(--pa-card-border)' }}>
-          {children}
-        </td>
-      ),
+      th: ({ children }) => <th>{children}</th>,
+      td: ({ children }) => <td>{children}</td>,
       img: ({ src, alt }) => <img src={src} alt={alt ?? ''} className="max-w-full rounded-lg my-1" />,
     }}
   >

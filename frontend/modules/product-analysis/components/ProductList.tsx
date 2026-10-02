@@ -82,17 +82,16 @@ export const ProductList: React.FC<ProductListProps> = ({
 
   if (items.length === 0) {
     return (
-      <div
-        className="rounded-2xl border p-10 flex flex-col items-center gap-3"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
-      >
+      <div className="pa-empty" style={{ flexDirection: 'column', gap: 12 }}>
         <PackageX size={36} />
         <p className="text-sm">{strings.noMatch}</p>
       </div>
     );
   }
 
-  const headerCellStyle = { color: 'var(--text-tertiary)' };
+  // 数据条基准：当页最大销售额，条宽按行值占比驱动（透明→主题色渐变）
+  const maxPageSales = Math.max(...visibleItems.map((item) => item.salesOrdered ?? 0), 1);
+
   const navButtonStyle = (disabled: boolean): React.CSSProperties => ({
     color: 'var(--text-secondary)',
     opacity: disabled ? 0.35 : 1,
@@ -101,22 +100,13 @@ export const ProductList: React.FC<ProductListProps> = ({
 
   return (
     <div className="pa-product-list flex flex-col gap-3">
-      <div
-        className="pa-table-scroll rounded-2xl border overflow-auto"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
-      >
-        <table className="w-full min-w-[720px] text-sm">
-          <thead className="sticky top-0 z-10" style={{ backgroundColor: 'var(--pa-card)' }}>
-            <tr style={{ borderBottom: '1px solid var(--pa-card-border)' }}>
-              <th className="text-left px-3 py-2.5 font-medium whitespace-nowrap" style={headerCellStyle}>
-                {strings.table.product}
-              </th>
-              <th className="text-left px-3 py-2.5 font-medium whitespace-nowrap" style={headerCellStyle}>
-                {strings.card.status}
-              </th>
-              <th className="text-right px-3 py-2.5 font-medium whitespace-nowrap" style={headerCellStyle}>
-                {strings.card.variations}
-              </th>
+      <div className="pa-table-wrap">
+        <table className="pa-table min-w-[720px] text-sm">
+          <thead>
+            <tr>
+              <th>{strings.table.product}</th>
+              <th>{strings.card.status}</th>
+              <th className="pa-th-num">{strings.card.variations}</th>
               <SortableHeader label={strings.card.sales} column="salesOrdered" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
               <SortableHeader label={strings.card.orders} column="ordersOrdered" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
               <SortableHeader label={strings.card.cvr} column="cvrConfirmed" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
@@ -125,7 +115,7 @@ export const ProductList: React.FC<ProductListProps> = ({
           </thead>
           <tbody>
             {visibleItems.map((item) => (
-              <ProductRow key={item.itemId} item={item} currency={currency} onSelect={onSelect} />
+              <ProductRow key={item.itemId} item={item} currency={currency} onSelect={onSelect} maxSales={maxPageSales} />
             ))}
           </tbody>
         </table>
@@ -258,8 +248,7 @@ function SortableHeader({
   const Icon = active ? (sortDirection === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
   return (
     <th
-      className="px-3 py-2.5 font-medium whitespace-nowrap"
-      style={active ? { color: 'var(--pa-accent-text)' } : { color: 'var(--text-tertiary)' }}
+      className="pa-th-num"
       aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
       <button
@@ -278,8 +267,9 @@ function SortableHeader({
 const ProductRow = React.memo<{
   item: ParentProduct;
   currency: string;
+  maxSales: number;
   onSelect: (item: ParentProduct) => void;
-}>(({ item, currency, onSelect }) => (
+}>(({ item, currency, maxSales, onSelect }) => (
   <tr
     tabIndex={0}
     onClick={() => onSelect(item)}
@@ -289,10 +279,9 @@ const ProductRow = React.memo<{
         onSelect(item);
       }
     }}
-    className="cursor-pointer transition-colors duration-150 outline-none focus-visible:bg-black/[0.04] hover:bg-black/[0.02]"
-    style={{ borderBottom: '1px solid var(--pa-card-border)' }}
+    className="cursor-pointer outline-none"
   >
-    <td className="px-3 py-2.5 max-w-[320px]">
+    <td className="max-w-[320px]">
       <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
         {item.itemName}
       </p>
@@ -300,7 +289,7 @@ const ProductRow = React.memo<{
         #{item.itemId}
       </p>
     </td>
-    <td className="px-3 py-2.5 whitespace-nowrap">
+    <td className="whitespace-nowrap">
       {item.status ? (
         <span
           className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -312,19 +301,22 @@ const ProductRow = React.memo<{
         <span style={{ color: 'var(--text-tertiary)' }}>—</span>
       )}
     </td>
-    <td className="px-3 py-2.5 text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+    <td className="text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
       {formatCount(item.variations?.length ?? 0)}
     </td>
-    <td className="px-3 py-2.5 text-right font-mono font-semibold" style={{ color: 'var(--pa-accent-text)' }}>
-      {formatMoney(item.salesOrdered, currency)}
+    <td
+      className="pa-cellbar text-right font-mono font-semibold"
+      style={{ '--bar-w': `${Math.max(0, Math.round(((item.salesOrdered ?? 0) / maxSales) * 100))}%` } as React.CSSProperties}
+    >
+      <span style={{ color: 'var(--pa-accent-text)' }}>{formatMoney(item.salesOrdered, currency)}</span>
     </td>
-    <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
       {formatCount(item.ordersOrdered)}
     </td>
-    <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
       {formatPercent(item.cvrConfirmed)}
     </td>
-    <td className="px-3 py-2.5 text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
       {formatCount(item.visitors)}
     </td>
   </tr>

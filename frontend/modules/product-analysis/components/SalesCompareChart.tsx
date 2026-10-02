@@ -131,10 +131,21 @@ export const SalesCompareChart: React.FC<SalesCompareChartProps> = ({ items, cur
                   );
                 }}
               />
+              {/* 柱条填充：浅 tint → 主题色水平渐变，增加纵深 */}
+              <defs>
+                <linearGradient id="pa-compare-ordered" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={primary} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={primary} stopOpacity={1} />
+                </linearGradient>
+                <linearGradient id="pa-compare-confirmed" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor={secondary} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={secondary} stopOpacity={1} />
+                </linearGradient>
+              </defs>
               <Bar
                 dataKey="ordered"
                 name={strings.summary.salesOrdered}
-                fill={primary}
+                fill="url(#pa-compare-ordered)"
                 maxBarSize={14}
                 radius={[0, 6, 6, 0]}
                 isAnimationActive={false}
@@ -147,7 +158,7 @@ export const SalesCompareChart: React.FC<SalesCompareChartProps> = ({ items, cur
               <Bar
                 dataKey="confirmed"
                 name={strings.summary.salesConfirmed}
-                fill={secondary}
+                fill="url(#pa-compare-confirmed)"
                 maxBarSize={14}
                 radius={[0, 6, 6, 0]}
                 isAnimationActive={false}

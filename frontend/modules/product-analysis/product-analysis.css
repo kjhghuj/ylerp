@@ -473,7 +473,7 @@
 .pa-insight-list-fill .pa-insight-row { flex: 1 1 auto; }
 .pa-insight-row { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 40px; width: 100%; padding: 8px 5px; border: 0; border-bottom: 1px solid var(--pa-card-border); background: transparent; text-align: left; cursor: pointer; }
 .pa-insight-row:last-child { border-bottom: 0; }
-.pa-insight-row:hover { background: var(--pa-accent-soft); border-radius: 10px; }
+.pa-insight-row:hover { background: var(--pa-accent-soft); border-radius: 10px; box-shadow: inset 3px 0 0 var(--pa-accent-ui); }
 .pa-insight-rank { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 8px; flex: 0 0 auto; background: var(--pa-accent-soft); color: var(--pa-accent-text); font-weight: 800; font-size: 11px; }
 .pa-insight-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-size: 13px; font-weight: 650; }
 .pa-insight-meta { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -527,7 +527,16 @@
 }
 
 .pa-metric-featured {
-  background: var(--pa-accent-ui);
+  position: relative;
+  overflow: hidden;
+  /* 实底保持 WCAG 文字对比度，仅叠加右上角装饰性光晕（透明→渐变） */
+  background:
+    radial-gradient(
+      130% 150% at 100% 0%,
+      color-mix(in srgb, var(--pa-on-accent) 16%, transparent) 0%,
+      transparent 58%
+    ),
+    var(--pa-accent-ui);
   border-color: var(--pa-accent-ui);
 }
 
@@ -639,6 +648,7 @@
 .pa-rank-row:hover {
   background: var(--pa-accent-soft);
   border-radius: 12px;
+  box-shadow: inset 3px 0 0 var(--pa-accent-ui);
 }
 
 .pa-rank-badge {
@@ -822,6 +832,163 @@
 .pa-table-scroll {
   min-width: 0;
   max-width: 100%;
+}
+
+/* ---------- 统一表格设计系统（商品列表 / 变体明细 / 数据记录 / AI 回复表） ----------
+   表头：主题色薄雾自上而下淡出到卡片底色（透明→渐变）
+   行：透明色斑马纹 + hover 主题色并带左侧强调条
+   全部由 --pa-accent-* token 派生，自动适配主题色与深浅色 */
+
+.pa-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid var(--pa-card-border);
+  background: var(--pa-card);
+  scrollbar-width: thin;
+  scrollbar-color: var(--pa-accent-soft-2) transparent;
+}
+
+.pa-table-wrap::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pa-table-wrap::-webkit-scrollbar-thumb {
+  background: var(--pa-accent-soft-2);
+  border-radius: 999px;
+}
+
+.pa-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pa-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pa-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pa-accent-soft-2) 45%, var(--pa-card)) 0%,
+    var(--pa-card) 88%
+  );
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  /* sticky + border-collapse 组合下 border 会丢失，用内阴影画底边 */
+  box-shadow: inset 0 -1px 0 var(--pa-border-soft);
+}
+
+.pa-table thead th.pa-th-num {
+  text-align: right;
+}
+
+.pa-table thead th[aria-sort='ascending'],
+.pa-table thead th[aria-sort='descending'] {
+  color: var(--pa-accent-text);
+}
+
+.pa-table tbody td {
+  position: relative;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--pa-card-border);
+}
+
+.pa-table tbody tr {
+  transition: background 0.15s ease;
+}
+
+.pa-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--pa-accent-soft-2) 30%, transparent);
+}
+
+.pa-table tbody tr:hover {
+  background: var(--pa-accent-soft);
+}
+
+.pa-table tbody tr:hover td:first-child {
+  box-shadow: inset 3px 0 0 var(--pa-accent-ui);
+}
+
+.pa-table tbody tr:focus-visible {
+  background: var(--pa-accent-soft-2);
+}
+
+.pa-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* 暗色下透明度叠加更弱，斑马纹与 hover 需要更高配比才可分辨 */
+.dark .pa-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--pa-accent-soft-2) 55%, transparent);
+}
+
+.dark .pa-table tbody tr:hover {
+  background: var(--pa-accent-soft-2);
+}
+
+/* 销售额数据条：透明→主题色渐变横条，宽度由 --bar-w（当页最大值占比）驱动 */
+.pa-cellbar::before {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 6px;
+  width: var(--bar-w, 0%);
+  max-width: calc(100% - 12px);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--pa-accent-ui) 26%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
+.pa-cellbar > span {
+  position: relative;
+  z-index: 1;
+}
+
+/* AI 回复 Markdown 表格：接入同款表头渐变与斑马纹 */
+.pa-md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pa-md-table th {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--pa-accent-soft-2) 45%, var(--pa-card)) 0%,
+    var(--pa-card) 88%
+  );
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: left;
+  border-bottom: 1px solid var(--pa-border-soft);
+}
+
+.pa-md-table td {
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--pa-card-border);
+}
+
+.pa-md-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--pa-accent-soft-2) 30%, transparent);
 }
 
 .pa-shell .pa-empty {

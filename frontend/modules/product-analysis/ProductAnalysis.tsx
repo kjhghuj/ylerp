@@ -838,8 +838,8 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
         {days.length === 0 ? (
           <div className="pa-chart-empty" role="status">{emptyHint}</div>
         ) : (
-          <div className="pa-records-scroll">
-            <table className="pa-records">
+          <div className="pa-records-scroll pa-table-wrap">
+            <table className="pa-records pa-table">
               <thead>
                 <tr>
                   <th>{strings.overview.recordsColumns.date}</th>
