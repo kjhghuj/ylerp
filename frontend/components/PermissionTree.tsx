@@ -47,10 +47,10 @@ export const ALL_PERMISSIONS: PermissionNode[] = [
         ]
     },
     {
-        key: 'restock-v2', label: '补货V2', labelEn: 'Restock V2', icon: PackagePlus,
+        key: 'restock-v2', label: '元仓同步（商品列表）', labelEn: 'YC Sync (Product List)', icon: PackagePlus,
         children: [
-            { key: 'restock-v2.view', label: '查看建议', labelEn: 'View Suggestions', icon: Search },
-            { key: 'restock-v2.refresh', label: '刷新建议', labelEn: 'Refresh Suggestions', icon: Truck },
+            { key: 'restock-v2.view', label: '查看元仓库存', labelEn: 'View YC Stock', icon: Search },
+            { key: 'restock-v2.refresh', label: '同步元仓商品', labelEn: 'Sync YC Products', icon: Truck },
         ]
     },
     {

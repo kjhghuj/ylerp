@@ -29,7 +29,7 @@ vi.mock('../StoreContext', () => ({
         profit: '利润计算',
         productList: '商品明细',
         finance: '财务管理',
-        restockV2: '补货V2',
+        restockV3: '店铺补货',
         chromaAdapt: '图片制作',
         personalCenter: '个人中心',
       },
@@ -79,7 +79,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('利润计算')).toBeInTheDocument();
     expect(screen.getByText('商品明细')).toBeInTheDocument();
     expect(screen.getByText('财务管理')).toBeInTheDocument();
-    expect(screen.getByText('补货V2')).toBeInTheDocument();
+    expect(screen.getByText('店铺补货')).toBeInTheDocument();
     expect(screen.getByText('图片制作')).toBeInTheDocument();
     expect(screen.getByText('用户管理')).toBeInTheDocument();
   });

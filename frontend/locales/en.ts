@@ -10,7 +10,6 @@ export const en = {
     dashboard: 'Dashboard',
     profit: 'Profit Calculation',
     finance: 'Finance Hub',
-    restockV2: 'Sheet Restock',
     restockV3: 'Store Restock',
     chromaAdapt: 'Image Studio',
     productList: 'Product List',

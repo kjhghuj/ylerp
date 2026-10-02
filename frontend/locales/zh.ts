@@ -10,7 +10,6 @@ export const zh = {
     dashboard: '总览仪表盘',
     profit: '利润计算',
     finance: '财务管理',
-    restockV2: '表格补货',
     restockV3: '店铺补货',
     chromaAdapt: '图片制作',
     productList: '商品明细表',

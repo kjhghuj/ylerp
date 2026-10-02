@@ -8,7 +8,6 @@ import { FinanceManager } from './modules/FinanceManager';
 import { LoginPage } from './modules/LoginPage';
 
 // 重组件按需加载：减小主 JS 包（首屏无需全部模块代码）
-const RestockV2 = lazy(() => import('./modules/RestockV2').then(module => ({ default: module.RestockV2 })));
 const RestockV3 = lazy(() => import('./modules/RestockV3'));
 const ProductList = lazy(() => import('./modules/ProductList').then(module => ({ default: module.ProductList })));
 const UserManagement = lazy(() => import('./modules/UserManagement').then(module => ({ default: module.UserManagement })));
@@ -60,7 +59,7 @@ const MainContent: React.FC = () => {
   }
 
   const renderView = () => {
-    const moduleViews = ['dashboard', 'profit', 'finance', 'restock-v2', 'restock-v3', 'product-list', 'schedule', 'usage-stats', 'product-analysis'];
+    const moduleViews = ['dashboard', 'profit', 'finance', 'restock-v3', 'product-list', 'schedule', 'usage-stats', 'product-analysis'];
     if (user && user.role !== 'owner' && moduleViews.includes(currentView) && !hasPermission(user.permissions || [], currentView)) {
       return (
         <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: 'var(--text-tertiary)' }}>
@@ -76,7 +75,6 @@ const MainContent: React.FC = () => {
       case 'dashboard': return <Dashboard />;
       case 'profit': return <ProfitCalculator />;
       case 'finance': return <FinanceManager />;
-      case 'restock-v2': return <RestockV2 />;
       case 'restock-v3': return <RestockV3 key={restockEntry ? `entry-${restockEntry.shopId}-${restockEntry.from}` : 'default'} initialParams={restockEntry ?? undefined} />;
       case 'product-list': return <ProductList onNavigate={(view) => handleViewChange(view)} />;
       case 'user-management': return <UserManagement />;
