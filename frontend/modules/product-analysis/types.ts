@@ -324,6 +324,9 @@ export const DEFAULT_POTENTIAL_FILTERS: PotentialFilters = {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  createdAt?: string;
+  analysisFrom?: string;
+  analysisTo?: string;
   /** 推理模型的思考过程（仅前端展示，发送历史时不回传） */
   reasoning?: string;
   /** 思考耗时（毫秒），用于「已深度思考 X 秒」提示 */

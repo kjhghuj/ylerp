@@ -9,10 +9,11 @@ vi.mock('../modules/product-analysis/services/collectionApi',()=>({
   fetchBinding:vi.fn(),listCollectionRuns:vi.fn(),createSource:vi.fn(),bindCollectorShop:vi.fn(),
   fetchSharedCredentials:vi.fn(),submitSharedCookies:vi.fn(),createCollectionRun:vi.fn(),fetchCollectionRun:vi.fn(),
   actOnCollectionRun:vi.fn(),retryCollectionUpload:vi.fn(),downloadCollectionReport:vi.fn(),
+  fetchCollectorSyncStatus:vi.fn(),
 }));
 
-const shopA={id:'shop-a',name:'PH 店铺 A',site:'PH',currency:'PHP'} as ShopMeta;
-const shopB={id:'shop-b',name:'PH 店铺 B',site:'PH',currency:'PHP'} as ShopMeta;
+const shopA={id:'shop-a',name:'PH 店铺 A',site:'PH',currency:'PHP',platform:'shopee'} as ShopMeta;
+const shopB={id:'shop-b',name:'PH 店铺 B',site:'PH',currency:'PHP',platform:'shopee'} as ShopMeta;
 const cookies=[{name:'SPC_EC',value:'test-session',domain:'.shopee.ph',path:'/',secure:true,httpOnly:true}];
 const storageKey=(id:string)=>`product-analysis:collector-shop-id:${id}`;
 let states:Record<string,api.BindingState>;
@@ -20,7 +21,15 @@ let shared:api.SharedCredentialsState;
 const empty=():api.BindingState=>({binding:null,sources:[],connection:null});
 const onClose=vi.fn(),onImported=vi.fn();
 function view(shop=shopA){return <CollectionModal shop={shop} onClose={onClose} onImported={onImported}/>;}
-async function ready(){await waitFor(()=>expect(screen.queryByText('正在读取店铺配置…')).toBeNull());}
+async function ready(open=true){
+  await waitFor(()=>expect(api.fetchBinding).toHaveBeenCalled());
+  if(open){
+    fireEvent.click(screen.getByRole('button',{name:'凭据详情'}));
+    await waitFor(()=>expect(screen.getByLabelText('Shopee 店铺 ID')).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button',{name:'手动输入凭据（备用）'}));
+    await waitFor(()=>expect(screen.getByLabelText('Cookie-Editor JSON')).not.toBeDisabled());
+  }
+}
 function fill(id='12345678',json=JSON.stringify(cookies),spc=' test-cds '){
   if(!(screen.getByLabelText('Shopee 店铺 ID') as HTMLInputElement).readOnly)
     fireEvent.change(screen.getByLabelText('Shopee 店铺 ID'),{target:{value:id}});
@@ -31,9 +40,11 @@ const waitForAutoSave=()=>act(async()=>{await new Promise(resolve=>setTimeout(re
 
 beforeEach(()=>{
   vi.resetAllMocks();localStorage.clear();states={'shop-a':empty(),'shop-b':empty()};
+  vi.mocked(api.fetchCollectorSyncStatus).mockResolvedValue({lastPluginSyncedAt:null,syncedToday:false,active:false,shops:[]});
   shared={cookies:[],spcCds:'',credential:{status:'missing',last_validated_at:null,last_error:null}};
   vi.mocked(api.fetchSharedCredentials).mockImplementation(async()=>shared);
-  vi.mocked(api.fetchBinding).mockImplementation(async id=>states[id]);
+  vi.mocked(api.fetchBinding).mockImplementation(async id=>({...states[id],connection:states[id].binding?
+    {paired:false,lastSync:null,detail:null,credential:shared.credential}:null}));
   vi.mocked(api.listCollectionRuns).mockResolvedValue([]);
   vi.mocked(api.createSource).mockResolvedValue({sourceId:'manual-source',connectionId:'connection-a',pairingCode:'unused',expiresInSeconds:600});
   vi.mocked(api.bindCollectorShop).mockImplementation(async(id,sourceId,shopeeShopId)=>{
@@ -45,6 +56,41 @@ beforeEach(()=>{
   });
 });
 afterEach(()=>{cleanup();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
+
+it('hides credentials by default, loads details on demand and closes only the upper dialog with Escape',async()=>{
+  render(view());await ready(false);
+  expect(api.fetchSharedCredentials).not.toHaveBeenCalled();
+  expect(screen.queryByText('店铺与采集凭据')).toBeNull();
+  const button=screen.getByRole('button',{name:'凭据详情'});button.focus();fireEvent.click(button);
+  await screen.findByRole('dialog',{name:'凭据详情'});
+  await waitFor(()=>expect(api.fetchSharedCredentials).toHaveBeenCalledTimes(1));
+  expect(screen.queryByLabelText('Cookie-Editor JSON')).toBeNull();
+  fireEvent.keyDown(document,{key:'Escape'});
+  expect(screen.queryByRole('dialog',{name:'凭据详情'})).toBeNull();
+  expect(screen.getByRole('dialog',{name:'采集店铺数据'})).toBeInTheDocument();
+  await waitFor(()=>expect(button).toHaveFocus());
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+it('saves a shop binding independently of manual credentials',async()=>{
+  render(view());await ready();
+  fireEvent.change(screen.getByLabelText('Shopee 店铺 ID'),{target:{value:'12345678'}});
+  fireEvent.click(screen.getByRole('button',{name:'保存店铺绑定'}));
+  await waitFor(()=>expect(api.bindCollectorShop).toHaveBeenCalledWith(shopA.id,'manual-source','12345678'));
+  expect(api.submitSharedCookies).not.toHaveBeenCalled();
+});
+
+it('keeps keyboard focus within the upper dialog and backdrop closes only that dialog',async()=>{
+  render(view());await ready(false);
+  fireEvent.click(screen.getByRole('button',{name:'凭据详情'}));
+  await screen.findByRole('dialog',{name:'凭据详情'});
+  await waitFor(()=>expect(screen.getByLabelText('Shopee 店铺 ID')).not.toBeDisabled());
+  const first=screen.getByRole('button',{name:'关闭凭据详情'}),last=screen.getByRole('button',{name:'手动输入凭据（备用）'});
+  first.focus();fireEvent.keyDown(document,{key:'Tab',shiftKey:true});expect(last).toHaveFocus();
+  fireEvent.keyDown(document,{key:'Tab'});expect(first).toHaveFocus();
+  fireEvent.mouseDown(screen.getByRole('dialog',{name:'凭据详情'}).parentElement!);
+  expect(screen.queryByRole('dialog',{name:'凭据详情'})).toBeNull();expect(onClose).not.toHaveBeenCalled();
+});
 
 it('HTTP 页面没有 randomUUID 时仍能使用共用凭据创建采集任务',async()=>{
   const browserCrypto=globalThis.crypto;
@@ -124,6 +170,7 @@ describe('manual collection credentials',()=>{
     expect(JSON.parse((screen.getByLabelText('Cookie-Editor JSON') as HTMLTextAreaElement).value)).toEqual(cookies);
     expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe('test-cds');
     fireEvent.change(screen.getByLabelText('Shopee 店铺 ID'),{target:{value:'22222222'}});
+    fireEvent.click(screen.getByRole('button',{name:'保存店铺绑定'}));
     await waitForAutoSave();
     expect(api.bindCollectorShop).toHaveBeenCalledWith(shopB.id,'manual-source','22222222');
     expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);

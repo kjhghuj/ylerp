@@ -21,6 +21,10 @@ import {
 import type { AggResponse, DayMeta, PotentialResponse, ShopMeta } from '../modules/product-analysis/types';
 
 const toastSpy = vi.fn();
+vi.mock('../modules/product-analysis/services/collectionApi',async importOriginal=>({
+  ...await importOriginal<typeof import('../modules/product-analysis/services/collectionApi')>(),
+  fetchCollectorSyncStatus:async()=>({lastPluginSyncedAt:null,syncedToday:false,active:false,shops:[]}),listCollectionRuns:async()=>[],
+}));
 
 vi.mock('../components/Toast', () => ({
   useToast: () => ({ showToast: toastSpy }),
@@ -59,6 +63,7 @@ vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
     return typeof code === 'string' && code ? code : null;
   },
   sendProductAnalysisChatStream: vi.fn(),
+  fetchProductChatHistory: vi.fn(async () => ({ messages: [], retentionDays: 30 })),
 }));
 
 const mockFetchShops = vi.mocked(fetchShops);

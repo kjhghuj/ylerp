@@ -6,6 +6,9 @@ export interface ConnectionState {paired:boolean;lastSync:string|null;detail:str
   credential:{status:'missing'|'pending'|'valid'|'invalid';last_validated_at:string|null;last_error:string|null}}
 export interface BindingState {binding:CollectionBinding|null;sources:CollectionSource[];connection:ConnectionState|null}
 export interface SharedCredentialsState {cookies:Record<string,unknown>[];spcCds:string;credential:ConnectionState['credential']}
+export interface CollectorSyncShop {shopId:string;name:string;site:string;status:string;from:string;to:string;
+  completedDays:number;runId:string|null;detail:string|null}
+export interface CollectorSyncStatus {lastPluginSyncedAt:string|null;syncedToday:boolean;active:boolean;shops:CollectorSyncShop[]}
 export interface CollectionRun {id:string;shopId:string;fromDate:string;toDate:string;recollectExisting:boolean;
   status:string;collectorBatchId:number|null;createdAt:string}
 export interface CollectionTask {id:number|null;report_date:string;status:string;stage_detail?:string|null;last_error?:string|null;hasFile?:boolean}
@@ -17,7 +20,10 @@ export async function fetchSharedCredentials():Promise<SharedCredentialsState>{
   return (await api.get<SharedCredentialsState>('/product-analysis/collector-credentials')).data;
 }
 export async function submitSharedCookies(cookies:unknown,spcCds:string):Promise<void>{
-  await api.post('/product-analysis/collector-credentials',{cookies,spcCds});
+  await api.post('/product-analysis/collector-credentials',{cookies,spcCds,source:'manual'});
+}
+export async function fetchCollectorSyncStatus():Promise<CollectorSyncStatus>{
+  return (await api.get<CollectorSyncStatus>('/product-analysis/collector-sync-status')).data;
 }
 export async function fetchBinding(shopId:string):Promise<BindingState>{
   return (await api.get<BindingState>(`${path(shopId)}/collector-binding`)).data;

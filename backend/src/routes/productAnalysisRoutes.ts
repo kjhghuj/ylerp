@@ -12,6 +12,7 @@ import {
 } from '../services/glm/prompts';
 import { withUsageEvent } from '../services/usageEvents';
 import { runAiCall } from '../services/aiUsage';
+import { readProductChatHistory, saveProductChatTurn } from '../services/productAnalysisChatHistory';
 import { getProductAnalysisUploadRawBodyBytes } from '../middleware/productAtomicJsonMiddleware';
 import {
   SUMMABLE_FIELDS,
@@ -800,6 +801,17 @@ router.get('/shops/:id/items/:itemId', async (req: Request, res: Response) => {
 
 // ---- GLM AI 对话（店铺区间模式，默认近 7 天） ----
 
+router.get('/shops/:shopId/items/:itemId/chat-history', requireProductAnalysisPermission('product-analysis.aiChat'), async (req: Request, res: Response) => {
+  try {
+    const shop = await findOwnedShop(String(req.params.shopId), req.user!.id);
+    if (!shop) return res.status(404).json({ detail: 'Shop not found' });
+    const itemId = String(req.params.itemId);
+    if (!itemId.trim() || itemId.length > 256) return res.status(400).json({ detail: 'Invalid itemId' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.json(await readProductChatHistory(req.user!.id, shop.id, itemId));
+  } catch (error) { return errorResponse(error, res); }
+});
+
 router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat'), async (req: Request, res: Response) => {
   try {
     const body = req.body as Record<string, unknown>;
@@ -807,7 +819,8 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
     if (!shopId) {
       return res.status(400).json({ detail: 'Missing required field: shopId' });
     }
-    const history = sanitizeChatMessages(body?.messages);
+    let history = sanitizeChatMessages(body?.messages);
+    const submittedHistory = history;
     if (history.length === 0) {
       return res.status(400).json({ detail: 'Missing required field: messages' });
     }
@@ -845,6 +858,16 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       }
     }
     const itemId = typeof body.itemId === 'string' && body.itemId ? body.itemId : null;
+    const persistHistory = body.persistHistory === true;
+    const question = history[history.length - 1];
+    if (persistHistory && (!itemId || itemId.length > 256 || question.role !== 'user' || question.content.length > 10000)) {
+      return res.status(400).json({ detail: '保存对话需提供商品和有效问题（最多 10000 字）' });
+    }
+    if (persistHistory) {
+      const saved = await readProductChatHistory(req.user!.id, shop.id, itemId!);
+      // 历史以数据库为准；只接受客户端最后一个用户问题，避免过期页面覆盖/冒充历史。
+      history = sanitizeChatMessages([...saved.messages, question]);
+    }
     // 个人中心 AI 配置优先，未配置回退环境变量
     const chatConfig = await resolveChatAiConfig(req.user!.id);
 
@@ -872,7 +895,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
         detail.variations
       );
       chatMode = 'product_analysis_chat_item';
-      payload = { shopId, itemId, from, to, history };
+      payload = { shopId, itemId, from, to, history: submittedHistory };
       systemPrompt = [
         buildShopAnalysisSystemPrompt({
           shopName: shop.name,
@@ -908,7 +931,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
         }))
       );
       chatMode = 'product_analysis_chat_overview';
-      payload = { shopId, from, to, history };
+      payload = { shopId, from, to, history: submittedHistory };
       systemPrompt = [
         buildShopAnalysisSystemPrompt({
           shopName: shop.name,
@@ -938,6 +961,16 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       allowedModels: [chatConfig.model],
       payload,
     };
+    const saveReply = async (result: { content?: string }) => {
+      if (!persistHistory) return;
+      try {
+        await saveProductChatTurn({ userId: req.user!.id, shopId: shop.id, itemId: itemId!,
+          requestKey: body.requestKey as string, userContent: question.content,
+          assistantContent: result.content ?? '', from, to });
+      } catch {
+        throw new ApiError(503, 'AI 已回复，但对话保存失败；请保留当前页面内容后重试');
+      }
+    };
 
     // 流式模式：SSE 逐块推送增量，结束事件带最终模型；错误以事件形式返回
     if (body.stream === true) {
@@ -949,12 +982,12 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
       });
       res.flushHeaders();
       const send = (data: Record<string, unknown>) => {
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
+        if (!res.destroyed) res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
       // 推理模型思考期可能数十秒无正文：期间定时发 SSE 注释心跳，防止代理空闲断连
       let sawProviderData = false;
       const heartbeat = setInterval(() => {
-        if (!sawProviderData) res.write(': keep-alive\n\n');
+        if (!sawProviderData && !res.destroyed) res.write(': keep-alive\n\n');
       }, 5_000);
       try {
         let emitted = false;
@@ -973,6 +1006,8 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
             }
           )
         );
+        // 页面关闭不会跳过持久化；只有保存成功之后才通知前端本轮完成。
+        await saveReply(result);
         // 幂等重放（或供应商未产生增量）时把完整内容一次性补发
         if (!emitted && typeof result?.content === 'string' && result.content) {
           send({ delta: result.content });
@@ -990,6 +1025,7 @@ router.post('/chat', requireProductAnalysisPermission('product-analysis.aiChat')
     }
 
     const { result } = await runAiCall(aiCallInput, () => glmChat(chatMessages, { config: chatConfig }));
+    await saveReply(result);
     return res.json(result);
   } catch (error) {
     return errorResponse(error, res);

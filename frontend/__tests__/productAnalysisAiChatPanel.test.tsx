@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendProductAnalysisChatStream } from '../modules/product-analysis/services/productAnalysisApi';
+import { fetchProductChatHistory, sendProductAnalysisChatStream } from '../modules/product-analysis/services/productAnalysisApi';
 
 beforeAll(() => {
     // jsdom 未实现 scrollIntoView（面板消息区自动滚动）
@@ -15,6 +15,7 @@ vi.mock('../components/PermissionTree', () => ({ hasPermission: () => true }));
 vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
     getApiErrorDetail: (error: any) => error?.response?.data?.detail || String(error?.message || error),
     sendProductAnalysisChatStream: vi.fn(),
+    fetchProductChatHistory: vi.fn().mockResolvedValue({ messages: [], retentionDays: 30 }),
 }));
 
 import { AiChatPanel } from '../modules/product-analysis/modals/AiChatPanel';
@@ -22,9 +23,57 @@ import { AiChatPanel } from '../modules/product-analysis/modals/AiChatPanel';
 const mockStream = sendProductAnalysisChatStream as unknown as ReturnType<typeof vi.fn>;
 
 async function send(text: string) {
+    await waitFor(() => expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled());
     fireEvent.change(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…'), { target: { value: text } });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));
 }
+
+describe('saved product conversations', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(fetchProductChatHistory).mockResolvedValue({ messages: [], retentionDays: 30 });
+    });
+    it('restores the product conversation on every reopen and continues with the history', async () => {
+        const saved = [{ role: 'user' as const, content: '上次的问题' }, { role: 'assistant' as const, content: '上次的回答' }];
+        vi.mocked(fetchProductChatHistory).mockResolvedValue({ messages: saved, retentionDays: 30 });
+        mockStream.mockImplementation(async (_request: unknown, events: { onDelta: (d: string) => void; onDone: (m: string) => void }) => { events.onDelta('继续的回答'); events.onDone('glm'); });
+        const first = render(<AiChatPanel shopId="s1" itemId="p1" />);
+        expect(await screen.findByText('上次的回答')).toBeInTheDocument();
+        first.unmount();
+        render(<AiChatPanel shopId="s1" itemId="p1" />);
+        expect(await screen.findByText('上次的回答')).toBeInTheDocument();
+        await send('接着分析');
+        await waitFor(() => expect(mockStream).toHaveBeenCalledWith(expect.objectContaining({ persistHistory: true, messages: [...saved, { role: 'user', content: '接着分析' }] }), expect.anything(), expect.anything()));
+        expect(await screen.findByText('已自动保存 · 保留 30 天')).toBeInTheDocument();
+    });
+    it('keeps saved history when the analysis date range changes', async () => {
+        vi.mocked(fetchProductChatHistory).mockResolvedValue({ messages: [{ role: 'assistant', content: '同商品历史' }], retentionDays: 30 });
+        const { rerender } = render(<AiChatPanel shopId="s1" itemId="p1" from="2026-09-01" to="2026-09-07" />);
+        await screen.findByText('同商品历史');
+        rerender(<AiChatPanel shopId="s1" itemId="p1" from="2026-09-08" to="2026-09-14" />);
+        await waitFor(() => {
+            expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled();
+            expect(screen.getByText('同商品历史')).toBeInTheDocument();
+        });
+    });
+    it('ignores late history results after switching products', async () => {
+        let release: (value: any) => void = () => {};
+        vi.mocked(fetchProductChatHistory).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+        const { rerender } = render(<AiChatPanel shopId="s1" itemId="p1" />);
+        rerender(<AiChatPanel shopId="s1" itemId="p2" />);
+        await waitFor(() => expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled());
+        release({ messages: [{ role: 'assistant', content: '旧商品迟到记录' }], retentionDays: 30 });
+        await waitFor(() => expect(screen.queryByText('旧商品迟到记录')).not.toBeInTheDocument());
+    });
+    it('blocks sending when history cannot be loaded and offers a real retry', async () => {
+        vi.mocked(fetchProductChatHistory).mockRejectedValueOnce(new Error('历史加载失败'));
+        render(<AiChatPanel shopId="s1" itemId="p1" />);
+        await screen.findByText('历史加载失败');
+        expect(screen.getByRole('button', { name: '发送' })).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: '重新加载记录' }));
+        await waitFor(() => expect(screen.getByPlaceholderText('问问 AI 关于这个商品或店铺的问题…')).toBeEnabled());
+    });
+});
 
 describe('AiChatPanel streaming', () => {
     beforeEach(() => {

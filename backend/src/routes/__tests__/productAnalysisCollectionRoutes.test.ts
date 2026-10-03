@@ -1,18 +1,21 @@
 jest.mock('../../index',()=>({prisma:{
+  $transaction:jest.fn(),
   user:{findUnique:jest.fn()},
   productAnalysisShop:{findFirst:jest.fn()},
   productAnalysisCredentialSource:{findFirst:jest.fn(),findMany:jest.fn()},
   productAnalysisCollectorBinding:{findUnique:jest.fn()},
-  productAnalysisCollectionRun:{findUnique:jest.fn(),findFirst:jest.fn(),create:jest.fn(),update:jest.fn()},
+  productAnalysisCollectionRun:{findUnique:jest.fn(),findFirst:jest.fn(),create:jest.fn(),update:jest.fn(),updateMany:jest.fn()},
   productAnalysisDailyUpload:{findMany:jest.fn()},
 }}));
 jest.mock('../../services/productAnalysisCollectorClient',()=>({collectorRequest:jest.fn(),collectorReportFile:jest.fn()}));
+jest.mock('../../services/productAnalysisBackfill',()=>({recordPluginSync:jest.fn(),fetchCollectorSyncStatus:jest.fn(),notifyBackfillRunAction:jest.fn()}));
 
 import type {Request,Response} from 'express';
 import router from '../productAnalysisCollectionRoutes';
 import {prisma} from '../../index';
 import {collectorRequest,collectorReportFile} from '../../services/productAnalysisCollectorClient';
 import {CredentialInputError} from '../../collector/credentials';
+import {recordPluginSync,fetchCollectorSyncStatus,notifyBackfillRunAction} from '../../services/productAnalysisBackfill';
 
 const shop={id:'shop-a',userId:'user-a',name:'PH 店',site:'PH',currency:'PHP'};
 const owner={id:'user-a',username:'owner',role:'owner',permissions:[]};
@@ -39,6 +42,9 @@ const runUpdate=prisma.productAnalysisCollectionRun.update as jest.Mock;
 const dailyFind=prisma.productAnalysisDailyUpload.findMany as jest.Mock;
 
 beforeEach(()=>{jest.clearAllMocks();shopFind.mockResolvedValue(shop);runFind.mockResolvedValue(null);activeFind.mockResolvedValue(null);
+  (prisma.$transaction as jest.Mock).mockImplementation(work=>work(prisma));
+  (prisma.productAnalysisCollectionRun.updateMany as jest.Mock).mockResolvedValue({count:1});
+  (recordPluginSync as jest.Mock).mockResolvedValue('2026-10-03T08:00:00.000Z');
   (prisma.productAnalysisCredentialSource.findMany as jest.Mock).mockResolvedValue([{accountKey:'erp-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}]);
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({permissions:[],isActive:true});});
 
@@ -162,6 +168,49 @@ test('shared credentials can save without a shop binding and ignore client suppl
 
 test.each([{cookies:[],spcCds:'cds'},{cookies:[{name:'SPC_ST',value:'test'}],spcCds:' '}])('shared credentials reject incomplete input',async body=>{
   expect((await invoke('/collector-credentials','post',{body})).status).toHaveBeenCalledWith(400);
+  expect(collectorRequest).not.toHaveBeenCalled();
+});
+
+test('plugin sync records a timestamp and queues backfill, while manual saves do not',async()=>{
+  const body={cookies:[{name:'SPC_ST',value:'test'}],spcCds:'cds'};
+  (collectorRequest as jest.Mock).mockResolvedValue({credential:{status:'pending'}});
+  const plugin=await invoke('/collector-credentials','post',{body});
+  expect(recordPluginSync).toHaveBeenCalledWith(owner.id);
+  expect(plugin.json).toHaveBeenCalledWith({ok:true,syncedAt:'2026-10-03T08:00:00.000Z',credential:{status:'pending'}});
+  jest.mocked(recordPluginSync).mockClear();
+  await invoke('/collector-credentials','post',{body:{...body,source:'manual'}});
+  expect(recordPluginSync).not.toHaveBeenCalled();
+  const invalid=await invoke('/collector-credentials','post',{body:{...body,source:'anything'}});
+  expect(invalid.status).toHaveBeenCalledWith(400);
+});
+
+test('sync status enforces permissions and uses only the current account',async()=>{
+  const status={lastPluginSyncedAt:null,syncedToday:false,active:false,shops:[]};
+  jest.mocked(fetchCollectorSyncStatus).mockResolvedValue(status);
+  const result=await invoke('/collector-sync-status','get');
+  expect(fetchCollectorSyncStatus).toHaveBeenCalledWith(owner.id);
+  expect(result.setHeader).toHaveBeenCalledWith('Cache-Control','private, no-store');
+  expect(result.json).toHaveBeenCalledWith(status);
+  jest.mocked(fetchCollectorSyncStatus).mockClear();
+  const denied=await invoke('/collector-sync-status','get',{user:{id:'user-a',role:'viewer'}});
+  expect(denied.status).toHaveBeenCalledWith(403);
+  expect(fetchCollectorSyncStatus).not.toHaveBeenCalled();
+});
+
+test.each(['pause','resume','cancel','retry'] as const)('updates %s and its backfill control in one transaction',async action=>{
+  const run={id:'run-a',shopId:shop.id,status:action==='resume'?'PAUSED':action==='retry'?'FAILED':'ACTIVE',collectorBatchId:1};
+  activeFind.mockResolvedValueOnce(run);
+  (collectorRequest as jest.Mock).mockResolvedValue({batch:{counts:{PENDING:30},total:30}});
+  const result=await invoke(`/shops/:id/collection-runs/:runId/${action}`,'post',{params:{id:shop.id,runId:run.id}});
+  expect(result.status).not.toHaveBeenCalledWith(409);
+  expect(prisma.$transaction).toHaveBeenCalled();
+  expect(notifyBackfillRunAction).toHaveBeenCalledWith(shop.id,run.id,action,prisma);
+});
+
+test.each(['PAUSED','CANCELLED'])('does not retry uploads from a %s run',async status=>{
+  activeFind.mockResolvedValueOnce({id:'run-a',shopId:shop.id,status,collectorBatchId:1});
+  const result=await invoke('/shops/:id/collection-runs/:runId/tasks/:taskId/retry-upload','post',{params:{id:shop.id,runId:'run-a',taskId:'1'}});
+  expect(result.status).toHaveBeenCalledWith(409);
   expect(collectorRequest).not.toHaveBeenCalled();
 });
 

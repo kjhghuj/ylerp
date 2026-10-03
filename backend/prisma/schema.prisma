@@ -408,6 +408,8 @@ model ProductAnalysisShop {
   collectorBinding ProductAnalysisCollectorBinding?
   collectionRuns ProductAnalysisCollectionRun[]
   collectorImports ProductAnalysisCollectorImport[]
+  collectionBackfill ProductAnalysisCollectionBackfill?
+  chatTurns ProductAnalysisChatTurn[]
   restockShopSkuMappings RestockShopSkuMapping[]
   restockShopRules       RestockShopRule[]
 
@@ -485,6 +487,7 @@ model ProductAnalysisCollectionRun {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   imports ProductAnalysisCollectorImport[]
+  backfills ProductAnalysisCollectionBackfill[]
   @@unique([shopId, requestId])
   @@index([shopId, status])
 }
@@ -510,6 +513,34 @@ model ProductAnalysisCollectorImport {
   updatedAt DateTime @updatedAt
   @@unique([runId, reportDate, checksum])
   @@index([status, createdAt])
+}
+
+/// Successful plugin uploads are separate from credential contents/validation.
+model ProductAnalysisCollectionSync {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastPluginSyncedAt DateTime
+  revision Int @default(1)
+  shops ProductAnalysisCollectionBackfill[]
+}
+
+/// One durable, coalesced backfill request per shop. Run linkage survives restarts.
+model ProductAnalysisCollectionBackfill {
+  shopId String @id
+  shop ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  userId String
+  sync ProductAnalysisCollectionSync @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  revision Int
+  fromDate DateTime @db.Date
+  toDate DateTime @db.Date
+  status String @default("PENDING")
+  runId String?
+  run ProductAnalysisCollectionRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  completedDays Int @default(0)
+  detail String?
+  updatedAt DateTime @updatedAt
+  @@index([userId])
+  @@index([status, updatedAt])
 }
 
 /// 商品明细表的展示分组。商品业务数据仍保存在 Product，此模型只保存折叠展示关系。
@@ -623,11 +654,13 @@ model User {
   profitTemplates     ProfitTemplate[]
   productAnalysisReports ProductAnalysisReport[]
   productAnalysisShops   ProductAnalysisShop[]
+  productAnalysisChatTurns ProductAnalysisChatTurn[]
   productAnalysisDailyUploads ProductAnalysisDailyUpload[]
   productAnalysisCredentialSources ProductAnalysisCredentialSource[]
   productAnalysisCollectorBindings ProductAnalysisCollectorBinding[]
   productAnalysisCollectionRuns ProductAnalysisCollectionRun[]
   productAnalysisCollectorImports ProductAnalysisCollectorImport[]
+  productAnalysisCollectionSync ProductAnalysisCollectionSync?
   restockRecords      RestockRecord[]
   restockSalesImports RestockSalesImport[]
   externalSkuMappings ExternalSkuMapping[]
@@ -712,6 +745,26 @@ model UsageEvent {
   @@index([actorId, occurredAt])
   @@index([module, status, occurredAt])
   @@index([provenance, occurredAt])
+}
+
+/// 单品 AI 对话轮次；同一商品跨分析区间续聊，保留滚动 30 天。
+model ProductAnalysisChatTurn {
+  id               String @id @default(uuid())
+  userId           String
+  user             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shopId           String
+  shop             ProductAnalysisShop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  itemId           String
+  requestKey       String
+  userContent      String
+  assistantContent String
+  from             String
+  to               String
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, requestKey])
+  @@index([userId, shopId, itemId, createdAt])
+  @@index([createdAt])
 }
 
 model AiUsageCall {

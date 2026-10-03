@@ -237,6 +237,11 @@ const zh = {
   },
   ai: {
     title: 'AI 分析',
+    historyLoading: '正在恢复最近 30 天对话…',
+    historyRetry: '重新加载记录',
+    historyReady: '按商品自动保存 · 保留 30 天',
+    historySaved: '已自动保存 · 保留 30 天',
+    historyUnsaved: '本轮未确认保存，请保留当前内容',
     placeholder: '问问 AI 关于这个商品或店铺的问题…',
     send: '发送',
     thinking: 'AI 分析中…',
@@ -493,6 +498,11 @@ const en: typeof zh = {
   },
   ai: {
     title: 'AI Analysis',
+    historyLoading: 'Restoring the last 30 days of conversation…',
+    historyRetry: 'Reload history',
+    historyReady: 'Auto-saved per product · 30-day retention',
+    historySaved: 'Saved automatically · 30-day retention',
+    historyUnsaved: 'This turn is not confirmed saved; keep the current content',
     placeholder: 'Ask AI about this product or the shop…',
     send: 'Send',
     thinking: 'AI is analyzing…',

@@ -13,7 +13,8 @@ import { ProductList, type ProductSortKey } from './components/ProductList';
 import { PotentialList } from './components/PotentialList';
 import { ShopManager } from './components/ShopManager';
 import { CollectionModal } from './components/CollectionModal';
-import { fetchCollectionRun, listCollectionRuns } from './services/collectionApi';
+import { useCollectorSyncStatus } from './hooks/useCollectorSyncStatus';
+import { CollectorSyncSummary } from './components/CollectorSyncSummary';
 import { ThemeMenu } from './components/ThemeMenu';
 import { PaThemeProvider, usePaTheme } from './themeContext';
 import { ProductDetailModal } from './modals/ProductDetailModal';
@@ -399,26 +400,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     setDataRefreshToken((token) => token + 1);
   }, [refreshShops, showToast, strings]);
   const onCollectionImported = React.useCallback(() => { void refreshAfterWrite(); }, [refreshAfterWrite]);
-  const collectionCounts = useRef<Record<string,number>>({});
-  useEffect(() => {
-    if (!activeShopId || !hasUploadPermission) return;
-    let live = true;
-    const check = async () => {
-      try {
-        const runs = await listCollectionRuns(activeShopId);
-        const current = runs.find(run => ['ACTIVE','PAUSED','STARTING'].includes(run.status)) || runs[0];
-        if (!current) return;
-        const data = await fetchCollectionRun(activeShopId,current.id,1);
-        if (!live) return;
-        const count = data.batch?.counts.IMPORTED || 0;
-        const previous = collectionCounts.current[current.id] || 0;
-        collectionCounts.current[current.id] = count;
-        if (count > previous) void refreshAfterWrite();
-      } catch { /* 弹窗中会显示可操作的错误 */ }
-    };
-    void check(); const timer = window.setInterval(() => void check(), 15_000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, [activeShopId, hasUploadPermission, refreshAfterWrite]);
+  const collectorSync = useCollectorSyncStatus(activeShopId,hasUploadPermission,onCollectionImported);
 
   const handleShopsChanged = async () => {
     const list = await refreshShops();
@@ -914,6 +896,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
           {activeShop && hasUploadPermission && <button type="button" onClick={() => setCollectionOpen(true)} className="pa-btn pa-btn-ghost">
             <CloudDownload size={13} />采集店铺数据
           </button>}
+          {hasUploadPermission && <CollectorSyncSummary state={collectorSync.state} error={collectorSync.error} />}
           {onGenerateRestock && activeShopId && (
             <button
               type="button"
@@ -1036,6 +1019,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
         />
       )}
       {collectionOpen && activeShop && <CollectionModal key={activeShop.id} shop={activeShop}
+        syncState={collectorSync.state} syncError={collectorSync.error}
         onClose={() => setCollectionOpen(false)} onImported={onCollectionImported} />}
 
       {selectedItem && activeShopId && (

@@ -115,7 +115,8 @@ export async function processNextCollectorImport(){
       const validated=validateDailyUploadPayload(parsed);
       if(!validated.ok)throw new DailyIngestError(validated.detail);
       const result=await ingestDailyReport({shop:run.shop,date:row.reportDate.toISOString().slice(0,10),
-        payload:validated.value,actor:{id:run.user.id,username:run.user.username,role:run.user.role},onlyIfChanged:true});
+        payload:validated.value,actor:{id:run.user.id,username:run.user.username,role:run.user.role},onlyIfChanged:true,
+        onlyIfMissing:!run.recollectExisting});
       await prisma.productAnalysisCollectorImport.update({where:{id:row.id},data:{status:'IMPORTED',
         rowCount:result.itemCount,uploadId:result.uploadId,error:null}});
     }catch(error){

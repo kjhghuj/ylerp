@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Bot, User, RotateCcw, Sparkles, Lock, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../../../AuthContext';
 import { hasPermission } from '../../../components/PermissionTree';
-import { getApiErrorDetail, sendProductAnalysisChatStream } from '../services/productAnalysisApi';
+import { fetchProductChatHistory, getApiErrorDetail, sendProductAnalysisChatStream } from '../services/productAnalysisApi';
 import { MarkdownText } from '../components/MarkdownText';
 import { useProductAnalysisStrings } from '../i18n';
 import type { ChatMessage } from '../types';
@@ -19,8 +19,8 @@ interface AiChatPanelProps {
 
 const ITEM_NAME_SNIPPET_LENGTH = 40;
 
-/** GLM AI 对话面板：SSE 流式输出（含思考过程），聊天记录仅存前端 state。
- *  上下文（店铺 / 商品 / 区间）变化时清空对话并中止在途旧流，旧流内容不会写入新上下文。 */
+/** 单品对话恢复服务器近 30 天历史，完成的问答自动保存；整店模式仍是临时对话。
+ *  上下文变化中止旧流并重新恢复当前商品记录，迟到结果不能写入新上下文。 */
 export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTitle, from, to }) => {
   const { user } = useAuth();
   const strings = useProductAnalysisStrings();
@@ -31,6 +31,10 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(Boolean(itemId));
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyRetry, setHistoryRetry] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<'ready' | 'saved' | 'unsaved'>('ready');
   const [deepThinking, setDeepThinking] = useState(true);
   /** 各消息思考区的手动展开状态（未设置时：思考流式中展开、出正文后折叠） */
   const [expandedReasoning, setExpandedReasoning] = useState<Record<number, boolean>>({});
@@ -41,11 +45,10 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   /** 在途流的 AbortController：上下文切换 / 卸载时中止 */
   const abortRef = useRef<AbortController | null>(null);
 
-  // 上下文变化（店铺 / 商品 / 区间）：重置对话与错误，中止旧流，
-  // 并复位属于旧上下文的发送/思考展示状态——否则旧请求的 finally 因过期检查跳过复位，
-  // 输入框与发送按钮将持续禁用，新上下文无法继续提问
+  // 区间不属于保存键：变更区间后仍恢复同一商品；请求令牌包含账号与权限变化。
   useEffect(() => {
     contextTokenRef.current += 1;
+    const token = contextTokenRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
     setMessages([]);
@@ -53,7 +56,20 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     setInput('');
     setIsSending(false);
     setExpandedReasoning({});
-  }, [shopId, itemId, from, to]);
+    setHistoryError(null);
+    setSaveStatus('ready');
+    setHistoryLoading(Boolean(itemId && hasAiPermission));
+    if (itemId && hasAiPermission) {
+      void fetchProductChatHistory(shopId, itemId).then(result => {
+        if (contextTokenRef.current === token) setMessages(result.messages);
+      }).catch(err => {
+        if (contextTokenRef.current === token) setHistoryError(getApiErrorDetail(err));
+      }).finally(() => {
+        if (contextTokenRef.current === token) setHistoryLoading(false);
+      });
+    }
+    return () => { contextTokenRef.current += 1; abortRef.current?.abort(); };
+  }, [shopId, itemId, from, to, user?.id, hasAiPermission, historyRetry]);
 
   // 卸载时同样中止在途流
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -64,7 +80,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
-    if (!trimmed || isSending || !hasAiPermission) return;
+    if (!trimmed || isSending || historyLoading || historyError || !hasAiPermission) return;
     const contextToken = contextTokenRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
@@ -75,6 +91,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     setInput('');
     setError(null);
     setIsSending(true);
+    setSaveStatus('unsaved');
     const startedAt = Date.now();
     let streamed = '';
     let reasoning = '';
@@ -94,8 +111,10 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           shopId,
           ...(itemId ? { itemId } : {}),
           ...(from !== undefined && to !== undefined ? { from, to } : {}),
-          messages: nextMessages,
+          // 界面展示完整保留期；请求仅带最近消息，单品上下文由服务端恢复。
+          messages: nextMessages.slice(-8).map(({ role, content }) => ({ role, content })),
           deepThinking,
+          ...(itemId ? { persistHistory: true } : {}),
         },
         {
           onReasoning: (chunk) => {
@@ -110,6 +129,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             streamed += delta;
             patchAssistant({ content: streamed });
           },
+          onDone: () => { if (!isStale()) setSaveStatus('saved'); },
         },
         { signal: controller.signal }
       );
@@ -177,9 +197,18 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
         </button>
       </div>
 
+      {itemId && <div className="px-4 py-2 text-xs border-b" role="status" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}>
+        {historyLoading ? strings.ai.historyLoading : isSending ? strings.ai.thinking :
+          saveStatus === 'saved' ? strings.ai.historySaved : saveStatus === 'unsaved' ? strings.ai.historyUnsaved : strings.ai.historyReady}
+      </div>}
+      {historyError && <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2" role="alert" style={{ color: '#dc2626' }}>
+        <span>{historyError}</span>
+        <button type="button" onClick={() => setHistoryRetry(value => value + 1)}>{strings.ai.historyRetry}</button>
+      </div>}
+
       {/* 消息区 */}
       <div className="flex-1 min-h-[240px] max-h-[380px] overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && !historyLoading && !historyError && (
           <div className="flex flex-col items-center gap-3 py-6">
             <Bot size={28} style={{ color: 'var(--text-tertiary)' }} />
             <div className="flex flex-wrap justify-center gap-2 max-w-md">
@@ -275,6 +304,9 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
               }}
             >
               {message.role === 'assistant' ? <MarkdownText content={message.content} /> : message.content}
+              {message.role === 'user' && message.analysisFrom && message.analysisTo && <p className="text-[10px] mt-1 opacity-70">
+                {message.analysisFrom} ~ {message.analysisTo}
+              </p>}
               {isStreamingLast && message.content && <span className="animate-pulse">▍</span>}
             </div>
           </div>
@@ -314,7 +346,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           }}
           rows={2}
           placeholder={strings.ai.placeholder}
-          disabled={isSending}
+          disabled={isSending || historyLoading || Boolean(historyError)}
           className="flex-1 rounded-xl border px-3 py-2 text-sm resize-none"
           style={{
             backgroundColor: 'var(--pa-canvas)',
@@ -325,7 +357,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
         <button
           type="button"
           onClick={() => sendMessage(input)}
-          disabled={isSending || !input.trim()}
+          disabled={isSending || historyLoading || Boolean(historyError) || !input.trim()}
           className="p-2.5 rounded-xl shrink-0 transition-opacity duration-200 disabled:opacity-40"
           style={{ backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }}
           aria-label={strings.ai.send}

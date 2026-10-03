@@ -10,6 +10,8 @@ import shopeeRoutes from './routes/shopeeRoutes';
 import productAnalysisCollectionRoutes from './routes/productAnalysisCollectionRoutes';
 import productAnalysisImportRoutes, {startProductAnalysisImportWorker} from './routes/productAnalysisImportRoutes';
 import {getCollector,stopCollector} from './collector/runtime';
+import {startProductAnalysisBackfillWorker} from './services/productAnalysisBackfill';
+import {startProductChatHistoryCleanup} from './services/productAnalysisChatHistory';
 import {
   configureJsonBodyParsing,
   chromaJsonErrorHandler,
@@ -120,9 +122,11 @@ startFinanceBackup();
 startShopeeTokenRefresh(shopeeAuthorization);
 startProductAnalysisImportWorker();
 getCollector();
+const stopBackfillWorker=startProductAnalysisBackfillWorker();
+const stopChatHistoryCleanup=startProductChatHistoryCleanup();
 
 for (const signal of ['SIGINT','SIGTERM'] as const) {
-  process.once(signal,()=>{void stopCollector().finally(()=>process.exit(0));});
+  process.once(signal,()=>{stopBackfillWorker();stopChatHistoryCleanup();void stopCollector().finally(()=>process.exit(0));});
 }
 
 app.listen(port, () => {

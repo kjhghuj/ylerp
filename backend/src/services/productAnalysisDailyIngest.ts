@@ -13,6 +13,7 @@ export async function ingestDailyReport(input: {
   payload: ValidatedDailyUploadPayload;
   actor: { id: string; username: string; role: string };
   onlyIfChanged?: boolean;
+  onlyIfMissing?: boolean;
 }) {
   const {shop,date,payload,actor} = input;
   if (!isValidCalendarDate(date)) throw new DailyIngestError('日期无效');
@@ -49,10 +50,11 @@ export async function ingestDailyReport(input: {
       },async tx=>{
         const latest = await tx.productAnalysisDailyUpload.findFirst({where:{shopId:shop.id,date:uploadDate},
           orderBy:{version:'desc'},select:{version:true,sourceHash:true,id:true}});
-        if (input.onlyIfChanged) {
+        if (input.onlyIfChanged || input.onlyIfMissing) {
           const active=await tx.productAnalysisDailyUpload.findFirst({where:{shopId:shop.id,date:uploadDate,isActive:true},
-            select:{id:true,version:true,sourceHash:true}});
-          if(active?.sourceHash===sourceHash)return {uploadId:active.id,version:active.version,unchanged:true};
+            select:{id:true,version:true,sourceHash:true,itemCount:true}});
+          if(active && (input.onlyIfMissing || active.sourceHash===sourceHash))
+            return {uploadId:active.id,version:active.version,unchanged:true,itemCount:active.itemCount};
         }
         const version=(latest?.version??0)+1;
         await tx.productAnalysisDailyUpload.updateMany({where:{shopId:shop.id,date:uploadDate,isActive:true},data:{isActive:false}});
@@ -67,7 +69,7 @@ export async function ingestDailyReport(input: {
         },select:{id:true,version:true}});
         return {uploadId:created.id,version:created.version,unchanged:false};
       },{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});
-      return {...result,date,fileName:payload.fileName,itemCount:rows.length,derivedItemCount:rows.length,
+      return {...result,date,fileName:payload.fileName,itemCount:result.itemCount??rows.length,derivedItemCount:rows.length,
         variationCount,sourceSheetCount:payload.sourceSheets.length,sourceRowCount,sourceComplete:true,warnings:payload.warnings};
     } catch(error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';

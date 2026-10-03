@@ -208,6 +208,15 @@ export interface ChatRequest {
   operationId?: string;
   /** false 时后端对 GLM 系列降低/关闭深度思考，换取更快首字 */
   deepThinking?: boolean;
+  /** 单品对话在服务端自动保存并使用最近 30 天历史。 */
+  persistHistory?: boolean;
+}
+
+export async function fetchProductChatHistory(shopId: string, itemId: string): Promise<{ messages: ChatMessage[]; retentionDays: number }> {
+  const response = await api.get<{ messages: ChatMessage[]; retentionDays: number }>(
+    `/product-analysis/shops/${encodeURIComponent(shopId)}/items/${encodeURIComponent(itemId)}/chat-history`
+  );
+  return response.data;
 }
 
 export async function sendProductAnalysisChat(request: ChatRequest): Promise<ChatResult> {

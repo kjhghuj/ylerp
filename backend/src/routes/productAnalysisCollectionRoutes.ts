@@ -4,6 +4,8 @@ import {prisma} from '../index';
 import {collectorRequest,collectorReportFile} from '../services/productAnalysisCollectorClient';
 import {isValidCalendarDate} from '../services/productAnalysisUpload';
 import {CredentialInputError} from '../collector/credentials';
+import {recoverStarting,syncRunStatus} from '../services/productAnalysisCollectionRuns';
+import {recordPluginSync,fetchCollectorSyncStatus,notifyBackfillRunAction} from '../services/productAnalysisBackfill';
 
 const router=Router();
 const SUPPORTED=new Set(['PH','MY','SG']);
@@ -62,34 +64,21 @@ router.get('/collector-credentials',async(req,res)=>{
 router.post('/collector-credentials',async(req,res)=>{
   if(!(await allowed(req,res)))return;
   if(!validCredentials(req.body))return res.status(400).json({detail:'Cookie-Editor JSON 或 SPC_CDS 无效'});
+  if(req.body.source!==undefined&&!['plugin','manual'].includes(req.body.source))return res.status(400).json({detail:'凭据来源无效'});
   res.setHeader('Cache-Control','private, no-store');
   try {
     const result=await collectorRequest<{credential:unknown}>('/api/erp/shared-credentials',{
       method:'POST',body:{...await sharedCredentialScope(req),cookies:req.body.cookies,spcCds:req.body.spcCds.trim()}});
-    return res.json({ok:true,syncedAt:new Date().toISOString(),credential:result.credential});
+    const syncedAt=req.body.source==='manual'?new Date().toISOString():await recordPluginSync(req.user!.id);
+    return res.json({ok:true,syncedAt,credential:result.credential});
   }catch(error){return safeError(res,error);}
 });
-async function syncRunStatus(run:{id:string;status:string;collectorBatchId:number|null}) {
-  if(!run.collectorBatchId)return run.status;
-  const data=await collectorRequest<{batch:{counts:Record<string,number>;total:number}}>(`/api/erp/batches/${run.collectorBatchId}`);
-  const c=data.batch.counts;
-  const done=(c.IMPORTED||0)+(c.SKIPPED||0)===data.batch.total;
-  const working=Object.entries(c).some(([key,value])=>value>0&&!['IMPORTED','SKIPPED','FAILED'].includes(key));
-  const status=done?'COMPLETED':!working&&c.FAILED?'FAILED':run.status;
-  if(status!==run.status)await prisma.productAnalysisCollectionRun.update({where:{id:run.id},data:{status}});
-  return status;
-}
-async function recoverStarting(run:{id:string;status:string;collectorBatchId:number|null;createdAt:Date}) {
-  if(run.status!=='STARTING'||run.collectorBatchId)return run;
-  try {
-    const found=await collectorRequest<{batchId:number}>(`/api/erp/batches/by-run/${run.id}`);
-    return prisma.productAnalysisCollectionRun.update({where:{id:run.id},data:{collectorBatchId:found.batchId,status:'ACTIVE'}});
-  }catch(error){
-    const status=error&&typeof error==='object'&&'status'in error?Number(error.status):0;
-    if(status!==404||Date.now()-run.createdAt.getTime()<60_000)throw error;
-    return prisma.productAnalysisCollectionRun.update({where:{id:run.id},data:{status:'FAILED'}});
-  }
-}
+router.get('/collector-sync-status',async(req,res)=>{
+  if(!(await allowed(req,res)))return;
+  res.setHeader('Cache-Control','private, no-store');
+  try{return res.json(await fetchCollectorSyncStatus(req.user!.id));}
+  catch(error){return safeError(res,error);}
+});
 
 router.get('/shops/:id/collector-binding',async(req,res)=>{
   if(!(await allowed(req,res)))return;
@@ -261,7 +250,10 @@ for(const action of ['pause','resume','cancel','retry'] as const) {
       }
       const data=await collectorRequest(`/api/erp/batches/${run.collectorBatchId}/${action}`,{method:'POST'});
       const status=action==='pause'?'PAUSED':action==='cancel'?'CANCELLED':'ACTIVE';
-      await prisma.productAnalysisCollectionRun.update({where:{id:run.id},data:{status}});
+      await prisma.$transaction(async tx=>{
+        await tx.productAnalysisCollectionRun.update({where:{id:run.id},data:{status}});
+        await notifyBackfillRunAction(shop.id,run.id,action,tx);
+      });
       return res.json({ok:true,status,data});
     }catch(error){return safeError(res,error);}
   });
@@ -291,8 +283,18 @@ router.post('/shops/:id/collection-runs/:runId/tasks/:taskId/retry-upload',async
   const shop=await shopFor(req);if(!shop)return res.status(404).json({detail:'Shop not found'});
   const run=await prisma.productAnalysisCollectionRun.findFirst({where:{id:String(req.params.runId),shopId:shop.id}});
   if(!run?.collectorBatchId)return res.status(404).json({detail:'Run not found'});
+  if(['PAUSED','CANCELLED'].includes(run.status))return res.status(409).json({detail:'请先继续采集任务，已取消任务不能重试入库'});
+  const other=await prisma.productAnalysisCollectionRun.findFirst({where:{shopId:shop.id,id:{not:run.id},status:{in:activeStatuses}}});
+  if(other)return res.status(409).json({detail:'同一店铺已有正在运行的采集任务'});
   if(!/^\d+$/.test(String(req.params.taskId)))return res.status(400).json({detail:'Task ID 无效'});
-  try{return res.json(await collectorRequest(`/api/erp/batches/${run.collectorBatchId}/tasks/${req.params.taskId}/retry-upload`,{method:'POST'}));}
+  try{
+    const data=await collectorRequest(`/api/erp/batches/${run.collectorBatchId}/tasks/${req.params.taskId}/retry-upload`,{method:'POST'});
+    await prisma.$transaction(async tx=>{
+      await tx.productAnalysisCollectionRun.update({where:{id:run.id},data:{status:'ACTIVE'}});
+      await notifyBackfillRunAction(shop.id,run.id,'retry',tx);
+    });
+    return res.json(data);
+  }
   catch(error){return safeError(res,error);}
 });
 

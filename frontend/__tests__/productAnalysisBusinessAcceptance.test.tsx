@@ -14,6 +14,10 @@ beforeAll(() => {
 });
 
 const toastSpy = vi.fn();
+vi.mock('../modules/product-analysis/services/collectionApi',async importOriginal=>({
+  ...await importOriginal<typeof import('../modules/product-analysis/services/collectionApi')>(),
+  fetchCollectorSyncStatus:async()=>({lastPluginSyncedAt:null,syncedToday:false,active:false,shops:[]}),listCollectionRuns:async()=>[],
+}));
 vi.mock('../components/Toast', () => ({ useToast: () => ({ showToast: toastSpy }) }));
 vi.mock('../AuthContext', () => ({ useAuth: () => ({ user: null }) }));
 vi.mock('../components/PermissionTree', () => ({ hasPermission: () => true }));
@@ -40,6 +44,7 @@ vi.mock('../modules/product-analysis/services/productAnalysisApi', () => ({
   },
   getApiErrorCode: () => null,
   sendProductAnalysisChatStream: vi.fn(async () => {}),
+  fetchProductChatHistory: vi.fn(async () => ({ messages: [], retentionDays: 30 })),
 }));
 
 import {

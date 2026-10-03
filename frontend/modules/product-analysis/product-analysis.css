@@ -1324,3 +1324,17 @@
   padding:8px 10px;border-bottom:1px solid var(--border-light,#ddd);font-size:12px;align-items:start}
 .pa-collection-task-list > div:last-child {border-bottom:0}
 .pa-collection-task-list span:last-child {overflow-wrap:anywhere;color:var(--text-secondary)}
+.pa-credentials-overlay {z-index:110}
+.pa-credentials-modal {width:min(620px,100%);box-sizing:border-box}
+.pa-manual-credentials {display:grid;gap:10px;min-width:0}
+.pa-sync-summary {display:grid;gap:6px;font-size:12px;min-width:0;overflow-wrap:anywhere}
+.pa-sync-badge {color:var(--text-secondary);line-height:1.5}
+.pa-sync-badge-success {color:#15803d}
+.pa-sync-shop {display:grid;gap:3px}
+.pa-sync-detail {color:var(--text-tertiary);font-size:11px}
+@media(max-width:600px){
+  .pa-collection-modal {box-sizing:border-box;padding:14px}
+  .pa-collection-task-list > div {grid-template-columns:90px minmax(70px,1fr)}
+  .pa-collection-task-list span:last-child {grid-column:1 / -1}
+  .pa-collection-dates > label {width:100%}
+}

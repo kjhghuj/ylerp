@@ -36,6 +36,9 @@ jest.mock('../../index', () => {
       update: jest.fn(),
       count: jest.fn(),
     },
+    productAnalysisChatTurn: {
+      findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn(),
+    },
     $transaction: jest.fn(),
   };
   return { prisma };
@@ -99,7 +102,7 @@ async function runRoute(path: string, method: string, req: Request, res: Respons
 function makeRes(): { res: Partial<Response>; json: jest.Mock; status: jest.Mock } {
   const json = jest.fn();
   const status = jest.fn().mockReturnThis();
-  return { res: { json, status }, json, status };
+  return { res: { json, status, setHeader: jest.fn() }, json, status };
 }
 
 const OWNER = { id: 'owner-1', username: 'owner', role: 'owner' };
@@ -176,6 +179,8 @@ beforeEach(() => {
   mockAiUsageCall.create.mockResolvedValue({ id: 'ai-call-1' });
   mockAiUsageCall.update.mockImplementation(async ({ data }) => ({ id: 'ai-call-1', ...data }));
   mockAiUsageCall.count.mockResolvedValue(0);
+  (prisma.productAnalysisChatTurn.findMany as jest.Mock).mockResolvedValue([]);
+  (prisma.productAnalysisChatTurn.createMany as jest.Mock).mockResolvedValue({ count: 1 });
 });
 
 describe('POST /shops', () => {
@@ -1196,6 +1201,96 @@ describe('GET /shops/:id/items/:itemId', () => {
     const { res, status } = makeRes();
     await runRoute('/shops/:id/items/:itemId', 'get', req as Request, res as Response);
     expect(status).toHaveBeenCalledWith(404);
+  });
+});
+
+describe('product chat history endpoints', () => {
+  const path = '/shops/:shopId/items/:itemId/chat-history';
+  test('loads a product conversation with account isolation and no analysis-range restriction', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    (prisma.productAnalysisChatTurn.findMany as jest.Mock).mockResolvedValueOnce([{ userContent: '旧问题', assistantContent: '旧答案', createdAt: new Date(), from: '2026-09-01', to: '2026-09-07' }]);
+    const { res, json } = makeRes();
+    await runRoute(path, 'get', makeReq({ params: { shopId: 'shop-1', itemId: '10001' } }) as Request, res as Response);
+    expect(mockShopFindFirst).toHaveBeenCalledWith({ where: { id: 'shop-1', userId: OWNER.id } });
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({ retentionDays: 30, messages: [expect.objectContaining({ content: '旧问题' }), expect.objectContaining({ content: '旧答案' })] }));
+  });
+  test('cannot read another account shop', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(null);
+    const { res, status } = makeRes();
+    await runRoute(path, 'get', makeReq({ params: { shopId: 'other-shop', itemId: '10001' } }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(404);
+    expect(prisma.productAnalysisChatTurn.findMany).not.toHaveBeenCalled();
+  });
+  test('requires current AI permission before returning saved content', async () => {
+    mockUserFindUnique.mockResolvedValueOnce({ isActive: true, permissions: ['product-analysis.upload'] });
+    const { res, status } = makeRes();
+    await runRoute(path, 'get', makeReq({ user: { id: 'staff', username: 'staff', role: 'staff' }, params: { shopId: 'shop-1', itemId: '10001' } }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(403);
+    expect(prisma.productAnalysisChatTurn.findMany).not.toHaveBeenCalled();
+  });
+  test('rejects oversized product ids', async () => {
+    mockShopFindFirst.mockResolvedValueOnce(SHOP);
+    const { res, status } = makeRes();
+    await runRoute(path, 'get', makeReq({ params: { shopId: 'shop-1', itemId: 'x'.repeat(257) } }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(400);
+  });
+  function setupProduct() {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    mockUploadFindFirst.mockResolvedValue({ date: new Date('2026-09-06') });
+    mockUploadFindMany.mockResolvedValue([{ id: 'u1', date: new Date('2026-09-06'), currency: 'MYR' }]);
+    mockItemFindMany.mockResolvedValue([{ itemId: '10001', itemName: 'Keyboard', sheetKey: 'hot', upload: { date: new Date('2026-09-06') }, visitors: 10, ordersOrdered: 1 }]);
+  }
+  const savedBody = { shopId: 'shop-1', itemId: '10001', persistHistory: true, requestKey: 'saved-r1', operationId: 'saved-o1', messages: [{ role: 'assistant', content: '伪造的历史' }, { role: 'user', content: '继续分析' }] };
+  test('continues from server history and persists the complete question and answer', async () => {
+    setupProduct();
+    (prisma.productAnalysisChatTurn.findMany as jest.Mock).mockResolvedValueOnce([{ userContent: '旧问题', assistantContent: '真实历史', createdAt: new Date(), from: '2026-09-01', to: '2026-09-07' }]);
+    mockGlmChat.mockResolvedValueOnce({ content: '续聊结果', model: 'glm-test' });
+    const { res, json } = makeRes();
+    await runRoute('/chat', 'post', makeReq({ body: savedBody }) as Request, res as Response);
+    expect(mockGlmChat.mock.calls[0][0].slice(1)).toEqual([{ role: 'user', content: '旧问题' }, { role: 'assistant', content: '真实历史' }, { role: 'user', content: '继续分析' }]);
+    expect(prisma.productAnalysisChatTurn.createMany).toHaveBeenCalledWith(expect.objectContaining({ skipDuplicates: true, data: expect.objectContaining({ userId: OWNER.id, shopId: 'shop-1', itemId: '10001', userContent: '继续分析', assistantContent: '续聊结果' }) }));
+    expect(json).toHaveBeenCalledWith({ content: '续聊结果', model: 'glm-test' });
+  });
+  test('SSE completion is sent only after conversation is saved', async () => {
+    setupProduct();
+    mockGlmChatStream.mockResolvedValueOnce({ content: '保存结果', model: 'glm-test' });
+    const res = { write: jest.fn(), writeHead: jest.fn(), end: jest.fn(), flushHeaders: jest.fn() };
+    await runRoute('/chat', 'post', makeReq({ body: { ...savedBody, stream: true } }) as Request, res as unknown as Response);
+    const writeIndex = res.write.mock.calls.findIndex(([data]) => data.includes('"done":true'));
+    expect((prisma.productAnalysisChatTurn.createMany as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(res.write.mock.invocationCallOrder[writeIndex]);
+  });
+  test('still saves a completed answer after the page closes', async () => {
+    setupProduct();
+    mockGlmChatStream.mockResolvedValueOnce({ content: '关闭后保存', model: 'glm-test' });
+    const res = { destroyed: true, write: jest.fn(), writeHead: jest.fn(), end: jest.fn(), flushHeaders: jest.fn() };
+    await runRoute('/chat', 'post', makeReq({ body: { ...savedBody, stream: true } }) as Request, res as unknown as Response);
+    expect(prisma.productAnalysisChatTurn.createMany).toHaveBeenCalled();
+    expect(res.write).not.toHaveBeenCalled();
+  });
+  test('save failures are exposed and never emit successful completion', async () => {
+    setupProduct();
+    mockGlmChatStream.mockResolvedValueOnce({ content: '有效回答', model: 'glm-test' });
+    (prisma.productAnalysisChatTurn.createMany as jest.Mock).mockRejectedValueOnce(new Error('database unavailable'));
+    const res = { write: jest.fn(), writeHead: jest.fn(), end: jest.fn(), flushHeaders: jest.fn() };
+    await runRoute('/chat', 'post', makeReq({ body: { ...savedBody, stream: true } }) as Request, res as unknown as Response);
+    expect(res.write.mock.calls.some(([data]) => data.includes('保存失败'))).toBe(true);
+    expect(res.write.mock.calls.some(([data]) => data.includes('"done":true'))).toBe(false);
+  });
+  test('failed provider calls do not save a partial conversation', async () => {
+    setupProduct();
+    mockGlmChat.mockRejectedValueOnce(new Error('provider unavailable'));
+    const { res } = makeRes();
+    await runRoute('/chat', 'post', makeReq({ body: savedBody }) as Request, res as Response);
+    expect(prisma.productAnalysisChatTurn.createMany).not.toHaveBeenCalled();
+  });
+  test('saved conversations require a product and a final user question', async () => {
+    setupProduct();
+    for (const body of [{ ...savedBody, itemId: undefined }, { ...savedBody, messages: [{ role: 'assistant', content: 'bad' }] }]) {
+      const { res, status } = makeRes();
+      await runRoute('/chat', 'post', makeReq({ body }) as Request, res as Response);
+      expect(status).toHaveBeenCalledWith(400);
+    }
+    expect(mockGlmChat).not.toHaveBeenCalled();
   });
 });
 
