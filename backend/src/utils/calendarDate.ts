@@ -17,3 +17,14 @@ export const addDays = (date: string, days: number): string => {
 /** Difference in whole calendar days; callers add one for inclusive intervals. */
 export const diffDays = (from: string, to: string): number =>
   Math.round((parseDateUtc(to).getTime() - parseDateUtc(from).getTime()) / DAY_MS);
+
+/** Validate a bounded inclusive interval without normalizing malformed dates. */
+export const parseCalendarRange = (
+  query: { from?: unknown; to?: unknown },
+  maxDays: number,
+): { from: string; to: string } | null => {
+  const { from, to } = query;
+  if (!isValidCalendarDate(from) || !isValidCalendarDate(to) || from > to) return null;
+  if (diffDays(from, to) + 1 > maxDays) return null;
+  return { from, to };
+};

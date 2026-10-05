@@ -271,6 +271,20 @@ describe('GET /shops', () => {
       expect.objectContaining({ id: 'shop-1', dayCount: 12, latestUploadDate: '2026-09-06' }),
     ]);
   });
+
+  test('keeps its JSON error response when the database rejects', async () => {
+    mockShopFindMany.mockRejectedValueOnce(new Error('database unavailable'));
+    mockUploadGroupBy.mockResolvedValueOnce([]);
+    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const { res, status, json } = makeRes();
+      await runRoute('/shops', 'get', makeReq() as Request, res as Response);
+      expect(status).toHaveBeenCalledWith(500);
+      expect(json).toHaveBeenCalledWith({ detail: 'Internal server error' });
+    } finally {
+      log.mockRestore();
+    }
+  });
 });
 
 describe('DELETE /shops/:id', () => {
@@ -317,6 +331,35 @@ describe('POST /shops/:id/daily-uploads', () => {
     await runRoute('/shops/:id/daily-uploads', 'post', req as Request, res as Response);
     expect(status).toHaveBeenCalledWith(400);
     expect(mockUploadCreate).not.toHaveBeenCalled();
+  });
+
+  test('checks the report period before the currency and never starts a transaction for invalid data', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const { res, status, json } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { date: '2026-09-06', payload: {
+        fileName: 'a.20260905.xlsx', currency: 'PHP', sheets: PARSED_SHEETS,
+      } },
+    }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json.mock.calls[0][0].detail).toContain('不一致');
+    expect(json.mock.calls[0][0].detail).not.toContain('币种');
+    expect(mockTransaction).not.toHaveBeenCalled();
+  });
+
+  test('rejects an empty report before a transaction with its existing error detail', async () => {
+    mockShopFindFirst.mockResolvedValue(SHOP);
+    const { res, status, json } = makeRes();
+    await runRoute('/shops/:id/daily-uploads', 'post', makeReq({
+      params: { id: SHOP.id },
+      body: { date: '2026-09-06', payload: {
+        fileName: 'a.20260906.xlsx', sheets: [{ sheetKey: 'hot', items: [] }],
+      } },
+    }) as Request, res as Response);
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ detail: 'Report contains no product items' });
+    expect(mockTransaction).not.toHaveBeenCalled();
   });
 
   test('creates an immutable same-day version and switches active in one transaction', async () => {
@@ -548,6 +591,7 @@ describe('POST /shops/:id/daily-uploads', () => {
     expect(status).toHaveBeenCalledWith(400);
     expect(json.mock.calls[0][0].detail).toContain('PHP');
     expect(json.mock.calls[0][0].detail).toContain('MYR');
+    expect(json).toHaveBeenCalledWith({ detail: '报表币种 PHP 与店铺币种 MYR 不一致，请确认站点后重传' });
     expect(mockUploadCreate).not.toHaveBeenCalled();
   });
 

@@ -16,9 +16,11 @@
 import { createHash } from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import { prisma, safeRedis } from '../infrastructure/runtimeResources';
-import { dateString, diffDays, parseDateUtc } from '../utils/calendarDate';
+import { dateString, diffDays, parseCalendarRange, parseDateUtc } from '../utils/calendarDate';
 import { withUsageEvent } from '../services/usageEvents';
 import { getProductListCacheKey } from '../services/productCache';
+import { buildRestockInventoryData, buildRestockProductData } from '../services/restockDefaults';
+import { fetchOwnedAnalysisShopsWithStats, findOwnedAnalysisShop } from '../services/productAnalysisShopQueries';
 import {
   buildRestockPlan,
   RestockPlanValidationError,
@@ -89,24 +91,6 @@ const requireRestockPermission = createRestockPermissionGuard(() => prisma, 'res
 // ---------------------------------------------------------------------------
 // 基础工具
 // ---------------------------------------------------------------------------
-
-/** 区间校验：from ≤ to 且跨度 ≤ 366 天（与商品分析查询口径一致） */
-function parseShopRange(query: Record<string, unknown>): { from: string; to: string } | null {
-  try {
-    const from = parseDateQuery(query.from, 'from');
-    const to = parseDateQuery(query.to, 'to');
-    if (!from || !to || from > to) return null;
-    const days = diffDays(from, to) + 1;
-    if (days > MAX_QUERY_RANGE_DAYS) return null;
-    return { from, to };
-  } catch {
-    return null;
-  }
-}
-
-async function findOwnedShop(id: string, userId: string) {
-  return prisma.productAnalysisShop.findFirst({ where: { id, userId } });
-}
 
 /** 拉取区间行并转 ShopDailyItemRow（date 由上传记录映射，避免逐行 join） */
 async function fetchShopSalesRows(shopId: string, from: string, to: string): Promise<ShopDailyItemRow[]> {
@@ -293,29 +277,7 @@ export const createRestockV3Router = ({
 
   router.get('/shops', requireRestockPermission('restock-v3.view'), async (req, res) => {
     try {
-      const userId = req.user!.id;
-      const [shops, stats] = await Promise.all([
-        prisma.productAnalysisShop.findMany({
-          where: { userId },
-          orderBy: { createdAt: 'desc' },
-          select: { id: true, name: true, site: true, platform: true, currency: true, createdAt: true, updatedAt: true },
-        }),
-        prisma.productAnalysisDailyUpload.groupBy({
-          by: ['shopId'],
-          where: { userId, isActive: true },
-          _count: { _all: true },
-          _max: { date: true },
-        }),
-      ]);
-      const statsByShop = new Map(stats.map((stat) => [stat.shopId, stat]));
-      res.json(shops.map((shop) => {
-        const stat = statsByShop.get(shop.id);
-        return {
-          ...shop,
-          dayCount: stat?._count._all ?? 0,
-          latestUploadDate: stat?._max.date ? dateString(stat._max.date) : null,
-        };
-      }));
+      res.json(await fetchOwnedAnalysisShopsWithStats(prisma, req.user!.id));
     } catch (error) {
       logSafeFailure('Restock V3 shop lookup failed', error);
       res.status(500).json({ error: 'Failed to fetch shops' });
@@ -326,9 +288,9 @@ export const createRestockV3Router = ({
   router.get('/shops/:id/sales', requireRestockPermission('restock-v3.view'), async (req, res) => {
     try {
       const userId = req.user!.id;
-      const shop = await findOwnedShop(String(req.params.id ?? ''), userId);
+      const shop = await findOwnedAnalysisShop(prisma, String(req.params.id ?? ''), userId);
       if (!shop) return res.status(404).json({ error: 'Shop not found' });
-      const range = parseShopRange(req.query as Record<string, unknown>);
+      const range = parseCalendarRange(req.query, MAX_QUERY_RANGE_DAYS);
       if (!range) {
         return res.status(400).json({ error: 'from/to must be valid dates (from ≤ to, span ≤ 366 days)' });
       }
@@ -452,39 +414,10 @@ export const createRestockV3Router = ({
 
       const inventory = await withUsageEvent(prisma, req, { module: 'restock-v3', action: 'restock_target_create', objectType: 'InventoryItem' }, async (tx) => {
         await tx.product.create({
-          data: {
-            name,
-            sku,
-            country: site,
-            sites: [site],
-            cost: 0,
-            productWeight: 0,
-            supplierTaxPoint: 0,
-            supplierInvoice: 'no',
-            sellerCouponType: 'fixed',
-            sellerCoupon: 0,
-            sellerCouponPlatformRatio: 0,
-            adROI: 15,
-            totalRevenue: 0,
-            platformInfrastructureFee: 0,
-            siteData: { [site]: { totalRevenue: 0 } },
-            userId,
-          },
+          data: buildRestockProductData({ name, sku, site, userId }),
         });
         return tx.inventoryItem.create({
-          data: {
-            name,
-            sku,
-            currentStock: 0,
-            stockOfficial: 0,
-            stockThirdParty: 0,
-            inTransit: 0,
-            dailySales: 0,
-            leadTime: 25,
-            replenishCycle: 30,
-            costPerUnit: 0,
-            userId,
-          },
+          data: buildRestockInventoryData({ name, sku, userId }),
         });
       });
       await Promise.all([
@@ -523,7 +456,7 @@ export const createRestockV3Router = ({
       } catch {
         return res.status(400).json({ error: 'Invalid SKU mapping payload' });
       }
-      const shop = await findOwnedShop(shopId, userId);
+      const shop = await findOwnedAnalysisShop(prisma, shopId, userId);
       if (!shop) return res.status(404).json({ error: 'Shop not found' });
 
       const [inventoryItems, products] = await Promise.all([
@@ -541,19 +474,12 @@ export const createRestockV3Router = ({
         await withUsageEvent(prisma, req, { module: 'restock-v3', action: 'restock_mapping_save', objectType: 'ExternalSkuMapping' }, async (tx) => {
           if (!matchedInventory) {
             await tx.inventoryItem.create({
-              data: {
+              data: buildRestockInventoryData({
                 name: matchedProduct!.name || matchedProduct!.sku,
                 sku: normalizedTargetSku,
-                currentStock: 0,
-                stockOfficial: 0,
-                stockThirdParty: 0,
-                inTransit: 0,
-                dailySales: 0,
-                leadTime: 25,
-                replenishCycle: 30,
                 costPerUnit: Number.isFinite(matchedProduct!.cost) ? matchedProduct!.cost : 0,
                 userId,
-              },
+              }),
             });
           }
           await tx.externalSkuMapping.upsert({
@@ -602,7 +528,7 @@ export const createRestockV3Router = ({
       } catch {
         return res.status(400).json({ error: 'Invalid SKU mapping payload' });
       }
-      const shop = await findOwnedShop(shopId, userId);
+      const shop = await findOwnedAnalysisShop(prisma, shopId, userId);
       if (!shop) return res.status(404).json({ error: 'Shop not found' });
       if (scope === 'site') {
         await withUsageEvent(prisma, req, { module: 'restock-v3', action: 'restock_mapping_delete', objectType: 'ExternalSkuMapping' }, (tx) => tx.externalSkuMapping.deleteMany({
@@ -624,7 +550,8 @@ export const createRestockV3Router = ({
 
   router.get('/sku-rules', requireRestockPermission('restock-v3.view'), async (req, res) => {
     try {
-      const shop = await findOwnedShop(
+      const shop = await findOwnedAnalysisShop(
+        prisma,
         parseRequiredString(req.query.shopId, 'shopId', MAX_IMPORT_ID_LENGTH),
         req.user!.id,
       );
@@ -669,7 +596,7 @@ export const createRestockV3Router = ({
       } catch {
         return res.status(400).json({ error: 'Invalid SKU rule payload' });
       }
-      const shop = await findOwnedShop(shopId, userId);
+      const shop = await findOwnedAnalysisShop(prisma, shopId, userId);
       if (!shop) return res.status(404).json({ error: 'Shop not found' });
       // 放宽：元仓同码直连 SKU 无本地档案也需要规则覆盖，故仅校验编码合法性
       const data = { leadTimeDays, safetyDays, growthPercent };
@@ -724,7 +651,7 @@ export const createRestockV3Router = ({
       const sku = normalizeRestockSku(req.params.sku);
       if (!sku) return res.status(400).json({ error: 'Invalid sku' });
       const scope = (req.body?.scope ?? req.query.scope) === 'site' ? 'site' : 'shop';
-      const shop = await findOwnedShop(shopId, userId);
+      const shop = await findOwnedAnalysisShop(prisma, shopId, userId);
       if (!shop) return res.status(404).json({ error: 'Shop not found' });
       const deleted = scope === 'site'
         ? await withUsageEvent(prisma, req, { module: 'restock-v3', action: 'restock_rule_delete', objectType: 'RestockSkuRule' }, (tx) => tx.restockSkuRule.deleteMany({ where: { userId, site: shop.site, sku } }))
@@ -849,7 +776,7 @@ export const createRestockV3Router = ({
         shopIds = Array.from(new Set(rawShopIds.map(id => id.trim()).filter(Boolean)));
         if (shopIds.length === 0 || shopIds.length > MAX_SHOPS_PER_PLAN) throw new Error('Invalid shopIds');
         if (shopIds.some(id => id.length > MAX_IMPORT_ID_LENGTH)) throw new Error('Invalid shopIds');
-        range = parseShopRange(req.body as Record<string, unknown>);
+        range = parseCalendarRange(req.body, MAX_QUERY_RANGE_DAYS);
         if (!range) throw new Error('Invalid range');
         planningDate = parseDateQuery(req.body?.planningDate, 'planningDate')
           || new Date().toISOString().slice(0, 10);
@@ -1865,7 +1792,6 @@ export const createRestockV3Router = ({
       if (currentItems.length === 0 || !('dailySales' in currentItems[0])) {
         return res.status(409).json({ error: '历史版本草稿不支持编辑（缺少完整快照），请重新计算并保存新计划' });
       }
-      const bySku = new Map(currentItems.map(item => [item.sku, item]));
       const rawEdits = req.body?.edits;
       if (!Array.isArray(rawEdits) || rawEdits.length === 0) {
         return res.status(400).json({ error: 'edits 必须是非空数组' });

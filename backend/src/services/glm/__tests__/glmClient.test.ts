@@ -10,11 +10,53 @@ jest.mock('../glmConfig', () => {
 });
 
 import { glmChat, glmChatStream, buildFastModeParams, GlmChatMessage } from '../glmClient';
-import { GlmApiError } from '../glmConfig';
+import { GlmApiError, GLM_STREAM_TIMEOUT_MS } from '../glmConfig';
 
 const mockFetch = jest.spyOn(global, 'fetch');
 
 const MESSAGES: GlmChatMessage[] = [{ role: 'user', content: '你好' }];
+
+describe('chat request contracts', () => {
+  beforeEach(() => { jest.clearAllMocks(); });
+
+  test.each([false, true])('keeps the headers, body and timeout for stream=%s', async stream => {
+    const signal = new AbortController().signal;
+    const timeout = jest.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+    const config = { apiKey: 'personal-key', baseUrl: 'https://chat.example/v1', model: 'glm-4.6', timeoutMs: 1234 };
+    mockFetch.mockResolvedValueOnce(stream
+      ? new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n')
+      : okResponse({ choices: [{ message: { content: 'ok' } }] }));
+    try {
+      if (stream) await glmChatStream(MESSAGES, { config, temperature: 0, fastMode: true });
+      else await glmChat(MESSAGES, { config, temperature: 0 });
+      expect(timeout).toHaveBeenCalledWith(stream ? GLM_STREAM_TIMEOUT_MS : config.timeoutMs);
+      expect(mockFetch).toHaveBeenCalledWith('https://chat.example/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer personal-key', 'Content-Type': 'application/json',
+          ...(stream ? { Accept: 'text/event-stream' } : {}),
+        },
+        body: JSON.stringify({
+          model: config.model, messages: MESSAGES, temperature: 0,
+          ...(stream ? { stream: true, thinking: { type: 'disabled' } } : {}),
+        }),
+        signal,
+      });
+    } finally { timeout.mockRestore(); }
+  });
+
+  test.each([glmChat, glmChatStream])('fails without sending a request for a missing personal key', async chat => {
+    await expect(chat(MESSAGES, {
+      config: { apiKey: '', baseUrl: 'https://chat.example', model: 'custom', timeoutMs: 1234 },
+    })).rejects.toMatchObject({ status_code: 503, detail: 'GLM_API_KEY not configured' });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  test('maps a rejected JSON response to the existing public error', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.reject(new Error('bad JSON')) } as Response);
+    await expect(glmChat(MESSAGES)).rejects.toMatchObject({ status_code: 502, detail: 'GLM request failed' });
+  });
+});
 
 describe('glmClient', () => {
   beforeEach(() => {

@@ -83,6 +83,7 @@ const mockUploadFindMany = prisma.productAnalysisDailyUpload.findMany as jest.Mo
 const mockUploadGroupBy = prisma.productAnalysisDailyUpload.groupBy as jest.Mock;
 const mockItemFindMany = prisma.productDailyItem.findMany as jest.Mock;
 const mockProductFindMany = prisma.product.findMany as jest.Mock;
+const mockProductCreate = prisma.product.create as jest.Mock;
 const mockInventoryFindMany = prisma.inventoryItem.findMany as jest.Mock;
 const mockInventoryCreate = prisma.inventoryItem.create as jest.Mock;
 const mockWarehouseMappingFindMany = prisma.warehouseMapping.findMany as jest.Mock;
@@ -298,6 +299,38 @@ describe('GET /shops/:id/sales', () => {
   });
 });
 
+describe('POST /target-skus', () => {
+  it('creates normalized product and zero-stock inventory archives with the existing defaults', async () => {
+    mockProductFindMany.mockResolvedValue([]);
+    mockInventoryFindMany.mockResolvedValue([]);
+    mockProductCreate.mockResolvedValue({ id: 'product-new' });
+    mockInventoryCreate.mockResolvedValue({ id: 'inv-new' });
+    const router = createRestockV3Router({ ycClient: makeYcClient() });
+    const res = makeRes();
+    await getHandler(router, '/target-skus', 'post')(
+      { user: { id: 'u1', role: 'owner' }, body: { site: ' my ', sku: ' sku-new ', name: ' 新商品 ' } } as unknown as Request,
+      res,
+      jest.fn(),
+    );
+    expect(mockProductCreate).toHaveBeenCalledWith({ data: {
+      name: '新商品', sku: 'SKU-NEW', country: 'MY', sites: ['MY'],
+      cost: 0, productWeight: 0, supplierTaxPoint: 0, supplierInvoice: 'no',
+      sellerCouponType: 'fixed', sellerCoupon: 0, sellerCouponPlatformRatio: 0,
+      adROI: 15, totalRevenue: 0, platformInfrastructureFee: 0,
+      siteData: { MY: { totalRevenue: 0 } }, userId: 'u1',
+    } });
+    expect(mockInventoryCreate).toHaveBeenCalledWith({ data: {
+      name: '新商品', sku: 'SKU-NEW', currentStock: 0, stockOfficial: 0,
+      stockThirdParty: 0, inTransit: 0, dailySales: 0, leadTime: 25,
+      replenishCycle: 30, costPerUnit: 0, userId: 'u1',
+    } });
+    expect(mockSafeRedisDel).toHaveBeenCalledWith('products:v2:u1');
+    expect(mockSafeRedisDel).toHaveBeenCalledWith('inventory:u1');
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(res.json).toHaveBeenCalledWith({ id: 'inv-new' });
+  });
+});
+
 describe('PUT /mapping', () => {
   it('defaults to shop-scoped mapping persisted per shop (legacy 身份)', async () => {
     mockShopFindFirst.mockResolvedValue(SHOP);
@@ -380,9 +413,11 @@ describe('PUT /mapping', () => {
       res,
       jest.fn(),
     );
-    expect(mockInventoryCreate).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ sku: 'PROD-X', name: 'X 商品' }),
-    }));
+    expect(mockInventoryCreate).toHaveBeenCalledWith({ data: {
+      sku: 'PROD-X', name: 'X 商品', userId: 'u1',
+      currentStock: 0, stockOfficial: 0, stockThirdParty: 0, inTransit: 0,
+      dailySales: 0, leadTime: 25, replenishCycle: 30, costPerUnit: 5,
+    } });
     expect(mockExternalMappingUpsert).toHaveBeenCalledWith({
       where: { userId_site_externalSku_externalSkuType: { userId: 'u1', site: 'MY', externalSku: 'SKU-B', externalSkuType: 'legacy' } },
       create: { userId: 'u1', site: 'MY', externalSku: 'SKU-B', externalSkuType: 'legacy', targetSku: 'PROD-X' },

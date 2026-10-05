@@ -1,7 +1,8 @@
 jest.mock('../../infrastructure/runtimeResources',()=>({prisma:{$transaction:jest.fn(),productAnalysisDailyUpload:{findFirst:jest.fn(),updateMany:jest.fn(),create:jest.fn()},usageEvent:{create:jest.fn()}}}));
 import {prisma} from '../../infrastructure/runtimeResources';
-import {ingestDailyReport} from '../productAnalysisDailyIngest';
+import {DailyIngestError, ingestDailyReport} from '../productAnalysisDailyIngest';
 import {validateDailyUploadPayload} from '../productAnalysisUpload';
+import { hashCanonicalJson } from '../productAnalysisSourceHash';
 
 const db=prisma as any;
 const parsed={fileName:'product_performance_20261002.xlsx',currency:'PHP',warnings:[],
@@ -37,5 +38,31 @@ test('serializable conflict rechecks data inserted by a concurrent manual upload
   const result=await ingestDailyReport({...input,onlyIfMissing:true});
   expect(result.uploadId).toBe('manual');
   expect(db.$transaction).toHaveBeenCalledTimes(2);
+  expect(db.productAnalysisDailyUpload.create).not.toHaveBeenCalled();
+});
+
+test.each([
+  { name: 'invalid calendar date', change: { date: '2026-02-31' }, detail: '日期无效' },
+  { name: 'report period mismatch', change: { date: '2026-10-03' }, detail: '不一致' },
+  { name: 'different currency', change: { shop: { id: input.shop.id, currency: 'MYR' } }, detail: '报表币种 PHP 与店铺币种 MYR 不一致' },
+  { name: 'empty product rows', change: { payload: { ...input.payload, sheets: [{ sheetKey: 'hot' as const, items: [] }] } }, detail: 'Report contains no product items' },
+])('rejects $name before a transaction even for missing-only collection', async ({ change, detail }) => {
+  db.productAnalysisDailyUpload.findFirst.mockResolvedValue({ id: 'existing', version: 1, itemCount: 7 });
+  const result = ingestDailyReport({ ...input, ...change, onlyIfMissing: true });
+  await expect(result).rejects.toBeInstanceOf(DailyIngestError);
+  await expect(result).rejects.toThrow(detail);
+  expect(db.$transaction).not.toHaveBeenCalled();
+  expect(db.productAnalysisDailyUpload.updateMany).not.toHaveBeenCalled();
+  expect(db.productAnalysisDailyUpload.create).not.toHaveBeenCalled();
+});
+
+test('keeps the active version when changed-only collection receives identical source data', async () => {
+  db.productAnalysisDailyUpload.findFirst.mockResolvedValue({
+    id: 'existing', version: 3, sourceHash: hashCanonicalJson(input.payload.sourceSheets), itemCount: 7,
+  });
+  await expect(ingestDailyReport({ ...input, onlyIfChanged: true })).resolves.toMatchObject({
+    uploadId: 'existing', version: 3, unchanged: true, itemCount: 7, derivedItemCount: 1,
+  });
+  expect(db.productAnalysisDailyUpload.updateMany).not.toHaveBeenCalled();
   expect(db.productAnalysisDailyUpload.create).not.toHaveBeenCalled();
 });

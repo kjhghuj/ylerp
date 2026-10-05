@@ -2,6 +2,7 @@ import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
 import { prisma, safeRedis } from '../infrastructure/runtimeResources';
 import { getProductListCacheKey } from '../services/productCache';
+import { buildRestockInventoryData, buildRestockProductData } from '../services/restockDefaults';
 import {
   RestockSourceDataError,
   type RemoteStockRow,
@@ -355,24 +356,9 @@ export const createRestockV2Router = ({
           } else {
             const created = await tx.product.create({
             data: {
-              name: item.name,
-              sku: item.sku,
-              country: site,
-              sites: [site],
-              cost: 0,
-              productWeight: 0,
+              ...buildRestockProductData({ name: item.name, sku: item.sku, site, userId }),
               ...dimensions,
               ycSpecsSyncedAt: specsSyncedAt,
-              supplierTaxPoint: 0,
-              supplierInvoice: 'no',
-              sellerCouponType: 'fixed',
-              sellerCoupon: 0,
-              sellerCouponPlatformRatio: 0,
-              adROI: 15,
-              totalRevenue: 0,
-              platformInfrastructureFee: 0,
-              siteData: { [site]: { totalRevenue: 0 } },
-              userId,
             },
           });
           productBySku.set(skuKey, created);
@@ -398,19 +384,13 @@ export const createRestockV2Router = ({
           updatedInventoryItems += 1;
           } else {
             const created = await tx.inventoryItem.create({
-            data: {
+            data: buildRestockInventoryData({
               name: item.name,
               sku: item.sku,
               currentStock: item.available,
-              stockOfficial: 0,
               stockThirdParty: item.available,
-              inTransit: 0,
-              dailySales: 0,
-              leadTime: 25,
-              replenishCycle: 30,
-              costPerUnit: 0,
               userId,
-            },
+            }),
           });
           inventoryBySku.set(skuKey, created);
           createdInventoryItems += 1;

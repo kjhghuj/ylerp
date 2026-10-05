@@ -25,38 +25,44 @@ export interface GlmClientConfig {
   timeoutMs: number;
 }
 
+type ChatOptions = { temperature?: number; config?: GlmClientConfig; fastMode?: boolean };
+
+async function requestChatCompletions(messages: GlmChatMessage[], options: ChatOptions, stream: boolean) {
+  const apiKey = options.config?.apiKey ?? GLM_API_KEY;
+  const baseUrl = options.config?.baseUrl ?? GLM_BASE_URL;
+  const model = options.config?.model ?? GLM_MODEL;
+  if (!apiKey) throw new GlmApiError(503, 'GLM_API_KEY not configured', true);
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      ...(stream ? { Accept: 'text/event-stream' } : {}),
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: options.temperature ?? 0.6,
+      ...(stream ? { stream: true, ...(options.fastMode ? buildFastModeParams(model) : {}) } : {}),
+    }),
+    signal: AbortSignal.timeout(stream ? GLM_STREAM_TIMEOUT_MS : options.config?.timeoutMs ?? GLM_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    const providerDetail = await readProviderError(response);
+    throw new GlmApiError(
+      502,
+      `GLM provider rejected the request (${response.status})${providerDetail ? `: ${providerDetail}` : ''}`
+    );
+  }
+  return { response, model };
+}
+
 export async function glmChat(
   messages: GlmChatMessage[],
   options: { temperature?: number; config?: GlmClientConfig } = {}
 ): Promise<GlmChatResult> {
-  const apiKey = options.config?.apiKey ?? GLM_API_KEY;
-  const baseUrl = options.config?.baseUrl ?? GLM_BASE_URL;
-  const model = options.config?.model ?? GLM_MODEL;
-  const timeoutMs = options.config?.timeoutMs ?? GLM_TIMEOUT_MS;
-  if (!apiKey) {
-    throw new GlmApiError(503, 'GLM_API_KEY not configured', true);
-  }
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: options.temperature ?? 0.6,
-      }),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (!response.ok) {
-      const providerDetail = await readProviderError(response);
-      throw new GlmApiError(
-        502,
-        `GLM provider rejected the request (${response.status})${providerDetail ? `: ${providerDetail}` : ''}`
-      );
-    }
+    const { response, model } = await requestChatCompletions(messages, options, false);
     const data: unknown = await response.json();
     const content = extractContent(data);
     if (typeof content !== 'string' || content.length === 0) {
@@ -117,36 +123,8 @@ export async function glmChatStream(
   onDelta?: (delta: string) => void,
   onReasoning?: (reasoning: string) => void
 ): Promise<GlmChatResult> {
-  const apiKey = options.config?.apiKey ?? GLM_API_KEY;
-  const baseUrl = options.config?.baseUrl ?? GLM_BASE_URL;
-  const model = options.config?.model ?? GLM_MODEL;
-  if (!apiKey) {
-    throw new GlmApiError(503, 'GLM_API_KEY not configured', true);
-  }
   try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: options.temperature ?? 0.6,
-        stream: true,
-        ...(options.fastMode ? buildFastModeParams(model) : {}),
-      }),
-      signal: AbortSignal.timeout(GLM_STREAM_TIMEOUT_MS),
-    });
-    if (!response.ok) {
-      const providerDetail = await readProviderError(response);
-      throw new GlmApiError(
-        502,
-        `GLM provider rejected the request (${response.status})${providerDetail ? `: ${providerDetail}` : ''}`
-      );
-    }
+    const { response, model } = await requestChatCompletions(messages, options, true);
     if (!response.body) {
       throw new GlmApiError(502, 'GLM stream returned no body');
     }
