@@ -1,4 +1,4 @@
-jest.mock('../../index', () => ({prisma: {
+jest.mock('../../infrastructure/runtimeResources', () => ({prisma: {
   $transaction: jest.fn(),
   productAnalysisCollectionSync: {upsert: jest.fn(), findUnique: jest.fn()},
   productAnalysisCollectionBackfill: {findMany: jest.fn(), upsert: jest.fn(), updateMany: jest.fn()},
@@ -9,7 +9,7 @@ jest.mock('../../index', () => ({prisma: {
 }}));
 jest.mock('../productAnalysisCollectorClient', () => ({collectorRequest: jest.fn()}));
 
-import {prisma} from '../../index';
+import {prisma} from '../../infrastructure/runtimeResources';
 import {collectorRequest} from '../productAnalysisCollectorClient';
 import {backfillDates, recordPluginSync, fetchCollectorSyncStatus, processBackfillShop,processProductAnalysisBackfills,
   notifyBackfillRunAction,startProductAnalysisBackfillWorker} from '../productAnalysisBackfill';

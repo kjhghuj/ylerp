@@ -15,7 +15,8 @@
 
 import { createHash } from 'crypto';
 import { Router, type Request, type Response } from 'express';
-import { prisma, safeRedis } from '../index';
+import { prisma, safeRedis } from '../infrastructure/runtimeResources';
+import { dateString, diffDays, parseDateUtc } from '../utils/calendarDate';
 import { withUsageEvent } from '../services/usageEvents';
 import { getProductListCacheKey } from '../services/productCache';
 import {
@@ -89,21 +90,13 @@ const requireRestockPermission = createRestockPermissionGuard(() => prisma, 'res
 // 基础工具
 // ---------------------------------------------------------------------------
 
-function parseDateUtc(date: string): Date {
-  return new Date(`${date}T00:00:00.000Z`);
-}
-
-function dateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 /** 区间校验：from ≤ to 且跨度 ≤ 366 天（与商品分析查询口径一致） */
 function parseShopRange(query: Record<string, unknown>): { from: string; to: string } | null {
   try {
     const from = parseDateQuery(query.from, 'from');
     const to = parseDateQuery(query.to, 'to');
     if (!from || !to || from > to) return null;
-    const days = Math.round((parseDateUtc(to).getTime() - parseDateUtc(from).getTime()) / 86_400_000) + 1;
+    const days = diffDays(from, to) + 1;
     if (days > MAX_QUERY_RANGE_DAYS) return null;
     return { from, to };
   } catch {
@@ -394,7 +387,7 @@ export const createRestockV3Router = ({
         from: range.from,
         to: range.to,
         shopObservedDays: aggregate.shopObservedDays,
-        calendarDays: Math.round((parseDateUtc(range.to).getTime() - parseDateUtc(range.from).getTime()) / 86_400_000) + 1,
+        calendarDays: diffDays(range.from, range.to) + 1,
         observedDates: aggregate.observedDates,
         pendingCount: review.length,
         collisionKeys: aggregate.collisionKeys,
@@ -1321,7 +1314,7 @@ export const createRestockV3Router = ({
       });
 
       const singleShop = shopIds.length === 1 ? shops[0] : null;
-      const calendarDays = Math.round((parseDateUtc(range!.to).getTime() - parseDateUtc(range!.from).getTime()) / 86_400_000) + 1;
+      const calendarDays = diffDays(range!.from, range!.to) + 1;
       const nowIso = new Date().toISOString();
       // 完整条件指纹 = 源条件指纹 + 计算参数（参数变化 → 指纹变化 → 旧结果过期）
       const fingerprint = createHash('sha256').update(JSON.stringify({

@@ -69,11 +69,11 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
                         </div>
                         <div className="flex-1 relative group">
                             <select 
-                                value={selectedPlatform} 
+                                value={siteCountry === 'USD' ? 'tiktok' : selectedPlatform}
                                 onChange={e => setSelectedPlatform(e.target.value as PlatformType)} 
                                 className="w-full text-[11px] font-bold p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-xl outline-none appearance-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer capitalize shadow-sm hover:bg-slate-100/50"
                             >
-                                {Object.keys(PLATFORMS).map(p => (
+                                {Object.keys(PLATFORMS).filter(p => siteCountry !== 'USD' || p === 'tiktok').map(p => (
                                     <option key={p} value={p} className="font-sans py-2">{t.matrix.platforms[p as PlatformType] || PLATFORMS[p as PlatformType].name}</option>
                                 ))}
                             </select>
@@ -84,7 +84,7 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
                         onClick={onAddBlank}
                         className="w-full bg-slate-900 hover:bg-black text-white font-bold text-[11px] py-2.5 rounded-xl transition-all shadow-md active:scale-[0.98]"
                     >
-                        {t.matrix.newNode}
+                        {siteCountry === 'USD' ? t.templates.newCrossBorderNode : t.matrix.newNode}
                     </button>
                 </div>
             </div>

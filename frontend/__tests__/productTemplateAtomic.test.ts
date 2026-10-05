@@ -167,6 +167,26 @@ describe('atomic product/template request construction', () => {
       .toEqual(expect.objectContaining(snapshot));
   });
 
+  it('uses the US cross-border fee preset for an automatic default with a product name', () => {
+    const snapshot = createExchangeRateSnapshot(0.14, new Date('2026-10-04T08:00:00.000Z'));
+    const payload = buildDefaultProductTemplatePayload('Product', 'USD', taxes, snapshot);
+
+    expect(payload).toMatchObject({
+      name: 'Product',
+      country: 'USD',
+      platform: 'tiktok',
+      data: {
+        platformCommissionRate: 6,
+        transactionFeeRate: 0,
+        tiktokOrderFee: 0,
+        campaignServiceFeeRate: 0,
+        shippingCalculationMode: 2,
+        tiktokFeePolicy: { presetId: 'USD', presetProfile: 'us-cross-border' },
+        ...snapshot,
+      },
+    });
+  });
+
   it('represents aggregate response templates as raw API DTOs', () => {
     const response = {
       product: {

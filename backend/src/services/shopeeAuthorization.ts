@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
+import { startScheduledTask } from '../infrastructure/scheduledTask';
 import {
   appBinding, decryptShopeeCredentials, encryptShopeeCredentials, parseShopeeTokens,
   secretHash, shopeeConfig, ShopeeError, shopeeRequest, signedShopeeUrl,
@@ -171,13 +172,10 @@ export class ShopeeAuthorizationService {
 }
 
 export function startShopeeTokenRefresh(service: ShopeeAuthorizationService) {
-  let running = false;
-  const timer = setInterval(async () => {
-    if (running) return;
-    running = true;
-    try { await service.refreshDue(); } catch { /* Retry on the next interval; never log tokens. */ }
-    finally { running = false; }
-  }, 60_000);
-  timer.unref();
-  return timer;
+  const task = startScheduledTask(() => service.refreshDue(), {
+    intervalMs: 60_000,
+    onError: () => { /* Retry on the next interval; never log tokens. */ },
+  });
+  // Preserve the Timeout return type for existing callers using clearInterval.
+  return Object.assign(task.timer, { stop: task.stop, drain: task.drain });
 }

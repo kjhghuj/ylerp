@@ -1,6 +1,7 @@
 import type { PlatformType } from '../../platformConfig';
 import type { ProductCalcData, SiteData } from '../../types';
 import { buildPlatformNodeTemplatePayload } from './templateDataSerializer';
+import { createTiktokNode, TIKTOK_US_CROSS_BORDER_NODE_NAME } from './tiktokFeePolicy';
 import { findExistingProductTemplateLink, resolveTemplateIdForPayload } from './productTemplateSync';
 import {
     DEFAULT_NODE_DATA,
@@ -51,6 +52,7 @@ export const buildAtomicProductSitePatch = (
         case 'TH': return { sites: ['TH'], siteData: { TH: data } };
         case 'CN': return { sites: ['CN'], siteData: { CN: data } };
         case 'ID': return { sites: ['ID'], siteData: { ID: data } };
+        case 'US': return { sites: ['US'], siteData: { US: data } };
     }
 };
 
@@ -153,7 +155,7 @@ export const buildDefaultProductTemplatePayload = (
     country: string,
     taxOverrides: TaxOverrides,
     exchangeRateSnapshot?: ExchangeRateSnapshot,
-): ProductTemplateWritePayload => buildPlatformNodeTemplatePayload({
+): ProductTemplateWritePayload => buildPlatformNodeTemplatePayload(country === 'USD' ? createTiktokNode(country, TIKTOK_US_CROSS_BORDER_NODE_NAME) : {
     id: 'default-product-template',
     name,
     currency: country,

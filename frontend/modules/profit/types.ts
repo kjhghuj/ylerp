@@ -66,6 +66,21 @@ export const DEFAULT_NODE_DATA = {
     damageReturnRate: 0,
     mdvServiceFeeRate: 0, fssServiceFeeRate: 0, ccbServiceFeeRate: 0, warehouseOperationFee: 0,
     lastMileFee: 0,
+    // 0 legacy; 1 SEA cross-border; 2 manual total; 3 US head + local; 4 mainland US 4PL direct mail.
+    shippingCalculationMode: 0, manualShippingFee: 0,
+    // 0 general; 1 special; 2 sensitive. Extra costs exclude the already included local delivery.
+    usDirectCargoType: 0, usDirectExtraFee: 0,
+    usHeadFreightFee: 0, usHeadFreightRatePerKg: 0, usHeadFreightConfigured: 0,
+    // 0 unconfigured; 1 manual; 2 Standard LIVE; 3 CBT LIVE; 4 no separate local fee.
+    usLocalDeliveryMode: 0,
+    usPackageLengthCm: 0, usPackageWidthCm: 0, usPackageHeightCm: 0,
+    // 0 unconfirmed; 1 contiguous 48 states; 2 other destinations.
+    usDestinationRegion: 0, usShippingDate: 20261004,
+    buyerShippingFee: 0, shippingSubsidy: 0, tiktokOrderFee: 0,
+    affiliateCommissionRate: 0, affiliateProductTax: 0,
+    growthServiceFeeRate: 0, growthServiceFeeCap: 0,
+    shippingServiceFeeRate: 0, shippingServiceFeeCap: 0,
+    campaignServiceFeeRate: 0, campaignServiceFeeCap: 0,
     vatRate: 0, corporateIncomeTaxRate: 0,
 };
 
@@ -116,15 +131,15 @@ export type ProductTemplateData =
     | GraphProductTemplateData
     | InvalidProductTemplateData;
 
-export type CountryCode = 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN';
-export type CurrencyCode = 'SGD' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'CNY';
+export type CountryCode = 'SG' | 'MY' | 'PH' | 'TH' | 'ID' | 'CN' | 'US';
+export type CurrencyCode = 'SGD' | 'MYR' | 'PHP' | 'THB' | 'IDR' | 'CNY' | 'USD';
 
 export const COUNTRY_TO_CURRENCY: Record<CountryCode, CurrencyCode> = {
-    SG: 'SGD', MY: 'MYR', PH: 'PHP', TH: 'THB', ID: 'IDR', CN: 'CNY',
+    SG: 'SGD', MY: 'MYR', PH: 'PHP', TH: 'THB', ID: 'IDR', CN: 'CNY', US: 'USD',
 };
 
 export const CURRENCY_TO_COUNTRY: Record<CurrencyCode, CountryCode> = {
-    SGD: 'SG', MYR: 'MY', PHP: 'PH', THB: 'TH', IDR: 'ID', CNY: 'CN',
+    SGD: 'SG', MYR: 'MY', PHP: 'PH', THB: 'TH', IDR: 'ID', CNY: 'CN', USD: 'US',
 };
 
 const toSupportedCurrencyCode = (code: string | null | undefined): string => {

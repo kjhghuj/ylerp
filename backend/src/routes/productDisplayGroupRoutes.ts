@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { authorizeAnyPermission } from '../middleware/authMiddleware';
 
 const router = Router();

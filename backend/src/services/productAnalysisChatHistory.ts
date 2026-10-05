@@ -1,4 +1,5 @@
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
+import { startScheduledTask } from '../infrastructure/scheduledTask';
 
 const RETENTION_DAYS = 30;
 const cutoff = (now: Date) => new Date(now.getTime() - RETENTION_DAYS * 86_400_000);
@@ -36,9 +37,8 @@ export async function pruneProductChatHistory(now = new Date()) {
 }
 
 export function startProductChatHistoryCleanup() {
-  const clean = () => { void pruneProductChatHistory().catch(() => console.error('Product chat history cleanup failed')); };
-  clean();
-  const timer = setInterval(clean, 60 * 60 * 1000);
-  timer.unref();
-  return () => clearInterval(timer);
+  return startScheduledTask(() => pruneProductChatHistory(), {
+    intervalMs: 60 * 60 * 1000, immediate: true,
+    onError: () => console.error('Product chat history cleanup failed'),
+  });
 }

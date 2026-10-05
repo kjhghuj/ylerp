@@ -1,3 +1,5 @@
+import { isValidCalendarDate, parseDateUtc } from '../utils/calendarDate';
+
 export type RestockStatus = 'critical' | 'warning' | 'healthy' | 'missing_sales' | 'zero_sales' | 'no_stock_data';
 export type StockSource = 'yc' | 'missing';
 
@@ -348,14 +350,10 @@ const validateBoundedNumber = (
 };
 
 const parseDateOnly = (value: string, field: string): Date => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  if (!isValidCalendarDate(value)) {
     throw new RestockPlanValidationError(`${field} must be a valid YYYY-MM-DD date`);
   }
-  const date = new Date(`${value}T00:00:00.000Z`);
-  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
-    throw new RestockPlanValidationError(`${field} must be a valid YYYY-MM-DD date`);
-  }
-  return date;
+  return parseDateUtc(value);
 };
 
 const dateOnlyFromTimestamp = (value: string, field: string): string => {

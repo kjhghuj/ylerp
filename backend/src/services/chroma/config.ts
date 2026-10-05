@@ -1,3 +1,5 @@
+import '../../config/environment';
+
 export const ARK_API_KEY = process.env.ARK_API_KEY || '';
 export const ARK_ENDPOINT_ID = process.env.ARK_ENDPOINT_ID || '';
 export const ARK_ENDPOINT_ID_SEEDREAM_5_LITE = process.env.ARK_ENDPOINT_ID_SEEDREAM_5_LITE || '';

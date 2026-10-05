@@ -42,6 +42,23 @@ interface ChatContentItem {
   image_url?: { url: string };
 }
 
+async function postArkJson(url: string, apiKey: string, payload: unknown, action: 'analysis' | 'generation'): Promise<any> {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) throw new ApiError(response.status, `Ark provider rejected the ${action} request (${response.status})`);
+    // Await body parsing inside this boundary so rejected JSON keeps the same error contract.
+    return await response.json();
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(502, `Ark ${action} request failed`);
+  }
+}
+
 export async function chatWithImages(model: string, content: ChatContentItem[], config?: ArkClientConfig): Promise<any> {
   const apiKey = config?.apiKey ?? ARK_API_KEY;
   const endpoint_id = resolveAnalysisEndpoint(model, config);
@@ -52,25 +69,7 @@ export async function chatWithImages(model: string, content: ChatContentItem[], 
     ? `${config.baseUrl.replace(/\/$/, '')}/chat/completions`
     : ARK_CHAT_URL;
   const payload = { model: endpoint_id, messages: [{ role: 'user', content }] };
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  };
-  try {
-    const response = await fetch(chatUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok) {
-      throw new ApiError(response.status, `Ark provider rejected the analysis request (${response.status})`);
-    }
-    return response.json();
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(502, 'Ark analysis request failed');
-  }
+  return postArkJson(chatUrl, apiKey, payload, 'analysis');
 }
 
 export async function generateImage(
@@ -92,23 +91,5 @@ export async function generateImage(
   if (imageUrls && imageUrls.length > 0) {
     payload.image = imageUrls[0];
   }
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-  };
-  try {
-    const response = await fetch(imageUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok) {
-      throw new ApiError(response.status, `Ark provider rejected the generation request (${response.status})`);
-    }
-    return response.json();
-  } catch (error) {
-    if (error instanceof ApiError) throw error;
-    throw new ApiError(502, 'Ark generation request failed');
-  }
+  return postArkJson(imageUrl, apiKey, payload, 'generation');
 }

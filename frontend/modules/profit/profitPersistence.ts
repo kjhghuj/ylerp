@@ -18,7 +18,7 @@ import {
     type SiteLevelInputs,
 } from './types';
 
-const PROFIT_CURRENCIES: CurrencyCode[] = ['MYR', 'SGD', 'PHP', 'THB', 'IDR'];
+const PROFIT_CURRENCIES: CurrencyCode[] = ['MYR', 'SGD', 'PHP', 'THB', 'IDR', 'USD'];
 const nodeDataKeys = Object.keys(DEFAULT_NODE_DATA) as (keyof NodeData)[];
 const graphRuntimeKeys = [
     'graphTemplateId',

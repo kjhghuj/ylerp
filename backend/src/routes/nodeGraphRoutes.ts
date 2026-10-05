@@ -1,7 +1,7 @@
 import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
 import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { z } from 'zod';
 
 const router = Router();

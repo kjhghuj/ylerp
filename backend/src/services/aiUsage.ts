@@ -1,7 +1,8 @@
 import { createHash } from 'crypto';
-import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { Prisma, type AiUsageCall } from '@prisma/client';
+import { prisma } from '../infrastructure/runtimeResources';
 import { ApiError, MODEL_COSTS } from './chroma/config';
+import { aiCallDayStart, positiveAiLimit } from './aiCallLimits';
 
 export interface AiCallInput {
   userId: string; actorName?: string; requestKey: string; operationId: string;
@@ -20,6 +21,12 @@ export function aiRequestHash(input: AiCallInput): string {
   return createHash('sha256').update(canonical({ module: input.module || 'chroma', mode: input.mode, model: input.model, kind: input.kind, operationId: input.operationId, payload: input.payload })).digest('hex');
 }
 
+function replayCall(existing: AiUsageCall | null, requestHash: string) {
+  if (!existing || existing.requestHash !== requestHash) throw new ApiError(409, '同一 requestKey 对应不同请求内容');
+  if (existing.status !== 'success' || !existing.result) throw new ApiError(409, `调用 ${existing.id} 状态为 ${existing.status}，不会重复请求供应商；请在记录中核对结果`);
+  return { call: existing, result: existing.result as any };
+}
+
 export async function runAiCall(input: AiCallInput, provider: () => Promise<any>) {
   if (![input.requestKey, input.operationId].every(x => typeof x === 'string' && /^[\w-]{1,128}$/.test(x))) {
     throw new ApiError(400, '请升级客户端：必须提供有效的 requestKey 和 operationId');
@@ -33,16 +40,30 @@ export async function runAiCall(input: AiCallInput, provider: () => Promise<any>
   const requestHash = aiRequestHash(input);
   let call;
   try {
-    call = await prisma.aiUsageCall.create({ data: {
-      userId: input.userId, actorName: input.actorName, requestKey: input.requestKey,
-      operationId: input.operationId, requestHash, module: input.module || 'chroma', mode: input.mode, kind: input.kind, model: input.model,
-    } });
+    const admission = await prisma.$transaction(async tx => {
+      // Serialize admissions for one user across backend processes. Provider calls
+      // run after commit, so network latency never holds this row lock.
+      const users = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT "id" FROM "User" WHERE "id"=${input.userId} FOR UPDATE`);
+      if (!users.length) throw new ApiError(401, 'Unauthorized');
+      const existing = await tx.aiUsageCall.findUnique({
+        where: { userId_requestKey: { userId: input.userId, requestKey: input.requestKey } },
+      });
+      if (existing) return { call: replayCall(existing, requestHash).call, replay: true };
+      const usedToday = await tx.aiUsageCall.count({
+        where: { userId: input.userId, provenance: 'native', startedAt: { gte: aiCallDayStart() } },
+      });
+      if (usedToday >= positiveAiLimit('AI_DAILY_CALL_LIMIT', 200)) throw new ApiError(429, '今日 AI 调用额度已用完');
+      return { call: await tx.aiUsageCall.create({ data: {
+        userId: input.userId, actorName: input.actorName, requestKey: input.requestKey,
+        operationId: input.operationId, requestHash, module: input.module || 'chroma', mode: input.mode, kind: input.kind, model: input.model,
+      } }), replay: false };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    if (admission.replay) return replayCall(admission.call, requestHash);
+    call = admission.call;
   } catch (error: any) {
     if (error.code !== 'P2002') throw error;
     const existing = await prisma.aiUsageCall.findUnique({ where: { userId_requestKey: { userId: input.userId, requestKey: input.requestKey } } });
-    if (!existing || existing.requestHash !== requestHash) throw new ApiError(409, '同一 requestKey 对应不同请求内容');
-    if (existing.status !== 'success' || !existing.result) throw new ApiError(409, `调用 ${existing.id} 状态为 ${existing.status}，不会重复请求供应商；请在记录中核对结果`);
-    return { call: existing, result: existing.result as any };
+    return replayCall(existing, requestHash);
   }
 
   let result: any;

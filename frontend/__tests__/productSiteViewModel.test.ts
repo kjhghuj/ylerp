@@ -23,6 +23,12 @@ const baseProduct = {
 };
 
 describe('normalizeProductSiteMembership', () => {
+  it('recognizes US and USD aliases for product membership', () => {
+    expect(normalizeProductSiteMembership({ country: 'USD', sites: ['US', 'USD'] })).toEqual(['US']);
+    const view = createProductSiteViewModel({ ...baseProduct, country: 'US', sites: ['US'],
+      siteData: { USD: { totalRevenue: 123.45 } } } as never, 'US');
+    expect(view).toMatchObject({ country: 'US', currency: 'USD', sites: ['US'], siteInputs: { totalRevenue: 123.45 } });
+  });
   it('does not guess a site when both country and sites are missing', () => {
     expect(normalizeProductSiteMembership({ country: null, sites: [] })).toEqual([]);
   });

@@ -1,16 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/authMiddleware';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { canViewUsage, canExportUsage, csvCell, parseUsageFilter } from '../services/usagePolicy';
 import { getUsageReport } from '../services/usageReport';
 import { getUsageDetails, parseDetailsOptions } from '../services/usageDetails';
+import { currentPermissionUser } from '../middleware/requestPermissions';
 
 const router = Router();
 router.use(authenticate);
 export function requireUsagePermission(action: 'view' | 'export') {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = req.user && await prisma.user.findUnique({ where: { id: req.user.id }, select: { role: true, isActive: true, permissions: true } });
+      const user = await currentPermissionUser(req, prisma);
       if (!(action === 'export' ? canExportUsage(user || null) : canViewUsage(user || null))) { res.status(403).json({ error: '没有使用统计权限' }); return; }
       next();
     } catch { res.status(503).json({ error: '无法验证当前权限，请稍后重试' }); }

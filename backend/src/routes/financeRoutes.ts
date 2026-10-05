@@ -1,7 +1,8 @@
 import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
-import { prisma, safeRedis } from '../index';
+import { prisma, safeRedis } from '../infrastructure/runtimeResources';
 import { authorize } from '../middleware/authMiddleware';
+import { FinanceInputError, parseFinanceInput, parseFinanceMonth } from '../services/financeInput';
 
 
 const router = Router();
@@ -33,11 +34,7 @@ router.post('/batch', async (req, res) => {
             return res.status(400).json({ error: 'Expected an array of records' });
         }
 
-        const formattedRecords = records.map((record: any) => ({
-            ...record,
-            userId,
-            date: new Date(record.date)
-        }));
+        const formattedRecords = records.map(record => ({ ...parseFinanceInput(record), userId }));
 
         const result = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_import', objectType: 'FinanceRecord' }, tx => tx.financeRecord.createMany({
             data: formattedRecords
@@ -47,6 +44,7 @@ router.post('/batch', async (req, res) => {
 
         res.status(201).json({ count: result.count });
     } catch (error) {
+        if (error instanceof FinanceInputError) return res.status(400).json({ error: error.message });
         console.error('Batch import failed:', error);
         res.status(500).json({ error: 'Failed to batch create finance records' });
     }
@@ -55,11 +53,12 @@ router.post('/batch', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const userId = req.user!.id;
-        const recordData = { ...req.body, userId, date: new Date(req.body.date) };
+        const recordData = { ...parseFinanceInput(req.body), userId };
         const record = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_create', objectType: 'FinanceRecord' }, tx => tx.financeRecord.create({ data: recordData }));
         await safeRedis.del('finance:all');
         res.status(201).json(record);
     } catch (error) {
+        if (error instanceof FinanceInputError) return res.status(400).json({ error: error.message });
         console.error('Failed to create finance record:', error);
         res.status(500).json({ error: 'Failed to create finance record' });
     }
@@ -70,11 +69,7 @@ router.put('/:id', async (req, res) => {
         const existing = await prisma.financeRecord.findFirst({ where: { id: req.params.id } });
         if (!existing) return res.status(404).json({ error: 'Record not found' });
 
-        const recordData = { ...req.body };
-        if (req.body.date) recordData.date = new Date(req.body.date);
-        delete recordData.id;
-        delete recordData.userId;
-        recordData.updatedBy = req.user!.username;
+        const recordData = { ...parseFinanceInput(req.body, true), updatedBy: req.user!.username };
 
         const record = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_update', objectType: 'FinanceRecord' }, tx => tx.financeRecord.update({
             where: { id: req.params.id },
@@ -83,6 +78,7 @@ router.put('/:id', async (req, res) => {
         await safeRedis.del('finance:all');
         res.json(record);
     } catch (error) {
+        if (error instanceof FinanceInputError) return res.status(400).json({ error: error.message });
         console.error('Failed to update finance record:', error);
         res.status(500).json({ error: 'Failed to update finance record' });
     }
@@ -101,17 +97,7 @@ router.delete('/all', authorize('owner'), async (req, res) => {
 
 router.delete('/month/:month', authorize('owner'), async (req, res) => {
     try {
-        const monthParam = Array.isArray(req.params.month) ? req.params.month[0] : req.params.month;
-        const [yearStr, monthStr] = monthParam.split('-');
-        const year = parseInt(yearStr);
-        const month = parseInt(monthStr);
-
-        if (isNaN(year) || isNaN(month)) {
-            return res.status(400).json({ error: 'Invalid month format, expected YYYY-MM' });
-        }
-
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 1);
+        const { startDate, endDate } = parseFinanceMonth(req.params.month);
 
         const result = await withUsageEvent(prisma, req, { module: 'finance', action: 'finance_delete', objectType: 'FinanceRecord' }, tx => tx.financeRecord.deleteMany({
             where: {
@@ -125,6 +111,7 @@ router.delete('/month/:month', authorize('owner'), async (req, res) => {
         await safeRedis.del('finance:all');
         res.json({ message: 'Deleted records', count: result.count });
     } catch (error) {
+        if (error instanceof FinanceInputError) return res.status(400).json({ error: error.message });
         console.error('Delete month failed:', error);
         res.status(500).json({ error: 'Failed to delete finance records for the month' });
     }

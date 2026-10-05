@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import type { YcOpenPlatformClient } from '../../services/ycOpenPlatformClient';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(),
@@ -75,7 +75,7 @@ jest.mock('../../index', () => ({
 }));
 
 import { createRestockV3Router } from '../restockV3Routes';
-import { prisma, safeRedis } from '../../index';
+import { prisma, safeRedis } from '../../infrastructure/runtimeResources';
 
 const mockShopFindFirst = prisma.productAnalysisShop.findFirst as jest.Mock;
 const mockShopFindMany = prisma.productAnalysisShop.findMany as jest.Mock;

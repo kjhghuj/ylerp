@@ -6,11 +6,22 @@ import {loadConfig} from './config';
 import {CredentialStore} from './credentials';
 import {checksumOf} from './validate';
 
+function canonicalDestination(directory: string): string {
+  if (fs.existsSync(directory)) return fs.realpathSync(directory);
+  const parent = path.dirname(directory);
+  if (parent === directory) return directory;
+  return path.join(canonicalDestination(parent), path.basename(directory));
+}
+
+function isOutside(relative: string): boolean {
+  return relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
 /** One-time migration. The original database/files remain available for rollback. */
 export function migrateCollectorData(sourceDirectory: string, destinationDirectory: string) {
   const source = fs.realpathSync(sourceDirectory), destination = path.resolve(destinationDirectory);
-  const relation = path.relative(source, destination);
-  if (!relation || (!relation.startsWith('..') && !path.isAbsolute(relation))) throw new Error('ERP 数据目录不能位于旧采集目录内');
+  const relation = path.relative(source, canonicalDestination(destination));
+  if (!relation || !isOutside(relation)) throw new Error('ERP 数据目录不能位于旧采集目录内');
   if (fs.existsSync(destination)) throw new Error('目标目录已存在，拒绝覆盖 ERP 采集数据');
   const sourceDb = new DatabaseSync(path.join(source, 'collector.db'));
   const staging = `${destination}.migrating-${crypto.randomUUID()}`;
@@ -44,8 +55,9 @@ export function migrateCollectorData(sourceDirectory: string, destinationDirecto
     let summary: {tasks:number;credentials:number;reports:number};
     try {
       const rebase = (file:string, root:string) => {
-        const relative=path.relative(sourceDownloads,file);
-        if(relative.startsWith('..')||path.isAbsolute(relative))throw new Error('历史报表路径不在旧采集器下载目录内');
+        // macOS /var aliases and user directory aliases refer to the same files.
+        const relative=path.relative(sourceDownloads,fs.realpathSync(file));
+        if(isOutside(relative))throw new Error('历史报表路径不在旧采集器下载目录内');
         return path.join(root,'downloads',relative);
       };
       const tasks = migrated.prepare('SELECT id,file_path,file_checksum FROM tasks').all() as {id:number;file_path:string|null;file_checksum:string|null}[];
@@ -73,6 +85,7 @@ export function migrateCollectorData(sourceDirectory: string, destinationDirecto
       try {sourceDb.exec('ROLLBACK');} catch {}
       if(priorPause)sourceDb.prepare("UPDATE app_state SET value=? WHERE key='workerPaused'").run(priorPause.value);
       else sourceDb.prepare("DELETE FROM app_state WHERE key='workerPaused'").run();
+      try { fs.rmSync(staging,{recursive:true,force:true}); } catch {}
     }
     sourceDb.close();
   }

@@ -1,4 +1,4 @@
-jest.mock('../../index',()=>({prisma:{
+jest.mock('../../infrastructure/runtimeResources',()=>({prisma:{
   productAnalysisCollectionRun:{findUnique:jest.fn(),update:jest.fn()},
   productAnalysisCollectorImport:{findUnique:jest.fn(),create:jest.fn()},
 }}));
@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import type {Server} from 'node:http';
 import router from '../productAnalysisImportRoutes';
-import {prisma} from '../../index';
+import {prisma} from '../../infrastructure/runtimeResources';
 import {collectorRequest} from '../../services/productAnalysisCollectorClient';
 
 const runId='11111111-1111-4111-8111-111111111111';

@@ -1,6 +1,6 @@
-jest.mock('../../index',()=>({prisma:{productAnalysisCollectionRun:{update:jest.fn(),updateMany:jest.fn(),findUnique:jest.fn()}}}));
+jest.mock('../../infrastructure/runtimeResources',()=>({prisma:{productAnalysisCollectionRun:{update:jest.fn(),updateMany:jest.fn(),findUnique:jest.fn()}}}));
 jest.mock('../productAnalysisCollectorClient',()=>({collectorRequest:jest.fn()}));
-import {prisma} from '../../index';
+import {prisma} from '../../infrastructure/runtimeResources';
 import {collectorRequest} from '../productAnalysisCollectorClient';
 import {recoverStarting,syncRunStatus} from '../productAnalysisCollectionRuns';
 

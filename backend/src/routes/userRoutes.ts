@@ -1,12 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../infrastructure/runtimeResources';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { authenticate, authorize } from '../middleware/authMiddleware';
 import { encryptYcAppSecret, encryptSecret, AI_KEY_MASK } from '../services/ycCredentials';
 
 const router = Router();
-const prisma = new PrismaClient();
 
 router.use(authenticate);
 

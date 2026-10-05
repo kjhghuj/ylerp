@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     $transaction: jest.fn(),
     product: { count: jest.fn() },
@@ -19,7 +19,7 @@ jest.mock('../../index', () => ({
 }));
 
 import router from '../productDisplayGroupRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const db = prisma as any;
 

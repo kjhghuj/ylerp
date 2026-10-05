@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { all, create } from 'mathjs';
+import { isValidCalendarDate } from '../utils/calendarDate';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -663,6 +664,57 @@ const validateExchangeRateSnapshot = (data: JsonRecord): void => {
   }
 };
 
+const validateTiktokUSShippingData = (data: JsonRecord): void => {
+  const enums: Record<string, readonly number[]> = {
+    usDirectCargoType: [0, 1, 2],
+    usHeadFreightConfigured: [0, 1],
+    usLocalDeliveryMode: [0, 1, 2, 3, 4],
+    usDestinationRegion: [0, 1, 2],
+  };
+  for (const [key, values] of Object.entries(enums)) {
+    if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+    const value = requireFiniteNumber(data[key], key);
+    if (!Number.isInteger(value) || !values.includes(value)) {
+      fail(key, 'must be a supported integer option');
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'usShippingDate')) {
+    const value = requireFiniteNumber(data.usShippingDate, 'usShippingDate');
+    const digits = String(value);
+    if (!Number.isInteger(value) || !/^\d{8}$/.test(digits)) {
+      fail('usShippingDate', 'must be a YYYYMMDD date');
+    }
+    const isoDate = `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6, 8)}`;
+    if (!isValidCalendarDate(isoDate)) {
+      fail('usShippingDate', 'must be a valid calendar date');
+    }
+  }
+
+  if (data.shippingCalculationMode !== 3) return;
+  if (data.usHeadFreightConfigured !== 1) {
+    fail('usHeadFreightConfigured', 'head freight must be explicitly configured for segmented US shipping');
+  }
+  if (![1, 2, 3, 4].includes(data.usLocalDeliveryMode as number)) {
+    fail('usLocalDeliveryMode', 'local delivery must be selected for segmented US shipping');
+  }
+  if (data.usLocalDeliveryMode === 1 && data.lastMileFee !== undefined) {
+    const value = requireFiniteNumber(data.lastMileFee, 'lastMileFee');
+    if (value < 0 || value > Number.MAX_SAFE_INTEGER) fail('lastMileFee', 'is outside the supported range');
+  }
+  if (data.usLocalDeliveryMode !== 2 && data.usLocalDeliveryMode !== 3) return;
+  if (data.usDestinationRegion !== 1) {
+    fail('usDestinationRegion', 'official LIVE delivery requires the contiguous 48 US states');
+  }
+  for (const key of ['usPackageLengthCm', 'usPackageWidthCm', 'usPackageHeightCm']) {
+    if (requireFiniteNumber(data[key], key) <= 0) fail(key, 'must be positive for official LIVE delivery');
+  }
+  if (data.usShippingDate === undefined) fail('usShippingDate', 'is required for official LIVE delivery');
+  if ((data.usShippingDate as number) < 20260921 || (data.usShippingDate as number) > 20270117) {
+    fail('usShippingDate', 'official LIVE delivery requires a verified date from 20260921 through 20270117');
+  }
+};
+
 const validateStandardData = (data: JsonRecord): void => {
   if (data.schemaVersion !== undefined) {
     validateCurrentSchemaVersion(data.schemaVersion);
@@ -670,6 +722,37 @@ const validateStandardData = (data: JsonRecord): void => {
     fail('schemaVersion', `is required for current standard templates`);
   }
   validateExchangeRateSnapshot(data);
+  if (Object.prototype.hasOwnProperty.call(data, 'shippingCalculationMode')) {
+    const mode = requireFiniteNumber(data.shippingCalculationMode, 'shippingCalculationMode');
+    if (![0, 1, 2, 3, 4].includes(mode)) {
+      fail('shippingCalculationMode', 'must be 0 (legacy rates), 1 (SEA automatic), 2 (manual total), 3 (segmented US shipping), or 4 (US 4PL direct mail)');
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(data, 'tiktokFeePolicy')) {
+    const policy = requireRecord(data.tiktokFeePolicy, 'tiktokFeePolicy');
+    if (policy.version !== 1) fail('tiktokFeePolicy.version', 'must be supported version 1');
+    if (typeof policy.presetId !== 'string' || !['MYR', 'SGD', 'PHP', 'THB', 'USD', 'manual'].includes(policy.presetId)) {
+      fail('tiktokFeePolicy.presetId', 'must be a supported preset');
+    }
+    if (policy.presetProfile !== undefined && (policy.presetProfile !== 'us-cross-border' || policy.presetId !== 'USD')) {
+      fail('tiktokFeePolicy.presetProfile', 'must be us-cross-border with the USD preset');
+    }
+    if (policy.presetId === 'manual') {
+      if (policy.verifiedAt !== null) fail('tiktokFeePolicy.verifiedAt', 'must be null for unverified manual rules');
+    } else {
+      const date = requireString(policy.verifiedAt, 'tiktokFeePolicy.verifiedAt');
+      if (!isValidCalendarDate(date)) fail('tiktokFeePolicy.verifiedAt', 'must be a valid date');
+    }
+  }
+  const rates = ['platformCommissionRate', 'transactionFeeRate', 'affiliateCommissionRate', 'growthServiceFeeRate', 'shippingServiceFeeRate', 'campaignServiceFeeRate'];
+  const amounts = ['buyerShippingFee', 'shippingSubsidy', 'tiktokOrderFee', 'affiliateProductTax', 'growthServiceFeeCap', 'shippingServiceFeeCap', 'campaignServiceFeeCap', 'manualShippingFee',
+    'usHeadFreightFee', 'usHeadFreightRatePerKg', 'usPackageLengthCm', 'usPackageWidthCm', 'usPackageHeightCm', 'usDirectExtraFee'];
+  for (const key of [...rates, ...amounts]) {
+    if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
+    const value = requireFiniteNumber(data[key], key);
+    if (value < 0 || value > (rates.includes(key) ? 100 : Number.MAX_SAFE_INTEGER)) fail(key, 'is outside the supported range');
+  }
+  validateTiktokUSShippingData(data);
 };
 
 const validateTemplateData = (

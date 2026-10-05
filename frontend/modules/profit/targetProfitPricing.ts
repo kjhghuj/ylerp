@@ -1,7 +1,8 @@
 import { calculateProfit, type ProfitResult } from './calculateProfit';
+import { getProfitCalculationContext } from './tiktokFeePolicy';
 import { hasRuntimeGraphClaim } from './graphNodeSavePreparation';
 import { normalizeProfitGlobalInputs, normalizeSiteInputs, normalizeStandardNodeData,
-  parseCanonicalPositiveRate, validateCouponRevenueBudget, type ProfitInputError } from './profitInputNormalization';
+  parseCanonicalPositiveRate, validateCouponRevenueBudget, validateTiktokShippingWeight, type ProfitInputError } from './profitInputNormalization';
 import { normalizeCurrencyCode, type CurrencyCode, type PlatformNode, type ProfitGlobalInputs, type SiteLevelInputs } from './types';
 
 export const PRICING_LIMITS = { minCents: 1, maxCents: 100_000_000, maxEvaluations: 256 } as const;
@@ -46,7 +47,12 @@ export const solveTargetProfitPrice = (input: TargetPricingInput): TargetPricing
   if (global.ok === false || data.ok === false || site.ok === false) return fail('invalid_inputs', [
     ...(global.ok === false ? global.errors : []), ...(data.ok === false ? data.errors : []), ...(site.ok === false ? site.errors : []),
   ]);
+  let context: ReturnType<typeof getProfitCalculationContext>;
+  try { context = getProfitCalculationContext(input.node.platform, input.node.persistedData); }
+  catch { return fail('invalid_inputs', [{ field: 'tiktokFeePolicy', code: 'invalid_enum' }]); }
   const currency = normalizeCurrencyCode(input.currency) as CurrencyCode;
+  const shippingErrors = validateTiktokShippingWeight(input.node.platform, data.value, global.value.productWeight, currency);
+  if (shippingErrors.length > 0) return fail('invalid_inputs', shippingErrors);
   const platformCouponCNY = data.value.platformCoupon / rate.value;
   const percentCoupon = site.value.sellerCouponType === 'percent';
   const fraction = percentCoupon ? site.value.sellerCoupon / 100 : 0;
@@ -63,7 +69,7 @@ export const solveTargetProfitPrice = (input: TargetPricingInput): TargetPricing
     const candidate = { ...site.value, totalRevenue: cents / 100 };
     if (validateCouponRevenueBudget(data.value, candidate, rate.value).length > 0) return null;
     try {
-      const result = calculateProfit(data.value, global.value, candidate, rate.value, currency);
+      const result = calculateProfit(data.value, global.value, candidate, rate.value, currency, context);
       return result.revenueAfterSellerCoupon > 0 && result.margin >= target ? result : null;
     } catch { return null; }
   };

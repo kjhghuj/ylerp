@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../services/jwtSecret';
+import { hasAnyPermission, rememberAuthenticatedUser } from './requestPermissions';
+import { prisma } from '../infrastructure/runtimeResources';
 
 export interface AuthUser {
     id: string;
@@ -21,8 +23,6 @@ declare global {
 /**
  * Verify JWT token and attach user to request
  */
-import { prisma } from '../index';
-
 export const authenticate = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authHeader = req.headers.authorization;
 
@@ -44,6 +44,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
             return;
         }
         req.user = { id: current.id, username: current.username, role: current.role, permissions: current.permissions };
+        rememberAuthenticatedUser(req);
         next();
     } catch (error) {
         res.status(401).json({ error: '登录已过期，请重新登录' });
@@ -58,10 +59,7 @@ export const authorizeAnyPermission = (...permissionKeys: string[]) => {
             return;
         }
         const permissions = user.permissions || [];
-        const allowed = user.role === 'owner' || permissions.includes('*') || permissionKeys.some(key => {
-            const moduleKey = key.includes('.') ? key.split('.')[0] : key;
-            return permissions.includes(key) || permissions.includes(moduleKey);
-        });
+        const allowed = user.role === 'owner' || hasAnyPermission(permissions, permissionKeys);
         if (!allowed) {
             res.status(403).json({ error: '权限不足' });
             return;

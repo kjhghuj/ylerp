@@ -1,5 +1,5 @@
-jest.mock('../../index',()=>({prisma:{$transaction:jest.fn(),productAnalysisDailyUpload:{findFirst:jest.fn(),updateMany:jest.fn(),create:jest.fn()},usageEvent:{create:jest.fn()}}}));
-import {prisma} from '../../index';
+jest.mock('../../infrastructure/runtimeResources',()=>({prisma:{$transaction:jest.fn(),productAnalysisDailyUpload:{findFirst:jest.fn(),updateMany:jest.fn(),create:jest.fn()},usageEvent:{create:jest.fn()}}}));
+import {prisma} from '../../infrastructure/runtimeResources';
 import {ingestDailyReport} from '../productAnalysisDailyIngest';
 import {validateDailyUploadPayload} from '../productAnalysisUpload';
 

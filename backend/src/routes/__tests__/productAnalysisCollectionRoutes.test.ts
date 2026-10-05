@@ -1,4 +1,4 @@
-jest.mock('../../index',()=>({prisma:{
+jest.mock('../../infrastructure/runtimeResources',()=>({prisma:{
   $transaction:jest.fn(),
   user:{findUnique:jest.fn()},
   productAnalysisShop:{findFirst:jest.fn()},
@@ -12,7 +12,7 @@ jest.mock('../../services/productAnalysisBackfill',()=>({recordPluginSync:jest.f
 
 import type {Request,Response} from 'express';
 import router from '../productAnalysisCollectionRoutes';
-import {prisma} from '../../index';
+import {prisma} from '../../infrastructure/runtimeResources';
 import {collectorRequest,collectorReportFile} from '../../services/productAnalysisCollectorClient';
 import {CredentialInputError} from '../../collector/credentials';
 import {recordPluginSync,fetchCollectorSyncStatus,notifyBackfillRunAction} from '../../services/productAnalysisBackfill';

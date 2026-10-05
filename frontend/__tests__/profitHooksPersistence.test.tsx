@@ -9,6 +9,7 @@ import { DEFAULT_PRODUCT_TAX_RATES } from '../modules/productTaxRates';
 import type { NodeGraphTemplate } from '../modules/profit/nodeGraphTypes';
 import { prepareGraphNodeForSave } from '../modules/profit/graphNodeSavePreparation';
 import { serializePlatformNodeTemplateData } from '../modules/profit/templateDataSerializer';
+import { createTiktokNode } from '../modules/profit/tiktokFeePolicy';
 import {
   DEFAULT_NODE_DATA,
   DEFAULT_SITE_INPUTS,
@@ -440,6 +441,231 @@ describe('useProfitImport persistence compatibility', () => {
 describe('useProductActions persistence payloads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('allows only TikTok blank nodes at the US site while retaining existing nodes', () => {
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS } }, vi.fn()));
+    act(() => { result.current.handleAddBlankNode('shopee'); });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    act(() => { result.current.handleAddBlankNode('tiktok'); });
+    const update = store.setProfitNodes.mock.calls[0][0];
+    expect(update({ USD: [] }).USD[0]).toMatchObject({ name: '跨境', platform: 'tiktok', currency: 'USD', data: { platformCommissionRate: 6, transactionFeeRate: 0 } });
+  });
+
+  it('applies the US cross-border defaults once to an existing named node while retaining 3PF', () => {
+    const cross: PlatformNode = { id: 'cross', name: '跨境', platform: 'tiktok', currency: 'USD', data: { ...DEFAULT_NODE_DATA, manualShippingFee: 9, affiliateCommissionRate: 15 } };
+    const threePF = { ...cross, id: '3pf', name: '3PF' };
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [cross, threePF] } };
+    testState.store = store;
+    const { rerender } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS } }, vi.fn()));
+    expect(store.setProfitNodes).toHaveBeenCalledTimes(1);
+    const upgraded = store.setProfitNodes.mock.calls[0][0](store.profitNodes);
+    expect(upgraded.USD[0].data).toMatchObject({ platformCommissionRate: 6, transactionFeeRate: 0, manualShippingFee: 9, affiliateCommissionRate: 15 });
+    expect(upgraded.USD[1]).toBe(threePF);
+    upgraded.USD[0].data.platformCommissionRate = 5;
+    store.profitNodes = upgraded;
+    store.setProfitNodes.mockClear();
+    rerender();
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    expect(store.profitNodes.USD[0].data.platformCommissionRate).toBe(5);
+  });
+
+  it('retains a legacy US fixed fee when automatically applying cross-border defaults', () => {
+    const cross: PlatformNode = { id: 'legacy-fixed', name: '跨境', platform: 'tiktok', currency: 'USD', data: { ...DEFAULT_NODE_DATA } };
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [cross] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS, platformInfrastructureFee: 2 } }, vi.fn()));
+    expect(store.setProfitNodes).toHaveBeenCalledTimes(1);
+    const upgraded = store.setProfitNodes.mock.calls[0][0](store.profitNodes);
+    expect(upgraded.USD[0].data.tiktokOrderFee).toBe(0.28);
+    expect(result.current.tiktokUpgradeIds).toEqual([]);
+    expect(cross.persistedData).toBeUndefined();
+  });
+
+  it('defers a legacy fixed-fee conversion until the USD exchange rate is available', () => {
+    const cross: PlatformNode = { id: 'deferred', name: '跨境', platform: 'tiktok', currency: 'USD', data: { ...DEFAULT_NODE_DATA } };
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [cross] } };
+    testState.store = store;
+    const { rerender } = renderHook(({ rate }) => useProductActions([], vi.fn(), { ...validExchangeRates, USD: rate },
+      { USD: { ...DEFAULT_SITE_INPUTS, platformInfrastructureFee: 2 } }, vi.fn()), { initialProps: { rate: NaN } });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    rerender({ rate: 0.14 });
+    expect(store.setProfitNodes).toHaveBeenCalledTimes(1);
+    expect(store.setProfitNodes.mock.calls[0][0](store.profitNodes).USD[0].data.tiktokOrderFee).toBe(0.28);
+  });
+
+  it('does not apply an earlier site fixed fee to nodes replaced by a pending import', () => {
+    const oldNode: PlatformNode = { id: 'old-cross', name: '跨境', platform: 'tiktok', currency: 'USD', data: { ...DEFAULT_NODE_DATA } };
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [oldNode] } };
+    testState.store = store;
+    const { rerender } = renderHook(({ fixedFee }) => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS, platformInfrastructureFee: fixedFee } }, vi.fn()), { initialProps: { fixedFee: 2 } });
+    const queuedUpdate = store.setProfitNodes.mock.calls[0][0];
+    const importedNode = { ...oldNode, id: 'new-import' };
+    const imported = { USD: [importedNode] };
+    expect(queuedUpdate(imported)).toBe(imported);
+    expect(importedNode.persistedData).toBeUndefined();
+    store.profitNodes = imported;
+    store.setProfitNodes.mockClear();
+    rerender({ fixedFee: 5 });
+    expect(store.setProfitNodes.mock.calls[0][0](imported).USD[0].data.tiktokOrderFee).toBe(0.7);
+  });
+
+  it('blocks an empty US product save when its default template has no valid exchange rate', async () => {
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [] } };
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: { id: 'should-not-save' }, productTemplates: [] });
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates,
+      { USD: { ...DEFAULT_SITE_INPUTS } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(testState.showToast).toHaveBeenCalledWith(strings.profit.errors.rateFetchFailed, 'error');
+  });
+
+  it('saves US product membership, USD TikTok fees and an exchange-rate snapshot together', async () => {
+    const node = createTiktokNode('USD', 'TK US');
+    node.data.manualShippingFee = 12;
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [node] } };
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: { id: 'us-product' }, productTemplates: [] });
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS, totalRevenue: 200 } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      product: expect.objectContaining({ country: 'US', sites: ['US'], siteData: { US: expect.objectContaining({ totalRevenue: 200 }) } }),
+      templateMutations: [expect.objectContaining({ country: 'USD', platform: 'tiktok',
+        data: expect.objectContaining({ manualShippingFee: 12, shippingCalculationMode: 2, exchangeRate: 0.14,
+          exchangeRateAt: expect.any(String) }) })],
+    }));
+  });
+
+  it('retains the US site patch when saving an existing USD product', async () => {
+    const node = createTiktokNode('USD', 'TK US');
+    const existing = { id: 'existing-us', name: 'Product', sku: 'SKU-1', country: 'US' };
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitEditingProductId: existing.id,
+      profitNodes: { USD: [node] }, products: [existing] };
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: existing, productTemplates: [] });
+    testState.api.get.mockResolvedValueOnce({ data: [] });
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS, totalRevenue: 200 } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      sitePatch: { sites: ['US'], siteData: { US: expect.objectContaining({ totalRevenue: 200 }) } },
+    }), 'existing-us');
+  });
+
+  it('uses a TikTok default template when saving a US product with no nodes', async () => {
+    const store = { ...baseStore(), profitSiteCurrency: 'USD', profitNodes: { USD: [] } };
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: { id: 'us-empty-product' }, productTemplates: [] });
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, USD: 0.14 },
+      { USD: { ...DEFAULT_SITE_INPUTS } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).toHaveBeenCalledWith(expect.objectContaining({
+      ensureDefaultTemplate: expect.objectContaining({ country: 'USD', platform: 'tiktok',
+        name: 'Product',
+        data: expect.objectContaining({ platformCommissionRate: 6, transactionFeeRate: 0,
+          exchangeRate: 0.14, exchangeRateAt: expect.any(String),
+          shippingCalculationMode: 2,
+          tiktokFeePolicy: expect.objectContaining({ presetId: 'USD', presetProfile: 'us-cross-border' }) }) }),
+    }));
+  });
+
+  it.each([0, 20001])('blocks automatic TK product saving at invalid weight %s without relying on card callbacks', async productWeight => {
+    const node = createTiktokNode('THB', 'TK');
+    const store = { ...baseStore(), profitSiteCurrency: 'THB',
+      profitGlobalInputs: { ...baseStore().profitGlobalInputs, productWeight },
+      profitNodes: { ...baseStore().profitNodes, THB: [node] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates, { THB: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).not.toHaveBeenCalled();
+    expect(result.current.inputErrors).toContainEqual(expect.objectContaining({ field: 'productWeight' }));
+  });
+
+  it('persists the automatic shipping choice through the actual product save flow', async () => {
+    const node = createTiktokNode('MYR', 'TK');
+    const store = { ...baseStore(), profitNodes: { ...baseStore().profitNodes, MYR: [node] } };
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: { id: 'auto-product' }, productTemplates: [] });
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } }, vi.fn()));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.saveProductWithTemplates).toHaveBeenCalledOnce();
+    const payload = store.saveProductWithTemplates.mock.calls[0][0];
+    expect(JSON.stringify(payload)).toContain('"shippingCalculationMode":1');
+  });
+
+  it('keeps TK upgrade and edits in memory until a successful shared-template save', async () => {
+    const legacy: PlatformNode = { id: 'tk-old', platform: 'tiktok', currency: 'MYR', data: { ...DEFAULT_NODE_DATA, platformCommissionRate: 8, transactionFeeRate: 2, baseShippingFee: 5 } };
+    const store = { ...baseStore(), profitNodes: { ...baseStore().profitNodes, MYR: [legacy] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), { ...validExchangeRates, MYR: 2 }, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100, platformInfrastructureFee: 3 } }, vi.fn()));
+    act(() => result.current.handleUpgradeTiktok(legacy.id));
+    act(() => result.current.handleUpdateNode(legacy.id, { affiliateCommissionRate: 12 }));
+    expect(result.current.nodes[0].data).toMatchObject({ platformCommissionRate: 8, transactionFeeRate: 2, tiktokOrderFee: 6, affiliateCommissionRate: 12 });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    expect(legacy.persistedData).toBeUndefined();
+    testState.api.post.mockRejectedValueOnce(new Error('save failed'));
+    await act(async () => { await result.current.handleSaveTemplate(legacy.id, 'TK upgrade'); });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    expect(result.current.tiktokUpgradeIds).toEqual([legacy.id]);
+    testState.api.post.mockResolvedValueOnce({ data: { id: 'saved', name: 'TK upgrade' } });
+    await act(async () => { await result.current.handleSaveTemplate(legacy.id, 'TK upgrade'); });
+    expect(testState.api.post).toHaveBeenLastCalledWith('/templates', expect.objectContaining({ data: expect.objectContaining({ affiliateCommissionRate: 12, tiktokOrderFee: 6, tiktokFeePolicy: { version: 1, presetId: 'MYR', verifiedAt: '2026-10-04' } }) }));
+    const commit = store.setProfitNodes.mock.calls[0][0];
+    expect(commit(store.profitNodes).MYR[0].data.affiliateCommissionRate).toBe(12);
+    expect(result.current.tiktokUpgradeIds).toEqual([]);
+  });
+
+  it('cancels a TK upgrade without writing or changing historical inputs', () => {
+    const legacy: PlatformNode = { id: 'tk-cancel', platform: 'tiktok', currency: 'MYR', data: { ...DEFAULT_NODE_DATA, transactionFeeRate: 1 } };
+    const store = { ...baseStore(), profitNodes: { ...baseStore().profitNodes, MYR: [legacy] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS } }, vi.fn()));
+    act(() => result.current.handleUpgradeTiktok(legacy.id));
+    act(() => result.current.handleUpdateNode(legacy.id, { transactionFeeRate: 9 }));
+    act(() => result.current.handleCancelTiktokUpgrade(legacy.id));
+    expect(result.current.nodes[0]).toBe(legacy);
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+  });
+
+  it('saves a TK upgrade through the atomic product flow and commits only on success', async () => {
+    const legacy: PlatformNode = { id: 'tk-product', platform: 'tiktok', currency: 'MYR', data: { ...DEFAULT_NODE_DATA, transactionFeeRate: 2 } };
+    const store = { ...baseStore(), profitNodes: { ...baseStore().profitNodes, MYR: [legacy] } };
+    testState.store = store;
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } }, vi.fn()));
+    act(() => result.current.handleUpgradeTiktok(legacy.id));
+    store.saveProductWithTemplates.mockRejectedValueOnce(new Error('rollback'));
+    await act(async () => { await result.current.handleSaveProduct(); });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    store.saveProductWithTemplates.mockResolvedValueOnce({ product: { id: 'saved-product' }, productTemplates: [] });
+    await act(async () => { await result.current.handleSaveProduct(); });
+    const commit = store.setProfitNodes.mock.calls[0][0];
+    expect(serializePlatformNodeTemplateData(commit(store.profitNodes).MYR[0])).toMatchObject({ tiktokFeePolicy: { version: 1, presetId: 'MYR' }, transactionFeeRate: 2 });
+    expect(result.current.tiktokUpgradeIds).toEqual([]);
+  });
+
+  it('does not replace edits made during a pending TK upgrade save', async () => {
+    const legacy: PlatformNode = { id: 'tk-race', platform: 'tiktok', currency: 'MYR', data: { ...DEFAULT_NODE_DATA } };
+    const store = { ...baseStore(), profitNodes: { ...baseStore().profitNodes, MYR: [legacy] } };
+    testState.store = store;
+    let finish: (value: unknown) => void;
+    testState.api.post.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const { result } = renderHook(() => useProductActions([], vi.fn(), validExchangeRates, { MYR: { ...DEFAULT_SITE_INPUTS, totalRevenue: 100 } }, vi.fn()));
+    act(() => result.current.handleUpgradeTiktok(legacy.id));
+    let save: Promise<void>;
+    act(() => { save = result.current.handleSaveTemplate(legacy.id, 'TK race'); });
+    act(() => result.current.handleUpdateNode(legacy.id, { affiliateCommissionRate: 15 }));
+    await act(async () => { finish!({ data: { id: 'shared' } }); await save!; });
+    expect(store.setProfitNodes).not.toHaveBeenCalled();
+    expect(result.current.nodes[0].data.affiliateCommissionRate).toBe(15);
+    expect(result.current.tiktokUpgradeIds).toEqual([legacy.id]);
   });
 
   it('trims name and SKU once for validation, lookup, and the saved payload', async () => {
@@ -1069,7 +1295,7 @@ describe('useProductActions persistence payloads', () => {
     const { result } = renderHook(() => useProductActions(
       [],
       vi.fn(),
-      {},
+      validExchangeRates,
       { MYR: { ...DEFAULT_SITE_INPUTS } },
       vi.fn(),
     ));
@@ -1088,7 +1314,8 @@ describe('useProductActions persistence payloads', () => {
         country: 'MYR',
         platform: 'other',
         type: 'profit',
-        data: expect.objectContaining({ vatRate: -5, corporateIncomeTaxRate: 125 }),
+        data: expect.objectContaining({ vatRate: -5, corporateIncomeTaxRate: 125,
+          exchangeRate: validExchangeRates.MYR, exchangeRateAt: expect.any(String) }),
       }),
     });
   });

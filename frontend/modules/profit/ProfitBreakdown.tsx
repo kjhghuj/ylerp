@@ -128,6 +128,17 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
         { id: 'commission', label: t.results.commission, cnyValue: result.commission, tone: 'deduction', optional: true, nested: true },
         { id: 'transactionFee', label: t.results.transFee, cnyValue: result.transactionFee, tone: 'deduction', optional: true, nested: true },
         { id: 'serviceFee', label: t.results.serviceFee, cnyValue: result.serviceFee, tone: 'deduction', optional: true, nested: true },
+        ...(result.affiliateCommission !== undefined ? [
+          { id: 'growthServiceFee', label: t.tiktok.growthFee, cnyValue: result.growthServiceFee ?? 0, tone: 'deduction' as const, optional: true, nested: true },
+          { id: 'shippingServiceFee', label: t.tiktok.shippingServiceFee, cnyValue: result.shippingServiceFee ?? 0, tone: 'deduction' as const, optional: true, nested: true },
+          { id: 'campaignServiceFee', label: t.tiktok.campaignFee, cnyValue: result.campaignServiceFee ?? 0, tone: 'deduction' as const, optional: true, nested: true },
+          ...(result.campaignServiceFeeBase !== undefined && (result.campaignServiceFee ?? 0) > 0 ? [{ id: 'campaignServiceFeeBase', label: t.tiktok.usCampaignBase, cnyValue: result.campaignServiceFeeBase, tone: 'neutral' as const, nested: true }] : []),
+          { id: 'orderFee', label: t.tiktok.orderFee, cnyValue: result.orderFee ?? 0, tone: 'deduction' as const, optional: true, nested: true },
+          { id: 'affiliateCommission', label: t.tiktok.affiliateFee, cnyValue: result.affiliateCommission, tone: 'deduction' as const, optional: true, nested: true },
+          { id: 'commissionBase', label: currency === 'USD' ? t.tiktok.usCommissionBase : t.tiktok.commissionBase, cnyValue: result.commissionBase ?? 0, tone: 'neutral' as const, nested: true },
+          { id: 'transactionFeeBase', label: t.tiktok.transactionBase, cnyValue: result.transactionFeeBase ?? 0, tone: 'neutral' as const, nested: true },
+          { id: 'affiliateCommissionBase', label: t.tiktok.affiliateBase, cnyValue: result.affiliateCommissionBase ?? 0, tone: 'neutral' as const, nested: true },
+        ] : []),
         { id: 'adFee', label: t.results.adFee, cnyValue: result.adFee, tone: 'deduction', optional: true, nested: true },
         { id: 'damage', label: t.results.damage, cnyValue: result.damage, tone: 'deduction', optional: true, nested: true },
       ],
@@ -136,7 +147,16 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
       id: 'logisticsTax',
       title: t.breakdown.logisticsAndTax,
       rows: [
-        { id: 'shippingFee', label: t.results.shipping, cnyValue: result.shippingFee, tone: 'deduction' },
+        { id: 'shippingFee', label: result.shippingFee < 0 ? t.tiktok.netShippingIncome : t.results.shipping, cnyValue: Math.abs(result.shippingFee), tone: result.shippingFee < 0 ? 'info' : 'deduction' },
+        ...(result.actualShippingFee !== undefined ? [
+          { id: 'actualShippingFee', label: t.tiktok.actualShipping, cnyValue: result.actualShippingFee, tone: 'neutral' as const, nested: true },
+          ...(result.usHeadFreightFee !== undefined ? [
+            { id: 'usHeadFreightFee', label: t.inputs.usHeadFreightFee, cnyValue: result.usHeadFreightFee, tone: 'neutral' as const, nested: true },
+            { id: 'usLocalDeliveryFee', label: t.inputs.usLocalDeliveryFee, cnyValue: result.usLocalDeliveryFee ?? 0, tone: 'neutral' as const, nested: true },
+          ] : []),
+          { id: 'buyerShippingFee', label: t.inputs.buyerShippingFee, cnyValue: result.buyerShippingFee ?? 0, tone: 'info' as const, optional: true, nested: true },
+          { id: 'shippingSubsidy', label: t.inputs.shippingSubsidy, cnyValue: result.shippingSubsidy ?? 0, tone: 'info' as const, optional: true, nested: true },
+        ] : []),
         { id: 'totalTax', label: t.results.totalTax, cnyValue: result.totalTax, tone: 'deduction' },
         { id: 'vat', label: t.results.vat, cnyValue: result.vat, tone: 'deduction', optional: true, nested: true },
         { id: 'corporateTax', label: t.results.corpTax, cnyValue: result.corporateIncomeTax, tone: 'deduction', optional: true, nested: true },
@@ -150,7 +170,7 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
         { id: 'costTaxAmount', label: t.results.costTaxAmount, cnyValue: result.costTaxAmount, tone: 'info', optional: true },
       ],
     },
-  ], [result, t]);
+  ], [result, t, currency]);
 
   const allValues = useMemo(() => [
     ...groups.flatMap(group => group.rows.map(row => signedValue(row))),
@@ -171,7 +191,7 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
     { id: 'summaryRevenue', label: t.breakdown.salesRevenue, cnyValue: result.totalRevenue, tone: 'neutral' },
     { id: 'summaryCoupon', label: t.results.sellerCouponSellerContribution, cnyValue: result.sellerCouponSellerContribution, tone: 'deduction' },
     { id: 'summaryPlatform', label: t.results.platformFee, cnyValue: result.platformFee, tone: 'deduction' },
-    { id: 'summaryShipping', label: t.results.shipping, cnyValue: result.shippingFee, tone: 'deduction' },
+    { id: 'summaryShipping', label: result.shippingFee < 0 ? t.tiktok.netShippingIncome : t.results.shipping, cnyValue: Math.abs(result.shippingFee), tone: result.shippingFee < 0 ? 'info' : 'deduction' },
     { id: 'summaryTax', label: t.results.totalTax, cnyValue: result.totalTax, tone: 'deduction' },
     { id: 'summaryCost', label: t.inputs.cost, cnyValue: result.purchaseCost, tone: 'deduction' },
   ], [result, t]);

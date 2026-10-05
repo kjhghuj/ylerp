@@ -19,6 +19,7 @@ const COUNTRY_TO_CURRENCY: Readonly<Record<string, string>> = Object.freeze({
   TH: 'THB',
   ID: 'IDR',
   CN: 'CNY',
+  US: 'USD',
 });
 const SUPPORTED_PRODUCT_TEMPLATE_CURRENCIES = new Set(Object.values(COUNTRY_TO_CURRENCY));
 

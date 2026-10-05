@@ -1,8 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { decryptSecret } from './ycCredentials';
 import { GLM_API_KEY, GLM_BASE_URL, GLM_MODEL, GLM_TIMEOUT_MS } from './glm/glmConfig';
 import {
+  ApiError,
   ARK_API_KEY,
   ARK_ENDPOINT_ID,
   ARK_ENDPOINT_ID_SEEDREAM_5_LITE,
@@ -50,6 +51,22 @@ const safeDecrypt = (encrypted: string | null | undefined): string | null => {
 const pickOverride = (value: unknown, fallback: string): string =>
   typeof value === 'string' && value.trim() ? value.trim() : fallback;
 
+function resolveProviderCredential(baseUrl: string, fallbackUrl: string, personalKey: string | null, serverKey: string): string {
+  let url: URL;
+  try { url = new URL(baseUrl); }
+  catch { throw new ApiError(400, 'AI 服务地址无效'); }
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
+    throw new ApiError(400, 'AI 服务地址无效');
+  }
+  if (personalKey) return personalKey;
+  // A user-controlled destination must never receive the shared server API key.
+  let serverOrigin: string;
+  try { serverOrigin = new URL(fallbackUrl).origin; }
+  catch { throw new ApiError(503, '服务器 AI 服务地址无效', true); }
+  if (url.origin !== serverOrigin) throw new ApiError(400, '使用自定义 AI 服务地址时，请配置自己的 API Key');
+  return serverKey;
+}
+
 const readEndpointOverrides = (stored: unknown): Record<string, unknown> => {
   if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
   const source = stored as Record<string, unknown>;
@@ -72,9 +89,10 @@ export async function resolveChatAiConfig(
     where: { id: userId },
     select: { aiChatBaseUrl: true, aiChatApiKeyEnc: true, aiChatModel: true },
   });
+  const baseUrl = pickOverride(user?.aiChatBaseUrl, GLM_BASE_URL);
   return {
-    apiKey: safeDecrypt(user?.aiChatApiKeyEnc) ?? GLM_API_KEY,
-    baseUrl: pickOverride(user?.aiChatBaseUrl, GLM_BASE_URL),
+    apiKey: resolveProviderCredential(baseUrl, GLM_BASE_URL, safeDecrypt(user?.aiChatApiKeyEnc), GLM_API_KEY),
+    baseUrl,
     model: pickOverride(user?.aiChatModel, GLM_MODEL),
     timeoutMs: GLM_TIMEOUT_MS,
   };
@@ -90,9 +108,10 @@ export async function resolveImageAiConfig(
     select: { aiImageApiKeyEnc: true, aiImageBaseUrl: true, aiImageEndpoints: true },
   });
   const overrides = readEndpointOverrides(user?.aiImageEndpoints);
+  const baseUrl = pickOverride(user?.aiImageBaseUrl, DEFAULT_ARK_BASE_URL);
   return {
-    apiKey: safeDecrypt(user?.aiImageApiKeyEnc) ?? ARK_API_KEY,
-    baseUrl: pickOverride(user?.aiImageBaseUrl, DEFAULT_ARK_BASE_URL),
+    apiKey: resolveProviderCredential(baseUrl, DEFAULT_ARK_BASE_URL, safeDecrypt(user?.aiImageApiKeyEnc), ARK_API_KEY),
+    baseUrl,
     endpoints: {
       analysisLite: pickOverride(overrides.analysisLite, ARK_ANALYSIS_ENDPOINT_ID),
       analysisMini: pickOverride(overrides.analysisMini, ARK_ANALYSIS_ENDPOINT_ID_SEED_2_MINI),

@@ -58,10 +58,10 @@ export const BuyerPaidPrices = ({ siteInputs, siteCountry, exchangeRate, t }: {
             siteInputs.totalRevenue, siteInputs.sellerCoupon, siteInputs.sellerCouponType,
             exchangeRate, siteCountry, t.inputs.buyerPaidPrice,
         )}</div>
-        <div className="text-orange-600">{renderBuyerPaidPrice(
+        {normalizeCurrencyCode(siteCountry) !== 'USD' && <div className="text-orange-600">{renderBuyerPaidPrice(
             siteInputs.totalRevenue, siteInputs.sellerCoupon, siteInputs.sellerCouponType,
             exchangeRate, siteCountry, t.inputs.crossBorderBuyerPaidPrice,
             STOREFRONT_DISPLAY_TAX_RATES[normalizeCurrencyCode(siteCountry) as CurrencyCode] ?? NaN,
-        )}</div>
+        )}</div>}
     </div>
 );

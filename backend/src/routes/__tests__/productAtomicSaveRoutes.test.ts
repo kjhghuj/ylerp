@@ -9,7 +9,7 @@ const rootLinkDeleteMany = jest.fn();
 const transaction = jest.fn();
 const redisDel = jest.fn();
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     $transaction: transaction,
     product: {
@@ -210,6 +210,20 @@ describe('atomic product and template routes', () => {
     transaction.mockReset();
     createUsageEvent.mockResolvedValue(undefined);
     redisDel.mockResolvedValue(undefined);
+  });
+
+  it.each(['US', 'USD'])('saves a US product and canonical USD TikTok template from %s', async country => {
+    const { res, tx } = await invoke('post', {
+      product: { ...baseProduct, country: 'US', sites: ['US'], siteData: { US: { totalRevenue: 200 } } },
+      templateMutations: [createMutation({ country, platform: 'tiktok', data: standardData })],
+    });
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(tx.product.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      country: 'US', sites: ['US'], siteData: { US: { totalRevenue: 200 } },
+    }) });
+    expect(tx.productProfitTemplate.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      country: 'USD', platform: 'tiktok', data: standardData,
+    }) });
   });
 
   it.each([

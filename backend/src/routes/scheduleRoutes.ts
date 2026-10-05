@@ -1,6 +1,6 @@
 import { withUsageEvent } from '../services/usageEvents';
 import { Router, Request, Response } from 'express';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 
 
 const router = Router();

@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
+import { parsePagination } from '../utils/queryParams';
 
 const router = Router();
 
@@ -75,19 +76,20 @@ async function cleanupOldImages(userId: string): Promise<void> {
 router.get('/records', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const pagination = parsePagination(req.query);
+    if (!pagination) return res.status(400).json({ error: 'Invalid pagination parameters' });
+    const { page, limit, skip } = pagination;
     const legacy = req.query.source === 'legacy';
     if (legacy) {
       const [records, total] = await prisma.$transaction([
-        prisma.chromaGenerationRecord.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+        prisma.chromaGenerationRecord.findMany({ where: { userId }, orderBy: { createdAt: 'desc' }, skip, take: limit }),
         prisma.chromaGenerationRecord.count({ where: { userId } }),
       ]);
       return res.json({ records: records.map(r => ({ ...r, provenance: 'legacy_unverified', costLabel: '历史上报估算' })), total, page, limit });
     }
     const where = { userId, provenance: 'native' };
     const [calls, total, legacyTotal] = await prisma.$transaction([
-      prisma.aiUsageCall.findMany({ where, orderBy: { startedAt: 'desc' }, skip: (page - 1) * limit, take: limit }),
+      prisma.aiUsageCall.findMany({ where, orderBy: { startedAt: 'desc' }, skip, take: limit }),
       prisma.aiUsageCall.count({ where }), prisma.chromaGenerationRecord.count({ where: { userId } }),
     ]);
     res.json({ records: calls.map(c => ({ id: c.id, mode: c.mode, model: c.model, kind: c.kind, cost: c.estimatedCost == null ? null : Number(c.estimatedCost), status: c.status, imageId: c.imageIds[0], createdAt: c.startedAt, errorMessage: c.errorMessage, deliveryStatus: c.deliveryStatus, storageStatus: c.storageStatus, pricingVersion: c.pricingVersion, provenance: c.provenance, currency: c.currency })), total, legacyTotal, page, limit });
@@ -149,9 +151,9 @@ router.post('/records', async (req: Request, res: Response) => {
 router.get('/images', async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
-    const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
-    const skip = (page - 1) * limit;
+    const pagination = parsePagination(req.query);
+    if (!pagination) return res.status(400).json({ error: 'Invalid pagination parameters' });
+    const { page, limit, skip } = pagination;
 
     const [images, total] = await Promise.all([
       prisma.chromaImage.findMany({

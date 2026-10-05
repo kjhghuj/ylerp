@@ -25,6 +25,7 @@
  */
 
 import { pairwiseRatio } from './productAnalysisAggregation';
+import { addDays, diffDays } from '../utils/calendarDate';
 
 export const MIN_CTR_PERCENT = 4;
 export const MIN_CLICKS = 5;
@@ -101,22 +102,8 @@ export interface PotentialResult {
   metrics: PotentialMetrics;
 }
 
-function parseDateUtc(date: string): Date {
-  return new Date(`${date}T00:00:00.000Z`);
-}
-
-function dateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addDays(date: string, delta: number): string {
-  const next = parseDateUtc(date);
-  next.setUTCDate(next.getUTCDate() + delta);
-  return dateString(next);
-}
-
 function daysBetweenInclusive(from: string, to: string): number {
-  return Math.round((parseDateUtc(to).getTime() - parseDateUtc(from).getTime()) / 86_400_000) + 1;
+  return diffDays(from, to) + 1;
 }
 
 export interface GrowthWindows {

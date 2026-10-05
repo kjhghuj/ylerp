@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(),
@@ -28,7 +28,7 @@ jest.mock('../../index', () => ({
 }));
 
 import { createRestockV2Router, parseYcProductDimensions } from '../restockV2Routes';
-import { prisma, safeRedis } from '../../index';
+import { prisma, safeRedis } from '../../infrastructure/runtimeResources';
 
 const mockProductFindMany = prisma.product.findMany as jest.Mock;
 const mockProductCreate = prisma.product.create as jest.Mock;

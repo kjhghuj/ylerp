@@ -1,5 +1,5 @@
 import { createHmac } from 'crypto';
-import { ShopeeAuthorizationService } from '../shopeeAuthorization';
+import { ShopeeAuthorizationService, startShopeeTokenRefresh } from '../shopeeAuthorization';
 import { appBinding, decryptShopeeCredentials, encryptShopeeCredentials, parseShopeeTokens, shopeeConfig, shopeeRequest, signedShopeeUrl } from '../shopeeClient';
 
 const originalEnv = process.env;
@@ -21,6 +21,23 @@ beforeEach(() => {
 afterEach(() => { process.env = originalEnv; jest.restoreAllMocks(); });
 const session = () => ({ id: 'session', userId: 'owner', status: 'pending', appBinding: appBinding(shopeeConfig()), expiresAt: new Date(Date.now() + 60000) });
 
+test('token refresh preserves its timer handle, skips overlapping work and can stop and drain', async () => {
+  jest.useFakeTimers();
+  let finish!: () => void;
+  const refresh = jest.spyOn(service, 'refreshDue').mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }))
+    .mockResolvedValue(undefined);
+  const timer = startShopeeTokenRefresh(service);
+  try {
+    expect(refresh).not.toHaveBeenCalled();
+    await jest.advanceTimersByTimeAsync(120_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    timer.stop(); finish(); await timer.drain();
+    clearInterval(timer);
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  } finally { timer.stop(); jest.useRealTimers(); }
+});
+
 test('API signatures include exact path and timestamp, and shop credentials when required', () => {
   const config = shopeeConfig();
   const url = signedShopeeUrl(config, '/api/v2/auth/token/get', undefined, 1700000000000);
@@ -37,6 +54,18 @@ test('credential encryption is randomized, authenticated and rejects a changed k
   expect(() => decryptShopeeCredentials(encrypted, { ...config, encryptionKey: 'wrong'.repeat(16) })).toThrow('无法解密');
   const segments = encrypted.split(':'); segments[3] = Buffer.from('tampered').toString('base64');
   expect(() => decryptShopeeCredentials(segments.join(':'), config)).toThrow('无法解密');
+});
+test.each([':', '::ignored'])('rejects trailing credential payload segments %s', suffix => {
+  const config = shopeeConfig();
+  const encrypted = encryptShopeeCredentials(parseShopeeTokens(tokenResponse), config);
+  expect(() => decryptShopeeCredentials(encrypted + suffix, config)).toThrow('无法解密');
+});
+test.each([
+  { accessToken: 42 }, { refreshToken: ['token'] }, { expiresAt: ['2026-10-05'] },
+])('rejects malformed stored token types %j', fields => {
+  const config = shopeeConfig();
+  const encrypted = encryptShopeeCredentials({ ...parseShopeeTokens(tokenResponse), ...fields }, config);
+  expect(() => decryptShopeeCredentials(encrypted, config)).toThrow('无法解密');
 });
 test('begin stores a hash and builds a signed redirect carrying the original state', async () => {
   db.shopeeAuthSession.create.mockResolvedValue({ id: 'session', expiresAt: new Date() });

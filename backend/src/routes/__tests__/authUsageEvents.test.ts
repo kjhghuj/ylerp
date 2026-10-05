@@ -1,4 +1,4 @@
-jest.mock('../../index', () => ({ prisma: {
+jest.mock('../../infrastructure/runtimeResources', () => ({ prisma: {
   user: { findUnique: jest.fn() }, usageEvent: { create: jest.fn() },
 } }));
 jest.mock('bcrypt', () => ({ compare: jest.fn() }));
@@ -7,7 +7,7 @@ jest.mock('../../middleware/authMiddleware', () => ({ authenticate: (_req: any, 
 
 import bcrypt from 'bcrypt';
 import router from '../authRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const handler = (path: string, method: string) => (router as any).stack.find((entry: any) =>
   entry.route?.path === path && entry.route.methods[method]).route.stack.at(-1).handle;

@@ -132,6 +132,41 @@ test('migration does not copy an active queue or leave its pause state changed a
   expect(fs.existsSync(path.join(root,'target'))).toBe(false);
 });
 
+test('migration rebases report paths through a source directory alias', async()=>{
+  const actual=path.join(root,'legacy');
+  fs.mkdirSync(actual);
+  const alias=path.join(root,'legacy-alias');
+  fs.symlinkSync(actual,alias,'dir');
+  const source=createRuntime(alias);
+  const created=await batch(source,await bind(source));
+  const file=path.join(source.cfg.downloadDir,'report.xlsx');
+  fs.writeFileSync(file,fixture());
+  source.queue.updateFields(created.taskIds[0],{file_path:file,file_checksum:checksumOf(file)});
+  const target=path.join(root,'erp-data');
+  expect(migrateCollectorData(alias,target)).toMatchObject({tasks:1});
+  const migrated=createRuntime(target);
+  expect(migrated.reportFile(created.batchId,created.taskIds[0]).file_path).toBe(path.join(target,'downloads','report.xlsx'));
+});
+
+test('migration rejects a destination inside a source directory alias before creating staging files',()=>{
+  const actual=path.join(root,'legacy');
+  fs.mkdirSync(actual);
+  const alias=path.join(root,'legacy-alias');
+  fs.symlinkSync(actual,alias,'dir');
+  const source=createRuntime(actual);
+  expect(()=>migrateCollectorData(source.cfg.dataDir,path.join(alias,'nested','target'))).toThrow('不能位于旧采集目录内');
+  expect(fs.existsSync(path.join(actual,'nested'))).toBe(false);
+});
+
+test('failed migration removes its staging directory and restores the original pause state', async()=>{
+  const source=createRuntime(path.join(root,'legacy'));
+  const created=await batch(source,await bind(source));
+  source.queue.updateFields(created.taskIds[0],{file_path:path.join(source.cfg.downloadDir,'missing.xlsx'),file_checksum:'missing'});
+  expect(()=>migrateCollectorData(source.cfg.dataDir,path.join(root,'target'))).toThrow();
+  expect(source.worker.isPaused()).toBe(false);
+  expect(fs.readdirSync(root).some(name=>name.startsWith('target.migrating-'))).toBe(false);
+});
+
 test('shared credentials apply across existing and new shop connections, with user isolation and restart persistence',async()=>{
   const directory=path.join(root,'erp-data');
   const runtime=createRuntime(directory);

@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {Prisma, type ProductAnalysisCollectionBackfill, type ProductAnalysisCollectionRun} from '@prisma/client';
-import {prisma} from '../index';
+import {prisma} from '../infrastructure/runtimeResources';
+import {startScheduledTask} from '../infrastructure/scheduledTask';
 import {addDays, dateInTz} from '../collector/dates';
 import {collectorRequest} from './productAnalysisCollectorClient';
 import {activeCollectionStatuses, syncRunStatus} from './productAnalysisCollectionRuns';
@@ -184,8 +185,5 @@ export async function processProductAnalysisBackfills() {
 }
 
 export function startProductAnalysisBackfillWorker() {
-  void processProductAnalysisBackfills();
-  const timer = setInterval(() => void processProductAnalysisBackfills(),4_000);
-  timer.unref();
-  return () => clearInterval(timer);
+  return startScheduledTask(processProductAnalysisBackfills,{intervalMs:4_000,immediate:true});
 }

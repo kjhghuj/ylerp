@@ -1,12 +1,13 @@
-jest.mock('../../index', () => ({ prisma: {
-  aiUsageCall: { create: jest.fn(), update: jest.fn() },
+jest.mock('../../infrastructure/runtimeResources', () => ({ prisma: {
+  aiUsageCall: { create: jest.fn(), update: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
+  $transaction: jest.fn(), $queryRaw: jest.fn(),
   // tracked() 会按用户解析 AI 配置：无个人配置（null）时回退环境变量
   user: { findUnique: jest.fn().mockResolvedValue(null) },
 } }));
 jest.mock('../../services/chroma/arkClient', () => ({ chatWithImages: jest.fn(), generateImage: jest.fn() }));
 jest.mock('../../services/chroma/imageUtils', () => ({ cleanBase64Image: (x: string) => x, getImageDimensionsFromBase64: () => ({ width: 100, height: 100 }), calculateSizeForAspectRatio: () => '2048x2048', downloadImageAsDataUrl: jest.fn() }));
 import router from '../chromaAdaptRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 import { chatWithImages, generateImage } from '../../services/chroma/arkClient';
 import { downloadImageAsDataUrl } from '../../services/chroma/imageUtils';
 
@@ -17,6 +18,10 @@ function handler(path: string) {
 describe('all Chroma provider modes', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    (prisma.$transaction as jest.Mock).mockImplementation(callback => callback(prisma));
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ id: 'u1' }]);
+    (prisma.aiUsageCall.findUnique as jest.Mock).mockResolvedValue(null);
+    (prisma.aiUsageCall.count as jest.Mock).mockResolvedValue(0);
     (prisma.aiUsageCall.create as jest.Mock).mockResolvedValue({ id: 'call1' });
     (prisma.aiUsageCall.update as jest.Mock).mockImplementation(async ({ data }) => ({ id: 'call1', ...data }));
     (chatWithImages as jest.Mock).mockResolvedValue({ choices: [{ message: { content: 'valid analysis' } }] });

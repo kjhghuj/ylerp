@@ -1,4 +1,4 @@
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { recordUsageEvent } from './usageEvents';
 
 /** Compatibility only. Business mutations must use withUsageEvent with their transaction. */

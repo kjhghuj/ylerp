@@ -16,6 +16,7 @@ import {
   type YcStockAgeRow,
 } from './ycOpenPlatformClient';
 import type { PrismaClient } from '@prisma/client';
+import { mapWithConcurrency } from '../utils/mapWithConcurrency';
 
 const SITE_NAMES: Record<string, string> = {
   MY: 'Malaysia',
@@ -177,26 +178,6 @@ const safeCachedReceipts = (value: string | null): YcInboundReceipt[] | null => 
   } catch {
     return null;
   }
-};
-
-const mapWithConcurrency = async <T, R>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T) => Promise<R>,
-): Promise<R[]> => {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index]);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, worker),
-  );
-  return results;
 };
 
 export const createDashboardSnapshotLoader = ({

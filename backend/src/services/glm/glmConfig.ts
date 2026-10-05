@@ -1,3 +1,5 @@
+import '../../config/environment';
+
 export const GLM_API_KEY = process.env.GLM_API_KEY || '';
 export const GLM_BASE_URL =
   process.env.GLM_BASE_URL || 'https://open.bigmodel.cn/api/coding/paas/v4';

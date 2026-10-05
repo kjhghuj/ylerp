@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({ prisma: {} }));
+jest.mock('../../infrastructure/runtimeResources', () => ({ prisma: {} }));
 jest.mock('../../middleware/authMiddleware', () => ({
   authenticate: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));

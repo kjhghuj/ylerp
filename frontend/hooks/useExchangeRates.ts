@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { parseCanonicalPositiveRate } from '../modules/profit/profitInputNormalization';
 
-const FALLBACK_RATES: Record<string, number> = { MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0 };
-const RATE_CURRENCIES = ['MYR', 'PHP', 'SGD', 'THB', 'IDR'] as const;
+const FALLBACK_RATES: Record<string, number> = { MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150.0, USD: 0.14 };
+const RATE_CURRENCIES = ['MYR', 'PHP', 'SGD', 'THB', 'IDR', 'USD'] as const;
 const MAX_RETRIES = 3;
 const RETRY_BASE_MS = 5000;
 const MAX_RATE_AGE_MS = 7 * 24 * 60 * 60 * 1000;

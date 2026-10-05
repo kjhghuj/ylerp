@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
     $transaction: jest.fn(),
@@ -32,7 +32,7 @@ jest.mock('../../services/activityLogger', () => ({
 }));
 
 import router from '../productRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const mockProductFindFirst = prisma.product.findFirst as jest.Mock;
 const mockUserFindUnique = (prisma as any).user.findUnique as jest.Mock;

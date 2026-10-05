@@ -3,11 +3,12 @@
  * 内容：站点与 SKU 规范化、请求参数解析、YC 站点仓库解析与库存/在途拉取、
  * YC SKU 别名映射、按模块前缀的权限守卫。
  * 全部为纯函数或依赖注入形式（ycClient / prisma 均由调用方传入），
- * 不直接 import prisma 实例，路由测试的 jest.mock('../../index') 不受影响。
+ * 不直接 import prisma 实例，路由测试的 jest.mock('../../infrastructure/runtimeResources') 不受影响。
  */
 
-import { type NextFunction, type Request, type Response } from 'express';
 import type { PrismaClient } from '@prisma/client';
+import { isValidCalendarDate } from '../utils/calendarDate';
+import { createPermissionGuard, hasAnyPermission } from '../middleware/requestPermissions';
 import {
   getYcWarehouseCodesForSite,
   YcClientError,
@@ -80,13 +81,7 @@ export const parseBoundedQueryNumber = (
 
 export const parseDateQuery = (value: unknown, field: string): string | undefined => {
   if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new Error(`Invalid ${field}`);
-  }
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
-    throw new Error(`Invalid ${field}`);
-  }
+  if (!isValidCalendarDate(value)) throw new Error(`Invalid ${field}`);
   return value;
 };
 
@@ -210,33 +205,18 @@ export const withMappedInboundCustomerSku = (
 };
 
 export const hasRestockPermission = (permissions: string[], permission: string): boolean => {
-  const moduleKey = permission.split('.')[0];
-  return permissions.includes('*') || permissions.includes(permission) || permissions.includes(moduleKey);
+  return hasAnyPermission(permissions, [permission]);
 };
 
 /** 按模块前缀生成权限守卫中间件（restock-v2 / restock-v3 各自实例化）；
  *  owner 直通，其余实时查库校验 isActive + permissions。
- *  db 以 getter 注入：路由模块从 index 循环导入 prisma，模块加载期不可取值（TDZ），须延迟到请求时 */
+ *  使用本次认证快照；没有认证标记时实时查库，db 以 getter 注入。 */
 export const createRestockPermissionGuard =
   (dbAccessor: () => Pick<PrismaClient, 'user'>, modulePrefix: 'restock-v2' | 'restock-v3') => {
     const requireRestockPermission = (permission: `${typeof modulePrefix}.view` | `${typeof modulePrefix}.refresh`) => {
-      return async (req: Request, res: Response, next: NextFunction) => {
-        if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-        if (req.user.role === 'owner') return next();
-        try {
-          const user = await dbAccessor().user.findUnique({
-            where: { id: req.user.id },
-            select: { permissions: true, isActive: true },
-          });
-          if (!user?.isActive || !hasRestockPermission(user.permissions || [], permission)) {
-            return res.status(403).json({ error: 'Forbidden' });
-          }
-          return next();
-        } catch (error) {
-          logSafeFailure('Restock permission lookup failed', error);
-          return res.status(500).json({ error: 'Permission check failed' });
-        }
-      };
+      return createPermissionGuard(dbAccessor, [permission], {
+        onError: error => logSafeFailure('Restock permission lookup failed', error),
+      });
     };
     return requireRestockPermission;
   };

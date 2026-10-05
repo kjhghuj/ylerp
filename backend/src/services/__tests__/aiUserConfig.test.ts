@@ -1,5 +1,5 @@
-// aiUserConfig 的默认 db 参数来自 ../index（真实应用入口），单测里必须先 mock 掉
-jest.mock('../../index', () => ({ prisma: {} }));
+// 默认数据库来自共享资源模块，单测使用独立 mock。
+jest.mock('../../infrastructure/runtimeResources', () => ({ prisma: {} }));
 // glmConfig/chroma config 在模块加载时冻结 env 常量，直接 mock 为"环境变量"取值
 jest.mock('../glm/glmConfig', () => ({
   GLM_API_KEY: 'env-glm-key',
@@ -15,7 +15,9 @@ jest.mock('../chroma/config', () => ({
   ARK_ANALYSIS_ENDPOINT_ID: 'ep-env-lite',
   ARK_ANALYSIS_ENDPOINT_ID_SEED_2_MINI: 'ep-env-mini',
   ARK_ANALYSIS_ENDPOINT_ID_SEED_2_PRO: '',
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(public status_code: number, public detail: string) { super(detail); }
+  },
   MODEL_COSTS: {},
 }));
 import { encryptSecret } from '../ycCredentials';
@@ -93,5 +95,31 @@ describe('user AI config resolution', () => {
       generationDefault: 'ep-env-gen',
       generationLite: '',            // 环境变量未配置
     });
+  });
+
+  it.each(['chat', 'image'])('never sends server credentials to a custom %s provider', async kind => {
+    findUnique.mockResolvedValue(kind === 'chat'
+      ? { aiChatBaseUrl: 'https://user-provider.example/v1', aiChatApiKeyEnc: null }
+      : { aiImageBaseUrl: 'https://user-provider.example/v1', aiImageApiKeyEnc: null });
+    const resolve = kind === 'chat' ? resolveChatAiConfig : resolveImageAiConfig;
+    await expect(resolve('user-1', db as any)).rejects.toMatchObject({ status_code: 400 });
+  });
+
+  it('does not fall back to a server key on a custom provider if personal key decryption fails', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      findUnique.mockResolvedValue({ aiChatBaseUrl: 'https://user-provider.example/v1', aiChatApiKeyEnc: 'v1:broken:payload' });
+      await expect(resolveChatAiConfig('user-1', db as any)).rejects.toMatchObject({ status_code: 400 });
+    } finally { log.mockRestore(); }
+  });
+
+  it('allows a path override on the configured server provider origin', async () => {
+    findUnique.mockResolvedValue({ aiChatBaseUrl: 'https://env-glm.example/v2', aiChatApiKeyEnc: null });
+    expect(await resolveChatAiConfig('user-1', db as any)).toMatchObject({ apiKey: 'env-glm-key', baseUrl: 'https://env-glm.example/v2' });
+  });
+
+  it.each(['file:///tmp/provider', 'https://user:password@user-provider.example/v1', 'not-a-url'])('rejects an invalid AI provider address %s', async baseUrl => {
+    findUnique.mockResolvedValue({ aiImageBaseUrl: baseUrl, aiImageApiKeyEnc: encryptSecret('personal-key', 'test-encryption-key') });
+    await expect(resolveImageAiConfig('user-1', db as any)).rejects.toMatchObject({ status_code: 400 });
   });
 });

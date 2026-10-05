@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import {Router,type Request,type Response} from 'express';
 import multer from 'multer';
-import {prisma} from '../index';
+import {prisma} from '../infrastructure/runtimeResources';
 import {acceptCollectorImport,importReply,importSpool} from '../services/productAnalysisImportService';
 export {startProductAnalysisImportWorker} from '../services/productAnalysisImportService';
 

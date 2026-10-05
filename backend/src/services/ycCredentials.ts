@@ -1,7 +1,5 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
-
-const ENCRYPTION_VERSION = 'v1';
-const IV_BYTES = 12;
+import { createHash } from 'crypto';
+import { decryptSecretPayload, encryptSecretPayload, isEncryptedSecretPayload } from './secretEncryption';
 
 const resolveEncryptionKey = (keySource?: string): Buffer => {
   const source = keySource
@@ -17,41 +15,15 @@ const resolveEncryptionKey = (keySource?: string): Buffer => {
 export const AI_KEY_MASK = '••••••••';
 
 /** 通用 AES-256-GCM 加密（YC 凭据与 AI API Key 共用，格式 v1:iv:authTag:cipher） */
-export const encryptSecret = (value: string, keySource?: string): string => {
-  const iv = randomBytes(IV_BYTES);
-  const cipher = createCipheriv('aes-256-gcm', resolveEncryptionKey(keySource), iv);
-  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
-  const authTag = cipher.getAuthTag();
-  return [
-    ENCRYPTION_VERSION,
-    iv.toString('base64'),
-    authTag.toString('base64'),
-    encrypted.toString('base64'),
-  ].join(':');
-};
+export const encryptSecret = (value: string, keySource?: string): string =>
+  encryptSecretPayload(value, resolveEncryptionKey(keySource));
 
 export const decryptSecret = (value: string, keySource?: string): string => {
-  const [version, ivValue, authTagValue, encryptedValue, ...extra] = value.split(':');
-  if (
-    version !== ENCRYPTION_VERSION
-    || !ivValue
-    || !authTagValue
-    || !encryptedValue
-    || extra.length > 0
-  ) {
+  if (!isEncryptedSecretPayload(value)) {
     throw new Error('Invalid YC credential payload');
   }
   try {
-    const decipher = createDecipheriv(
-      'aes-256-gcm',
-      resolveEncryptionKey(keySource),
-      Buffer.from(ivValue, 'base64'),
-    );
-    decipher.setAuthTag(Buffer.from(authTagValue, 'base64'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(encryptedValue, 'base64')),
-      decipher.final(),
-    ]).toString('utf8');
+    return decryptSecretPayload(value, resolveEncryptionKey(keySource));
   } catch {
     throw new Error('Unable to decrypt YC credential');
   }

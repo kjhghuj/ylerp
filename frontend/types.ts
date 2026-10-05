@@ -12,8 +12,8 @@ export interface ProductCalcData {
   id: string;
   name: string;
   sku: string;
-  country?: 'SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID';
-  sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID')[];
+  country?: 'SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID' | 'US';
+  sites?: ('SG' | 'MY' | 'PH' | 'TH' | 'CN' | 'ID' | 'US')[];
   cost: number;
   productWeight: number;
   ycLengthCm?: number | null;

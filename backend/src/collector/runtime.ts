@@ -209,6 +209,10 @@ export function getCollector(): CollectorRuntime {
   } catch (error) { releaseLock(); throw error; }
 }
 
+export function stopCollectorClaims(): void {
+  current?.worker.stop();
+}
+
 export async function stopCollector() {
   if (current) await current.stop();
   if (!current?.worker.busyCount()) releaseLock?.();

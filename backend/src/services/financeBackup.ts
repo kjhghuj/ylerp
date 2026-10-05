@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
+import { startScheduledTask } from '../infrastructure/scheduledTask';
 
 const BACKUP_PATH = path.join(__dirname, '../../backups/finance-backup.json');
 const INTERVAL_MS = 24 * 60 * 60 * 1000;
@@ -26,6 +27,5 @@ export function startFinanceBackup() {
         }
     };
 
-    setTimeout(run, getStartupDelayMs());
-    setInterval(run, INTERVAL_MS);
+    return startScheduledTask(run, { intervalMs: INTERVAL_MS, initialDelayMs: getStartupDelayMs() });
 }

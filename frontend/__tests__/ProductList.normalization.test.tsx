@@ -10,7 +10,7 @@ import {
 } from '../modules/profit/productSiteViewModel';
 
 const productListState = vi.hoisted(() => ({
-  rates: { MYR: 1.67 },
+  rates: { MYR: 1.67 } as Record<string, number>,
   activeTab: 'MY',
   user: { role: 'owner', permissions: [] as string[] },
 }));
@@ -111,6 +111,109 @@ describe('ProductList site input normalization', () => {
         data: { id: 'link-secondary', country: 'MYR', isPrimary: body.isPrimary },
       }),
     );
+  });
+
+  it('shows the US tab and executes a saved TikTok template with USD site inputs', async () => {
+    productListState.activeTab = 'US';
+    productListState.rates = { USD: 0.14 };
+    products = [{ ...baseProduct, country: 'US', sites: ['US'], siteData: { US: { totalRevenue: 200 } } }];
+    setApiResponses([{ id: 'us-tk-link', name: 'TK US saved', country: 'USD', platform: 'tiktok', createdAt: '2026-10-04',
+      data: { kind: 'standard', schemaVersion: 2, shippingCalculationMode: 2, manualShippingFee: 12,
+        tiktokFeePolicy: { version: 1, presetId: 'USD', verifiedAt: '2026-10-04' } } }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+    expect(screen.getByRole('button', { name: zh.productList.tabs.us })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /TK US saved/ }));
+    await waitFor(() => expect(calculateProfit).toHaveBeenCalled());
+    expect(calculateProfit.mock.calls.at(-1)?.[2]).toMatchObject({ totalRevenue: 200 });
+    expect(calculateProfit.mock.calls.at(-1)?.[3]).toBe(0.14);
+    expect(calculateProfit.mock.calls.at(-1)?.[4]).toBe('USD');
+    expect(screen.getByText(zh.profit.tiktok.usAssumptions)).toBeInTheDocument();
+  });
+
+  it('passes TK policy and fees from a flat API template into the shared calculation', async () => {
+    products = [{ ...baseProduct, siteData: { MY: { totalRevenue: 100 } } }];
+    setApiResponses([{
+      id: 'tk-link', name: 'TK current', country: 'MY', platform: 'tiktok', createdAt: '2026-10-04',
+      data: { kind: 'standard', schemaVersion: 2, tiktokFeePolicy: { version: 1, presetId: 'MYR', verifiedAt: '2026-10-04' }, affiliateCommissionRate: 12, buyerShippingFee: 5, tiktokOrderFee: 0.54 },
+    }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /TK current/ }));
+    await waitFor(() => expect(calculateProfit).toHaveBeenCalled());
+    expect(calculateProfit.mock.calls.at(-1)?.[0]).toMatchObject({ affiliateCommissionRate: 12, buyerShippingFee: 5, tiktokOrderFee: 0.54 });
+    expect(calculateProfit.mock.calls.at(-1)?.[5]).toEqual({ platform: 'tiktok', tiktokFeePolicy: { version: 1, presetId: 'MYR', verifiedAt: '2026-10-04' } });
+    expect(screen.getByText(zh.profit.tiktok.assumptions)).toBeInTheDocument();
+  });
+
+  it.each([1, 2])('renders TK shipping mode %s from its actual pricing source instead of old rate fields', async mode => {
+    products = [{ ...baseProduct, productWeight: 300, siteData: { MY: { totalRevenue: 100 } } }];
+    setApiResponses([{
+      id: 'tk-shipping', name: 'TK shipping', country: 'MY', platform: 'tiktok', createdAt: '2026-10-04',
+      data: { kind: 'standard', schemaVersion: 2, tiktokFeePolicy: { version: 1, presetId: 'MYR', verifiedAt: '2026-10-04' },
+        shippingCalculationMode: mode, manualShippingFee: 17.8, lastMileFee: 5.125, baseShippingFee: 99 },
+    }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /TK shipping/ }));
+    const label = mode === 1 ? zh.profit.tiktok.shippingQuote : zh.profit.inputs.manualShippingFee;
+    const fee = await screen.findByText(label);
+    expect(fee.parentElement).toHaveTextContent(mode === 1 ? '3.42MYR' : '17.80MYR');
+    expect(screen.queryByText(zh.productList.detail.baseShipping)).not.toBeInTheDocument();
+    if (mode === 2) expect(screen.queryByText(zh.profit.inputs.lastMileFee)).not.toBeInTheDocument();
+  });
+
+  it.each([[0, '9.45', '10.46'], [1, '11.30', '12.31'], [2, '11.30', '12.31']])('shows official US direct cargo %s from the shared quote without saved manual or last-mile costs', async (cargo, shipping, total) => {
+    productListState.activeTab = 'US';
+    productListState.rates = { USD: 0.14 };
+    products = [{ ...baseProduct, country: 'US', sites: ['US'], productWeight: 500,
+      siteData: { US: { totalRevenue: 200 } } }];
+    setApiResponses([{ id: 'us-direct', name: 'US direct logistics', country: 'US', platform: 'tiktok', createdAt: '2026-10-04',
+      data: { kind: 'standard', schemaVersion: 2, shippingCalculationMode: 4,
+        tiktokFeePolicy: { version: 1, presetId: 'USD', verifiedAt: '2026-10-04' },
+        usDirectCargoType: cargo, usDirectExtraFee: 1.005,
+        lastMileFee: 99, usHeadFreightFee: 99, manualShippingFee: 99, baseShippingFee: 99 } }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /US direct logistics/ }));
+    expect((await screen.findByText(zh.profit.tiktok.usDirectShipping)).parentElement).toHaveTextContent(`${shipping}USD`);
+    expect(screen.getByText(zh.profit.inputs.usDirectExtraFee).parentElement).toHaveTextContent('1.01USD');
+    expect(screen.getByText(zh.profit.tiktok.usTotalShippingQuote).parentElement).toHaveTextContent(`${total}USD`);
+    expect(screen.queryByText(zh.profit.inputs.manualShippingFee)).not.toBeInTheDocument();
+    expect(screen.queryByText(zh.profit.inputs.lastMileFee)).not.toBeInTheDocument();
+    expect(screen.queryByText(zh.productList.detail.baseShipping)).not.toBeInTheDocument();
+    expect(calculateProfit.mock.calls.at(-1)?.[0]).toMatchObject({ shippingCalculationMode: 4, usDirectCargoType: cargo, usDirectExtraFee: 1.005 });
+    expect(calculateProfit.mock.calls.at(-1)?.[5]).toEqual({ platform: 'tiktok', tiktokFeePolicy: { version: 1, presetId: 'USD', verifiedAt: '2026-10-04' } });
+  });
+
+  it.each([
+    [1, '4.20', '7.25'],
+    [2, '3.69', '6.74'],
+    [3, '3.39', '6.44'],
+    [4, '0.00', '3.05'],
+  ])('shows US head freight, local delivery mode %s and their total from the shared quote', async (localMode, localFee, total) => {
+    productListState.activeTab = 'US';
+    productListState.rates = { USD: 0.14 };
+    products = [{ ...baseProduct, country: 'US', sites: ['US'], productWeight: 100,
+      siteData: { US: { totalRevenue: 200 } } }];
+    setApiResponses([{ id: 'us-segmented', name: 'US segmented logistics', country: 'US', platform: 'tiktok', createdAt: '2026-10-04',
+      data: { kind: 'standard', schemaVersion: 2, shippingCalculationMode: 3,
+        tiktokFeePolicy: { version: 1, presetId: 'USD', verifiedAt: '2026-10-04' },
+        usHeadFreightFee: 2.45, usHeadFreightRatePerKg: 6, usHeadFreightConfigured: 1,
+        usLocalDeliveryMode: localMode, lastMileFee: 4.2, usDestinationRegion: 1,
+        usPackageLengthCm: 10, usPackageWidthCm: 5, usPackageHeightCm: 5, usShippingDate: 20261004,
+        manualShippingFee: 99, baseShippingFee: 99, extraShippingFee: 99, crossBorderFee: 99 } }]);
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByTitle('View'));
+    fireEvent.click(await screen.findByRole('button', { name: /US segmented logistics/ }));
+    expect((await screen.findByText(zh.profit.tiktok.usHeadFreight)).parentElement).toHaveTextContent('3.05USD');
+    expect(screen.getByText(zh.profit.tiktok.usLocalDelivery).parentElement).toHaveTextContent(`${localFee}USD`);
+    expect(screen.getByText(zh.profit.tiktok.usSegmentedShippingTotal).parentElement).toHaveTextContent(`${total}USD`);
+    expect(screen.queryByText(zh.productList.detail.baseShipping)).not.toBeInTheDocument();
+    expect(screen.queryByText(zh.profit.inputs.manualShippingFee)).not.toBeInTheDocument();
+    expect(calculateProfit.mock.calls.at(-1)?.[0]).toMatchObject({ shippingCalculationMode: 3,
+      usHeadFreightConfigured: 1, usLocalDeliveryMode: localMode, usHeadFreightFee: 2.45, usHeadFreightRatePerKg: 6 });
+    expect(calculateProfit.mock.calls.at(-1)?.[4]).toBe('USD');
   });
 
   it('renders numeric strings safely and defaults invalid historical fields without a toFixed crash', () => {

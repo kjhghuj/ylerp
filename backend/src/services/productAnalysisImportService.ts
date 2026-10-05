@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import {prisma} from '../index';
+import {prisma} from '../infrastructure/runtimeResources';
+import {startScheduledTask} from '../infrastructure/scheduledTask';
 import {parseProductAnalysisWorkbook} from '../../../shared/productAnalysis/excelParser';
 import {isValidCalendarDate, validateDailyUploadPayload} from '../services/productAnalysisUpload';
 import {DailyIngestError, ingestDailyReport} from '../services/productAnalysisDailyIngest';
@@ -91,9 +92,11 @@ export async function enqueueCollectorFile(filePath:string, metadata:Record<stri
 export function findCollectorImport(id:string){return prisma.productAnalysisCollectorImport.findUnique({where:{id}});}
 let processing=false;
 export function startProductAnalysisImportWorker(){
-  void prisma.productAnalysisCollectorImport.updateMany({where:{status:'PROCESSING'},data:{status:'PENDING'}})
+  const recovery=prisma.productAnalysisCollectorImport.updateMany({where:{status:'PROCESSING'},data:{status:'PENDING'}})
     .catch(error=>console.error('Import recovery error:',error));
-  const timer=setInterval(()=>void processNextCollectorImport(),2_000);timer.unref();
+  const task=startScheduledTask(async()=>{await recovery;await processNextCollectorImport();},{intervalMs:2_000});
+  const drain=task.drain;
+  return Object.assign(task,{drain:async()=>{await recovery;await drain();}});
 }
 export async function processNextCollectorImport(){
   if(processing)return;

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     $transaction: jest.fn(async function (this: any, callback: any) { return callback(this); }),
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -15,7 +15,7 @@ jest.mock('../../index', () => ({
 }));
 
 import router from '../nodeGraphRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const mockFindMany = prisma.nodeGraphTemplate.findMany as jest.Mock;
 const mockCreate = prisma.nodeGraphTemplate.create as jest.Mock;

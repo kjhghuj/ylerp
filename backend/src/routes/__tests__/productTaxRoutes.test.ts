@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     $transaction: jest.fn(async function (this: any, callback: any) { return callback(this); }),
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -34,7 +34,7 @@ jest.mock('../../services/activityLogger', () => ({
 }));
 
 import router from '../productRoutes';
-import { prisma, safeRedis } from '../../index';
+import { prisma, safeRedis } from '../../infrastructure/runtimeResources';
 
 const product = prisma.product as unknown as {
   findMany: jest.Mock;

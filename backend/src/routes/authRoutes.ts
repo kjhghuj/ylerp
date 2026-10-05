@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { authenticate } from '../middleware/authMiddleware';
 import { recordUsageEvent } from '../services/usageEvents';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { getJwtSecret } from '../services/jwtSecret';
 
 const router = Router();

@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { RemoteInboundDetail, RemoteInboundOrder, RemoteStockRow } from './restockPlanner';
 import { decryptYcAppSecret } from './ycCredentials';
+import { mapWithConcurrency } from '../utils/mapWithConcurrency';
 
 interface YcApiResponse<T> {
   state?: string;
@@ -151,24 +152,6 @@ const validateScope = (values: string[], maximum: number): string[] => {
   return Array.from(new Set(normalized));
 };
 
-const mapWithConcurrency = async <T, R>(
-  items: T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-): Promise<R[]> => {
-  const results = new Array<R>(items.length);
-  let nextIndex = 0;
-  const worker = async () => {
-    while (nextIndex < items.length) {
-      const index = nextIndex;
-      nextIndex += 1;
-      results[index] = await mapper(items[index], index);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
-  return results;
-};
-
 const isActiveInboundStatus = (status: RemoteInboundOrder['status']) => {
   const parsed = Number(status);
   return parsed === 2 || parsed === 3;
@@ -232,59 +215,20 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
   }
 
   async listProductInventory({ warehouseCodes = [], customerSkus = [] }: YcListProductInventoryParams): Promise<RemoteStockRow[]> {
-    const rows: RemoteStockRow[] = [];
-    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
-    const validCustomerSkus = validateScope(customerSkus, YC_CLIENT_LIMITS.maxCustomerSkus);
-    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
-    const skuChunks = chunk(validCustomerSkus, 100);
-    if (warehouseScope.length * skuChunks.length > YC_CLIENT_LIMITS.maxRequestBatches) {
-      throw new YcClientError('YC request batch limit exceeded', 'BATCH_LIMIT');
-    }
-
-    for (const warehouseCode of warehouseScope) {
-      for (const skuChunk of skuChunks) {
-        const pageRows = await this.paginate<RemoteStockRow>('/api/openPlatform/stock/list', {
-          ...(warehouseCode ? { warehouseCode } : {}),
-          ...(skuChunk.length > 0 ? { customerSku: skuChunk } : {}),
-        });
-        if (rows.length + pageRows.length > YC_CLIENT_LIMITS.maxListRows) {
-          throw new YcClientError('YC inventory row limit exceeded', 'ROW_LIMIT', '/api/openPlatform/stock/list');
-        }
-        rows.push(...pageRows);
-      }
-    }
-    return rows;
+    return this.listWarehouseScope<RemoteStockRow>(
+      { warehouseCodes, customerSkus }, '/api/openPlatform/stock/list',
+      'warehouseCode', 'YC inventory row limit exceeded',
+    );
   }
 
   async listStockAge({
     warehouseCodes = [],
     customerSkus = [],
   }: YcListStockAgeParams): Promise<YcStockAgeRow[]> {
-    const rows: YcStockAgeRow[] = [];
-    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
-    const validCustomerSkus = validateScope(customerSkus, YC_CLIENT_LIMITS.maxCustomerSkus);
-    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
-    const skuChunks = chunk(validCustomerSkus, 100);
-    if (warehouseScope.length * skuChunks.length > YC_CLIENT_LIMITS.maxRequestBatches) {
-      throw new YcClientError('YC request batch limit exceeded', 'BATCH_LIMIT');
-    }
-    for (const warehouseCode of warehouseScope) {
-      for (const skuChunk of skuChunks) {
-        const pageRows = await this.paginate<YcStockAgeRow>('/api/openPlatform/stock/ageList', {
-          ...(warehouseCode ? { warehouseCode } : {}),
-          ...(skuChunk.length > 0 ? { customerSku: skuChunk } : {}),
-        });
-        if (rows.length + pageRows.length > YC_CLIENT_LIMITS.maxListRows) {
-          throw new YcClientError(
-            'YC stock age row limit exceeded',
-            'ROW_LIMIT',
-            '/api/openPlatform/stock/ageList',
-          );
-        }
-        rows.push(...pageRows);
-      }
-    }
-    return rows;
+    return this.listWarehouseScope<YcStockAgeRow>(
+      { warehouseCodes, customerSkus }, '/api/openPlatform/stock/ageList',
+      'warehouseCode', 'YC stock age row limit exceeded',
+    );
   }
 
   async listCustomerWarehouses(): Promise<YcCustomerWarehouse[]> {
@@ -301,48 +245,15 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
   }
 
   async listInboundOrders({ warehouseCodes = [] }: YcListInboundOrdersParams): Promise<RemoteInboundOrder[]> {
-    const listedRows: RemoteInboundOrder[] = [];
-    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
-    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
-
-    for (const warehouseCode of warehouseScope) {
-      const listedOrders = await this.paginate<RemoteInboundOrder>('/api/openPlatform/inOrder/list', {
-        ...(warehouseCode ? { destinationWarehouseCode: warehouseCode } : {}),
-      });
-      if (listedRows.length + listedOrders.length > YC_CLIENT_LIMITS.maxListRows) {
-        throw new YcClientError('YC inbound order limit exceeded', 'ROW_LIMIT', '/api/openPlatform/inOrder/list');
-      }
-      listedRows.push(...listedOrders);
-    }
-
-    let totalDetails = 0;
+    const listedRows = await this.listInboundOrderRows(warehouseCodes);
+    const loadDetails = this.createInboundDetailLoader();
     return mapWithConcurrency(
       listedRows,
       YC_CLIENT_LIMITS.inboundDetailConcurrency,
       async order => {
         if (!isActiveInboundStatus(order.status)) return { ...order, details: [] };
 
-        const customerWarehouseOrderNo = String(order.customerWarehouseOrderNo || '').trim();
-        if (!customerWarehouseOrderNo || customerWarehouseOrderNo.length > YC_CLIENT_LIMITS.maxIdentifierLength) {
-          throw new YcClientError(
-            'YC inbound detail identifier is invalid',
-            'INVALID_IDENTIFIER',
-            '/api/openPlatform/inOrder/detail',
-          );
-        }
-
-        const detail = await this.request<YcInboundOrderDetail>('/api/openPlatform/inOrder/detail', {
-          customerWarehouseOrderNo,
-        });
-        const details = flattenInboundDetails(detail?.details);
-        totalDetails += details.length;
-        if (totalDetails > YC_CLIENT_LIMITS.maxInboundDetails) {
-          throw new YcClientError(
-            'YC inbound detail limit exceeded',
-            'DETAIL_LIMIT',
-            '/api/openPlatform/inOrder/detail',
-          );
-        }
+        const { detail, details } = await loadDetails(order);
         return { ...order, ...detail, details };
       },
     );
@@ -351,47 +262,14 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
   async listInboundReceiptHistory({
     warehouseCodes = [],
   }: YcListInboundOrdersParams): Promise<YcInboundReceipt[]> {
-    const listedRows: RemoteInboundOrder[] = [];
-    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
-    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
-
-    for (const warehouseCode of warehouseScope) {
-      const listedOrders = await this.paginate<RemoteInboundOrder>('/api/openPlatform/inOrder/list', {
-        ...(warehouseCode ? { destinationWarehouseCode: warehouseCode } : {}),
-      });
-      if (listedRows.length + listedOrders.length > YC_CLIENT_LIMITS.maxListRows) {
-        throw new YcClientError('YC inbound order limit exceeded', 'ROW_LIMIT', '/api/openPlatform/inOrder/list');
-      }
-      listedRows.push(...listedOrders);
-    }
-
+    const listedRows = await this.listInboundOrderRows(warehouseCodes);
     const completedOrders = listedRows.filter(order => validReceiptTime(order));
-    let totalDetails = 0;
+    const loadDetails = this.createInboundDetailLoader();
     const receiptsByOrder = await mapWithConcurrency(
       completedOrders,
       YC_CLIENT_LIMITS.inboundDetailConcurrency,
       async order => {
-        const customerWarehouseOrderNo = String(order.customerWarehouseOrderNo || '').trim();
-        if (!customerWarehouseOrderNo || customerWarehouseOrderNo.length > YC_CLIENT_LIMITS.maxIdentifierLength) {
-          throw new YcClientError(
-            'YC inbound detail identifier is invalid',
-            'INVALID_IDENTIFIER',
-            '/api/openPlatform/inOrder/detail',
-          );
-        }
-
-        const detail = await this.request<YcInboundOrderDetail>('/api/openPlatform/inOrder/detail', {
-          customerWarehouseOrderNo,
-        });
-        const details = flattenInboundDetails(detail?.details);
-        totalDetails += details.length;
-        if (totalDetails > YC_CLIENT_LIMITS.maxInboundDetails) {
-          throw new YcClientError(
-            'YC inbound detail limit exceeded',
-            'DETAIL_LIMIT',
-            '/api/openPlatform/inOrder/detail',
-          );
-        }
+        const { details } = await loadDetails(order);
         const receivedAt = validReceiptTime(order);
         if (!receivedAt) return [];
         const warehouseCode = String(
@@ -415,6 +293,61 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
       },
     );
     return receiptsByOrder.flat();
+  }
+
+  private async listWarehouseScope<T>(
+    { warehouseCodes, customerSkus = [] }: YcListProductInventoryParams & { warehouseCodes: string[] },
+    path: string,
+    warehouseField: 'warehouseCode' | 'destinationWarehouseCode',
+    rowLimitMessage: string,
+  ): Promise<T[]> {
+    const rows: T[] = [];
+    const validWarehouseCodes = validateScope(warehouseCodes, YC_CLIENT_LIMITS.maxWarehouseCodes);
+    const validCustomerSkus = validateScope(customerSkus, YC_CLIENT_LIMITS.maxCustomerSkus);
+    const warehouseScope = validWarehouseCodes.length > 0 ? validWarehouseCodes : [undefined];
+    const skuChunks = chunk(validCustomerSkus, 100);
+    if (warehouseScope.length * skuChunks.length > YC_CLIENT_LIMITS.maxRequestBatches) {
+      throw new YcClientError('YC request batch limit exceeded', 'BATCH_LIMIT');
+    }
+    for (const warehouseCode of warehouseScope) {
+      for (const skuChunk of skuChunks) {
+        const pageRows = await this.paginate<T>(path, {
+          ...(warehouseCode ? { [warehouseField]: warehouseCode } : {}),
+          ...(skuChunk.length > 0 ? { customerSku: skuChunk } : {}),
+        });
+        if (rows.length + pageRows.length > YC_CLIENT_LIMITS.maxListRows) {
+          throw new YcClientError(rowLimitMessage, 'ROW_LIMIT', path);
+        }
+        rows.push(...pageRows);
+      }
+    }
+    return rows;
+  }
+
+  private listInboundOrderRows(warehouseCodes: string[]): Promise<RemoteInboundOrder[]> {
+    return this.listWarehouseScope<RemoteInboundOrder>(
+      { warehouseCodes }, '/api/openPlatform/inOrder/list',
+      'destinationWarehouseCode', 'YC inbound order limit exceeded',
+    );
+  }
+
+  /** The aggregate detail limit belongs to one public lookup, never to the client instance. */
+  private createInboundDetailLoader() {
+    let totalDetails = 0;
+    return async (order: RemoteInboundOrder) => {
+      const customerWarehouseOrderNo = String(order.customerWarehouseOrderNo || '').trim();
+      const path = '/api/openPlatform/inOrder/detail';
+      if (!customerWarehouseOrderNo || customerWarehouseOrderNo.length > YC_CLIENT_LIMITS.maxIdentifierLength) {
+        throw new YcClientError('YC inbound detail identifier is invalid', 'INVALID_IDENTIFIER', path);
+      }
+      const detail = await this.request<YcInboundOrderDetail>(path, { customerWarehouseOrderNo });
+      const details = flattenInboundDetails(detail?.details);
+      totalDetails += details.length;
+      if (totalDetails > YC_CLIENT_LIMITS.maxInboundDetails) {
+        throw new YcClientError('YC inbound detail limit exceeded', 'DETAIL_LIMIT', path);
+      }
+      return { detail, details };
+    };
   }
 
   private async paginate<T>(path: string, body: Record<string, unknown>): Promise<T[]> {
@@ -488,38 +421,44 @@ export class HttpYcOpenPlatformClient implements YcOpenPlatformClient {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
-    let response: Response;
     try {
-      response = await fetch(`${this.baseUrl}${path}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
-        throw new YcClientError('YC request timed out', 'TIMEOUT', path);
+      let response: Response;
+      try {
+        response = await fetch(`${this.baseUrl}${path}`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          throw new YcClientError('YC request timed out', 'TIMEOUT', path);
+        }
+        throw new YcClientError('YC request failed', 'NETWORK_ERROR', path);
       }
-      throw new YcClientError('YC request failed', 'NETWORK_ERROR', path);
+      if (!response.ok) {
+        throw new YcClientError('YC request failed', 'HTTP_ERROR', path, response.status);
+      }
+
+      let payload: YcApiResponse<T>;
+      try {
+        payload = await response.json() as YcApiResponse<T>;
+      } catch (error) {
+        if (controller.signal.aborted || (error instanceof Error && error.name === 'AbortError')) {
+          throw new YcClientError('YC request timed out', 'TIMEOUT', path);
+        }
+        throw new YcClientError('YC response was invalid', 'INVALID_RESPONSE', path, response.status);
+      }
+      if (payload === null || typeof payload !== 'object') {
+        throw new YcClientError('YC response was invalid', 'INVALID_RESPONSE', path, response.status);
+      }
+      if (payload.state && payload.state !== SUCCESS_STATE) {
+        throw new YcClientError('YC request was rejected', 'REMOTE_REJECTED', path, response.status);
+      }
+      return (payload.data ?? payload) as T;
     } finally {
       clearTimeout(timeout);
     }
-
-    if (!response.ok) {
-      throw new YcClientError('YC request failed', 'HTTP_ERROR', path, response.status);
-    }
-
-    let payload: YcApiResponse<T>;
-    try {
-      payload = await response.json() as YcApiResponse<T>;
-    } catch {
-      throw new YcClientError('YC response was invalid', 'INVALID_RESPONSE', path, response.status);
-    }
-    if (payload.state && payload.state !== SUCCESS_STATE) {
-      throw new YcClientError('YC request was rejected', 'REMOTE_REJECTED', path, response.status);
-    }
-
-    return (payload.data ?? payload) as T;
   }
 }
 

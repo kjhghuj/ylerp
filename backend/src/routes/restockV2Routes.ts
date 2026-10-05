@@ -1,6 +1,6 @@
 import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
-import { prisma, safeRedis } from '../index';
+import { prisma, safeRedis } from '../infrastructure/runtimeResources';
 import { getProductListCacheKey } from '../services/productCache';
 import {
   RestockSourceDataError,

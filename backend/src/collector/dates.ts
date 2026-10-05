@@ -1,5 +1,7 @@
 /** 时区与“昨天”日期计算。每个站点使用自己的 IANA 时区。 */
 import path from "node:path";
+import { addDays } from '../utils/calendarDate';
+export { addDays, isValidCalendarDate as isValidDate } from '../utils/calendarDate';
 
 /** 将某个时刻映射到指定时区的 YYYY-MM-DD */
 export function dateInTz(tsMs: number, timeZone: string): string {
@@ -14,21 +16,7 @@ export function dateInTz(tsMs: number, timeZone: string): string {
 
 /** 指定时区的“昨天”（相对真实当前时间），保证不采集未完成的今天 */
 export function yesterdayInTz(timeZone: string, nowMs: number = Date.now()): string {
-  return dateInTz(nowMs - 24 * 3600 * 1000, timeZone);
-}
-
-/** 校验 YYYY-MM-DD 格式 */
-export function isValidDate(s: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s + "T00:00:00Z");
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
-}
-
-/** 日期加 n 天（按 UTC 历法，用于逐日拆分） */
-export function addDays(date: string, n: number): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+  return addDays(dateInTz(nowMs, timeZone), -1);
 }
 
 /** 闭区间日期序列（安全上限 1000 天，批次/补采入口另限制为 366 天） */

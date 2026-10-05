@@ -217,6 +217,51 @@ describe('HttpYcOpenPlatformClient inbound details', () => {
     }));
   });
 
+  it.each([
+    ['listProductInventory', '/api/openPlatform/stock/list'],
+    ['listStockAge', '/api/openPlatform/stock/ageList'],
+  ] as const)('%s preserves warehouse and SKU chunk scopes and result order', async (method, apiPath) => {
+    const customerSkus = Array.from({ length: 101 }, (_, index) => `SKU-${index}`);
+    const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith('/authorization/login')) return response({ token: 'secret-token' });
+      const body = JSON.parse(String(init?.body));
+      return response({ list: [{ warehouseCode: body.warehouseCode, customerSku: body.customerSku[0] }], total: 1 });
+    });
+    global.fetch = fetchMock as typeof fetch;
+    const client = new HttpYcOpenPlatformClient({ appKey: 'app-key', appSecret: 'app-secret' });
+
+    const rows = await client[method]({ warehouseCodes: ['WH-1', 'WH-2', 'WH-1'], customerSkus });
+
+    expect(rows).toEqual([
+      { warehouseCode: 'WH-1', customerSku: 'SKU-0' },
+      { warehouseCode: 'WH-1', customerSku: 'SKU-100' },
+      { warehouseCode: 'WH-2', customerSku: 'SKU-0' },
+      { warehouseCode: 'WH-2', customerSku: 'SKU-100' },
+    ]);
+    const requests = fetchMock.mock.calls.slice(1);
+    expect(requests.map(([url]) => url)).toEqual(Array(4).fill(expect.stringContaining(apiPath)));
+    expect(requests.map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      expect.objectContaining({ warehouseCode: 'WH-1', customerSku: customerSkus.slice(0, 100) }),
+      expect.objectContaining({ warehouseCode: 'WH-1', customerSku: customerSkus.slice(100) }),
+      expect.objectContaining({ warehouseCode: 'WH-2', customerSku: customerSkus.slice(0, 100) }),
+      expect.objectContaining({ warehouseCode: 'WH-2', customerSku: customerSkus.slice(100) }),
+    ]);
+  });
+
+  it.each([
+    ['listProductInventory', 'YC inventory row limit exceeded'],
+    ['listStockAge', 'YC stock age row limit exceeded'],
+    ['listInboundOrders', 'YC inbound order limit exceeded'],
+  ] as const)('%s rejects rows aggregated beyond the limit across warehouses', async (method, message) => {
+    const rows = Array.from({ length: 1001 }, () => ({ customerSku: 'SKU-1' }));
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token' }))
+      .mockResolvedValue(response({ list: rows, total: rows.length }));
+    const client = new HttpYcOpenPlatformClient({ appKey: 'app-key', appSecret: 'app-secret' });
+
+    await expect(client[method]({ warehouseCodes: ['WH-1', 'WH-2'] })).rejects.toThrow(message);
+  });
+
   it('aborts requests that exceed the configured timeout', async () => {
     global.fetch = jest.fn((_url, init) => new Promise((_resolve, reject) => {
       (init?.signal as AbortSignal).addEventListener('abort', () => {
@@ -233,6 +278,44 @@ describe('HttpYcOpenPlatformClient inbound details', () => {
     });
 
     await expect(client.listCustomerWarehouses()).rejects.toThrow('YC request timed out');
+  });
+
+  it('keeps the request deadline active while reading the response body', async () => {
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token', tokenType: 'Bearer' }))
+      .mockImplementationOnce((_url: string, init: RequestInit) => Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => new Promise((resolve, reject) => {
+          const completed = setTimeout(() => resolve({ state: '000001', data: [] }), 30);
+          init.signal?.addEventListener('abort', () => {
+            clearTimeout(completed);
+            const error = new Error('body aborted');
+            error.name = 'AbortError';
+            reject(error);
+          }, { once: true });
+        }),
+      } as unknown as Response));
+    global.fetch = fetchMock as typeof fetch;
+    const client = new HttpYcOpenPlatformClient({
+      appKey: 'app-key', appSecret: 'app-secret', requestTimeoutMs: 5,
+    });
+
+    await expect(client.listCustomerWarehouses()).rejects.toMatchObject({
+      name: 'YcClientError', code: 'TIMEOUT', path: '/api/openPlatform/baseData/customerWarehouse',
+    });
+  });
+
+  it('rejects a null JSON response with the structured response error', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(response({ token: 'secret-token', tokenType: 'Bearer' }))
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => null } as Response);
+    const client = new HttpYcOpenPlatformClient({ appKey: 'app-key', appSecret: 'app-secret' });
+
+    await expect(client.listCustomerWarehouses()).rejects.toMatchObject({
+      name: 'YcClientError', code: 'INVALID_RESPONSE', path: '/api/openPlatform/baseData/customerWarehouse',
+      httpStatus: 200,
+    });
   });
 
   it('rejects oversized warehouse and SKU query scopes before sending a request', async () => {

@@ -13,6 +13,18 @@ import {
 import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 
 describe('profit input normalization', () => {
+  it('retains valid shipping modes and defaults historical templates to their saved rates', () => {
+    expect(normalizeStandardNodeData({}).ok).toBe(true);
+    for (const shippingCalculationMode of [0, 1, 2]) {
+      const normalized = normalizeStandardNodeData({ shippingCalculationMode, manualShippingFee: '12.35' });
+      expect(normalized).toMatchObject({ ok: true, value: { shippingCalculationMode, manualShippingFee: 12.35 } });
+    }
+    expect(normalizeStandardNodeData({})).toMatchObject({ ok: true, value: { shippingCalculationMode: 0 } });
+  });
+
+  it.each([0.5, 1.5, 5, -1, 'bad'])('rejects invalid shipping mode %j', shippingCalculationMode => {
+    expect(normalizeStandardNodeData({ shippingCalculationMode }).ok).toBe(false);
+  });
   it.each([
     [0, 0],
     [-2.5, -2.5],

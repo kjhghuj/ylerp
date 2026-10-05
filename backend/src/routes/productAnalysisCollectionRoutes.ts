@@ -1,11 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import {Router, type Request, type Response} from 'express';
-import {prisma} from '../index';
+import {prisma} from '../infrastructure/runtimeResources';
 import {collectorRequest,collectorReportFile} from '../services/productAnalysisCollectorClient';
 import {isValidCalendarDate} from '../services/productAnalysisUpload';
 import {CredentialInputError} from '../collector/credentials';
 import {recoverStarting,syncRunStatus} from '../services/productAnalysisCollectionRuns';
 import {recordPluginSync,fetchCollectorSyncStatus,notifyBackfillRunAction} from '../services/productAnalysisBackfill';
+import {requestHasAnyPermission} from '../middleware/requestPermissions';
+import {parseQueryInteger} from '../utils/queryParams';
 
 const router=Router();
 const SUPPORTED=new Set(['PH','MY','SG']);
@@ -15,11 +17,12 @@ const activeStatuses=['STARTING','ACTIVE','PAUSED'];
 async function allowed(req:Request,res:Response):Promise<boolean> {
   const user=req.user;
   if(!user){res.status(401).json({detail:'Unauthorized'});return false;}
-  if(user.role==='owner')return true;
-  const current=await prisma.user.findUnique({where:{id:user.id},select:{permissions:true,isActive:true}});
-  const p=current?.permissions||[];
-  if(current?.isActive&&(p.includes('*')||p.includes('product-analysis')||p.includes('product-analysis.upload'))) return true;
-  res.status(403).json({detail:'Forbidden'});return false;
+  try {
+    if(await requestHasAnyPermission(req,prisma,['product-analysis.upload']))return true;
+    res.status(403).json({detail:'Forbidden'});return false;
+  }catch {
+    res.status(500).json({detail:'Permission check failed'});return false;
+  }
 }
 async function shopFor(req:Request) {
   return prisma.productAnalysisShop.findFirst({where:{id:String(req.params.id||''),userId:req.user!.id}});
@@ -220,7 +223,8 @@ router.get('/shops/:id/collection-runs/:runId',async(req,res)=>{
   if(!run)return res.status(404).json({detail:'Run not found'});
   if(!run.collectorBatchId)return res.json({run,batch:null,tasks:[]});
   try {
-    const page=Math.max(1,Math.min(10000,Number(req.query.page)||1));
+    const page=parseQueryInteger(req.query.page,1,1,10000);
+    if(page===null)return res.status(400).json({detail:'Page 无效'});
     const data=await collectorRequest<{batch:{counts:Record<string,number>;total:number};tasks:unknown[];page:number;pages:number}>(
       `/api/erp/batches/${run.collectorBatchId}?page=${page}&pageSize=20`);
     const status=await syncRunStatus(run);

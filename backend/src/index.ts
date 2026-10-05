@@ -1,134 +1,83 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
-import Redis from 'ioredis';
-import { parseTrustedProxyCidrs } from './services/trustedProxy';
-import { assertJwtSecretConfigured } from './services/jwtSecret';
-import { guardAiRequest } from './middleware/aiRequestGuard';
-import shopeeRoutes from './routes/shopeeRoutes';
-import productAnalysisCollectionRoutes from './routes/productAnalysisCollectionRoutes';
-import productAnalysisImportRoutes, {startProductAnalysisImportWorker} from './routes/productAnalysisImportRoutes';
-import {getCollector,stopCollector} from './collector/runtime';
-import {startProductAnalysisBackfillWorker} from './services/productAnalysisBackfill';
-import {startProductChatHistoryCleanup} from './services/productAnalysisChatHistory';
+import './config/environment';
+import type { Server } from 'node:http';
+import { createApp } from './app';
 import {
-  configureJsonBodyParsing,
-  chromaJsonErrorHandler,
-  chromaJsonParser,
-  productAnalysisUploadJsonParser,
-  productAtomicRouteErrorHandler,
-} from './middleware/productAtomicJsonMiddleware';
-
-dotenv.config();
-assertJwtSecretConfigured();
-
-const app = express();
-app.set('trust proxy', parseTrustedProxyCidrs(process.env.TRUSTED_PROXY_CIDRS));
-const port = process.env.PORT || 4002;
-
-// Middlewares
-app.use(cors());
-// Shopee verifies signatures over the raw body, before general JSON parsing.
-app.use('/api/shopee', shopeeRoutes);
-configureJsonBodyParsing(app);
-
-export const prisma = new PrismaClient();
-export const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-    maxRetriesPerRequest: null,
-    retryStrategy: () => null,
-});
-
-redis.on('connect', () => {
-    console.log('Redis TCP connected');
-});
-
-let redisReady = false;
-redis.on('ready', () => { redisReady = true; console.log('Redis ready'); });
-redis.on('close', () => { redisReady = false; });
-redis.on('end', () => { redisReady = false; });
-redis.on('error', (err) => {
-    console.warn('Redis error (continuing without cache):', err.message);
-});
-
-export const safeRedis = {
-    async get(key: string): Promise<string | null> {
-        if (!redisReady) return null;
-        try { return await redis.get(key); } catch { return null; }
-    },
-    async set(key: string, value: string, ...args: (string | number)[]): Promise<void> {
-        if (!redisReady) return;
-        try { await (redis.set as (...a: any[]) => any)(key, value, ...args); } catch {}
-    },
-    async del(key: string): Promise<void> {
-        if (!redisReady) return;
-        try { await redis.del(key); } catch {}
-    },
-};
-
-// Import middleware
-import { authenticate, authorize, authorizeAnyPermission } from './middleware/authMiddleware';
-import { ShopeeAuthorizationService, startShopeeTokenRefresh } from './services/shopeeAuthorization';
-import { configureShopeeAuthorization, createShopeeManagementRoutes } from './routes/shopeeAuthorizationRoutes';
-
-// Import routes
-import authRoutes from './routes/authRoutes';
-import userRoutes from './routes/userRoutes';
-import productRoutes from './routes/productRoutes';
-import productDisplayGroupRoutes from './routes/productDisplayGroupRoutes';
-import financeRoutes from './routes/financeRoutes';
-import nodeGraphRoutes from './routes/nodeGraphRoutes';
-import templateRoutes from './routes/templateRoutes';
-import chromaAdaptRoutes from './routes/chromaAdaptRoutes';
-import restockV2Routes from './routes/restockV2Routes';
-import restockV3Routes from './routes/restockV3Routes';
-import scheduleRoutes from './routes/scheduleRoutes';
-import chromaRecordRoutes from './routes/chromaRecordRoutes';
-import usageRoutes from './routes/usageRoutes';
-import dashboardRoutes from './routes/dashboardRoutes';
-import productAnalysisRoutes from './routes/productAnalysisRoutes';
+  prisma, initializeRuntimeResources, closeRuntimeResources,
+} from './infrastructure/runtimeResources';
+import { createGracefulShutdown, type StoppableJob } from './infrastructure/gracefulShutdown';
+import { getCollector, stopCollector, stopCollectorClaims } from './collector/runtime';
 import { startFinanceBackup } from './services/financeBackup';
+import { ShopeeAuthorizationService, startShopeeTokenRefresh } from './services/shopeeAuthorization';
+import { startProductAnalysisImportWorker } from './services/productAnalysisImportService';
+import { startProductAnalysisBackfillWorker } from './services/productAnalysisBackfill';
+import { startProductChatHistoryCleanup } from './services/productAnalysisChatHistory';
 
-// Public routes (no auth required)
-app.use('/api/auth', authRoutes);
+export { prisma, redis, safeRedis } from './infrastructure/runtimeResources';
 
-// Protected routes (auth required)
-const shopeeAuthorization = new ShopeeAuthorizationService(prisma);
-configureShopeeAuthorization(shopeeAuthorization);
-app.use('/api/shopee/manage', authenticate, authorize('owner'), createShopeeManagementRoutes(shopeeAuthorization));
-app.use('/api/users', userRoutes);
-app.use('/api/products', authenticate, productRoutes);
-app.use('/api/product-display-groups', authenticate, productDisplayGroupRoutes);
-app.use(productAtomicRouteErrorHandler);
-app.use('/api/finance', authenticate, financeRoutes);
-app.use('/api/templates', authenticate, templateRoutes);
-app.use('/api/restock-v2', authenticate, restockV2Routes);
-app.use('/api/restock-v3', authenticate, restockV3Routes);
-app.use('/api/schedule', authenticate, scheduleRoutes);
-app.use('/api/node-graphs', authenticate, nodeGraphRoutes);
-app.use('/api/chroma-adapt', authenticate, chromaJsonParser, chromaJsonErrorHandler, guardAiRequest, chromaAdaptRoutes);
-app.use('/api/chroma-data', authenticate, authorizeAnyPermission('chroma-adapt.translate', 'chroma-adapt.edit', 'chroma-adapt.generate'), chromaJsonParser, chromaJsonErrorHandler, chromaRecordRoutes);
-app.use('/api/usage', usageRoutes);
-app.use('/api/dashboard', authenticate, dashboardRoutes);
-app.use('/api/product-analysis', authenticate, productAnalysisUploadJsonParser, chromaJsonErrorHandler, guardAiRequest, productAnalysisRoutes);
-app.use('/api/product-analysis', authenticate, productAnalysisCollectionRoutes);
-app.use('/api/imports', productAnalysisImportRoutes);
-
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
-});
-
-startFinanceBackup();
-startShopeeTokenRefresh(shopeeAuthorization);
-startProductAnalysisImportWorker();
-getCollector();
-const stopBackfillWorker=startProductAnalysisBackfillWorker();
-const stopChatHistoryCleanup=startProductChatHistoryCleanup();
-
-for (const signal of ['SIGINT','SIGTERM'] as const) {
-  process.once(signal,()=>{stopBackfillWorker();stopChatHistoryCleanup();void stopCollector().finally(()=>process.exit(0));});
+export function startServer(): { server: Server; shutdown: () => Promise<void> } {
+  const shopeeAuthorization = new ShopeeAuthorizationService(prisma);
+  const app = createApp({ shopeeAuthorization });
+  const port = process.env.PORT || 4002;
+  const jobs: StoppableJob[] = [];
+  let importWorker: StoppableJob | undefined;
+  let server: Server;
+  try {
+    getCollector();
+    initializeRuntimeResources();
+    jobs.push(startFinanceBackup());
+    jobs.push(startShopeeTokenRefresh(shopeeAuthorization));
+    jobs.push(startProductAnalysisBackfillWorker());
+    jobs.push(startProductChatHistoryCleanup());
+    importWorker = startProductAnalysisImportWorker();
+    server = app.listen(port, () => {
+      console.log(`Server running at http://localhost:${port}`);
+    });
+  } catch (error) {
+    void createGracefulShutdown({
+      closeHttp: async () => {}, stopCollector, stopCollectorClaims, jobs, importWorker,
+      closeResources: closeRuntimeResources,
+    })();
+    throw error;
+  }
+  const shutdown = createGracefulShutdown({
+    closeHttp: () => new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+    }),
+    forceCloseHttp: () => server.closeAllConnections(),
+    stopCollector,
+    stopCollectorClaims,
+    jobs,
+    importWorker,
+    closeResources: closeRuntimeResources,
+  });
+  const handleSignal = () => {
+    void shutdown().finally(() => {
+      removeListeners();
+      process.exit(0);
+    });
+  };
+  const handleServerError = (error: Error) => {
+    console.error('HTTP server failed:', error);
+    void shutdown().finally(() => {
+      removeListeners();
+      process.exitCode = 1;
+    });
+  };
+  const removeListeners = () => {
+    process.removeListener('SIGINT', handleSignal);
+    process.removeListener('SIGTERM', handleSignal);
+    server.removeListener('error', handleServerError);
+  };
+  process.once('SIGINT', handleSignal);
+  process.once('SIGTERM', handleSignal);
+  server.once('error', handleServerError);
+  return { server, shutdown: () => shutdown().finally(removeListeners) };
 }
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
-});
+if (require.main === module) {
+  try { startServer(); }
+  catch (error) {
+    console.error('Backend startup failed:', error);
+    process.exitCode = 1;
+  }
+}

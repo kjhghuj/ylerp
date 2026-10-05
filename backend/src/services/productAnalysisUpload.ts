@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 import { SUMMABLE_FIELDS, EXTRA_FIELDS } from './productAnalysisAggregation';
+import { isValidCalendarDate } from '../utils/calendarDate';
+export { isValidCalendarDate } from '../utils/calendarDate';
 
 export const SHEET_KEYS = ['hot', 'new', 'uncompetitive', 'competitive'] as const;
 export type UploadSheetKey = (typeof SHEET_KEYS)[number];
@@ -23,13 +25,6 @@ export const MAX_SOURCE_COLUMNS = 512;
 export const MAX_SOURCE_CELLS = 1_000_000;
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期需为 YYYY-MM-DD');
-
-/** 真实日历日：解析后回比原字符串，2026-02-31 这类溢出日期不合法 */
-export function isValidCalendarDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-}
 
 const numericField = z.number().finite();
 

@@ -1,5 +1,5 @@
 import type {ProductAnalysisCollectionRun} from '@prisma/client';
-import {prisma} from '../index';
+import {prisma} from '../infrastructure/runtimeResources';
 import {collectorRequest} from './productAnalysisCollectorClient';
 
 export const activeCollectionStatuses = ['STARTING', 'ACTIVE', 'PAUSED'];

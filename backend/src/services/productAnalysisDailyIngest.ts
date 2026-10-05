@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { withUsageEvent } from './usageEvents';
 import { SUMMABLE_FIELDS, mapParsedSheetItemsToDailyRows, type DailyItemRow } from './productAnalysisAggregation';
 import { hashCanonicalJson } from './productAnalysisSourceHash';

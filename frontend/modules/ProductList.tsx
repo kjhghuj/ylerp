@@ -12,6 +12,10 @@ import { ProductCalcData, AppState } from '../types';
 import { writeFile, utils } from 'xlsx';
 import api from '../src/api';
 import { calculateProfit } from './profit/calculateProfit';
+import { getProfitCalculationContext } from './profit/tiktokFeePolicy';
+import { quoteTiktokCrossBorderShipping } from './profit/tiktokShippingRates';
+import { quoteTiktokUSShipping } from './profit/tiktokUSShipping';
+import { quoteTiktokUSDirectShipping } from './profit/tiktokUSDirectShipping';
 import { useToast } from '../components/Toast';
 import { type CurrencyCode, COUNTRY_TO_CURRENCY, normalizeCurrencyCode } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
@@ -66,8 +70,8 @@ interface LinkedTemplate extends LinkedProductTemplate {
 }
 
 const countryNameMap: Record<string, string> = {
-    'SG': 'SG', 'MY': 'MY', 'PH': 'PH', 'TH': 'TH', 'ID': 'ID',
-    'SGD': 'SGD', 'MYR': 'MYR', 'PHP': 'PHP', 'THB': 'THB', 'IDR': 'IDR',
+    'SG': 'SG', 'MY': 'MY', 'PH': 'PH', 'TH': 'TH', 'ID': 'ID', 'US': 'US',
+    'SGD': 'SGD', 'MYR': 'MYR', 'PHP': 'PHP', 'THB': 'THB', 'IDR': 'IDR', 'USD': 'USD',
 };
 
 const countryCurrencyMap = COUNTRY_TO_CURRENCY;
@@ -725,6 +729,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                     siteInputs.value,
                     rate.rate,
                     currency as CurrencyCode,
+                    getProfitCalculationContext(tpl.platform, standardData),
                 );
             });
         } catch {
@@ -743,11 +748,18 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             return { sections: [], viewModel };
         }
         const d = toStandardNodeData(normalizedData);
+        const tiktokPolicy = getProfitCalculationContext(tpl.platform, normalizedData).tiktokFeePolicy;
         const productSite = createProductSiteViewModel(
             selectedProduct || {},
             tpl.country,
             [extractLegacyProductTaxRateCandidate(tpl.data)],
         );
+        const automaticShippingQuote = tpl.platform === 'tiktok' && d.shippingCalculationMode === 1
+            ? quoteTiktokCrossBorderShipping(productSite.currency, productSite.globalInputs.productWeight) : null;
+        const usShippingQuote = tpl.platform === 'tiktok' && productSite.currency === 'USD' && d.shippingCalculationMode === 3
+            ? quoteTiktokUSShipping(d, productSite.globalInputs.productWeight) : null;
+        const usDirectShippingQuote = tpl.platform === 'tiktok' && productSite.currency === 'USD' && d.shippingCalculationMode === 4
+            ? quoteTiktokUSDirectShipping(d, productSite.globalInputs.productWeight) : null;
         let exchangeRate: ResolvedProfitExchangeRate | null = null;
         try {
             exchangeRate = resolveProfitExchangeRate(
@@ -778,15 +790,32 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             {
                 title: t.detail.fees,
                 items: [
+                    ...(usDirectShippingQuote ? [
+                        { label: strings.profit.tiktok.usDirectShipping, value: usDirectShippingQuote.shippingFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                        { label: strings.profit.inputs.usDirectExtraFee, value: usDirectShippingQuote.extraFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                        { label: strings.profit.tiktok.usTotalShippingQuote, value: usDirectShippingQuote.totalFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                    ] : usShippingQuote ? [
+                        { label: strings.profit.tiktok.usHeadFreight, value: usShippingQuote.headFreightFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                        { label: strings.profit.tiktok.usLocalDelivery, value: usShippingQuote.localDeliveryFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                        { label: strings.profit.tiktok.usSegmentedShippingTotal, value: usShippingQuote.totalFeeLocal, suffix: productSite.currency, currency: productSite.currency },
+                    ] : tpl.platform === 'tiktok' && d.shippingCalculationMode !== 0 ? [
+                        { label: d.shippingCalculationMode === 1 ? strings.profit.tiktok.shippingQuote : strings.profit.inputs.manualShippingFee,
+                            value: automaticShippingQuote ? automaticShippingQuote.crossBorderFeeLocal : d.manualShippingFee,
+                            suffix: productSite.currency, currency: productSite.currency },
+                        ...(d.shippingCalculationMode === 1 ? [{ label: strings.profit.inputs.lastMileFee, value: d.lastMileFee, suffix: productSite.currency, currency: productSite.currency }] : []),
+                    ] : [
                     { label: t.detail.baseShipping, value: d.baseShippingFee, suffix: productSite.currency, currency: productSite.currency },
                     { label: t.detail.extraShipping, value: d.extraShippingFee, suffix: `${productSite.currency}/10g`, currency: productSite.currency },
                     { label: t.detail.crossBorder, value: d.crossBorderFee, suffix: productSite.currency, currency: productSite.currency },
+                    ]),
                     { label: t.detail.warehouseFee, value: d.warehouseOperationFee, suffix: productSite.currency, currency: productSite.currency },
                 ]
             },
             {
                 title: t.detail.serviceRates,
-                items: [
+                items: tiktokPolicy ? [
+                    ...['affiliateCommissionRate', 'growthServiceFeeRate', 'shippingServiceFeeRate', 'campaignServiceFeeRate'].map(key => ({ label: strings.profit.inputs[key], value: d[key], suffix: '%' })),
+                ] : [
                     { label: t.detail.mdvFee, value: d.mdvServiceFeeRate, suffix: '%' },
                     { label: t.detail.fssFee, value: d.fssServiceFeeRate, suffix: '%' },
                     { label: t.detail.ccbFee, value: d.ccbServiceFeeRate, suffix: '%' },
@@ -807,6 +836,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 ]
             },
         ];
+
+        if (tiktokPolicy) sections.push({
+            title: productSite.currency === 'USD' ? strings.profit.tiktok.usAssumptions : strings.profit.tiktok.assumptions,
+            items: ['buyerShippingFee', 'shippingSubsidy', ...(d.shippingCalculationMode === 0 ? ['lastMileFee'] : []), 'tiktokOrderFee', 'affiliateProductTax', 'growthServiceFeeCap', 'shippingServiceFeeCap', 'campaignServiceFeeCap'].map(key => ({ label: strings.profit.inputs[key], value: d[key], suffix: productSite.currency, currency: productSite.currency })),
+        });
 
         return {
             sections,
@@ -858,7 +892,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         </div>
     );
 
-    const renderCostBreakdown = (profit: ReturnType<typeof calculateProfit>) => (
+    const renderCostBreakdown = (profit: ReturnType<typeof calculateProfit>, currency: string) => (
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
             {[
                 { label: t.revenue, value: profit.totalRevenue.toFixed(2) },
@@ -866,7 +900,25 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 { label: t.commission, value: profit.commission.toFixed(2) },
                 { label: t.transactionFee, value: profit.transactionFee.toFixed(2) },
                 { label: t.serviceFee, value: profit.serviceFee.toFixed(2) },
-                { label: t.shippingFee, value: profit.shippingFee.toFixed(2) },
+                ...(profit.affiliateCommission !== undefined ? [
+                    { label: strings.profit.tiktok.affiliateFee, value: profit.affiliateCommission.toFixed(2) },
+                    { label: strings.profit.tiktok.growthFee, value: (profit.growthServiceFee ?? 0).toFixed(2) },
+                    { label: strings.profit.tiktok.shippingServiceFee, value: (profit.shippingServiceFee ?? 0).toFixed(2) },
+                    { label: strings.profit.tiktok.campaignFee, value: (profit.campaignServiceFee ?? 0).toFixed(2) },
+                    ...(profit.campaignServiceFeeBase !== undefined && (profit.campaignServiceFee ?? 0) > 0 ? [{ label: strings.profit.tiktok.usCampaignBase, value: profit.campaignServiceFeeBase.toFixed(2) }] : []),
+                    { label: strings.profit.tiktok.orderFee, value: (profit.orderFee ?? 0).toFixed(2) },
+                    { label: currency === 'USD' ? strings.profit.tiktok.usCommissionBase : strings.profit.tiktok.commissionBase, value: (profit.commissionBase ?? 0).toFixed(2) },
+                    { label: strings.profit.tiktok.transactionBase, value: (profit.transactionFeeBase ?? 0).toFixed(2) },
+                    { label: strings.profit.tiktok.affiliateBase, value: (profit.affiliateCommissionBase ?? 0).toFixed(2) },
+                    ...(profit.usHeadFreightFee !== undefined ? [
+                        { label: strings.profit.tiktok.usHeadFreight, value: profit.usHeadFreightFee.toFixed(2) },
+                        { label: strings.profit.tiktok.usLocalDelivery, value: (profit.usLocalDeliveryFee ?? 0).toFixed(2) },
+                    ] : []),
+                    { label: strings.profit.tiktok.actualShipping, value: (profit.actualShippingFee ?? 0).toFixed(2) },
+                    { label: strings.profit.inputs.buyerShippingFee, value: (profit.buyerShippingFee ?? 0).toFixed(2) },
+                    { label: strings.profit.inputs.shippingSubsidy, value: (profit.shippingSubsidy ?? 0).toFixed(2) },
+                ] : []),
+                { label: profit.shippingFee < 0 ? strings.profit.tiktok.netShippingIncome : t.shippingFee, value: Math.abs(profit.shippingFee).toFixed(2) },
                 { label: t.adFee, value: profit.adFee.toFixed(2) },
                 { label: t.totalTax, value: profit.totalTax.toFixed(2) },
                 { label: t.damage, value: profit.damage.toFixed(2) },
@@ -1301,7 +1353,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                     viewModel.result,
                                                     normalizeCurrencyCode(tpl.country) as CurrencyCode,
                                                 )}
-                                                {renderCostBreakdown(viewModel.result)}
+                                                {renderCostBreakdown(viewModel.result, normalizeCurrencyCode(tpl.country))}
                                             </>
                                         )}
                                         <ProductTemplateExecutionPanel
@@ -1418,7 +1470,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         { code: 'MY' as const, name: t.tabs.my },
                         { code: 'SG' as const, name: t.tabs.sg },
                         { code: 'ID' as const, name: t.tabs.id },
-                        { code: 'TH' as const, name: t.tabs.th }
+                        { code: 'TH' as const, name: t.tabs.th },
+                        { code: 'US' as const, name: t.tabs.us }
                     ]).map(tab => (
                         <button
                             key={tab.code}

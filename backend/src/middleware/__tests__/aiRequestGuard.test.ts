@@ -1,13 +1,6 @@
-jest.mock('../../index', () => ({
-  prisma: { aiUsageCall: { count: jest.fn() } },
-}));
-
 import { EventEmitter } from 'events';
 import type { Request, Response } from 'express';
-import { prisma } from '../../index';
 import { guardAiRequest, resetAiRequestGuardForTests } from '../aiRequestGuard';
-
-const count = prisma.aiUsageCall.count as jest.Mock;
 
 function response() {
   const emitter = new EventEmitter() as EventEmitter & Partial<Response>;
@@ -16,44 +9,98 @@ function response() {
   emitter.status = status;
   return { res: emitter as Response, status, json };
 }
+const request = (id = 'u1') => ({
+  method: 'POST', baseUrl: '/api/chroma-adapt', path: '/generate', user: { id },
+} as Request);
 
 describe('AI request guard', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
     resetAiRequestGuardForTests();
-    count.mockResolvedValue(0);
     process.env.AI_MAX_CONCURRENT_CALLS = '1';
   });
+  afterEach(() => {
+    delete process.env.AI_MAX_CONCURRENT_CALLS;
+    delete process.env.AI_CALLS_PER_MINUTE;
+    jest.useRealTimers();
+  });
 
-  afterEach(() => delete process.env.AI_MAX_CONCURRENT_CALLS);
-
-  it('does not count non-AI product-analysis mutations', async () => {
+  it('does not apply AI limits to ordinary product-analysis mutations', async () => {
     const next = jest.fn();
-    await guardAiRequest({ method: 'POST', baseUrl: '/api/product-analysis', path: '/shops', user: { id: 'u1' } } as Request, response().res, next);
-    expect(next).toHaveBeenCalled();
-    expect(count).not.toHaveBeenCalled();
+    await guardAiRequest({ ...request(), baseUrl: '/api/product-analysis', path: '/shops' } as Request, response().res, next);
+    expect(next).toHaveBeenCalledWith();
   });
 
   it('blocks concurrent calls and releases the slot on response finish', async () => {
-    const request = { method: 'POST', baseUrl: '/api/chroma-adapt', path: '/generate', user: { id: 'u1' } } as Request;
     const first = response();
-    await guardAiRequest(request, first.res, jest.fn());
+    await guardAiRequest(request(), first.res, jest.fn());
     const second = response();
-    await guardAiRequest(request, second.res, jest.fn());
+    await guardAiRequest(request(), second.res, jest.fn());
     expect(second.status).toHaveBeenCalledWith(429);
     first.res.emit('finish');
-    const third = response();
     const next = jest.fn();
-    await guardAiRequest(request, third.res, next);
-    expect(next).toHaveBeenCalled();
+    await guardAiRequest(request(), response().res, next);
+    expect(next).toHaveBeenCalledWith();
   });
 
-  it('blocks the configured Shanghai-day call limit', async () => {
-    process.env.AI_DAILY_CALL_LIMIT = '2';
-    count.mockResolvedValue(2);
-    const { res, status } = response();
-    await guardAiRequest({ method: 'POST', baseUrl: '/api/product-analysis', path: '/chat', user: { id: 'u1' } } as Request, res, jest.fn());
-    expect(status).toHaveBeenCalledWith(429);
-    delete process.env.AI_DAILY_CALL_LIMIT;
+  it('reserves the concurrency slot synchronously for simultaneous submissions', async () => {
+    const firstNext = jest.fn();
+    const secondNext = jest.fn();
+    const second = response();
+    await Promise.all([
+      guardAiRequest(request(), response().res, firstNext),
+      guardAiRequest(request(), second.res, secondNext),
+    ]);
+    expect(firstNext).toHaveBeenCalledTimes(1);
+    expect(secondNext).not.toHaveBeenCalled();
+    expect(second.status).toHaveBeenCalledWith(429);
+  });
+
+  it('keeps users independent and also guards product-analysis chat', async () => {
+    await guardAiRequest(request('one'), response().res, jest.fn());
+    const next = jest.fn();
+    await guardAiRequest({ ...request('two'), baseUrl: '/api/product-analysis', path: '/chat' } as Request, response().res, next);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  it('expires the minute allowance after a minute while retaining active slots', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-10-05T00:00:00Z'));
+    process.env.AI_CALLS_PER_MINUTE = '1';
+    const first = response();
+    await guardAiRequest(request(), first.res, jest.fn());
+    first.res.emit('finish');
+    const blocked = response();
+    await guardAiRequest(request(), blocked.res, jest.fn());
+    expect(blocked.status).toHaveBeenCalledWith(429);
+    jest.advanceTimersByTime(60_000);
+    const next = jest.fn();
+    await guardAiRequest(request(), response().res, next);
+    expect(next).toHaveBeenCalledWith();
+    jest.advanceTimersByTime(60_000);
+    const active = response();
+    await guardAiRequest(request(), active.res, jest.fn());
+    expect(active.status).toHaveBeenCalledWith(429);
+  });
+
+  it('does not release another request when finish and close both fire', async () => {
+    process.env.AI_MAX_CONCURRENT_CALLS = '2';
+    const first = response();
+    await guardAiRequest(request(), first.res, jest.fn());
+    await guardAiRequest(request(), response().res, jest.fn());
+    first.res.emit('finish'); first.res.emit('close');
+    await guardAiRequest(request(), response().res, jest.fn());
+    const fourth = response();
+    await guardAiRequest(request(), fourth.res, jest.fn());
+    expect(fourth.status).toHaveBeenCalledWith(429);
+  });
+
+  it('releases a disconnected response and tolerates malformed limits using defaults', async () => {
+    const first = response();
+    await guardAiRequest(request(), first.res, jest.fn());
+    first.res.emit('close');
+    process.env.AI_MAX_CONCURRENT_CALLS = '-3';
+    process.env.AI_CALLS_PER_MINUTE = 'NaN';
+    const next = jest.fn();
+    await guardAiRequest(request(), response().res, next);
+    expect(next).toHaveBeenCalledWith();
   });
 });

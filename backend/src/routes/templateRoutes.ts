@@ -1,6 +1,6 @@
 import { withUsageEvent } from '../services/usageEvents';
 import { Router } from 'express';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 
 import {
     ProfitTemplateDataValidationError,

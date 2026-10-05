@@ -13,6 +13,7 @@ import {
     formatNodeGraphEvaluationError,
 } from './nodeGraphProfitAdapter';
 import { createGraphPlatformNode, createTemplatePlatformNode } from './platformNodeFactory';
+import { applyTiktokUSCrossBorderDefaults, createTiktokNode, TIKTOK_US_CROSS_BORDER_NODE_NAME, upgradeTiktokNode } from './tiktokFeePolicy';
 import { buildPlatformNodeTemplatePayload } from './templateDataSerializer';
 import type { GraphNodeRuntimeValidationState } from './GraphTemplateCard';
 import {
@@ -36,6 +37,7 @@ import {
     normalizeStandardNodesForSave,
     parseCanonicalProfitNumber,
     validateCouponRevenueBudget,
+    validateTiktokShippingWeight,
     type ProfitInputError,
 } from './profitInputNormalization';
 import {
@@ -72,6 +74,20 @@ export const useProductActions = (
     } = useStore();
     const { showToast } = useToast();
     const t = strings.profit;
+    useEffect(() => {
+        const site = normalizeSiteInputs((siteInputsMap.USD ?? DEFAULT_SITE_INPUTS) as unknown as Record<string, unknown>);
+        if (!site.ok) return;
+        const applyDefaults = (node: PlatformNode) => applyTiktokUSCrossBorderDefaults(node, site.value, rates.USD);
+        if (!(profitNodes.USD ?? []).some(node => applyDefaults(node) !== node)) return;
+        setProfitNodes(previous => {
+            // A preceding import may have replaced both nodes and site inputs.
+            // Wait for its next render before using that product's fixed fee.
+            if (previous.USD !== profitNodes.USD) return previous;
+            const current = previous.USD ?? [];
+            const updated = current.map(applyDefaults);
+            return updated.some((node, index) => node !== current[index]) ? { ...previous, USD: updated } : previous;
+        });
+    }, [profitNodes, setProfitNodes, siteInputsMap, rates]);
     const formatGraphErrors = (errors: Parameters<typeof formatNodeGraphEvaluationError>[0][]) => (
         errors.map(error => formatNodeGraphEvaluationError(error, t.graphErrors)).join('；')
     );
@@ -81,17 +97,18 @@ export const useProductActions = (
     const [inputErrors, setInputErrors] = useState<ProfitInputError[]>([]);
     const [draftInputErrors, setDraftInputErrors] = useState<ProfitInputError[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [tiktokUpgradeDrafts, setTiktokUpgradeDrafts] = useState<Record<string, { source: PlatformNode; node: PlatformNode }>>({});
     const savingRef = useRef(false);
     const [identityConfirmation, setIdentityConfirmation] = useState<ProductIdentityConfirmation | null>(null);
     const editingProduct = products.find(product => product.id === editingProductId) || null;
     // A completed request must not restore a form that was reset, edited or replaced.
     const siteInputsKey = JSON.stringify(siteInputsMap);
-    const draftRef = useRef({ globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey, version: 0 });
+    const draftRef = useRef({ globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey, tiktokUpgradeDrafts, version: 0 });
     const previousDraft = draftRef.current;
     if (previousDraft.globalInputs !== globalInputs || previousDraft.profitNodes !== profitNodes
         || previousDraft.editingProductId !== editingProductId || previousDraft.siteCountry !== siteCountry
-        || previousDraft.siteInputsKey !== siteInputsKey) {
-        draftRef.current = { globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey,
+        || previousDraft.siteInputsKey !== siteInputsKey || previousDraft.tiktokUpgradeDrafts !== tiktokUpgradeDrafts) {
+        draftRef.current = { globalInputs, profitNodes, editingProductId, siteCountry, siteInputsKey, tiktokUpgradeDrafts,
             version: previousDraft.version + 1 };
     }
     useEffect(() => () => { draftRef.current.version += 1; }, []);
@@ -124,7 +141,22 @@ export const useProductActions = (
         });
     }, []);
 
-    const nodes: PlatformNode[] = profitNodes[siteCountry] || [];
+    const rawNodes: PlatformNode[] = profitNodes[siteCountry] || [];
+    const nodes: PlatformNode[] = rawNodes.map(node => tiktokUpgradeDrafts[node.id]?.source === node ? tiktokUpgradeDrafts[node.id].node : node);
+    const tiktokUpgradeIds = rawNodes.filter(node => tiktokUpgradeDrafts[node.id]?.source === node).map(node => node.id);
+    const handleCancelTiktokUpgrade = (id: string) => setTiktokUpgradeDrafts(previous => {
+        const next = { ...previous }; delete next[id]; return next;
+    });
+    const handleUpgradeTiktok = (id: string) => {
+        const source = rawNodes.find(node => node.id === id);
+        if (!source) return;
+        const site = normalizeSiteInputs((siteInputsMap[source.currency] || DEFAULT_SITE_INPUTS) as unknown as Record<string, unknown>);
+        if (site.ok === false) { setInputErrors(site.errors); return; }
+        try {
+            const node = upgradeTiktokNode(source, site.value, rates[source.currency]);
+            setTiktokUpgradeDrafts(previous => ({ ...previous, [id]: { source, node } }));
+        } catch { showToast(t.errors.templateSaveFailed, 'error'); }
+    };
     const setNodes = useCallback((newNodes: PlatformNode[] | ((prev: PlatformNode[]) => PlatformNode[])) => {
         setProfitNodes(prev => {
             const currentNodes = prev[siteCountry] || [];
@@ -148,9 +180,10 @@ export const useProductActions = (
         setInputErrors([]);
         setDraftInputErrors([]);
         setGraphNodeValidation({});
+        setTiktokUpgradeDrafts({});
         setGlobalInputs(previous => ({ ...previous, name: '', sku: '', purchaseCost: 0, productWeight: 0 }));
         setSiteInputsMap(Object.fromEntries(
-            ['MYR', 'SGD', 'PHP', 'THB', 'IDR'].map(currency => [currency, { ...DEFAULT_SITE_INPUTS }]),
+            ['MYR', 'SGD', 'PHP', 'THB', 'IDR', 'USD'].map(currency => [currency, { ...DEFAULT_SITE_INPUTS }]),
         ));
         setProfitNodes(previous => Object.fromEntries(Object.keys(previous).map(currency => [currency, []])));
     };
@@ -158,6 +191,10 @@ export const useProductActions = (
     const handleUpdateNode = (id: string, partialData: Partial<NodeData>) => {
         const changedFields = new Set(Object.keys(partialData).map(field => `nodes.${id}.${field}`));
         setInputErrors(previous => previous.filter(error => !changedFields.has(error.field)));
+        if (tiktokUpgradeIds.includes(id)) {
+            setTiktokUpgradeDrafts(previous => ({ ...previous, [id]: { ...previous[id], node: { ...previous[id].node, data: { ...previous[id].node.data, ...partialData } } } }));
+            return;
+        }
         setNodes(prev => prev.map(n => (
             n.id === id && n.persistedData?.kind !== 'invalid'
                 ? { ...n, data: { ...n.data, ...partialData } }
@@ -166,6 +203,7 @@ export const useProductActions = (
     };
 
     const handleDeleteNode = (id: string) => {
+        handleCancelTiktokUpgrade(id);
         setInputErrors(previous => previous.filter(
             error => !error.field.startsWith(`nodes.${id}.`),
         ));
@@ -204,6 +242,11 @@ export const useProductActions = (
     };
 
     const handleAddBlankNode = (selectedPlatform: string) => {
+        if (siteCountry === 'USD' && selectedPlatform !== 'tiktok') return;
+        if (selectedPlatform === 'tiktok') {
+            setNodes(prev => [...prev, createTiktokNode(siteCountry, siteCountry === 'USD' ? TIKTOK_US_CROSS_BORDER_NODE_NAME : t.templates.unnamedNode)]);
+            return;
+        }
         setNodes(prev => [...prev, {
             id: genId(),
             platform: selectedPlatform as PlatformType,
@@ -326,7 +369,9 @@ export const useProductActions = (
         ];
         if (blockSaveWithInputErrors(templateValidationErrors, node.id)) return;
         setInputErrors([]);
-        setNodes(previous => previous.map(candidate => (
+        const pendingUpgrade = tiktokUpgradeIds.includes(node.id);
+        const templateSaveVersion = draftRef.current.version;
+        if (!pendingUpgrade) setNodes(previous => previous.map(candidate => (
             candidate.id === node.id ? normalizedNode : candidate
         )));
         let exchangeRateSnapshot: ExchangeRateSnapshot | undefined;
@@ -350,6 +395,10 @@ export const useProductActions = (
                 exchangeRateSnapshot,
             ));
             setAllTemplates(prev => [...prev, response.data]);
+            if (pendingUpgrade && draftRef.current.version === templateSaveVersion) {
+                setNodes(previous => previous.map(candidate => candidate.id === node.id ? normalizedNode : candidate));
+                handleCancelTiktokUpgrade(node.id);
+            }
             showToast(t.templates.saved);
         } catch {
             showToast(t.errors.templateDbFailed, 'error');
@@ -396,6 +445,10 @@ export const useProductActions = (
         if (normalizedSite.ok && normalizedNodes.ok) {
             for (const node of normalizedNodes.value) {
                 if (node.persistedData?.kind === 'invalid' || hasRuntimeGraphClaim(node)) continue;
+                if (normalizedGlobal.ok) {
+                    validationErrors.push(...validateTiktokShippingWeight(node.platform, node.data, normalizedGlobal.value.productWeight, node.currency)
+                        .map(error => error.field === 'productWeight' ? error : { ...error, field: `nodes.${node.id}.${error.field}` }));
+                }
                 validationErrors.push(...validateCouponRevenueBudget(
                     node.data,
                     normalizedSite.value,
@@ -489,6 +542,7 @@ export const useProductActions = (
                     ))
                     .map(node => node.currency),
             );
+            if (preparedNodes.length === 0) standardCurrencies.add(siteCountry);
             for (const currency of standardCurrencies) {
                 exchangeRateSnapshots[currency] = createExchangeRateSnapshot(
                     rates[currency],
@@ -547,6 +601,7 @@ export const useProductActions = (
         }
 
         if (draftRef.current.version === saveVersion) {
+            setTiktokUpgradeDrafts(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !preparedNodes.some(node => node.id === id))));
             setGlobalInputs(normalizedGlobalInputs);
             setProfitNodes(previous => {
                 const next = mode === 'create'
@@ -580,6 +635,9 @@ export const useProductActions = (
 
     return {
         nodes,
+        tiktokUpgradeIds,
+        handleUpgradeTiktok,
+        handleCancelTiktokUpgrade,
         inputErrors: [...inputErrors, ...draftInputErrors],
         nodeDraftErrors: draftInputErrors,
         clearInputError,

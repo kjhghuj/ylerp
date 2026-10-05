@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     $transaction: jest.fn(async function (this: any, callback: any) { return callback(this); }),
     usageEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -17,7 +17,7 @@ jest.mock('../../services/activityLogger', () => ({
 }));
 
 import router from '../templateRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const mockTemplate = prisma.profitTemplate as unknown as {
   findFirst: jest.Mock;

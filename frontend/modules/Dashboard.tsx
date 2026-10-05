@@ -19,7 +19,7 @@ import { useExchangeRates } from '../hooks/useExchangeRates';
 import api from '../src/api';
 import { parseCanonicalPositiveRate, parseCanonicalProfitNumber } from './profit/profitInputNormalization';
 
-const CURRENCIES = ['MYR', 'SGD', 'PHP', 'THB', 'IDR'] as const;
+const CURRENCIES = ['MYR', 'SGD', 'PHP', 'THB', 'IDR', 'USD'] as const;
 const SITE_NAMES: Record<string, { zh: string; en: string }> = {
   ALL: { zh: '全部站点', en: 'All sites' },
   MY: { zh: '马来西亚', en: 'Malaysia' },
@@ -27,6 +27,7 @@ const SITE_NAMES: Record<string, { zh: string; en: string }> = {
   PH: { zh: '菲律宾', en: 'Philippines' },
   TH: { zh: '泰国', en: 'Thailand' },
   ID: { zh: '印尼', en: 'Indonesia' },
+  US: { zh: '美国', en: 'United States' },
 };
 
 type MonitorKind = 'aging' | 'restock';

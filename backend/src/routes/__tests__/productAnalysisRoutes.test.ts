@@ -1,4 +1,4 @@
-jest.mock('../../index', () => {
+jest.mock('../../infrastructure/runtimeResources', () => {
   const prisma = {
     productAnalysisShop: {
       findFirst: jest.fn(),
@@ -40,6 +40,7 @@ jest.mock('../../index', () => {
       findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn(),
     },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   };
   return { prisma };
 });
@@ -50,7 +51,7 @@ jest.mock('../../services/glm/glmClient', () => ({
 
 import { Request, Response } from 'express';
 import router from '../productAnalysisRoutes';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 import { glmChat, glmChatStream } from '../../services/glm/glmClient';
 
 const mockShopFindFirst = prisma.productAnalysisShop.findFirst as jest.Mock;
@@ -169,6 +170,8 @@ const PARSED_SHEETS = [
 beforeEach(() => {
   jest.clearAllMocks();
   mockTransaction.mockImplementation(async callback => callback(prisma));
+  (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ id: OWNER.id }]);
+  mockAiUsageCall.findUnique.mockResolvedValue(null);
   mockUploadFindFirst.mockResolvedValue(null);
   mockUploadUpdateMany.mockResolvedValue({ count: 0 });
   mockUploadCreate.mockResolvedValue({

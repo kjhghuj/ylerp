@@ -41,6 +41,9 @@ export const ProfitCalculator: React.FC = () => {
     const [useLocalCurrency, setUseLocalCurrency] = useState(false);
     const [pricingSession, setPricingSession] = useState(0);
     const [pricingBasisId, setPricingBasisId] = useState<string | null>(null);
+    useEffect(() => {
+        if (siteCountry === 'USD') setSelectedPlatform('tiktok');
+    }, [siteCountry]);
     const resetPricing = useCallback(() => {
         setPricingSession(value => value + 1);
         setPricingBasisId(null);
@@ -90,6 +93,7 @@ export const ProfitCalculator: React.FC = () => {
         handleSaveAsNew, handleConfirmIdentityUpdate, handleCancelIdentityUpdate,
         handleReset, editingProduct, pendingIdentityConfirmation, isSaving,
         nodeDraftErrors,
+        tiktokUpgradeIds, handleUpgradeTiktok, handleCancelTiktokUpgrade,
     } = useProductActions(allTemplates, setAllTemplates, rates, profitSiteInputsMap, setProfitSiteInputsMap);
 
     const formatInputError = (error: (typeof inputErrors)[number]): string => {
@@ -243,6 +247,10 @@ export const ProfitCalculator: React.FC = () => {
                             nodeName={node.name}
                             isPricingBasis={node.id === pricingBasisId}
                             data={node.data}
+                            templateData={node.persistedData}
+                            isUpgradePreview={tiktokUpgradeIds.includes(node.id)}
+                            onUpgrade={handleUpgradeTiktok}
+                            onCancelUpgrade={handleCancelTiktokUpgrade}
                             globalInputs={profitGlobalInputs}
                             siteInputs={profitSiteInputsMap[node.currency] || DEFAULT_SITE_INPUTS}
                             rateToCNY={rates[node.currency]}

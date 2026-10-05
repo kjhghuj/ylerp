@@ -77,6 +77,7 @@ const COUNTRY_TO_CURRENCY: Record<string, string> = {
   TH: 'THB',
   ID: 'IDR',
   CN: 'CNY',
+  US: 'USD',
 };
 
 const normalizeSite = (value: string | null | undefined): string => {

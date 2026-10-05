@@ -1,4 +1,8 @@
 import { hasRuntimeGraphClaim } from './graphNodeSavePreparation';
+import { getProfitCalculationContext } from './tiktokFeePolicy';
+import { getTiktokShippingRate } from './tiktokShippingRates';
+import { quoteTiktokUSShipping, TiktokUSShippingError, formatTiktokUSShippingDate } from './tiktokUSShipping';
+import { quoteTiktokUSDirectShipping } from './tiktokUSDirectShipping';
 import {
     DEFAULT_NODE_DATA,
     DEFAULT_SITE_INPUTS,
@@ -31,6 +35,17 @@ const STANDARD_NODE_NUMBER_OPTIONS: Partial<Record<keyof NodeData, Omit<Canonica
     platformCoupon: { min: 0 },
     warehouseOperationFee: { min: 0 },
     lastMileFee: { min: 0 },
+    shippingCalculationMode: { min: 0, max: 4 }, manualShippingFee: { min: 0 },
+    usDirectCargoType: { min: 0, max: 2 }, usDirectExtraFee: { min: 0 },
+    usHeadFreightFee: { min: 0 }, usHeadFreightRatePerKg: { min: 0 },
+    usHeadFreightConfigured: { min: 0, max: 1 }, usLocalDeliveryMode: { min: 0, max: 4 },
+    usPackageLengthCm: { min: 0 }, usPackageWidthCm: { min: 0 }, usPackageHeightCm: { min: 0 },
+    usDestinationRegion: { min: 0, max: 2 }, usShippingDate: { min: 10000101, max: 99991231 },
+    buyerShippingFee: { min: 0 }, shippingSubsidy: { min: 0 }, tiktokOrderFee: { min: 0 },
+    affiliateProductTax: { min: 0 }, affiliateCommissionRate: { min: 0, max: 100 },
+    growthServiceFeeRate: { min: 0, max: 100 }, growthServiceFeeCap: { min: 0 },
+    shippingServiceFeeRate: { min: 0, max: 100 }, shippingServiceFeeCap: { min: 0 },
+    campaignServiceFeeRate: { min: 0, max: 100 }, campaignServiceFeeCap: { min: 0 },
     platformCommissionRate: { min: 0, max: 100 },
     transactionFeeRate: { min: 0, max: 100 },
     damageReturnRate: { min: 0, max: 100 },
@@ -269,8 +284,41 @@ export const normalizeStandardNodeData = (
             defaultValue,
         });
     }
+    for (const [field, allowed] of Object.entries({ shippingCalculationMode: [0, 1, 2, 3, 4], usDirectCargoType: [0, 1, 2], usHeadFreightConfigured: [0, 1], usLocalDeliveryMode: [0, 1, 2, 3, 4], usDestinationRegion: [0, 1, 2] })) {
+        if (values[field] !== undefined && !allowed.includes(values[field])) errors.push({ field, code: 'invalid_enum' });
+    }
+    if (values.usShippingDate !== undefined) {
+        try { formatTiktokUSShippingDate(values.usShippingDate); }
+        catch (error) { errors.push(error instanceof TiktokUSShippingError ? error.issue : { field: 'usShippingDate', code: 'invalid_enum' }); }
+    }
     if (errors.length > 0) return { ok: false, errors };
     return { ok: true, value: values as NodeData };
+};
+
+export const validateTiktokShippingWeight = (
+    platform: string | undefined,
+    data: NodeData,
+    productWeight: number,
+    currency: string,
+): ProfitInputError[] => {
+    if (platform !== 'tiktok') return [];
+    if (data.shippingCalculationMode === 4) {
+        if (currency !== 'USD') return [{ field: 'shippingCalculationMode', code: 'invalid_enum' }];
+        try { quoteTiktokUSDirectShipping(data, productWeight); return []; }
+        catch (error) { return [error instanceof TiktokUSShippingError ? error.issue : { field: 'shippingCalculationMode', code: 'invalid_enum' }]; }
+    }
+    if (data.shippingCalculationMode === 3) {
+        if (currency !== 'USD') return [{ field: 'shippingCalculationMode', code: 'invalid_enum' }];
+        try { quoteTiktokUSShipping(data, productWeight); return []; }
+        catch (error) { return [error instanceof TiktokUSShippingError ? error.issue : { field: 'shippingCalculationMode', code: 'invalid_enum' }]; }
+    }
+    if (data.shippingCalculationMode !== 1) return [];
+    const rate = getTiktokShippingRate(currency);
+    if (!rate) return [{ field: 'shippingCalculationMode', code: 'invalid_enum' }];
+    if (!Number.isFinite(productWeight)) return [{ field: 'productWeight', code: 'not_finite' }];
+    if (productWeight <= 0) return [{ field: 'productWeight', code: 'required' }];
+    if (productWeight > rate.maxWeightGrams) return [{ field: 'productWeight', code: 'max', max: rate.maxWeightGrams }];
+    return [];
 };
 
 export const validateCouponRevenueBudget = (
@@ -313,6 +361,8 @@ export const normalizeStandardNodesForSave = (
             continue;
         }
         const normalized = normalizeStandardNodeData(node.data as unknown as Record<string, unknown>);
+        try { getProfitCalculationContext(node.platform, node.persistedData); }
+        catch { errors.push({ field: `nodes.${node.id}.tiktokFeePolicy`, code: 'invalid_enum' }); }
         if (normalized.ok === false) {
             errors.push(...normalized.errors.map(error => ({
                 ...error,

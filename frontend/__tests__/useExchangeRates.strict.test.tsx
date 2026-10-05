@@ -8,6 +8,7 @@ const fallbackRates = {
   SGD: 0.19,
   THB: 5.01,
   IDR: 2150,
+  USD: 0.14,
 };
 
 const mockRateResponse = (rates: Record<string, unknown>) => {
@@ -40,6 +41,7 @@ describe('useExchangeRates strict API normalization', () => {
       SGD: ' 0.20 ',
       THB: '5e0',
       IDR: 2200,
+      USD: '0.145',
     });
 
     const { result } = renderHook(() => useExchangeRates());
@@ -51,6 +53,7 @@ describe('useExchangeRates strict API normalization', () => {
       SGD: 0.2,
       THB: 5,
       IDR: 2200,
+      USD: 0.145,
     });
     expect(result.current.isStale).toBe(false);
   });

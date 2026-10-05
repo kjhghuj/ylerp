@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
+import { createPermissionGuard } from '../middleware/requestPermissions';
+import { parseQueryInteger } from '../utils/queryParams';
+import { addDays, dateString, diffDays, parseDateUtc } from '../utils/calendarDate';
 import { Prisma } from '@prisma/client';
-import { prisma } from '../index';
+import { prisma } from '../infrastructure/runtimeResources';
 import { GlmApiError } from '../services/glm/glmConfig';
 import { glmChat, glmChatStream, GlmChatMessage } from '../services/glm/glmClient';
 import { ApiError } from '../services/chroma/config';
@@ -66,29 +69,12 @@ function isValidDateString(value: unknown): value is string {
   return typeof value === 'string' && isValidCalendarDate(value);
 }
 
-function parseDateUtc(date: string): Date {
-  return new Date(`${date}T00:00:00.000Z`);
-}
-
-function dateString(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
 function daysBetweenInclusive(from: string, to: string): number {
-  return Math.round((parseDateUtc(to).getTime() - parseDateUtc(from).getTime()) / 86_400_000) + 1;
-}
-
-function addDays(date: string, delta: number): string {
-  const next = parseDateUtc(date);
-  next.setUTCDate(next.getUTCDate() + delta);
-  return dateString(next);
+  return diffDays(from, to) + 1;
 }
 
 function parsePageNumber(value: unknown, fallback: number, max: number): number | null {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : null;
+  return parseQueryInteger(value, fallback, 0, max);
 }
 
 function isRetryableSerializationError(error: unknown): boolean {
@@ -97,35 +83,9 @@ function isRetryableSerializationError(error: unknown): boolean {
   return code === 'P2034' || code === 'P2002';
 }
 
-/** '*' 通配 / 模块级 key（product-analysis）/ 具体 subkey 三级放行，与前端 PermissionTree 语义对齐 */
-function hasProductAnalysisPermission(permissions: string[], permission: string): boolean {
-  return (
-    permissions.includes('*')
-    || permissions.includes('product-analysis')
-    || permissions.includes(permission)
-  );
-}
-
 type ProductAnalysisPermission = 'product-analysis.upload' | 'product-analysis.aiChat';
-
-/** 与 dashboardRoutes.requireDashboardPermission 同构：owner 直通，其余查库校验 isActive + 权限 */
 const requireProductAnalysisPermission = (permission: ProductAnalysisPermission) => (
-  async (req: Request, res: Response, next: (err?: unknown) => void) => {
-    if (!req.user) return res.status(401).json({ detail: 'Unauthorized' });
-    if (req.user.role === 'owner') return next();
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { permissions: true, isActive: true },
-      });
-      if (!user?.isActive || !hasProductAnalysisPermission(user.permissions || [], permission)) {
-        return res.status(403).json({ detail: 'Forbidden' });
-      }
-      return next();
-    } catch {
-      return res.status(500).json({ detail: 'Permission check failed' });
-    }
-  }
+  createPermissionGuard(() => prisma, [permission], { responseKey: 'detail' })
 );
 
 function sanitizeChatMessages(raw: unknown): GlmChatMessage[] {

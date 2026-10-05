@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     user: { findUnique: jest.fn() },
   },
@@ -26,7 +26,7 @@ jest.mock('../../services/ycOpenPlatformClient', () => {
 
 import { createDashboardRouter } from '../dashboardRoutes';
 import { DashboardDataUnavailableError } from '../../services/dashboardSnapshotLoader';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const snapshot = {
   generatedAt: '2026-07-23T00:00:00.000Z',

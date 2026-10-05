@@ -24,10 +24,26 @@ describe('profit local-storage compatibility', () => {
     ['MY', 'MYR'],
     ['SG', 'SGD'],
     ['MYR', 'MYR'],
+    ['US', 'USD'],
+    ['USD', 'USD'],
     ['future', 'FUTURE'],
     [null, 'MYR'],
   ])('migrates stored site %s to %s', (stored, expected) => {
     expect(normalizeStoredProfitSiteCurrency(stored)).toBe(expected);
+  });
+
+  it('round trips US TikTok nodes and site inputs in a USD bucket', () => {
+    const stored = { US: [{ id: 'us-tk', platform: 'tiktok', currency: 'US', data: {
+      manualShippingFee: 12.5, shippingCalculationMode: 2, affiliateCommissionRate: 8,
+    } }] };
+    const normalized = normalizeStoredProfitNodes(stored, 'USD');
+    expect(normalized.USD[0]).toMatchObject({ currency: 'USD', platform: 'tiktok', data: {
+      manualShippingFee: 12.5, shippingCalculationMode: 2, affiliateCommissionRate: 8,
+    } });
+    expect(normalizeStoredProfitNodes(JSON.parse(JSON.stringify(normalized)), 'USD').USD).toEqual(normalized.USD);
+    expect(normalizeStoredProfitSiteInputs({ US: { totalRevenue: 123.45, adROI: 8 } }).USD)
+      .toMatchObject({ totalRevenue: 123.45, adROI: 8 });
+    expect(normalizeStoredProfitSiteInputs(undefined).USD).toEqual(DEFAULT_SITE_INPUTS);
   });
 
   it('migrates legacy country-keyed node buckets and node currencies', () => {

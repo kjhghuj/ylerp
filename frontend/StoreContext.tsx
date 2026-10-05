@@ -59,8 +59,8 @@ interface StoreContextType {
   profitSiteInputsMap: Record<string, SiteLevelInputs>;
   setProfitSiteInputsMap: (inputs: Record<string, SiteLevelInputs> | ((prev: Record<string, SiteLevelInputs>) => Record<string, SiteLevelInputs>)) => void;
 
-  productListActiveTab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH';
-  setProductListActiveTab: (tab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH') => void;
+  productListActiveTab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH' | 'US';
+  setProductListActiveTab: (tab: 'PH' | 'MY' | 'SG' | 'ID' | 'TH' | 'US') => void;
   productListCurrentPage: number;
   setProductListCurrentPage: (page: number | ((prev: number) => number)) => void;
 
@@ -124,6 +124,7 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       PHP: [],
       THB: [],
       IDR: [],
+      USD: [],
     };
   });
 
@@ -140,9 +141,9 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 
   // Product List persistent state
-  const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH'>(() => {
+  const [productListActiveTab, setProductListActiveTab] = useState<'PH' | 'MY' | 'SG' | 'ID' | 'TH' | 'US'>(() => {
     const saved = localStorage.getItem('yl-product-list-active-tab');
-    return (saved === 'PH' || saved === 'MY' || saved === 'SG' || saved === 'ID' || saved === 'TH') ? saved : 'MY';
+    return (saved === 'PH' || saved === 'MY' || saved === 'SG' || saved === 'ID' || saved === 'TH' || saved === 'US') ? saved : 'MY';
   });
 
   const [productListCurrentPage, setProductListCurrentPage] = useState<number>(() => {

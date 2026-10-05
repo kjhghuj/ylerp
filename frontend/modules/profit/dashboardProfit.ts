@@ -2,6 +2,7 @@ import type { ProductCalcData } from '../../types';
 import { createProductTemplateProfitViewModel } from '../productTemplateProfitViewModel';
 import { normalizeProductTemplateData, toStandardNodeData } from '../productTemplateImport';
 import { calculateProfit } from './calculateProfit';
+import { getProfitCalculationContext } from './tiktokFeePolicy';
 import { resolveProfitExchangeRate } from './exchangeRateSnapshot';
 import {
     normalizeProfitGlobalInputs,
@@ -175,6 +176,7 @@ export const aggregatePrimaryProfitTemplates = (
                 siteInputs.value,
                 rate,
                 currency,
+                data.kind === 'standard' ? getProfitCalculationContext(record.platform, data) : {},
             ).revenueAfterSellerCoupon;
         } catch {
             excluded.push({ templateId: record.id, reason: 'invalid_input' });
@@ -206,6 +208,7 @@ export const aggregatePrimaryProfitTemplates = (
                     siteInputs.value,
                     rate,
                     currency,
+                    getProfitCalculationContext(record.platform, data),
                 ).finalRevenueCNY;
             } catch {
                 excluded.push({ templateId: record.id, reason: 'invalid_input' });

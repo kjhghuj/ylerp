@@ -1,5 +1,7 @@
-import { NextFunction, Request, Response, Router } from 'express';
-import { prisma, safeRedis } from '../index';
+import { Router } from 'express';
+import { createPermissionGuard } from '../middleware/requestPermissions';
+import { parseQueryInteger } from '../utils/queryParams';
+import { prisma, safeRedis } from '../infrastructure/runtimeResources';
 import {
   createDashboardSnapshotLoader,
   DashboardDataUnavailableError,
@@ -16,37 +18,9 @@ interface CreateDashboardRouterOptions {
   ycClientFactory?: (userId: string) => Promise<YcOpenPlatformClient>;
 }
 
-const hasPermission = (permissions: string[], permission: string) => (
-  permissions.includes('*')
-  || permissions.includes('dashboard')
-  || permissions.includes(permission)
-);
-
 const requireDashboardPermission = (permission: 'dashboard.alerts' | 'dashboard.inventoryTable') => (
-  async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
-    if (req.user.role === 'owner') return next();
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: { permissions: true, isActive: true },
-      });
-      if (!user?.isActive || !hasPermission(user.permissions || [], permission)) {
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-      return next();
-    } catch {
-      return res.status(500).json({ error: 'Permission check failed' });
-    }
-  }
+  createPermissionGuard(() => prisma, [permission])
 );
-
-const parsePositiveInteger = (value: unknown, fallback: number, maximum: number): number => {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return Number.NaN;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= maximum ? parsed : Number.NaN;
-};
 
 export const createDashboardRouter = (options: CreateDashboardRouterOptions = {}) => {
   const router = Router();
@@ -92,9 +66,9 @@ export const createDashboardRouter = (options: CreateDashboardRouterOptions = {}
       return res.status(400).json({ error: 'Invalid monitor kind' });
     }
     const site = typeof req.query.site === 'string' ? req.query.site.trim().toUpperCase() : 'ALL';
-    const page = parsePositiveInteger(req.query.page, 1, 100_000);
-    const pageSize = parsePositiveInteger(req.query.pageSize, 20, 100);
-    if (!site || !Number.isFinite(page) || !Number.isFinite(pageSize)) {
+    const page = parseQueryInteger(req.query.page, 1, 1, 100_000);
+    const pageSize = parseQueryInteger(req.query.pageSize, 20, 1, 100);
+    if (!site || page === null || pageSize === null) {
       return res.status(400).json({ error: 'Invalid query parameters' });
     }
     try {

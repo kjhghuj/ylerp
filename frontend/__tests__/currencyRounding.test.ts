@@ -13,6 +13,7 @@ describe('profit currency rounding', () => {
     expect(getCurrencyDecimalPlaces('PHP')).toBe(2);
     expect(getCurrencyDecimalPlaces('THB')).toBe(2);
     expect(getCurrencyDecimalPlaces('IDR')).toBe(0);
+    expect(getCurrencyDecimalPlaces('USD')).toBe(2);
   });
 
   it.each([
@@ -21,6 +22,7 @@ describe('profit currency rounding', () => {
     [-1.005, 'CNY', -1.01],
     [12.5, 'IDR', 13],
     [-12.5, 'IDR', -13],
+    [1.005, 'USD', 1.01],
   ] as const)('rounds %s in %s half away from zero', (amount, currency, expected) => {
     expect(roundCurrencyAmount(amount, currency)).toBe(expected);
   });
@@ -39,6 +41,7 @@ describe('profit currency rounding', () => {
   it('formats settlement displays with the same configured precision', () => {
     expect(formatCurrencyAmount(12.4, 'CNY')).toBe('12.40');
     expect(formatCurrencyAmount(12.6, 'IDR')).toBe('13');
+    expect(formatCurrencyAmount(12.4, 'USD')).toBe('12.40');
   });
 
   it('rejects non-finite currency amounts', () => {

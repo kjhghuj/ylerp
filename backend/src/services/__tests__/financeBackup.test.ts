@@ -1,8 +1,8 @@
 import fs from 'fs';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 import { startFinanceBackup } from '../financeBackup';
 
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     financeRecord: {
       findMany: jest.fn(),
@@ -45,6 +45,26 @@ describe('startFinanceBackup', () => {
 
     await jest.advanceTimersByTimeAsync(1);
     expect(findMany).toHaveBeenCalledTimes(1);
+    expect(writeFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels the delayed first backup and future backups on stop', async () => {
+    const stop = startFinanceBackup();
+    stop();
+    await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    expect(findMany).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('does not start another backup while an earlier one is pending', async () => {
+    let complete!: () => void;
+    findMany.mockImplementationOnce(() => new Promise<unknown[]>(resolve => { complete = () => resolve([]); }));
+    const stop = startFinanceBackup();
+    await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    stop();
+    complete();
+    await stop.drain();
     expect(writeFileSync).toHaveBeenCalledTimes(1);
   });
 });

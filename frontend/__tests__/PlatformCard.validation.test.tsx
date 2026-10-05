@@ -93,6 +93,7 @@ describe('PlatformCard strict preview', () => {
       expect.objectContaining({ totalRevenue: 100 }),
       2,
       'MYR',
+      { platform: 'shopee' },
     );
     expect(document.querySelector('input[name="firstWeight"]')).toHaveAttribute('aria-invalid', 'false');
     expect(container).toHaveTextContent('¥50.00');

@@ -2,7 +2,9 @@ import { withUsageEvent } from '../services/usageEvents';
 import { randomUUID } from 'node:crypto';
 import { Request, Response, Router } from 'express';
 import { Prisma } from '@prisma/client';
-import { prisma, safeRedis } from '../index';
+import { prisma, safeRedis } from '../infrastructure/runtimeResources';
+import { requestHasAnyPermission } from '../middleware/requestPermissions';
+import { parseQueryInteger } from '../utils/queryParams';
 
 import { getProductListCacheKey } from '../services/productCache';
 import {
@@ -26,7 +28,7 @@ import {
 const router = Router();
 
 const countryToCurrency: Record<string, string> = {
-    'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR', 'CN': 'CNY',
+    'SG': 'SGD', 'MY': 'MYR', 'PH': 'PHP', 'TH': 'THB', 'ID': 'IDR', 'CN': 'CNY', 'US': 'USD',
 };
 
 const findUserProduct = (id: string, userId: string) => {
@@ -37,19 +39,6 @@ const hasPrismaErrorCode = (error: unknown, code: string): boolean => (
     typeof error === 'object' && error !== null &&
     (error as { code?: unknown }).code === code
 );
-
-const DASHBOARD_PROFIT_PERMISSIONS = new Set([
-    '*',
-    'dashboard',
-    'dashboard.margin',
-    'dashboard.profitTable',
-]);
-
-const PRODUCT_TEMPLATE_WRITE_PERMISSIONS = new Set([
-    '*',
-    'product-list',
-    'product-list.edit',
-]);
 
 const DASHBOARD_PROFIT_PAGE_SIZE = 4;
 const DASHBOARD_PROFIT_MAX_PAGE = 250;
@@ -149,24 +138,11 @@ router.put('/:id/with-templates', saveProductWithTemplatesHandler('update'));
 
 router.get('/primary-profit-templates', async (req, res) => {
     try {
-        if (req.user!.role !== 'owner') {
-            const user = await prisma.user.findUnique({
-                where: { id: req.user!.id },
-                select: { permissions: true, isActive: true },
-            });
-            if (
-                !user?.isActive ||
-                !(user.permissions || []).some(permission => DASHBOARD_PROFIT_PERMISSIONS.has(permission))
-            ) {
-                return res.status(403).json({ error: 'Insufficient dashboard profit permission' });
-            }
+        if (!await requestHasAnyPermission(req, prisma, ['dashboard.margin', 'dashboard.profitTable'])) {
+            return res.status(403).json({ error: 'Insufficient dashboard profit permission' });
         }
-        const rawPage = req.query.page;
-        if (rawPage !== undefined && (typeof rawPage !== 'string' || !/^\d+$/.test(rawPage))) {
-            return res.status(400).json({ error: 'Invalid dashboard profit page' });
-        }
-        const page = rawPage === undefined ? 0 : Number(rawPage);
-        if (!Number.isSafeInteger(page) || page < 0 || page > DASHBOARD_PROFIT_MAX_PAGE) {
+        const page = parseQueryInteger(req.query.page, 0, 0, DASHBOARD_PROFIT_MAX_PAGE);
+        if (page === null) {
             return res.status(400).json({ error: 'Invalid dashboard profit page' });
         }
         const templates = await prisma.productProfitTemplate.findMany({
@@ -303,19 +279,8 @@ router.put('/:id/templates/:linkId/primary', async (req, res) => {
         if (typeof req.body?.isPrimary !== 'boolean') {
             return res.status(400).json({ error: 'isPrimary must be a boolean' });
         }
-        if (req.user!.role !== 'owner') {
-            const user = await prisma.user.findUnique({
-                where: { id: userId },
-                select: { permissions: true, isActive: true },
-            });
-            if (
-                !user?.isActive ||
-                !(user.permissions || []).some(permission => (
-                    PRODUCT_TEMPLATE_WRITE_PERMISSIONS.has(permission)
-                ))
-            ) {
-                return res.status(403).json({ error: 'Insufficient product edit permission' });
-            }
+        if (!await requestHasAnyPermission(req, prisma, ['product-list.edit'])) {
+            return res.status(403).json({ error: 'Insufficient product edit permission' });
         }
         let updated;
         const eventKey = randomUUID();

@@ -33,6 +33,13 @@ const baseProps = {
 };
 
 describe('GlobalInputsPanel strict percent-coupon helper', () => {
+  it('offers the US site and shows USD conversion without inventing a US sales-tax estimate', () => {
+    render(<GlobalInputsPanel {...baseProps} siteCountry="USD" rates={{ USD: 0.14 }}
+      siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
+    expect(screen.getByRole('option', { name: '美国 (USD)' })).toBeInTheDocument();
+    expect(screen.getByText('买家实付价格：100.00 CNY / 14.00 USD')).toBeInTheDocument();
+    expect(screen.queryByText(/跨境买家实付价格/)).not.toBeInTheDocument();
+  });
   it.each([
     ['fixed', 20, '200.00', '300.00'],
     ['percent', 20, '180.00', '270.00'],

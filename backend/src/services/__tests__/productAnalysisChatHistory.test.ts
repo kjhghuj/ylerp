@@ -1,7 +1,7 @@
-jest.mock('../../index', () => ({ prisma: { productAnalysisChatTurn: {
+jest.mock('../../infrastructure/runtimeResources', () => ({ prisma: { productAnalysisChatTurn: {
   findMany: jest.fn(), createMany: jest.fn(), deleteMany: jest.fn(),
 } } }));
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 import { readProductChatHistory, saveProductChatTurn, pruneProductChatHistory, startProductChatHistoryCleanup } from '../productAnalysisChatHistory';
 
 const turns = (prisma as any).productAnalysisChatTurn;

@@ -7,6 +7,7 @@ const CURRENCY_DECIMAL_PLACES: Readonly<Record<CurrencyCode, number>> = Object.f
     PHP: 2,
     THB: 2,
     IDR: 0,
+    USD: 2,
 });
 
 export const getCurrencyDecimalPlaces = (currency: CurrencyCode): number => (

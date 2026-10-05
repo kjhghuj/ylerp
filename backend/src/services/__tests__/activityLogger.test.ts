@@ -1,11 +1,11 @@
-jest.mock('../../index', () => ({
+jest.mock('../../infrastructure/runtimeResources', () => ({
   prisma: {
     usageEvent: { create: jest.fn() },
   },
 }));
 
 import { logActivity } from '../activityLogger';
-import { prisma } from '../../index';
+import { prisma } from '../../infrastructure/runtimeResources';
 
 const mockCreate = prisma.usageEvent.create as jest.Mock;
 
