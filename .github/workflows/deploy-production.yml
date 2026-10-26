@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      scope:
+        description: 'web: UI only; full: API, schema and web'
+        type: choice
+        options: [web, full]
+        default: web
 
 permissions:
   contents: read
@@ -14,11 +20,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  quality:
+    uses: ./.github/workflows/ui-quality.yml
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      scope: ${{ steps.select.outputs.scope }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_SCOPE: ${{ inputs.scope }}
+          BASE_SHA: ${{ github.event.before }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+            [[ "$REQUESTED_SCOPE" == web || "$REQUESTED_SCOPE" == full ]]
+            selected="$REQUESTED_SCOPE"
+          elif [[ ! "$BASE_SHA" =~ ^[a-f0-9]{40}$ || "$BASE_SHA" == 0000000000000000000000000000000000000000 ]]; then
+            selected=full
+          elif ! git cat-file -e "$BASE_SHA^{commit}"; then
+            selected=full
+          else
+            changed_files="$(git diff --name-only "$BASE_SHA" "$TARGET_SHA")"
+            if grep -Eq '^(backend/|shared/|scripts/|\.github/|docker-compose|deploy\.sh|\.dockerignore)' <<< "$changed_files"; then
+              selected=full
+            else
+              selected=web
+            fi
+          fi
+          echo "scope=$selected" >> "$GITHUB_OUTPUT"
   deploy:
+    needs: [quality, scope]
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
     steps:
+      - uses: actions/checkout@v4
       - name: Configure SSH
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -37,33 +78,9 @@ jobs:
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_SHA: ${{ github.sha }}
+          DEPLOY_SCOPE: ${{ needs.scope.outputs.scope }}
         run: |
-          ssh -i ~/.ssh/ylerp_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 "$SERVER_USER@$SERVER_HOST" 'bash -se' <<'REMOTE'
-            set -euo pipefail
-            cd /opt/ylerp
-            git fetch origin main
-            git checkout main
-            git pull --ff-only origin main
-
-            export COMPOSE_PARALLEL_LIMIT=1
-            docker compose -f docker-compose.prod.yml build api
-            docker compose -f docker-compose.prod.yml build web
-            docker compose -f docker-compose.prod.yml run --rm --no-deps api npx prisma migrate deploy </dev/null
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-
-            healthy=false
-            for attempt in $(seq 1 20); do
-              if docker compose -f docker-compose.prod.yml exec -T api node -e 'fetch("http://127.0.0.1:3002/health").then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))' </dev/null; then
-                healthy=true
-                break
-              fi
-              sleep 3
-            done
-
-            if [ "$healthy" != true ]; then
-              docker compose -f docker-compose.prod.yml logs --tail=100 api
-              exit 1
-            fi
-
-            docker compose -f docker-compose.prod.yml ps
-          REMOTE
+          [[ "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$DEPLOY_SCOPE" == web || "$DEPLOY_SCOPE" == full ]]
+          ssh -i ~/.ssh/ylerp_deploy -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 "$SERVER_USER@$SERVER_HOST" "bash -se -- '$DEPLOY_SHA' '$DEPLOY_SCOPE'" < scripts/deploy-production.sh

@@ -57,6 +57,7 @@ services:
           memory: 1G
 
   web:
+    image: ${YLERP_WEB_IMAGE:-ylerp-web:local}
     build:
       context: .
       dockerfile: frontend/Dockerfile
