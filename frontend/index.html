@@ -1,59 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2563eb" />
     <title>阳零ERP</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: {
-                DEFAULT: '#3b82f6',
-                light: '#60a5fa',
-                dark: '#2563eb',
-              },
-              secondary: '#f0fdfa',
-              background: '#f8fafc',
-              brand: {
-                50: '#eef2ff',
-                100: '#e0e7ff',
-                200: '#c7d2fe',
-                300: '#a5b4fc',
-                400: '#818cf8',
-                500: '#6366f1',
-                600: '#4f46e5',
-                700: '#4338ca',
-                800: '#3730a3',
-                900: '#312e81',
-              },
-            }
-          }
-        }
-      }
+      try {
+        if (localStorage.getItem('yl-dark-mode') === 'true') document.documentElement.classList.add('dark');
+      } catch (_) {}
     </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0",
-    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-    "react-dom": "https://esm.sh/react-dom@18.2.0",
-    "recharts": "https://esm.sh/recharts@2.12.7?external=react,react-dom",
-    "lucide-react": "https://esm.sh/lucide-react@0.263.1?external=react",
-    "xlsx": "https://esm.sh/xlsx@0.18.5",
-    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
-    "react/": "https://esm.sh/react@^18.2.0/"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+  </head>
   <body class="antialiased">
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

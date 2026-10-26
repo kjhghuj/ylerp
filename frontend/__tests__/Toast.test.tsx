@@ -1,127 +1,99 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, cleanup, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from '../components/Toast';
 import React from 'react';
 
-vi.useFakeTimers();
-
 const TestChild: React.FC = () => {
   const { showToast } = useToast();
-  return (
-    <div>
-      <button onClick={() => showToast('success message', 'success')}>Success</button>
-      <button onClick={() => showToast('error message', 'error')}>Error</button>
-      <button onClick={() => showToast('info message', 'info')}>Info</button>
-      <button onClick={() => showToast('custom duration', 'success', 1000)}>Custom Duration</button>
-    </div>
-  );
+  return <div>
+    <button onClick={() => showToast('success message')}>Success</button>
+    <button onClick={() => showToast('error message', 'error')}>Error</button>
+    <button onClick={() => showToast('info message', 'info')}>Info</button>
+    <button onClick={() => showToast('custom duration', 'success', 1000)}>Custom Duration</button>
+  </div>;
 };
 
-const renderWithToast = () => {
-  return render(
-    <ToastProvider>
-      <TestChild />
-    </ToastProvider>
-  );
+const renderWithToast = () => render(<ToastProvider><TestChild /></ToastProvider>);
+const trigger = async (label: string) => {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: label }));
+    // Sonner batches its external-store subscription on the next timer tick.
+    await vi.advanceTimersByTimeAsync(0);
+  });
+};
+const advance = async (milliseconds: number) => {
+  await act(async () => { await vi.advanceTimersByTimeAsync(milliseconds); });
 };
 
 describe('Toast', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(async () => {
+    cleanup();
+    await advance(5000);
+    vi.clearAllTimers();
     vi.useRealTimers();
   });
 
-  it('should render children', () => {
+  it('renders its children', () => {
     renderWithToast();
-    expect(screen.getByText('Success')).toBeInTheDocument();
-    expect(screen.getByText('Error')).toBeInTheDocument();
-    expect(screen.getByText('Info')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Success' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Error' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Info' })).toBeInTheDocument();
   });
 
-  it('should show a success toast when triggered', () => {
+  it('shows a success toast by default', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Success').click();
-    });
-    expect(screen.getByText('success message')).toBeInTheDocument();
+    await trigger('Success');
+    expect(screen.getByText('success message')).toBeVisible();
+    expect(screen.getByText('success message').closest('[data-sonner-toast]')).toHaveAttribute('data-type', 'success');
   });
 
-  it('should show an error toast with correct styling', () => {
+  it('preserves error severity', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Error').click();
-    });
-    const toast = screen.getByText('error message').closest('div');
-    expect(toast).toHaveClass('bg-red-50', 'border-red-200', 'text-red-700');
+    await trigger('Error');
+    expect(screen.getByText('error message')).toBeVisible();
+    expect(screen.getByText('error message').closest('[data-sonner-toast]')).toHaveAttribute('data-type', 'error');
   });
 
-  it('should show an info toast with correct styling', () => {
+  it('preserves info severity', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Info').click();
-    });
-    const toast = screen.getByText('info message').closest('div');
-    expect(toast).toHaveClass('bg-blue-50', 'border-blue-200', 'text-blue-700');
+    await trigger('Info');
+    expect(screen.getByText('info message')).toBeVisible();
+    expect(screen.getByText('info message').closest('[data-sonner-toast]')).toHaveAttribute('data-type', 'info');
   });
 
-  it('should auto-dismiss toast after duration (closing animation)', () => {
+  it('keeps the default notification visible until its configured duration', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Success').click();
-    });
-    expect(screen.getByText('success message')).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(3000);
-    });
-
-    const toastEl = screen.getByText('success message').closest('div');
-    expect(toastEl).toHaveClass('opacity-0', 'translate-x-8', 'scale-95');
+    await trigger('Success');
+    await advance(2999);
+    expect(screen.getByText('success message')).toBeVisible();
   });
 
-  it('should remove toast after closing animation completes', () => {
+  it('removes an expired default notification after its exit transition', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Success').click();
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(3000 + 300);
-    });
-
+    await trigger('Success');
+    await advance(3000);
+    await advance(500);
     expect(screen.queryByText('success message')).not.toBeInTheDocument();
   });
 
-  it('should respect custom duration', () => {
+  it('respects custom duration without changing the default duration', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Custom Duration').click();
-    });
-
-    act(() => {
-      vi.advanceTimersByTime(999);
-    });
-
-    expect(screen.getByText('custom duration')).toBeInTheDocument();
-
-    act(() => {
-      vi.advanceTimersByTime(1);
-    });
-
-    const toastEl = screen.getByText('custom duration').closest('div');
-    expect(toastEl).toHaveClass('opacity-0');
+    await trigger('Success');
+    await trigger('Custom Duration');
+    await advance(999);
+    expect(screen.getByText('custom duration')).toBeVisible();
+    await advance(1);
+    await advance(500);
+    expect(screen.queryByText('custom duration')).not.toBeInTheDocument();
+    expect(screen.getByText('success message')).toBeVisible();
   });
 
-  it('should show multiple toasts simultaneously', () => {
+  it('shows multiple notifications simultaneously', async () => {
     renderWithToast();
-    act(() => {
-      screen.getByText('Success').click();
-      screen.getByText('Error').click();
-    });
-    expect(screen.getByText('success message')).toBeInTheDocument();
-    expect(screen.getByText('error message')).toBeInTheDocument();
+    await trigger('Success');
+    await trigger('Error');
+    expect(screen.getByText('success message')).toBeVisible();
+    expect(screen.getByText('error message')).toBeVisible();
   });
 });

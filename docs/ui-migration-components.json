@@ -1,0 +1,205 @@
+[
+  {
+    "name": "button",
+    "source": "https://v3.shadcn.com/r/styles/new-york/button.json",
+    "registrySha256": "4D8F39C3BD25E630B5962667722E8707E7B18122AD6842A5C22ACF8A3FF9F93A",
+    "dependencies": [
+      "@radix-ui/react-slot"
+    ]
+  },
+  {
+    "name": "input",
+    "source": "https://v3.shadcn.com/r/styles/new-york/input.json",
+    "registrySha256": "4D1A3B126CC62485B225E3DA32D4A56DF851C95C5A24035AF1F1C80F33726CFA",
+    "dependencies": null
+  },
+  {
+    "name": "textarea",
+    "source": "https://v3.shadcn.com/r/styles/new-york/textarea.json",
+    "registrySha256": "95A734124C9184947F6EC7C5F03A59F5DD246E305D54D91F46FEFC339DA2F105",
+    "dependencies": null
+  },
+  {
+    "name": "label",
+    "source": "https://v3.shadcn.com/r/styles/new-york/label.json",
+    "registrySha256": "EA924E70D496CBD6986591AD75F2CBFEB9649F1CE2750CD6DBFB522833E4BCDB",
+    "dependencies": [
+      "@radix-ui/react-label"
+    ]
+  },
+  {
+    "name": "select",
+    "source": "https://v3.shadcn.com/r/styles/new-york/select.json",
+    "registrySha256": "574C730B6DC8B37E5CFA8E19159E4A1D2EE54C17B927BD4003FF26C8B7A6EDFB",
+    "dependencies": [
+      "@radix-ui/react-select"
+    ]
+  },
+  {
+    "name": "checkbox",
+    "source": "https://v3.shadcn.com/r/styles/new-york/checkbox.json",
+    "registrySha256": "2BFB63A4023DF9DFDA6C3C20EB58734F8BF69A45B0F8B89C5B2381A90D00C7DB",
+    "dependencies": [
+      "@radix-ui/react-checkbox"
+    ]
+  },
+  {
+    "name": "switch",
+    "source": "https://v3.shadcn.com/r/styles/new-york/switch.json",
+    "registrySha256": "90AA753AB629AB1C7CC5DCD7ED8404B761EB99C90F3531AA66BBBB4EA9716A26",
+    "dependencies": [
+      "@radix-ui/react-switch"
+    ]
+  },
+  {
+    "name": "tabs",
+    "source": "https://v3.shadcn.com/r/styles/new-york/tabs.json",
+    "registrySha256": "B608B427C8D640165083E54369C25E738D72D8CF7A80984FFC8FC0C2FF134A2F",
+    "dependencies": [
+      "@radix-ui/react-tabs"
+    ]
+  },
+  {
+    "name": "card",
+    "source": "https://v3.shadcn.com/r/styles/new-york/card.json",
+    "registrySha256": "E6B5055FF2E674007D65DF1B1E13F7E18EABA86EFDA60641C02EE6ABAEC337CE",
+    "dependencies": null
+  },
+  {
+    "name": "badge",
+    "source": "https://v3.shadcn.com/r/styles/new-york/badge.json",
+    "registrySha256": "CE3F01E6D6785477A7FEE003BD7144D7D11E7C5E8E31B3373DE15138349361E6",
+    "dependencies": [
+      "@radix-ui/react-slot"
+    ]
+  },
+  {
+    "name": "dialog",
+    "source": "https://v3.shadcn.com/r/styles/new-york/dialog.json",
+    "registrySha256": "E240F8EAA9E9E626DFFA1A340469C6BACE9C631E78B7B10E7D0F178A32A1C71C",
+    "dependencies": [
+      "@radix-ui/react-dialog"
+    ]
+  },
+  {
+    "name": "alert-dialog",
+    "source": "https://v3.shadcn.com/r/styles/new-york/alert-dialog.json",
+    "registrySha256": "7FAC1627FBED45517ACF027F83DF785A7DD00B4954394BC2DB837A1D0700F829",
+    "dependencies": [
+      "@radix-ui/react-alert-dialog"
+    ]
+  },
+  {
+    "name": "sheet",
+    "source": "https://v3.shadcn.com/r/styles/new-york/sheet.json",
+    "registrySha256": "F9D5C635BE7785736A4D716975FC3D34EECAF09552DD4805569FD989E56FDA8A",
+    "dependencies": [
+      "@radix-ui/react-dialog"
+    ]
+  },
+  {
+    "name": "popover",
+    "source": "https://v3.shadcn.com/r/styles/new-york/popover.json",
+    "registrySha256": "112F3CC3836F6B37823C55B794D3484B160BB450DD40963858874FB9AE314FD1",
+    "dependencies": [
+      "@radix-ui/react-popover"
+    ]
+  },
+  {
+    "name": "dropdown-menu",
+    "source": "https://v3.shadcn.com/r/styles/new-york/dropdown-menu.json",
+    "registrySha256": "DBD4C0A23BE34F2709108597C992528659DF65C39B7A0AFD17E1701D3EA5C361",
+    "dependencies": [
+      "@radix-ui/react-dropdown-menu"
+    ]
+  },
+  {
+    "name": "tooltip",
+    "source": "https://v3.shadcn.com/r/styles/new-york/tooltip.json",
+    "registrySha256": "AEF6EC3C142B054EBCD6DAAF9E0B46E67F0D50E51EEFBD7B392C83845A3F1926",
+    "dependencies": [
+      "@radix-ui/react-tooltip"
+    ]
+  },
+  {
+    "name": "table",
+    "source": "https://v3.shadcn.com/r/styles/new-york/table.json",
+    "registrySha256": "0CF28E873DDE65E036D5805297DBCEDAA0EB98BC33723B7F337293971AD1AA02",
+    "dependencies": null
+  },
+  {
+    "name": "pagination",
+    "source": "https://v3.shadcn.com/r/styles/new-york/pagination.json",
+    "registrySha256": "1DDFEE22DDD7C0A43F00528D3A7F877752EDF2E902E72A2A46022ABAE00B989E",
+    "dependencies": null
+  },
+  {
+    "name": "skeleton",
+    "source": "https://v3.shadcn.com/r/styles/new-york/skeleton.json",
+    "registrySha256": "EB09C61378D058280DEEDE279F924CC5394593693F30C2477D64468E8DC92D77",
+    "dependencies": null
+  },
+  {
+    "name": "alert",
+    "source": "https://v3.shadcn.com/r/styles/new-york/alert.json",
+    "registrySha256": "7F2A4DF00BB5A34D7C1ADC6190E0FF57DB23484C057A89AC31F268F70D828211",
+    "dependencies": null
+  },
+  {
+    "name": "progress",
+    "source": "https://v3.shadcn.com/r/styles/new-york/progress.json",
+    "registrySha256": "5B99E42B997EFAEF90FA01F64F35046D5015FF4ECC63887163DD112DF7F92FAC",
+    "dependencies": [
+      "@radix-ui/react-progress"
+    ]
+  },
+  {
+    "name": "separator",
+    "source": "https://v3.shadcn.com/r/styles/new-york/separator.json",
+    "registrySha256": "01173BDE1937C35DA6F84F92BB85F7E882A9091064B4532A058177FE1A96D17F",
+    "dependencies": [
+      "@radix-ui/react-separator"
+    ]
+  },
+  {
+    "name": "scroll-area",
+    "source": "https://v3.shadcn.com/r/styles/new-york/scroll-area.json",
+    "registrySha256": "CD2EAAEDE948B37AF48F5C57EB35D5C2F18B322319C358502528C64D95DB17D7",
+    "dependencies": [
+      "@radix-ui/react-scroll-area"
+    ]
+  },
+  {
+    "name": "avatar",
+    "source": "https://v3.shadcn.com/r/styles/new-york/avatar.json",
+    "registrySha256": "4FDCB3D39AA70DE77B59E195130C3A074E785F4886514BE6DF50618C57420F30",
+    "dependencies": [
+      "@radix-ui/react-avatar"
+    ]
+  },
+  {
+    "name": "accordion",
+    "source": "https://v3.shadcn.com/r/styles/new-york/accordion.json",
+    "registrySha256": "AF2A6C966D4077AE002EB95B6B4513E86C53BFD02CABB7B3A5700ED0D7191BC1",
+    "dependencies": [
+      "@radix-ui/react-accordion"
+    ]
+  },
+  {
+    "name": "collapsible",
+    "source": "https://v3.shadcn.com/r/styles/new-york/collapsible.json",
+    "registrySha256": "9E935A82F4D846CCE4FDE8498C3ADB298F794EDFBB807BF166B5D6A2BB1C376C",
+    "dependencies": [
+      "@radix-ui/react-collapsible"
+    ]
+  },
+  {
+    "name": "sonner",
+    "source": "https://v3.shadcn.com/r/styles/new-york/sonner.json",
+    "registrySha256": "785CE825462E7AEF1DEB35925E900561705A6D53E87260804E986FFC1AA72473",
+    "dependencies": [
+      "sonner"
+    ],
+    "adaptation": "Existing root dark class replaces next-themes."
+  }
+]
