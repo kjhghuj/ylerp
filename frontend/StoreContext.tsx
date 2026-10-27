@@ -263,7 +263,11 @@ export const StoreProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       } else {
         setProducts(prev => prev.filter(p => p.id !== id));
       }
-    } catch (e) { console.error('Error deleting product', e); }
+    } catch (e) {
+      console.error('Error deleting product', e);
+      // The confirmation stays open on failure so the user can retry deliberately.
+      throw e;
+    }
   };
 
   const addTransaction = async (t: FinanceRecord) => {

@@ -20,6 +20,7 @@ vi.mock('../hooks/useExchangeRates', () => ({ useExchangeRates: () => ({ rates: 
 vi.mock('../AuthContext', () => ({ useAuth: () => ({ user: { role: 'owner', permissions: [] } }) }));
 
 const setCurrentPage = vi.fn();
+const deleteProduct = vi.fn();
 const products = [
   { id: 'p1', name: 'Bottle Black', sku: 'BOT-BLK', country: 'MY', sites: ['MY'], cost: 10, productWeight: 100, supplierInvoice: 'no', supplierTaxPoint: 0, totalRevenue: 30 },
   { id: 'p2', name: 'Bottle White', sku: 'BOT-WHT', country: 'MY', sites: ['MY'], cost: 12, productWeight: 120, supplierInvoice: 'no', supplierTaxPoint: 0, totalRevenue: 35 },
@@ -32,7 +33,7 @@ vi.mock('../StoreContext', () => ({
   useStore: () => ({
     products: displayedProducts,
     refreshProducts: vi.fn(),
-    deleteProduct: vi.fn(),
+    deleteProduct,
     addProduct: vi.fn(),
     setCalculatorImport: vi.fn(),
     setCalculatorImportNodes: vi.fn(),
@@ -58,6 +59,7 @@ describe('ProductList grouping', () => {
     localStorage.clear();
     displayedProducts = products;
     displayedPage = 1;
+    deleteProduct.mockReset();
     (api.get as any).mockImplementation((url: string) => {
       if (url === '/product-display-groups') return Promise.resolve({ data: groups });
       if (url === '/restock-v2/stock-snapshot') {
@@ -166,5 +168,91 @@ describe('ProductList grouping', () => {
     await screen.findByRole('button', { name: '管理商品组' });
     expect(screen.getAllByRole('button', { name: /^[0-9]+$/ }).map(button => button.textContent))
       .toEqual(['3', '4', '5', '6', '7']);
+  });
+
+  it('requires an explicit decision before disbanding a group, and cancellation keeps it intact', async () => {
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: '管理商品组' }));
+    fireEvent.click(screen.getByRole('button', { name: '解散 Insulated Bottle' }));
+
+    const confirmation = screen.getByRole('alertdialog', { name: '解散商品组' });
+    expect(confirmation).toHaveTextContent('Insulated Bottle');
+    expect(api.delete).not.toHaveBeenCalled();
+    fireEvent.click(within(confirmation).getByRole('button', { name: '取消' }));
+    expect(api.delete).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '解散 Insulated Bottle' }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '确认解散' }));
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/product-display-groups/g1'));
+  });
+
+  it('renames a group through a labelled dialog and preserves the entered name on failure', async () => {
+    (api.put as any).mockRejectedValue(new Error('offline'));
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: '管理商品组' }));
+    fireEvent.click(screen.getByRole('button', { name: '重命名 Insulated Bottle' }));
+
+    const dialog = screen.getByRole('dialog', { name: '重命名商品组' });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: '商品组名称' }), { target: { value: 'Updated bottle' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存名称' }));
+    await waitFor(() => expect(api.put).toHaveBeenCalledWith('/product-display-groups/g1', { name: 'Updated bottle' }));
+    expect(within(dialog).getByRole('textbox', { name: '商品组名称' })).toHaveValue('Updated bottle');
+  });
+
+  it('closes grouping with Escape without saving and restores the initiating control', async () => {
+    render(<ProductList onNavigate={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Insulated Bottle' });
+    fireEvent.click(screen.getByLabelText('归组选中 CUP-1'));
+    const trigger = screen.getByRole('button', { name: '归组（1）' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole('dialog', { name: '商品归组' }), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(api.post).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('returns focus to the toolbar after deleting the initiating product row', async () => {
+    deleteProduct.mockImplementation(async () => { displayedProducts = products.filter(product => product.id !== 'p3'); });
+    render(<ProductList onNavigate={vi.fn()} />);
+    await screen.findByRole('button', { name: 'Insulated Bottle' });
+    const trigger = screen.getByRole('button', { name: '删除 Cup' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(deleteProduct).toHaveBeenCalledWith('p3', 'MY'));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('商品列表操作')).toHaveFocus());
+  });
+
+  it('focuses the rename field and returns to the group action when cancelled', async () => {
+    render(<ProductList onNavigate={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: '管理商品组' }));
+    const trigger = screen.getByRole('button', { name: '重命名 Insulated Bottle' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: '重命名商品组' });
+    await waitFor(() => expect(within(dialog).getByRole('textbox', { name: '商品组名称' })).toHaveFocus());
+    fireEvent.click(within(dialog).getByRole('button', { name: '取消' }));
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
+  it('focuses the new-group name and restores the opening control after Escape', async () => {
+    (api.get as any).mockImplementation((url: string) => Promise.resolve({
+      data: url === '/product-display-groups' ? [] : { remoteFetched: true, items: [] },
+    }));
+    render(<ProductList onNavigate={vi.fn()} />);
+    await screen.findByLabelText('归组选中 BOT-BLK');
+    fireEvent.click(screen.getByLabelText('归组选中 BOT-BLK'));
+    fireEvent.click(screen.getByLabelText('归组选中 BOT-WHT'));
+    const trigger = screen.getByRole('button', { name: '归组（2）' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: '商品归组' });
+    await waitFor(() => expect(within(dialog).getByRole('textbox', { name: '商品组名称' })).toHaveFocus());
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

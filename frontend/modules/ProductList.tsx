@@ -17,6 +17,15 @@ import { quoteTiktokCrossBorderShipping } from './profit/tiktokShippingRates';
 import { quoteTiktokUSShipping } from './profit/tiktokUSShipping';
 import { quoteTiktokUSDirectShipping } from './profit/tiktokUSDirectShipping';
 import { useToast } from '../components/Toast';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { NativeSelect } from '../components/ui/native-select';
+import { Checkbox } from '../components/ui/checkbox';
+import { Label } from '../components/ui/label';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel } from '../components/ui/alert-dialog';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
+import { Pagination, PaginationContent, PaginationItem } from '../components/ui/pagination';
 import { type CurrencyCode, COUNTRY_TO_CURRENCY, normalizeCurrencyCode } from './profit/types';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import {
@@ -154,6 +163,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const showToastRef = useRef(showToast);
     const { rates: exchangeRates } = useExchangeRates();
     const jsonFileInputRef = useRef<HTMLInputElement>(null);
+    const toolbarRef = useRef<HTMLDivElement>(null);
+    const decisionReturnFocusRef = useRef<HTMLElement | null>(null);
+    const renameInputRef = useRef<HTMLInputElement>(null);
+    const newGroupInputRef = useRef<HTMLInputElement>(null);
+    const groupSelectRef = useRef<HTMLSelectElement>(null);
 
     const activeTab = productListActiveTab;
     const setActiveTab = setProductListActiveTab;
@@ -179,6 +193,10 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const [savingGroup, setSavingGroup] = useState(false);
     const [managingGroup, setManagingGroup] = useState<ProductDisplayGroup | null>(null);
     const [showGroupManager, setShowGroupManager] = useState(false);
+    const [renameGroup, setRenameGroup] = useState<ProductDisplayGroup | null>(null);
+    const [renameValue, setRenameValue] = useState('');
+    const [pendingDecision, setPendingDecision] = useState<{ title: string; description: string; confirmLabel: string; action: () => Promise<void> } | null>(null);
+    const [decisionSaving, setDecisionSaving] = useState(false);
 
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<ProductCalcData | null>(null);
@@ -414,27 +432,41 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         }
     };
 
-    const handleRenameGroup = async (group: ProductDisplayGroup) => {
-        const name = window.prompt('请输入新的商品组名称', group.name)?.trim();
-        if (!name || name === group.name) return;
+    const handleRenameGroup = (group: ProductDisplayGroup) => {
+        setRenameValue(group.name);
+        setRenameGroup(group);
+    };
+
+    const saveGroupName = async () => {
+        const group = renameGroup;
+        const name = renameValue.trim();
+        if (!group || !name || decisionSaving) return;
+        if (name === group.name) { setRenameGroup(null); return; }
+        setDecisionSaving(true);
         try {
             await api.put(`/product-display-groups/${group.id}`, { name });
             if (await loadProductGroups()) showToast('商品组已重命名', 'success');
+            setRenameGroup(null);
         } catch {
             showToast('商品组重命名失败', 'error');
+        } finally {
+            setDecisionSaving(false);
         }
     };
 
-    const handleDisbandGroup = async (group: ProductDisplayGroup) => {
-        if (!window.confirm(`确定解散商品组“${group.name}”吗？SKU 商品数据不会被删除。`)) return;
-        try {
-            await api.delete(`/product-display-groups/${group.id}`);
-            const refreshed = await loadProductGroups();
-            if (managingGroup?.id === group.id) setManagingGroup(null);
-            if (refreshed) showToast('商品组已解散', 'success');
-        } catch {
-            showToast('解散商品组失败', 'error');
-        }
+    const handleDisbandGroup = (group: ProductDisplayGroup) => {
+        decisionReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        setPendingDecision({
+            title: '解散商品组',
+            description: `确定解散商品组“${group.name}”吗？SKU 商品数据不会被删除。`,
+            confirmLabel: '确认解散',
+            action: async () => {
+                await api.delete(`/product-display-groups/${group.id}`);
+                const refreshed = await loadProductGroups();
+                if (managingGroup?.id === group.id) setManagingGroup(null);
+                if (refreshed) showToast('商品组已解散', 'success');
+            },
+        });
     };
 
     const handleRemoveGroupMember = async (group: ProductDisplayGroup, productId: string) => {
@@ -665,10 +697,30 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
         }
     };
 
-    const handleDelete = async (product: ProductCalcData) => {
-        if (window.confirm(t.confirmDelete)) {
-            await deleteProduct(product.id, activeTab);
-            await loadProductGroups();
+    const handleDelete = (product: ProductCalcData) => {
+        decisionReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const site = activeTab;
+        setPendingDecision({
+            title: '删除商品',
+            description: `${product.name} · ${product.sku}。${t.confirmDelete}`,
+            confirmLabel: '确认删除',
+            action: async () => {
+                await deleteProduct(product.id, site);
+                await loadProductGroups();
+            },
+        });
+    };
+
+    const confirmDecision = async () => {
+        if (!pendingDecision || decisionSaving) return;
+        setDecisionSaving(true);
+        try {
+            await pendingDecision.action();
+            setPendingDecision(null);
+        } catch {
+            showToast('操作失败，请重试', 'error');
+        } finally {
+            setDecisionSaving(false);
         }
     };
 
@@ -852,12 +904,12 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
 
     const renderDetailSection = (section: any) => (
         <div key={section.title}>
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{section.title}</h4>
+            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 pb-1 border-b border-border">{section.title}</h4>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {section.items.map((item: any) => (
-                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                        <span className="text-sm font-bold text-slate-700">
+                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-muted/80 rounded-lg border border-border">
+                        <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                        <span className="text-sm font-bold text-foreground">
                             {item.value !== undefined && item.value !== null
                                 ? typeof item.value === 'number'
                                     ? item.currency
@@ -865,7 +917,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         : item.value.toFixed(2)
                                     : item.value
                                 : '-'}
-                            {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
+                            {item.suffix && <span className="text-xs text-muted-foreground font-medium ml-0.5">{item.suffix}</span>}
                         </span>
                     </div>
                 ))}
@@ -879,13 +931,13 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     ) => (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
             {[
-                { label: t.netProfitCNY, value: `¥${profit.finalRevenueCNY.toFixed(2)}`, color: profit.finalRevenueCNY >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: t.netProfitLocal, value: formatCurrencyAmount(profit.finalRevenueLocal, currency), color: profit.finalRevenueLocal >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: t.roiLabel, value: `${profit.roi.toFixed(1)}%`, color: profit.roi >= 0 ? 'text-emerald-600' : 'text-red-600' },
-                { label: t.marginLabel, value: `${profit.margin.toFixed(1)}%`, color: profit.margin >= 0 ? 'text-emerald-600' : 'text-red-600' },
+                { label: t.netProfitCNY, value: `¥${profit.finalRevenueCNY.toFixed(2)}`, color: profit.finalRevenueCNY >= 0 ? 'text-success' : 'text-destructive' },
+                { label: t.netProfitLocal, value: formatCurrencyAmount(profit.finalRevenueLocal, currency), color: profit.finalRevenueLocal >= 0 ? 'text-success' : 'text-destructive' },
+                { label: t.roiLabel, value: `${profit.roi.toFixed(1)}%`, color: profit.roi >= 0 ? 'text-success' : 'text-destructive' },
+                { label: t.marginLabel, value: `${profit.margin.toFixed(1)}%`, color: profit.margin >= 0 ? 'text-success' : 'text-destructive' },
             ].map(item => (
-                <div key={item.label} className="p-3 bg-gradient-to-br from-slate-50 to-white rounded-xl border border-slate-100">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</div>
+                <div key={item.label} className="p-3 bg-gradient-to-br from-muted to-card rounded-xl border border-border">
+                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{item.label}</div>
                     <div className={`text-lg font-extrabold mt-0.5 ${item.color}`}>{item.value}</div>
                 </div>
             ))}
@@ -923,9 +975,9 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 { label: t.totalTax, value: profit.totalTax.toFixed(2) },
                 { label: t.damage, value: profit.damage.toFixed(2) },
             ].map(item => (
-                <div key={item.label} className="flex items-center justify-between p-2 bg-slate-50/60 rounded-lg">
-                    <span className="text-xs text-slate-500">{item.label}</span>
-                    <span className="text-sm font-bold text-slate-700">¥{item.value}</span>
+                <div key={item.label} className="flex items-center justify-between p-2 bg-muted/60 rounded-lg">
+                    <span className="text-xs text-muted-foreground">{item.label}</span>
+                    <span className="text-sm font-bold text-foreground">¥{item.value}</span>
                 </div>
             ))}
         </div>
@@ -945,75 +997,112 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
             : null;
         const ycStock = ycStockBySku.get(normalizeSku(product.sku));
         return (
-            <tr
+            <TableRow
                 key={`${options.group?.id || 'product'}:${product.id}`}
-                className={`hover:bg-indigo-50/30 transition-colors group cursor-pointer ${options.grouped ? 'bg-slate-50/40' : ''}`}
+                className={`hover:bg-accent/30 transition-colors group cursor-pointer ${options.grouped ? 'bg-muted/40' : ''}`}
                 onDoubleClick={() => handleView(product)}
             >
-                <td className="p-3 pl-4 font-bold text-slate-800 max-w-[210px]">
+                <TableCell className="p-3 pl-4 font-bold text-foreground max-w-[210px]">
                     <div className={`flex items-center gap-2 ${options.grouped ? 'pl-7' : ''}`}>
                         {options.selectable && canEditPrimaryTemplate && (
-                            <input
-                                type="checkbox"
+                            <Checkbox
                                 aria-label={`归组选中 ${product.sku}`}
                                 checked={selectedProductIds.has(product.id)}
                                 onClick={event => event.stopPropagation()}
-                                onChange={() => toggleProductSelection(product.id)}
-                                className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                                onCheckedChange={() => toggleProductSelection(product.id)}
+                                className="h-4 w-4 rounded border-input text-primary"
                             />
                         )}
                         <span className="truncate">{product.name}</span>
                     </div>
-                </td>
-                <td className="p-3 text-slate-500 font-mono text-xs">{product.sku}</td>
-                <td className="p-3 text-right">
+                </TableCell>
+                <TableCell className="p-3 text-muted-foreground font-mono text-xs">{product.sku}</TableCell>
+                <TableCell className="p-3 text-right">
                     {ycStockLoading ? (
-                        <span className="text-xs text-slate-400">加载中...</span>
+                        <span className="text-xs text-muted-foreground">加载中...</span>
                     ) : ycStock ? (
                         <div className="space-y-0.5">
-                            <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(ycStock.available)}</div>
-                            <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(ycStock.inventory)}</div>
-                            <div className="text-[11px] text-slate-400">
+                            <div className="text-sm font-extrabold text-primary">可用 {formatStockNumber(ycStock.available)}</div>
+                            <div className="text-xs font-semibold text-muted-foreground">库存 {formatStockNumber(ycStock.inventory)}</div>
+                            <div className="text-[11px] text-muted-foreground">
                                 占用 {formatStockNumber(ycStock.occupy)} / 未发 {formatStockNumber(ycStock.unshipped)}
                             </div>
-                            <div className="text-[11px] text-slate-400 truncate max-w-[140px] ml-auto">
+                            <div className="text-[11px] text-muted-foreground truncate max-w-[140px] ml-auto">
                                 {ycStock.warehouseCodes.length ? ycStock.warehouseCodes.join(', ') : '-'}
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-0.5">
-                            <div className="text-xs font-bold text-slate-400">
+                            <div className="text-xs font-bold text-muted-foreground">
                                 {ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}
                             </div>
-                            <div className="text-[11px] text-slate-300">-</div>
+                            <div className="text-[11px] text-muted-foreground">-</div>
                         </div>
                     )}
-                </td>
-                <td className="p-3 text-right text-slate-700 font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</td>
-                <td className="p-3 text-right text-slate-600">{productSite.globalInputs.productWeight}g</td>
-                <td className="p-3 text-right text-slate-700 font-mono">¥{priceCNY.toFixed(2)}</td>
-                <td className="p-3 text-right text-slate-600 font-mono">{priceLocal === null ? '-' : formatCurrencyAmount(priceLocal, currency as CurrencyCode)}</td>
-                <td className="p-3 text-right text-slate-600 font-mono">{productSite.siteInputs.adROI}</td>
-                <td className="p-3">
+                </TableCell>
+                <TableCell className="p-3 text-right text-foreground font-mono">{productSite.globalInputs.purchaseCost.toFixed(2)}</TableCell>
+                <TableCell className="p-3 text-right text-muted-foreground">{productSite.globalInputs.productWeight}g</TableCell>
+                <TableCell className="p-3 text-right text-foreground font-mono">¥{priceCNY.toFixed(2)}</TableCell>
+                <TableCell className="p-3 text-right text-muted-foreground font-mono">{priceLocal === null ? '-' : formatCurrencyAmount(priceLocal, currency as CurrencyCode)}</TableCell>
+                <TableCell className="p-3 text-right text-muted-foreground font-mono">{productSite.siteInputs.adROI}</TableCell>
+                <TableCell className="p-3">
                     <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => handleView(product)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="View"><Eye size={15} /></button>
-                        <button onClick={() => { void handleQuickImport(product); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Import to Calculator"><ArrowUpRight size={15} /></button>
+                        <Button variant="ghost" size="icon" onClick={() => handleView(product)} className="h-8 w-8 text-muted-foreground" aria-label={`查看 ${product.name}`} title="View"><Eye size={15} /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => { void handleQuickImport(product); }} className="h-8 w-8 text-muted-foreground" aria-label={`导入计算器 ${product.name}`} title="Import to Calculator"><ArrowUpRight size={15} /></Button>
                         {options.group && canEditPrimaryTemplate && (
-                            <button
+                            <Button variant="ghost" size="sm"
                                 onClick={() => { void handleRemoveGroupMember(options.group!, product.id); }}
-                                className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                                className="p-1.5 text-muted-foreground hover:text-warning hover:bg-warning-subtle rounded-lg transition"
                                 title="移出商品组"
-                            ><Unlink size={15} /></button>
+                            ><Unlink size={15} /></Button>
                         )}
-                        <button onClick={() => { void handleDelete(product); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={15} /></button>
+                        <Button variant="ghost" size="icon" onClick={() => { void handleDelete(product); }} className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" aria-label={`删除 ${product.name}`} title="Delete"><Trash2 size={15} /></Button>
                     </div>
-                </td>
-            </tr>
+                </TableCell>
+            </TableRow>
         );
     };
 
     return (
-        <div className="space-y-6 h-full flex flex-col">
+        <div className="space-y-5 h-full min-w-0 flex flex-col text-foreground">
+            <AlertDialog open={pendingDecision !== null} onOpenChange={open => { if (!open && !decisionSaving) setPendingDecision(null); }}>
+                <AlertDialogContent className="w-[calc(100%-2rem)] rounded-xl" onCloseAutoFocus={event => {
+                    // A successful delete can remove the initiating row before the dialog closes.
+                    if (!decisionReturnFocusRef.current?.isConnected) {
+                        event.preventDefault();
+                        toolbarRef.current?.focus();
+                    }
+                }}>
+                    <AlertDialogTitle>{pendingDecision?.title}</AlertDialogTitle>
+                    <AlertDialogDescription>{pendingDecision?.description}</AlertDialogDescription>
+                    <div className="flex justify-end gap-2">
+                        <AlertDialogCancel disabled={decisionSaving}>取消</AlertDialogCancel>
+                        <Button variant="destructive" disabled={decisionSaving} onClick={() => { void confirmDecision(); }}>
+                            {decisionSaving ? '处理中...' : pendingDecision?.confirmLabel}
+                        </Button>
+                    </div>
+                </AlertDialogContent>
+            </AlertDialog>
+            <Dialog open={renameGroup !== null} onOpenChange={open => { if (!open && !decisionSaving) setRenameGroup(null); }}>
+                <DialogContent showCloseButton={false} className="w-[calc(100%-2rem)] rounded-xl"
+                    onOpenAutoFocus={event => { event.preventDefault(); renameInputRef.current?.focus(); }}
+                    onEscapeKeyDown={event => { if (decisionSaving) event.preventDefault(); }}
+                    onInteractOutside={event => { if (decisionSaving) event.preventDefault(); }}>
+                    <DialogTitle>重命名商品组</DialogTitle>
+                    <DialogDescription>商品组名称对所有站点生效。</DialogDescription>
+                    <form onSubmit={event => { event.preventDefault(); void saveGroupName(); }} className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="product-group-rename">商品组名称</Label>
+                            <Input id="product-group-rename" ref={renameInputRef} maxLength={120} value={renameValue} disabled={decisionSaving}
+                                onChange={event => setRenameValue(event.target.value)} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" disabled={decisionSaving} onClick={() => setRenameGroup(null)}>取消</Button>
+                            <Button type="submit" disabled={decisionSaving || !renameValue.trim()}>{decisionSaving ? '保存中...' : '保存名称'}</Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
             {showYcSyncModal && (
                 <YcProductSyncModal
                     siteName={siteNames[activeTab] || activeTab}
@@ -1027,171 +1116,173 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                 />
             )}
             {showGroupDialog && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="商品归组">
-                    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                <Dialog open onOpenChange={open => { if (!open && !savingGroup) setShowGroupDialog(false); }}>
+                    <DialogContent showCloseButton={false} aria-label="商品归组"
+                        onOpenAutoFocus={event => { event.preventDefault(); (newGroupInputRef.current ?? groupSelectRef.current)?.focus(); }}
+                        onEscapeKeyDown={event => { if (savingGroup) event.preventDefault(); }} onInteractOutside={event => { if (savingGroup) event.preventDefault(); }} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-md flex-col gap-0 overflow-hidden rounded-xl p-0">
+                        <div className="flex items-center justify-between border-b border-border p-5">
                             <div>
-                                <h3 className="font-bold text-slate-800">商品归组</h3>
-                                <p className="mt-1 text-xs text-slate-500">已选择 {selectedProductIds.size} 个 SKU，归组关系对所有站点生效</p>
+                                <DialogTitle className="font-bold text-foreground">商品归组</DialogTitle>
+                                <DialogDescription className="mt-1 text-xs text-muted-foreground">已选择 {selectedProductIds.size} 个 SKU，归组关系对所有站点生效</DialogDescription>
                             </div>
-                            <button onClick={() => setShowGroupDialog(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+                            <Button variant="ghost" size="icon" disabled={savingGroup} aria-label="关闭商品归组" onClick={() => setShowGroupDialog(false)}><X size={18} /></Button>
                         </div>
                         <div className="space-y-4 p-5">
-                            <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-                                <button
+                            <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+                                <Button variant="ghost" size="sm"
                                     onClick={() => setGroupDialogMode('create')}
                                     disabled={selectedProductIds.size < 2}
-                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'create' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'} disabled:opacity-40`}
-                                >创建新组</button>
-                                <button
+                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'create' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'} disabled:opacity-40`}
+                                >创建新组</Button>
+                                <Button variant="ghost" size="sm"
                                     onClick={() => setGroupDialogMode('existing')}
                                     disabled={productGroups.length === 0}
-                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'existing' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'} disabled:opacity-40`}
-                                >加入已有组</button>
+                                    className={`rounded-lg px-3 py-2 text-sm font-bold ${groupDialogMode === 'existing' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'} disabled:opacity-40`}
+                                >加入已有组</Button>
                             </div>
                             {groupDialogMode === 'create' ? (
-                                <label className="block text-sm font-medium text-slate-700">
+                                <label className="block text-sm font-medium text-foreground">
                                     商品组名称
-                                    <input
-                                        autoFocus
+                                    <Input
+                                        ref={newGroupInputRef}
                                         maxLength={120}
                                         value={newGroupName}
                                         onChange={event => setNewGroupName(event.target.value)}
                                         placeholder="例如：保温杯"
-                                        className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2.5 outline-none focus:border-indigo-500"
+                                        className="mt-2 w-full rounded-xl border border-border px-3 py-2.5 outline-none focus:border-primary"
                                     />
                                 </label>
                             ) : (
-                                <label className="block text-sm font-medium text-slate-700">
+                                <label className="block text-sm font-medium text-foreground">
                                     选择商品组
-                                    <select
+                                    <NativeSelect
+                                        ref={groupSelectRef}
                                         value={targetGroupId}
                                         onChange={event => setTargetGroupId(event.target.value)}
-                                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 outline-none focus:border-indigo-500"
+                                        className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:border-primary"
                                     >
                                         {productGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
-                                    </select>
+                                    </NativeSelect>
                                 </label>
                             )}
                         </div>
-                        <div className="flex justify-end gap-2 border-t border-slate-100 p-4">
-                            <button onClick={() => setShowGroupDialog(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600">取消</button>
-                            <button
+                        <div className="flex justify-end gap-2 border-t border-border p-4">
+                            <Button variant="outline" size="sm" disabled={savingGroup} onClick={() => setShowGroupDialog(false)}>取消</Button>
+                            <Button size="sm"
                                 onClick={() => { void handleSaveGroup(); }}
                                 disabled={savingGroup || (groupDialogMode === 'create' ? selectedProductIds.size < 2 || !newGroupName.trim() : !targetGroupId)}
-                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-40"
-                            >{savingGroup ? '保存中...' : '保存归组'}</button>
+                            >{savingGroup ? '保存中...' : '保存归组'}</Button>
                         </div>
-                    </div>
-                </div>
+                    </DialogContent>
+                </Dialog>
             )}
             {managingGroup && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="管理商品组成员">
-                    <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                <Dialog open onOpenChange={open => { if (!open) setManagingGroup(null); }}>
+                    <DialogContent showCloseButton={false} aria-label="管理商品组成员" className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col gap-0 overflow-hidden rounded-xl p-0">
+                        <div className="flex items-center justify-between border-b border-border p-5">
                             <div>
-                                <h3 className="font-bold text-slate-800">{managingGroup.name}</h3>
-                                <p className="mt-1 text-xs text-slate-500">所有站点共用此成员关系</p>
+                                <DialogTitle className="font-bold text-foreground">{managingGroup.name}</DialogTitle>
+                                <DialogDescription className="mt-1 text-xs text-muted-foreground">所有站点共用此成员关系</DialogDescription>
                             </div>
-                            <button onClick={() => setManagingGroup(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100"><X size={18} /></button>
+                            <Button variant="ghost" size="icon" aria-label="关闭商品组成员" onClick={() => setManagingGroup(null)}><X size={18} /></Button>
                         </div>
                         <div className="max-h-[55vh] overflow-y-auto p-5">
-                            <div className="mb-3 rounded-xl bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                            <div className="mb-3 rounded-xl bg-accent px-3 py-2 text-xs text-primary">
                                 如需添加成员，请关闭窗口，在商品视图勾选未归组 SKU，再选择“加入已有组”。
                             </div>
-                            <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
+                            <div className="divide-y divide-border rounded-xl border border-border">
                                 {managingGroup.members.map(member => {
                                     const product = products.find(item => item.id === member.productId);
                                     if (!product) return null;
                                     return (
                                         <div key={member.productId} className="flex items-center justify-between gap-4 p-3">
                                             <div className="min-w-0">
-                                                <div className="truncate text-sm font-bold text-slate-700">{product.name}</div>
-                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                                                <div className="truncate text-sm font-bold text-foreground">{product.name}</div>
+                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                                     <span className="font-mono">{product.sku}</span>
                                                     <span>{normalizeProductSiteMembership(product).join(' / ') || '-'}</span>
                                                 </div>
                                             </div>
-                                            <button
+                                            <Button variant="ghost" size="sm"
                                                 onClick={() => { void handleRemoveGroupMember(managingGroup, product.id); }}
-                                                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-50"
-                                            >移出组</button>
+                                                className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-bold text-warning hover:bg-warning-subtle"
+                                            >移出组</Button>
                                         </div>
                                     );
                                 })}
-                                {managingGroup.members.length === 0 && <div className="p-8 text-center text-sm text-slate-400">此商品组暂无成员</div>}
+                                {managingGroup.members.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">此商品组暂无成员</div>}
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </DialogContent>
+                </Dialog>
             )}
             {showGroupManager && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm" role="dialog" aria-label="管理商品组">
-                    <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-slate-100 p-5">
+                <Dialog open onOpenChange={open => { if (!open) setShowGroupManager(false); }}>
+                    <DialogContent showCloseButton={false} aria-label="管理商品组" className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl flex-col gap-0 overflow-hidden rounded-xl p-0">
+                        <div className="flex items-center justify-between border-b border-border p-5">
                             <div>
-                                <h3 className="font-bold text-slate-800">管理商品组</h3>
-                                <p className="mt-1 text-xs text-slate-500">所有站点共用商品组</p>
+                                <DialogTitle className="font-bold text-foreground">管理商品组</DialogTitle>
+                                <DialogDescription className="mt-1 text-xs text-muted-foreground">所有站点共用商品组</DialogDescription>
                             </div>
-                            <button onClick={() => setShowGroupManager(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="关闭商品组管理"><X size={18} /></button>
+                            <Button variant="ghost" size="sm" onClick={() => setShowGroupManager(false)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted" aria-label="关闭商品组管理"><X size={18} /></Button>
                         </div>
                         <div className="max-h-[60vh] space-y-2 overflow-y-auto p-5">
                             {productGroups.map(group => (
-                                <div key={group.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 p-3">
+                                <div key={group.id} className="flex items-center justify-between gap-3 rounded-xl border border-border p-3">
                                     <div className="min-w-0">
-                                        <div className="truncate text-sm font-bold text-slate-800">{group.name}</div>
-                                        <div className="mt-1 text-xs text-slate-400">{group.members.length} 个 SKU</div>
+                                        <div className="truncate text-sm font-bold text-foreground">{group.name}</div>
+                                        <div className="mt-1 text-xs text-muted-foreground">{group.members.length} 个 SKU</div>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1">
-                                        <button onClick={() => { setShowGroupManager(false); setManagingGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50" aria-label={`管理 ${group.name}`}>管理</button>
-                                        <button onClick={() => { void handleRenameGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100" aria-label={`重命名 ${group.name}`}>重命名</button>
-                                        <button onClick={() => { void handleDisbandGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50" aria-label={`解散 ${group.name}`}>解散</button>
+                                        <Button variant="ghost" size="sm" onClick={() => { setShowGroupManager(false); setManagingGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-primary hover:bg-accent" aria-label={`管理 ${group.name}`}>管理</Button>
+                                        <Button variant="ghost" size="sm" onClick={() => { void handleRenameGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-muted-foreground hover:bg-muted" aria-label={`重命名 ${group.name}`}>重命名</Button>
+                                        <Button variant="ghost" size="sm" onClick={() => { void handleDisbandGroup(group); }} className="rounded-lg px-2 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40" aria-label={`解散 ${group.name}`}>解散</Button>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    </div>
-                </div>
+                    </DialogContent>
+                </Dialog>
             )}
             {showDetailModal && selectedProduct && (
-                <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-                        <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white shrink-0">
+                <Dialog open onOpenChange={open => { if (!open) setShowDetailModal(false); }}>
+                    <DialogContent showCloseButton={false} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-xl p-0">
+                        <div className="p-5 border-b border-border flex justify-between items-center bg-gradient-to-r from-muted to-card shrink-0">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-indigo-100 rounded-xl text-indigo-600"><Eye size={18} /></div>
+                                <div className="p-2 bg-accent rounded-xl text-primary"><Eye size={18} /></div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-slate-800">{selectedProduct.name}</h3>
-                                    <p className="text-xs text-slate-400 font-medium">{selectedProduct.sku}</p>
+                                    <DialogTitle className="text-lg font-bold text-foreground">{selectedProduct.name}</DialogTitle>
+                                    <DialogDescription className="text-xs text-muted-foreground font-medium">{selectedProduct.sku}</DialogDescription>
                                 </div>
                             </div>
                             <div className="flex gap-2">
                                 {allLinkedTemplates.length > 0 && (
-                                    <button onClick={handleImportAllTemplates} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+                                    <Button variant="ghost" size="sm" onClick={handleImportAllTemplates} className="px-4 py-2 bg-primary hover:bg-primary text-primary-foreground rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
                                         <ArrowUpRight size={13} /> {t.modals.importCalculator}
-                                    </button>
+                                    </Button>
                                 )}
-                                <button onClick={() => setShowDetailModal(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition"><X size={20} /></button>
+                                <Button variant="ghost" size="icon" aria-label="关闭商品详情" onClick={() => setShowDetailModal(false)}><X size={20} /></Button>
                             </div>
                         </div>
 
-                        <div className="border-b border-slate-100 px-5 shrink-0">
+                        <div className="border-b border-border px-5 shrink-0">
                             <div className="flex gap-1 overflow-x-auto">
                                 {modalTabs.map((tab, idx) => (
-                                    <button
+                                    <Button variant="ghost" size="sm"
                                         key={idx}
                                         onClick={() => setModalActiveTab(idx)}
                                         className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-all duration-200 rounded-t-lg whitespace-nowrap flex items-center gap-1.5
                                             ${modalActiveTab === idx
-                                                ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50'
-                                                : 'border-transparent text-slate-400 hover:text-slate-600 hover:border-slate-200'
+                                                ? 'border-primary text-primary bg-accent/50'
+                                                : 'border-transparent text-muted-foreground hover:text-muted-foreground hover:border-border'
                                             }`}
                                     >
                                         <tab.icon size={13} />
                                         {tab.label}
-                                    </button>
+                                    </Button>
                                 ))}
                                 {loadingTemplates && (
-                                    <div className="px-4 py-2.5 text-xs text-slate-400 animate-pulse">{t.loading}</div>
+                                    <div className="px-4 py-2.5 text-xs text-muted-foreground animate-pulse">{t.loading}</div>
                                 )}
                             </div>
                         </div>
@@ -1200,22 +1291,22 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             {modalActiveTab === 0 && (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.baseInfo}</h4>
+                                        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 pb-1 border-b border-border">{t.detail.baseInfo}</h4>
                                         <div className="grid grid-cols-1 gap-2">
                                             {[
                                                 { label: t.detail.name, value: selectedProduct.name },
                                                 { label: t.detail.sku, value: selectedProduct.sku },
                                                 { label: t.detail.country, value: selectedProductSiteViewModel!.sites.join(', ') },
                                             ].map(item => (
-                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                    <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                    <span className="text-sm font-bold text-slate-700">{item.value || '-'}</span>
+                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-muted/80 rounded-lg border border-border">
+                                                    <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                                    <span className="text-sm font-bold text-foreground">{item.value || '-'}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                     <div>
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.priceCost}</h4>
+                                        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 pb-1 border-b border-border">{t.detail.priceCost}</h4>
                                         <div className="grid grid-cols-1 gap-2">
                                             {[
                                                 { label: t.table.cost, value: `${selectedProductSiteViewModel!.globalInputs.purchaseCost.toFixed(2)} CNY` },
@@ -1223,15 +1314,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                 { label: t.detail.invoice, value: selectedProductSiteViewModel!.globalInputs.supplierInvoice === 'yes' ? t.detail.invoiceYes : t.detail.invoiceNo },
                                                 { label: t.detail.taxPoint, value: `${selectedProductSiteViewModel!.globalInputs.supplierTaxPoint}%` },
                                             ].map(item => (
-                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                    <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                    <span className="text-sm font-bold text-slate-700">{item.value || '-'}</span>
+                                                <div key={item.label} className="flex items-center justify-between p-2.5 bg-muted/80 rounded-lg border border-border">
+                                                    <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                                    <span className="text-sm font-bold text-foreground">{item.value || '-'}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                     <div className="md:col-span-2">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.detail.ycSpecs}</h4>
+                                        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 pb-1 border-b border-border">{t.detail.ycSpecs}</h4>
                                         {selectedProduct.ycLengthCm != null
                                             && selectedProduct.ycWidthCm != null
                                             && selectedProduct.ycHeightCm != null
@@ -1243,20 +1334,20 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                     { label: t.detail.ycHeight, value: `${selectedProduct.ycHeightCm.toFixed(2)} cm` },
                                                     { label: t.detail.ycVolume, value: `${selectedProduct.ycVolumeM3.toFixed(6)} m³` },
                                                 ].map(item => (
-                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                        <span className="text-sm font-bold text-slate-700">{item.value}</span>
+                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-muted/80 rounded-lg border border-border">
+                                                        <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                                        <span className="text-sm font-bold text-foreground">{item.value}</span>
                                                     </div>
                                                 ))}
                                             </div>
                                         ) : (
-                                            <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+                                            <div className="rounded-lg border border-warning/20 bg-warning-subtle px-3 py-2 text-sm font-medium text-warning">
                                                 {t.detail.missingProductSpecs}
                                             </div>
                                         )}
                                     </div>
                                     <div className="md:col-span-2">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 pb-1 border-b border-slate-100">{t.siteParams}</h4>
+                                        <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 pb-1 border-b border-border">{t.siteParams}</h4>
                                         {(() => {
                                             const siteInputs = selectedProductSiteViewModel!.siteInputs;
                                             return (
@@ -1269,11 +1360,11 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                     { label: t.detail.infraFee, value: `${siteInputs.platformInfrastructureFee.toFixed(2)} CNY` },
                                                     { label: t.detail.couponType, value: siteInputs.sellerCouponType === 'percent' ? t.detail.percentType : t.detail.fixedType },
                                                 ].map(item => (
-                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-slate-50/80 rounded-lg border border-slate-100">
-                                                        <span className="text-xs font-medium text-slate-500">{item.label}</span>
-                                                        <span className="text-sm font-bold text-slate-700">
+                                                    <div key={item.label} className="flex items-center justify-between p-2.5 bg-muted/80 rounded-lg border border-border">
+                                                        <span className="text-xs font-medium text-muted-foreground">{item.label}</span>
+                                                        <span className="text-sm font-bold text-foreground">
                                                             {item.value || '-'}
-                                                            {item.suffix && <span className="text-xs text-slate-400 font-medium ml-0.5">{item.suffix}</span>}
+                                                            {item.suffix && <span className="text-xs text-muted-foreground font-medium ml-0.5">{item.suffix}</span>}
                                                         </span>
                                                     </div>
                                                 ))}
@@ -1290,33 +1381,33 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                 return (
                                     <>
                                         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                                            <div className="flex items-center gap-2 text-sm text-slate-500">
+                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                                 {tpl.platform && (
-                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-bold">{tpl.platform}</span>
+                                                    <span className="px-2 py-0.5 bg-accent text-primary rounded text-[10px] font-bold">{tpl.platform}</span>
                                                 )}
                                                 <span>{tpl.country}</span>
                                                 {tpl.isPrimary && (
-                                                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-[10px] font-bold">
+                                                    <span className="px-2 py-0.5 bg-success-subtle text-success rounded text-[10px] font-bold">
                                                         {t.detail.primaryTemplate}
                                                     </span>
                                                 )}
                                             </div>
                                             {canEditPrimaryTemplate && (
-                                                <button
+                                                <Button variant="ghost" size="sm"
                                                     type="button"
                                                     onClick={() => handlePrimaryTemplateChange(tpl, !tpl.isPrimary)}
                                                     disabled={updatingPrimaryTemplateId !== null}
-                                                    className="rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                                    className="rounded-lg border border-success/20 bg-card px-3 py-1.5 text-xs font-bold text-success transition hover:bg-success-subtle disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     {tpl.isPrimary
                                                         ? t.detail.unsetPrimaryTemplate
                                                         : t.detail.setPrimaryTemplate}
-                                                </button>
+                                                </Button>
                                             )}
                                         </div>
 
                                         {exchangeRate && (
-                                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5">
+                                            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-accent/60 px-3 py-2.5">
                                                 <div className="text-xs text-indigo-800">
                                                     <span className="font-bold">
                                                         {exchangeRate.source === 'snapshot'
@@ -1325,24 +1416,24 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                                     </span>
                                                     <span className="ml-2 font-mono">{exchangeRate.rate}</span>
                                                     {exchangeRate.exchangeRateAt && (
-                                                        <span className="ml-3 text-indigo-500">
+                                                        <span className="ml-3 text-primary">
                                                             {t.detail.exchangeRateSavedAt}: {exchangeRate.exchangeRateAt}
                                                         </span>
                                                     )}
                                                 </div>
                                                 {snapshot && (
-                                                    <button
+                                                    <Button variant="ghost" size="sm"
                                                         type="button"
                                                         onClick={() => setUseLiveTemplateRates(previous => ({
                                                             ...previous,
                                                             [tpl.id]: !previous[tpl.id],
                                                         }))}
-                                                        className="rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100"
+                                                        className="rounded-lg border border-primary/20 bg-card px-3 py-1.5 text-xs font-bold text-primary transition hover:bg-accent"
                                                     >
                                                         {useLiveTemplateRates[tpl.id]
                                                             ? t.detail.useHistoricalExchangeRate
                                                             : t.detail.recalculateWithCurrentExchangeRate}
-                                                    </button>
+                                                    </Button>
                                                 )}
                                             </div>
                                         )}
@@ -1372,99 +1463,99 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             })()}
 
                             {modalActiveTab > 0 && !loadingTemplates && siteTabs.length === 0 && (
-                                <div className="text-center py-12 text-slate-400">
+                                <div className="text-center py-12 text-muted-foreground">
                                     <Layers size={40} className="mx-auto mb-3 opacity-30" />
                                     <p className="text-sm font-medium">{t.modals.noTemplates}</p>
                                     <p className="text-xs mt-1">{t.modals.noTemplatesHint}</p>
                                 </div>
                             )}
                         </div>
-                    </div>
-                </div>
+                    </DialogContent>
+                </Dialog>
             )}
 
-            <div className="bg-white/70 backdrop-blur-xl p-5 rounded-2xl shadow-sm border border-white/50 shrink-0">
+            <div ref={toolbarRef} tabIndex={-1} aria-label="商品列表操作" className="shrink-0 rounded-xl border border-border bg-card p-4 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
-                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <List className="text-indigo-600" size={20} /> {t.title}
+                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <List className="text-primary" size={20} /> {t.title}
                     </h2>
                     <div className="flex flex-wrap gap-3 items-center w-full md:w-auto">
-                        <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1" aria-label="商品列表视图">
-                            <button
+                        <div className="flex rounded-xl border border-border bg-muted p-1" aria-label="商品列表视图">
+                            <Button variant="ghost" size="sm"
                                 type="button"
                                 onClick={() => setViewMode('grouped')}
+                                aria-pressed={viewMode === 'grouped'}
                                 disabled={groupsLoading || groupLoadError}
-                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'grouped' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
-                            >商品视图</button>
-                            <button
+                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'grouped' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}
+                            >商品视图</Button>
+                            <Button variant="ghost" size="sm"
                                 type="button"
                                 onClick={() => setViewMode('sku')}
-                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'sku' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
-                            >SKU 视图</button>
+                                aria-pressed={viewMode === 'sku'}
+                                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${viewMode === 'sku' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}
+                            >SKU 视图</Button>
                         </div>
                         {groupLoadError && (
-                            <button
+                            <Button variant="ghost" size="sm"
                                 type="button"
                                 onClick={() => { void loadProductGroups(); }}
                                 disabled={groupsLoading}
-                                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-50"
-                            >重试加载商品组</button>
+                                className="rounded-xl border border-warning/30 bg-warning-subtle px-3 py-2 text-xs font-bold text-warning hover:bg-warning-subtle disabled:opacity-50"
+                            >重试加载商品组</Button>
                         )}
                         {viewMode === 'grouped' && canEditPrimaryTemplate && productGroups.length > 0 && (
-                            <button
+                            <Button variant="outline" size="sm"
                                 type="button"
                                 onClick={() => setShowGroupManager(true)}
-                                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                            >管理商品组</button>
+                            >管理商品组</Button>
                         )}
                         {viewMode === 'grouped' && canEditPrimaryTemplate && selectedProductIds.size > 0 && (selectedProductIds.size >= 2 || productGroups.length > 0) && (
-                            <button
+                            <Button size="sm"
                                 type="button"
                                 onClick={openGroupDialog}
-                                className="flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"
                             >
                                 <FolderPlus size={16} /> 归组（{selectedProductIds.size}）
-                            </button>
+                            </Button>
                         )}
-                        <div className="relative flex-1 md:w-60">
-                            <input
+                        <div className="relative min-w-44 flex-1 md:w-60">
+                            <Input
                                 type="text"
                                 placeholder={t.searchPlaceholder}
+                                aria-label={t.searchPlaceholder}
                                 value={searchTerm}
                                 onChange={handleSearch}
-                                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
+                                className="pl-9"
                             />
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         </div>
                         {canSyncYcProducts && (
-                            <button
+                            <Button size="sm"
                                 type="button"
                                 onClick={() => { void handleOpenYcSync(); }}
-                                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
                             >
                                 <RefreshCw size={16} /> {ycSyncText.button}
-                            </button>
+                            </Button>
                         )}
-                        <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition shadow-sm font-medium text-sm">
+                        <Button variant="outline" size="sm" onClick={handleExport}>
                             <FileSpreadsheet size={16} /> {t.exportExcel}
-                        </button>
-                        <input
+                        </Button>
+                        <Input
                             type="file"
                             accept=".json"
                             className="hidden"
                             ref={jsonFileInputRef}
                             onChange={handleImportJSON}
                         />
-                        <button onClick={() => jsonFileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm">
-                            <Upload size={16} className="text-indigo-500" /> {t.importJson}
-                        </button>
-                        <button onClick={handleExportJSON} disabled={filteredProducts.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm ${filteredProducts.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600'}`}>
-                            <Download size={16} className={filteredProducts.length === 0 ? "text-slate-300" : "text-emerald-500"} /> {t.exportJson}
-                        </button>
+                        <Button variant="outline" size="sm" onClick={() => jsonFileInputRef.current?.click()}>
+                            <Upload size={16} className="text-primary" /> {t.importJson}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleExportJSON} disabled={filteredProducts.length === 0}>
+                            <Download size={16} className={filteredProducts.length === 0 ? "text-muted-foreground" : "text-success"} /> {t.exportJson}
+                        </Button>
                     </div>
                 </div>
 
-                <div className="flex gap-1 border-b border-slate-100">
+                <div className="flex max-w-full gap-1 overflow-x-auto border-b border-border">
                     {([
                         { code: 'PH' as const, name: t.tabs.ph },
                         { code: 'MY' as const, name: t.tabs.my },
@@ -1473,41 +1564,42 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                         { code: 'TH' as const, name: t.tabs.th },
                         { code: 'US' as const, name: t.tabs.us }
                     ]).map(tab => (
-                        <button
+                        <Button variant="ghost" size="sm"
                             key={tab.code}
                             onClick={() => { setActiveTab(tab.code); setCurrentPage(1); }}
+                            aria-pressed={activeTab === tab.code}
                             className={`px-5 py-2.5 text-sm font-bold border-b-2 transition-all duration-200 rounded-t-lg
                            ${activeTab === tab.code
-                                    ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50'
-                                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-200'
+                                    ? 'border-primary text-primary bg-accent/50'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
                                 }`}
                         >
                             {tab.name}
-                        </button>
+                        </Button>
                     ))}
                 </div>
             </div>
 
-            <div className="flex-1 bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden flex flex-col">
+            <div className="flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
                 <div className="overflow-x-auto flex-1">
-                    <table className="w-full min-w-[1120px] text-sm text-left">
-                        <thead className="bg-white/80 text-slate-500 font-bold sticky top-0 z-10 border-b border-slate-100 text-xs uppercase tracking-wider">
-                            <tr>
-                                <th className="p-3 pl-4">{t.table.name}</th>
-                                <th className="p-3">{t.table.sku}</th>
-                                <th
+                    <Table wrapped={false} className="w-full min-w-[1120px] text-sm text-left">
+                        <TableHeader className="bg-card/80 text-muted-foreground font-bold sticky top-0 z-10 border-b border-border text-xs uppercase tracking-wider">
+                            <TableRow>
+                                <TableHead className="p-3 pl-4">{t.table.name}</TableHead>
+                                <TableHead className="p-3">{t.table.sku}</TableHead>
+                                <TableHead
                                     className="p-3 text-right"
                                     aria-sort={ycStockSortDirection === 'asc' ? 'ascending' : ycStockSortDirection === 'desc' ? 'descending' : 'none'}
                                 >
-                                    <button
+                                    <Button variant="ghost" size="sm"
                                         type="button"
                                         onClick={toggleYcStockSort}
                                         aria-label={`元仓库存排序：${ycStockSortLabels[ycStockSortDirection]}`}
                                         title={`元仓库存排序：${ycStockSortLabels[ycStockSortDirection]}`}
                                         className={`ml-auto inline-flex items-center justify-end gap-1.5 rounded-lg px-2 py-1 transition ${
                                             ycStockSortDirection === 'none'
-                                                ? 'text-slate-500 hover:bg-slate-100 hover:text-indigo-600'
-                                                : 'bg-indigo-50 text-indigo-700'
+                                                ? 'text-muted-foreground hover:bg-muted hover:text-primary'
+                                                : 'bg-accent text-primary'
                                         }`}
                                     >
                                         <span>元仓库存</span>
@@ -1518,17 +1610,17 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                         ) : (
                                             <ArrowUpDown size={13} />
                                         )}
-                                    </button>
-                                </th>
-                                <th className="p-3 text-right">{t.table.cost}</th>
-                                <th className="p-3 text-right">{t.table.weight}</th>
-                                <th className="p-3 text-right">{t.table.priceCNY}</th>
-                                <th className="p-3 text-right">{t.table.priceLocal}</th>
-                                <th className="p-3 text-right">{t.table.adROI}</th>
-                                <th className="p-3 text-center w-28">{t.table.action}</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
+                                    </Button>
+                                </TableHead>
+                                <TableHead className="p-3 text-right">{t.table.cost}</TableHead>
+                                <TableHead className="p-3 text-right">{t.table.weight}</TableHead>
+                                <TableHead className="p-3 text-right">{t.table.priceCNY}</TableHead>
+                                <TableHead className="p-3 text-right">{t.table.priceLocal}</TableHead>
+                                <TableHead className="p-3 text-right">{t.table.adROI}</TableHead>
+                                <TableHead className="p-3 text-center w-28">{t.table.action}</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody className="divide-y divide-border">
                             {currentDisplayItems.map(item => {
                                 if (item.type === 'product' && item.product) {
                                     return renderProductRow(item.product, {
@@ -1550,96 +1642,107 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                                     : expandedGroupIds.has(group.id);
                                 return (
                                     <Fragment key={item.key}>
-                                        <tr className="bg-indigo-50/45 hover:bg-indigo-50/70 transition-colors">
-                                            <td className="p-3 pl-4 font-bold text-slate-800 max-w-[210px]">
-                                                <button
+                                        <TableRow className="bg-accent/45 hover:bg-accent/70 transition-colors">
+                                            <TableCell className="p-3 pl-4 font-bold text-foreground max-w-[210px]">
+                                                <Button variant="ghost" size="sm"
                                                     type="button"
                                                     onClick={() => toggleGroupExpanded(group.id, item.autoExpand)}
                                                     className="flex w-full items-center gap-2 text-left"
                                                     aria-expanded={expanded}
                                                 >
-                                                    {expanded ? <ChevronDown size={16} className="shrink-0 text-indigo-600" /> : <ChevronRight size={16} className="shrink-0 text-indigo-600" />}
+                                                    {expanded ? <ChevronDown size={16} className="shrink-0 text-primary" /> : <ChevronRight size={16} className="shrink-0 text-primary" />}
                                                     <span className="truncate">{group.name}</span>
-                                                </button>
-                                            </td>
-                                            <td className="p-3 text-xs font-bold text-indigo-700">
+                                                </Button>
+                                            </TableCell>
+                                            <TableCell className="p-3 text-xs font-bold text-primary">
                                                 {item.totalMemberCount} 个 SKU
                                                 {item.matchedMemberCount < item.totalMemberCount && (
-                                                    <div className="mt-1 font-normal text-slate-400">匹配 {item.matchedMemberCount}/{item.totalMemberCount}</div>
+                                                    <div className="mt-1 font-normal text-muted-foreground">匹配 {item.matchedMemberCount}/{item.totalMemberCount}</div>
                                                 )}
-                                            </td>
-                                            <td className="p-3 text-right">
+                                            </TableCell>
+                                            <TableCell className="p-3 text-right">
                                                 {ycStockLoading ? (
-                                                    <span className="text-xs text-slate-400">加载中...</span>
+                                                    <span className="text-xs text-muted-foreground">加载中...</span>
                                                 ) : summary.stock ? (
                                                     <div className="space-y-0.5">
-                                                        <div className="text-sm font-extrabold text-blue-700">可用 {formatStockNumber(summary.stock.available)}</div>
-                                                        <div className="text-xs font-semibold text-slate-600">库存 {formatStockNumber(summary.stock.inventory)}</div>
-                                                        <div className="text-[11px] text-slate-400">占用 {formatStockNumber(summary.stock.occupy)} / 未发 {formatStockNumber(summary.stock.unshipped)}</div>
+                                                        <div className="text-sm font-extrabold text-primary">可用 {formatStockNumber(summary.stock.available)}</div>
+                                                        <div className="text-xs font-semibold text-muted-foreground">库存 {formatStockNumber(summary.stock.inventory)}</div>
+                                                        <div className="text-[11px] text-muted-foreground">占用 {formatStockNumber(summary.stock.occupy)} / 未发 {formatStockNumber(summary.stock.unshipped)}</div>
                                                         {summary.matchedStockCount < summary.totalStockCount && (
-                                                            <div className="text-[11px] text-amber-600">已匹配 {summary.matchedStockCount}/{summary.totalStockCount} 个 SKU</div>
+                                                            <div className="text-[11px] text-warning">已匹配 {summary.matchedStockCount}/{summary.totalStockCount} 个 SKU</div>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-xs font-bold text-slate-400">{ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}</div>
+                                                    <div className="text-xs font-bold text-muted-foreground">{ycStockRemoteFetched ? '未匹配元仓' : '元仓未配置'}</div>
                                                 )}
-                                            </td>
-                                            <td className="p-3 text-right font-mono text-slate-700">{formatRange(summary.cost, value => value.toFixed(2))}</td>
-                                            <td className="p-3 text-right text-slate-400">-</td>
-                                            <td className="p-3 text-right font-mono text-slate-700">{formatRange(summary.priceCNY, value => `¥${value.toFixed(2)}`)}</td>
-                                            <td className="p-3 text-right font-mono text-slate-600">{formatRange(summary.priceLocal, value => formatCurrencyAmount(value, currency as CurrencyCode))}</td>
-                                            <td className="p-3 text-right text-slate-400">-</td>
-                                            <td className="p-3">
+                                            </TableCell>
+                                            <TableCell className="p-3 text-right font-mono text-foreground">{formatRange(summary.cost, value => value.toFixed(2))}</TableCell>
+                                            <TableCell className="p-3 text-right text-muted-foreground">-</TableCell>
+                                            <TableCell className="p-3 text-right font-mono text-foreground">{formatRange(summary.priceCNY, value => `¥${value.toFixed(2)}`)}</TableCell>
+                                            <TableCell className="p-3 text-right font-mono text-muted-foreground">{formatRange(summary.priceLocal, value => formatCurrencyAmount(value, currency as CurrencyCode))}</TableCell>
+                                            <TableCell className="p-3 text-right text-muted-foreground">-</TableCell>
+                                            <TableCell className="p-3">
                                                 {canEditPrimaryTemplate && (
                                                     <div className="flex items-center justify-center gap-1">
-                                                        <button onClick={() => setManagingGroup(group)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-lg" title="管理成员"><Users size={15} /></button>
-                                                        <button onClick={() => { void handleRenameGroup(group); }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg" title="重命名"><Pencil size={15} /></button>
-                                                        <button onClick={() => { void handleDisbandGroup(group); }} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg" title="解散商品组"><Trash2 size={15} /></button>
+                                                        <Button variant="ghost" size="sm" onClick={() => setManagingGroup(group)} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-card rounded-lg" title="管理成员"><Users size={15} /></Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => { void handleRenameGroup(group); }} className="p-1.5 text-muted-foreground hover:text-primary hover:bg-card rounded-lg" title="重命名"><Pencil size={15} /></Button>
+                                                        <Button variant="ghost" size="sm" onClick={() => { void handleDisbandGroup(group); }} className="p-1.5 text-muted-foreground hover:text-red-600 dark:hover:text-red-300 hover:bg-card rounded-lg" title="解散商品组"><Trash2 size={15} /></Button>
                                                     </div>
                                                 )}
-                                            </td>
-                                        </tr>
+                                            </TableCell>
+                                        </TableRow>
                                         {expanded && item.products.map(product => renderProductRow(product, { grouped: true, group }))}
                                     </Fragment>
                                 );
                             })}
                             {currentDisplayItems.length === 0 && (
-                                <tr>
-                                    <td colSpan={9} className="p-12 text-center text-slate-400 italic text-sm">{t.noProducts}</td>
-                                </tr>
+                                <TableRow>
+                                    <TableCell colSpan={9} className="p-12 text-center text-muted-foreground italic text-sm">{t.noProducts}</TableCell>
+                                </TableRow>
                             )}
-                        </tbody>
-                    </table>
+                        </TableBody>
+                    </Table>
                 </div>
 
-                <div className="p-3 border-t border-slate-100 flex justify-between items-center bg-white/50 rounded-b-2xl">
-                    <div className="text-xs text-slate-500 font-medium">
-                        {t.pagination.showing} <span className="font-bold text-slate-700">{sortedDisplayItems.length > 0 ? startIndex + 1 : 0}</span> {t.pagination.to} <span className="font-bold text-slate-700">{Math.min(startIndex + itemsPerPage, sortedDisplayItems.length)}</span> {t.pagination.of} <span className="font-bold text-slate-700">{sortedDisplayItems.length}</span> {viewMode === 'grouped' ? '项' : t.pagination.items}
-                        {viewMode === 'grouped' && <span className="ml-2 text-slate-400">（{filteredProducts.length} 个 SKU）</span>}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border p-3">
+                    <div className="text-xs text-muted-foreground font-medium">
+                        {t.pagination.showing} <span className="font-bold text-foreground">{sortedDisplayItems.length > 0 ? startIndex + 1 : 0}</span> {t.pagination.to} <span className="font-bold text-foreground">{Math.min(startIndex + itemsPerPage, sortedDisplayItems.length)}</span> {t.pagination.of} <span className="font-bold text-foreground">{sortedDisplayItems.length}</span> {viewMode === 'grouped' ? '项' : t.pagination.items}
+                        {viewMode === 'grouped' && <span className="ml-2 text-muted-foreground">（{filteredProducts.length} 个 SKU）</span>}
                     </div>
-                    <div className="flex gap-1">
-                        <button
+                    <Pagination aria-label="商品列表分页" className="mx-0 w-auto">
+                        <PaginationContent>
+                        <PaginationItem>
+                        <Button variant="ghost" size="sm"
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            aria-label="上一页"
                             disabled={currentPage === 1}
-                            className="p-1.5 border rounded-lg bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 text-slate-600"
+                            className="p-1.5 border rounded-lg bg-card disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted text-muted-foreground"
                         >
                             <ChevronLeft size={14} />
-                        </button>
+                        </Button>
+                        </PaginationItem>
                         {visiblePages.map(pageNumber => (
-                                <button key={pageNumber} onClick={() => setCurrentPage(pageNumber)}
-                                    className={`w-7 h-7 rounded-lg text-xs font-bold transition ${currentPage === pageNumber ? 'bg-indigo-600 text-white' : 'bg-white border text-slate-600 hover:bg-slate-50'}`}
+                            <PaginationItem key={pageNumber}>
+                                <Button variant={currentPage === pageNumber ? 'default' : 'ghost'} size="sm" onClick={() => setCurrentPage(pageNumber)}
+                                    aria-current={currentPage === pageNumber ? 'page' : undefined}
+                                    className="h-8 w-8 p-0"
                                 >
                                     {pageNumber}
-                                </button>
+                                </Button>
+                            </PaginationItem>
                         ))}
-                        <button
+                        <PaginationItem>
+                        <Button variant="ghost" size="sm"
                             onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            aria-label="下一页"
                             disabled={currentPage === totalPages || totalPages === 0}
-                            className="p-1.5 border rounded-lg bg-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 text-slate-600"
+                            className="p-1.5 border rounded-lg bg-card disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted text-muted-foreground"
                         >
                             <ChevronRight size={14} />
-                        </button>
-                    </div>
+                        </Button>
+                        </PaginationItem>
+                        </PaginationContent>
+                    </Pagination>
                 </div>
             </div>
         </div>
