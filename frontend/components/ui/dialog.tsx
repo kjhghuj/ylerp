@@ -8,6 +8,7 @@ import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useThemePortalContainer } from "./theme-scope"
+import { useDialogFocus } from "./use-dialog-focus"
 
 const Dialog = DialogPrimitive.Root
 
@@ -43,7 +44,9 @@ const DialogContent = React.forwardRef<
     overlayClassName?: string
     overlayStyle?: React.CSSProperties
   }
->(({ className, children, showCloseButton = true, closeLabel = "关闭", overlayClassName, overlayStyle, ...props }, ref) => (
+>(({ className, children, showCloseButton = true, closeLabel = "关闭", overlayClassName, overlayStyle, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  const focusHandlers = useDialogFocus({ onOpenAutoFocus, onCloseAutoFocus })
+  return (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} style={overlayStyle} />
     <DialogPrimitive.Content data-ui="dialog"
@@ -53,6 +56,7 @@ const DialogContent = React.forwardRef<
         className
       )}
       {...props}
+      {...focusHandlers}
     >
       {children}
       {showCloseButton && <DialogPrimitive.Close data-ui="dialog" type="button" aria-label={closeLabel} className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
@@ -61,7 +65,8 @@ const DialogContent = React.forwardRef<
       </DialogPrimitive.Close>}
     </DialogPrimitive.Content>
   </DialogPortal>
-))
+  )
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 const DialogHeader = ({
