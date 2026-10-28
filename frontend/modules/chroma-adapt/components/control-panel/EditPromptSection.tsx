@@ -152,10 +152,11 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
               className="w-full h-28 bg-card border border-border rounded-xl px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/30 resize-none transition-all"
               disabled={isProcessing}
             />
-            <Button variant={(!isProcessing && state.posterImage && state.editPrompt) ? "default" : "outline"}
+            <div className="flex items-center gap-2">
+<Button variant={(!isProcessing && state.posterImage && state.editPrompt) ? "default" : "outline"}
               onClick={onAnalyzeSecondary}
               disabled={isProcessing || !state.posterImage || !state.editPrompt}
-              className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto min-w-0 whitespace-normal", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
                 (!isProcessing && state.posterImage && state.editPrompt)
                   ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -163,8 +164,9 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Zap size={16} />}
               1. {t.analyze || 'Analyze & Plan'}
-              <span className="ml-1"><HelpTooltip {...helpContent.secondaryAnalyze} /></span>
-            </Button>
+</Button>
+<HelpTooltip {...helpContent.secondaryAnalyze} />
+</div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -215,10 +217,11 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
               </div>
             )}
 
-            <Button variant={(!isProcessing && state.secondaryBatchQueue.length > 0) ? "default" : "outline"}
+            <div className="flex items-center gap-2">
+<Button variant={(!isProcessing && state.secondaryBatchQueue.length > 0) ? "default" : "outline"}
               onClick={onSecondaryBatchGenerate}
               disabled={isProcessing || state.secondaryBatchQueue.length === 0}
-              className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto min-w-0 whitespace-normal", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
                 (!isProcessing && state.secondaryBatchQueue.length > 0)
                   ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -226,8 +229,9 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Wand2 size={16} />}
               {t.batchGenerate || 'Batch Generate'}
-              <span className="ml-1"><HelpTooltip {...helpContent.secondaryBatch} /></span>
-            </Button>
+</Button>
+<HelpTooltip {...helpContent.secondaryBatch} />
+</div>
           </div>
         )}
       </div>
@@ -271,10 +275,11 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
           />
         )}
 
-        <Button variant={(!isProcessing && state.posterImage && state.referenceImage) ? "default" : "outline"}
+        <div className="flex items-center gap-2">
+<Button variant={(!isProcessing && state.posterImage && state.referenceImage) ? "default" : "outline"}
           onClick={onAnalyzeColorAdapt}
           disabled={isProcessing || !state.posterImage || !state.referenceImage}
-          className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+          className={cn("h-auto min-w-0 whitespace-normal", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
             (!isProcessing && state.posterImage && state.referenceImage)
               ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
               : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -282,8 +287,9 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
         >
           {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Sparkles size={16} />}
           1. {t.analyzeColor || 'Analyze Colors'}
-          <span className="ml-1"><HelpTooltip {...helpContent.colorAnalyze} /></span>
-        </Button>
+</Button>
+<HelpTooltip {...helpContent.colorAnalyze} />
+</div>
       </div>
     );
   }

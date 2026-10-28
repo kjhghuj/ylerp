@@ -62,13 +62,13 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
           <h2 className="text-sm font-bold text-foreground">{t.targetLanguage}</h2>
           <HelpTooltip {...helpContent.targetLanguage} />
         </div>
-        <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
           {targetLanguages.map((lang) => (
             <Button variant={state.translationTarget === lang.code ? "default" : "outline"}
               key={lang.code} aria-pressed={state.translationTarget === lang.code}
               onClick={() => onTranslationTargetChange(lang.code)}
               disabled={isProcessing}
-              className={cn("h-auto", `py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
+              className={cn("h-auto min-w-0 whitespace-normal break-words px-2", `py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
                 state.translationTarget === lang.code
                   ? 'bg-primary text-primary-foreground shadow-sm shadow-none'
                   : 'bg-card text-muted-foreground border border-border hover:border-primary/30 hover:text-primary'
@@ -87,13 +87,13 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
             <h2 className="text-sm font-bold text-foreground">{t.fontStyle}</h2>
             <HelpTooltip {...helpContent.fontStyle} />
           </div>
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5">
             {fontOptions.map((font) => (
               <Button variant={state.targetFont === font.code ? "default" : "outline"}
                 key={font.code} aria-pressed={state.targetFont === font.code}
                 onClick={() => onTargetFontChange(font.code)}
                 disabled={isProcessing}
-                className={cn("h-auto", `flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
+                className={cn("h-auto min-w-0 whitespace-normal break-words px-2", `py-2 rounded-lg text-xs font-bold transition-all duration-200 ${
                   state.targetFont === font.code
                     ? 'bg-primary text-primary-foreground shadow-sm shadow-none'
                     : 'bg-card text-muted-foreground border border-border hover:border-primary/30 hover:text-primary'
@@ -128,7 +128,8 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
           </Button>
 
           {onPipelineBatchUpload && (
-            <div className="relative">
+            <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
               <Input
                 type="file"
                 accept="image/*"
@@ -143,16 +144,19 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
               >
                 <Upload className="w-4 h-4" />
                 {t.batchUpload || 'Batch Upload'}
-                <span className="ml-1"><HelpTooltip {...helpContent.batchUpload} /></span>
+
               </Button>
+            </div>
+              <HelpTooltip {...helpContent.batchUpload} />
             </div>
           )}
 
           {onBatchTranslateStart && state.pipelineQueue.length > 0 && (
-            <Button variant={!isProcessing ? "default" : "outline"}
+            <div className="flex items-center gap-2">
+<Button variant={!isProcessing ? "default" : "outline"}
               onClick={onBatchTranslateStart}
               disabled={isProcessing}
-              className={cn("h-auto", `group w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm transition-all duration-200 ${
+              className={cn("h-auto min-w-0 whitespace-normal", `group w-full py-3 rounded-2xl flex items-center justify-center gap-2 font-bold text-sm transition-all duration-200 ${
                 !isProcessing
                   ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -160,8 +164,9 @@ const LanguageControls: React.FC<LanguageControlsProps> = ({
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Images className="w-4 h-4" />}
               2. {t.batchTranslate || 'Batch Translate'} ({state.pipelineQueue.length})
-              <span className="ml-1"><HelpTooltip {...helpContent.batchTranslate} /></span>
-            </Button>
+</Button>
+<HelpTooltip {...helpContent.batchTranslate} />
+</div>
           )}
         </div>
       </div>

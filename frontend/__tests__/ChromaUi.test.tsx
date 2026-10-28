@@ -5,7 +5,8 @@ import ImageUploadSection from '../modules/chroma-adapt/components/control-panel
 import PreviewPanel from '../modules/chroma-adapt/components/PreviewPanel';
 import type { ChromaAppState } from '../modules/chroma-adapt/chromaTypes';
 import ComparisonSlider from '../modules/chroma-adapt/components/ComparisonSlider';
-import HelpTooltip from '../modules/chroma-adapt/components/HelpTooltip';
+import LanguageControls from '../modules/chroma-adapt/components/control-panel/LanguageControls';
+import EditPromptSection from '../modules/chroma-adapt/components/control-panel/EditPromptSection';
 import GenerationHistory from '../modules/chroma-adapt/components/GenerationHistory';
 
 describe('image tools UI contracts', () => {
@@ -67,14 +68,37 @@ describe('image tools UI contracts', () => {
     expect(slider).toHaveAttribute('aria-valuenow', '0');
   });
 
-  it('opens help with the keyboard without invoking the surrounding generate action', async () => {
+  it.each([
+    ['COLOR_ADAPT', 'single_model', '分析颜色'],
+    ['SECONDARY_GENERATION', 'single_model', '分析规划'],
+    ['SECONDARY_GENERATION', 'dual_model', '批量生成'],
+  ])('keeps %s %s help independent of the enabled generation action', async (mode, workflow, title) => {
     const generate = vi.fn();
-    render(<button onClick={generate}>Generate <HelpTooltip title="图片帮助" content="上传后再生成" /></button>);
-    const help = screen.getByRole('button', { name: '图片帮助' });
+    const state = { mode, language: 'zh', status: 'IDLE', posterImage: 'poster.png', referenceImage: 'ref.png', editPrompt: 'test prompt', colorWorkflowMode: 'single_model', secondaryWorkflowMode: workflow, secondaryBatchQueue: [{ id: '1', original: 'one.png' }] } as ChromaAppState;
+    render(<EditPromptSection state={state} t={{ analyze: 'Run analyze', analyzeColor: 'Run color', batchGenerate: 'Run batch' }} onAnalyzeSecondary={generate} onAnalyzeColorAdapt={generate} onSecondaryBatchGenerate={generate} />);
+    const help = screen.getByRole('button', { name: title });
     help.focus();
     await userEvent.keyboard(' ');
-    expect(screen.getByRole('dialog', { name: '图片帮助' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
     expect(generate).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(help).toHaveFocus());
+    await userEvent.click(screen.getByRole('button', { name: /Run (analyze|color|batch)/ }));
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
+  it.each(['批量上传', '批量翻译'])('keeps %s help independent of file input and batch start', async (title) => {
+    const upload = vi.fn(), generate = vi.fn(), fileClick = vi.fn();
+    const state = { mode: 'TRANSLATION', language: 'zh', status: 'IDLE', pipelineQueue: [{ id: 'one' }], posterImage: 'poster.png' } as ChromaAppState;
+    render(<LanguageControls state={state} t={{ batchUpload: 'Upload batch', batchTranslate: 'Run batch' }} targetLanguages={[]} fontOptions={[]} onTranslationTargetChange={vi.fn()} onGenerate={generate} onPipelineBatchUpload={upload} onBatchTranslateStart={generate} />);
+    screen.getByLabelText('Upload batch').addEventListener('click', fileClick);
+    const help = screen.getByRole('button', { name: title });
+    help.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByRole('dialog', { name: title })).toBeVisible();
+    expect(generate).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
+    expect(fileClick).not.toHaveBeenCalled();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(help).toHaveFocus());
   });
