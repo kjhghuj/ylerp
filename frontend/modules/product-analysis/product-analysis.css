@@ -761,7 +761,7 @@
 }
 
 .pa-records .pa-records-date {
-  color: var(--pa-accent-text);
+  color: hsl(var(--ui-foreground));
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -950,7 +950,7 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    color-mix(in srgb, var(--pa-accent-ui) 26%, transparent) 100%
+    color-mix(in srgb, var(--pa-accent-ui) 18%, transparent) 100%
   );
   pointer-events: none;
 }

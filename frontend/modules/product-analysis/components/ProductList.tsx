@@ -312,7 +312,7 @@ const ProductRow = React.memo<{
       className="pa-cellbar text-right font-mono font-semibold"
       style={{ '--bar-w': `${Math.max(0, Math.round(((item.salesOrdered ?? 0) / maxSales) * 100))}%` } as React.CSSProperties}
     >
-      <span style={{ color: 'var(--pa-accent-text)' }}>{formatMoney(item.salesOrdered, currency)}</span>
+      <span style={{ color: 'hsl(var(--ui-foreground))' }}>{formatMoney(item.salesOrdered, currency)}</span>
     </TableCell>
     <TableCell className="text-right font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
       {formatCount(item.ordersOrdered)}
