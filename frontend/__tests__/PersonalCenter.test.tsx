@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import api from '../src/api';
@@ -65,14 +66,14 @@ describe('PersonalCenter tabs', () => {
         vi.mocked(api.put).mockResolvedValue({ data: {} });
     });
 
-    it('renders profile / AI / YC / password / Shopee tabs for owner', () => {
+    it('renders profile / AI / YC / password / Shopee tabs for owner', async () => {
         render(<PersonalCenter />);
 
-        expect(screen.getByRole('button', { name: '基本信息' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'AI 服务' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '元仓开放平台' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: '修改密码' })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Shopee 店铺授权' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '基本信息' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'AI 服务' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '元仓开放平台' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: '修改密码' })).toBeInTheDocument();
+        expect(screen.getByRole('tab', { name: 'Shopee 店铺授权' })).toBeInTheDocument();
         // 默认停留在基本信息：头像表单可见，AI / 元仓字段不渲染
         expect(screen.getByText('点击更换头像')).toBeInTheDocument();
         expect(screen.queryByLabelText('对话模型 API Key')).toBeNull();
@@ -101,7 +102,7 @@ describe('PersonalCenter YC credentials', () => {
 
     const openYcTab = async () => {
         render(<PersonalCenter />);
-        fireEvent.click(screen.getByRole('button', { name: '元仓开放平台' }));
+        await userEvent.click(screen.getByRole('tab', { name: '元仓开放平台' }));
         await screen.findByLabelText('元仓 appKey');
     };
 
@@ -118,7 +119,7 @@ describe('PersonalCenter YC credentials', () => {
 
         fireEvent.change(screen.getByLabelText('元仓 appKey'), { target: { value: '' } });
         fireEvent.change(screen.getByLabelText('元仓 appSecret'), { target: { value: '' } });
-        fireEvent.click(screen.getByRole('button', { name: '保存元仓配置' }));
+        await userEvent.click(screen.getByRole('button', { name: '保存元仓配置' }));
 
         await waitFor(() => {
             expect(api.put).toHaveBeenCalledWith('/users/me/yc-credentials', {
@@ -149,7 +150,7 @@ describe('PersonalCenter AI config', () => {
 
     const openAiTab = async () => {
         render(<PersonalCenter />);
-        fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
+        await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
         await screen.findByLabelText('对话模型 Base URL');
     };
 
@@ -167,7 +168,7 @@ describe('PersonalCenter AI config', () => {
         await openAiTab();
 
         fireEvent.change(screen.getByLabelText('对话模型 API Key'), { target: { value: '' } });
-        fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+        await userEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
 
         await waitFor(() => {
             expect(api.put).toHaveBeenCalledWith('/users/me/ai-config', {
@@ -190,7 +191,7 @@ describe('PersonalCenter AI config', () => {
     it('does not submit an unchanged masked key', async () => {
         await openAiTab();
 
-        fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+        await userEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
 
         await waitFor(() => {
             expect(api.put).toHaveBeenCalledWith('/users/me/ai-config', expect.objectContaining({
@@ -210,7 +211,7 @@ describe('PersonalCenter AI chat provider presets', () => {
 
     const openAiTab = async () => {
         render(<PersonalCenter />);
-        fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
+        await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
         await screen.findByLabelText('服务商');
     };
 
@@ -226,7 +227,7 @@ describe('PersonalCenter AI chat provider presets', () => {
         expect(screen.getByLabelText('模型名称')).toHaveValue('deepseek-flash');
         expect(screen.getByText('deepseek-flash 为当前 V4.1 Flash API 模型，支持文本与视觉理解')).toBeInTheDocument();
 
-        fireEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
+        await userEvent.click(screen.getByRole('button', { name: '保存 AI 配置' }));
         await waitFor(() => {
             expect(api.put).toHaveBeenCalledWith('/users/me/ai-config', expect.objectContaining({
                 chat: expect.objectContaining({ provider: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash' }),
@@ -245,7 +246,7 @@ describe('PersonalCenter AI chat provider presets', () => {
 
     it('renders each model suggestion once when showing models from all providers', async () => {
         const { container } = render(<PersonalCenter />);
-        fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
+        await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
         await screen.findByLabelText('模型名称');
 
         const values = Array.from(container.querySelectorAll<HTMLOptionElement>('#ai-chat-model-options option'))
@@ -256,13 +257,14 @@ describe('PersonalCenter AI chat provider presets', () => {
 
     it('infers the provider from a stored Base URL when provider is empty', async () => {
         const { unmount } = render(<PersonalCenter />);
-        await screen.findByRole('button', { name: 'AI 服务' });
+        await screen.findByRole('tab', { name: 'AI 服务' });
         unmount();
 
         mockAiConfigGet({ baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' });
         render(<PersonalCenter />);
-        fireEvent.click(screen.getByRole('button', { name: 'AI 服务' }));
+        await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
         const providerSelect = await screen.findByLabelText('服务商') as HTMLSelectElement;
         expect(providerSelect.value).toBe('deepseek');
     });
 });
+

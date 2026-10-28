@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/button';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../src/api';
 
@@ -90,29 +91,31 @@ export const ShopeeConnections: React.FC = () => {
     finally { await load(); setBusy(false); }
   };
 
-  return <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-5">
+  return <section className="bg-card rounded-2xl border border-border p-6 space-y-5">
     <div>
-      <h3 className="text-lg font-semibold text-slate-800">Shopee 店铺授权</h3>
-      <p className="text-sm text-slate-500 mt-2">逐店完成授权后，系统自动换取并加密保存令牌。此入口使用店铺授权，暂不支持主账号批量授权。</p>
+      <h3 className="text-lg font-semibold text-foreground">Shopee 店铺授权</h3>
+      <p className="text-sm text-muted-foreground mt-2">逐店完成授权后，系统自动换取并加密保存令牌。此入口使用店铺授权，暂不支持主账号批量授权。</p>
     </div>
     {status && <p className="text-sm">当前环境：<strong>{status.configuration.environment === 'sandbox' ? '测试环境（Sandbox）' : status.configuration.environment === 'live' ? '正式环境' : '未配置'}</strong></p>}
-    {status?.configuration.environment === 'sandbox' && <p className="text-sm text-amber-700 bg-amber-50 rounded-lg p-3">当前使用 Test Partner 凭证，请先使用虾皮沙箱测试店铺验证。实际经营店铺需要正式环境凭证和相应授权资格。</p>}
-    {status && !status.configuration.ready && <p role="alert" className="text-red-600">{status.configuration.error}</p>}
-    {message && <p role="status" className="text-sm bg-slate-50 rounded-lg p-3 whitespace-pre-wrap">{message}</p>}
+    {status?.configuration.environment === 'sandbox' && <p className="text-sm text-warning bg-warning-subtle rounded-lg p-3">当前使用 Test Partner 凭证，请先使用虾皮沙箱测试店铺验证。实际经营店铺需要正式环境凭证和相应授权资格。</p>}
+    {status && !status.configuration.ready && <p role="alert" className="text-danger">{status.configuration.error}</p>}
+    {message && <p role="status" className="text-sm bg-muted rounded-lg p-3 whitespace-pre-wrap">{message}</p>}
     <div className="flex gap-3">
-      <button disabled={busy || !status?.configuration.ready} onClick={() => void begin()} className="px-4 py-2 rounded-lg bg-orange-600 text-white disabled:opacity-50">授权一家店铺</button>
-      <button disabled={busy} onClick={() => void load()} className="px-4 py-2 rounded-lg border border-slate-200 disabled:opacity-50">刷新列表</button>
+      <Button variant="default" size="sm" disabled={busy || !status?.configuration.ready} onClick={() => void begin()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground disabled:opacity-50">授权一家店铺</Button>
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => void load()} className="px-4 py-2 rounded-lg border border-border disabled:opacity-50">刷新列表</Button>
     </div>
-    {!status ? <p className="text-slate-500">正在读取授权配置…</p> : !status.connections.length ? <p className="text-sm text-slate-500 py-5">尚未绑定店铺。完成授权后，店铺会显示在这里。</p> : <div className="space-y-3">
-      {status.connections.map(connection => <div key={connection.id} className="border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+    {!status ? <p className="text-muted-foreground">正在读取授权配置…</p> : !status.connections.length ? <p className="text-sm text-muted-foreground py-5">尚未绑定店铺。完成授权后，店铺会显示在这里。</p> : <div className="space-y-3">
+      {status.connections.map(connection => <div key={connection.id} className="border border-border rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="font-medium">{connection.shopName || `店铺 ${connection.shopId}`} <span className="text-xs text-slate-500">{connection.region || ''} · {connection.environment === 'sandbox' ? '测试' : '正式'}</span></p>
-          <p className="text-sm text-slate-500">Shop ID：{connection.shopId}</p>
-          <p className="text-sm text-slate-500">令牌到期：{new Date(connection.expiresAt).toLocaleString()}</p>
+          <p className="font-medium">{connection.shopName || `店铺 ${connection.shopId}`} <span className="text-xs text-muted-foreground">{connection.region || ''} · {connection.environment === 'sandbox' ? '测试' : '正式'}</span></p>
+          <p className="text-sm text-muted-foreground">Shop ID：{connection.shopId}</p>
+          <p className="text-sm text-muted-foreground">令牌到期：{new Date(connection.expiresAt).toLocaleString()}</p>
           <p className="text-sm">{connection.status === 'reauthorization_required' ? '需要重新授权' : new Date(connection.expiresAt).getTime() <= Date.now() ? '令牌已过期，等待刷新' : '已授权'}{connection.lastError ? `（最近刷新错误：${connection.lastError}）` : ''}</p>
         </div>
-        <button disabled={busy} onClick={() => void refresh(connection.id)} className="text-sm text-indigo-600 disabled:opacity-50">刷新令牌</button>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={() => void refresh(connection.id)} className="text-sm text-primary disabled:opacity-50">刷新令牌</Button>
       </div>)}
     </div>}
   </section>;
 };
+
+

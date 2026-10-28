@@ -19,6 +19,7 @@
   --ui-accent: 214 100% 97%;
   --ui-accent-foreground: 221 83% 40%;
   --ui-destructive: 0 72% 45%;
+  --ui-danger: 0 72% 45%;
   --ui-destructive-foreground: 0 0% 100%;
   --ui-border: 214 32% 91%;
   --ui-input: 214 25% 81%;
@@ -48,6 +49,7 @@
   --ui-accent: 217 45% 24%;
   --ui-accent-foreground: 213 94% 80%;
   --ui-destructive: 0 63% 42%;
+  --ui-danger: 0 91% 78%;
   --ui-destructive-foreground: 0 0% 100%;
   --ui-border: 215 25% 30%;
   --ui-input: 215 25% 40%;
@@ -483,4 +485,5 @@ body {
   min-width: 24px;
   padding: 0;
 }
+
 

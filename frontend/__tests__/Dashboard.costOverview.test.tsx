@@ -210,6 +210,8 @@ describe('redesigned Dashboard', () => {
     render(<Dashboard />);
 
     const value = screen.getByText(/200\.00/);
-    expect(value).toHaveClass('text-rose-600');
+    expect(value).toHaveClass('text-danger');
   });
 });
+
+

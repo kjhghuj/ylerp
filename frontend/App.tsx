@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useEffect, lazy, Suspense } from 'react';
 import { StoreProvider, useStore } from './StoreContext';
 import { AuthProvider, useAuth } from './AuthContext';
 import { Sidebar } from './components/Sidebar';
@@ -20,6 +20,7 @@ import { DebugConsole } from './components/DebugConsole';
 import { ToastProvider } from './components/Toast';
 import { AppState } from './types';
 import { Lock } from 'lucide-react';
+import { useThemePreference } from './hooks/useThemePreference';
 import { hasPermission } from './components/PermissionTree';
 
 const MainContent: React.FC = () => {
@@ -27,20 +28,10 @@ const MainContent: React.FC = () => {
   /** 跨模块导航参数：商品分析「生成补货建议」带入店铺与区间 */
   const [restockEntry, setRestockEntry] = React.useState<{ shopId: string; from: string; to: string } | null>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
-  const [darkMode, setDarkMode] = useState(() => {
-    try { return localStorage.getItem('yl-dark-mode') === 'true'; } catch { return false; }
-  });
+  const [darkMode, setDarkMode] = useThemePreference();
   const { loading } = useStore();
   const { user } = useAuth();
 
-  useEffect(() => {
-    try { localStorage.setItem('yl-dark-mode', String(darkMode)); } catch {}
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
 
   useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0 });
@@ -156,3 +147,4 @@ const AppGuard: React.FC = () => {
 };
 
 export default App;
+

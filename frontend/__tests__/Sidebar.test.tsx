@@ -1,5 +1,6 @@
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 
 const { mockLogout, mockSetLanguage, mockUseAuth } = vi.hoisted(() => {
@@ -43,7 +44,7 @@ vi.mock('../AuthContext', () => ({
 
 import { Sidebar as SidebarComponent } from '../components/Sidebar';
 
-describe('Sidebar', () => {
+describe('Sidebar', async () => {
   const defaultProps = {
     currentView: 'dashboard' as const,
     onChangeView: vi.fn(),
@@ -51,7 +52,7 @@ describe('Sidebar', () => {
     onToggleDarkMode: vi.fn(),
   };
 
-  it('should keep appearance and language controls beside the user menu', () => {
+  it('should keep appearance and language controls beside the user menu', async () => {
     const onToggleDarkMode = vi.fn();
     render(<SidebarComponent {...defaultProps} onToggleDarkMode={onToggleDarkMode} />);
 
@@ -61,19 +62,19 @@ describe('Sidebar', () => {
     expect(userButton?.parentElement?.nextElementSibling).toBe(themeButton);
     expect(themeButton.nextElementSibling).toBe(languageButton);
 
-    fireEvent.click(themeButton);
-    fireEvent.click(languageButton);
+    await userEvent.click(themeButton);
+    await userEvent.click(languageButton);
     expect(onToggleDarkMode).toHaveBeenCalledOnce();
     expect(mockSetLanguage).toHaveBeenCalledWith('en');
   });
 
-  it('should render the logo and app title', () => {
+  it('should render the logo and app title', async () => {
     render(<SidebarComponent {...defaultProps} />);
     expect(screen.getByAltText('Logo')).toBeInTheDocument();
     expect(screen.getByText('阳零ERP')).toBeInTheDocument();
   });
 
-  it('should render all navigation items for owner', () => {
+  it('should render all navigation items for owner', async () => {
     render(<SidebarComponent {...defaultProps} />);
     expect(screen.getByText('仪表盘')).toBeInTheDocument();
     expect(screen.getByText('利润计算')).toBeInTheDocument();
@@ -84,80 +85,93 @@ describe('Sidebar', () => {
     expect(screen.getByText('用户管理')).toBeInTheDocument();
   });
 
-  it('should render user display name and role', () => {
+  it('should render user display name and role', async () => {
     render(<SidebarComponent {...defaultProps} />);
     expect(screen.getByText('Test User')).toBeInTheDocument();
     expect(screen.getByText('超级管理员')).toBeInTheDocument();
   });
 
-  it('should call onChangeView when a nav item is clicked', () => {
+  it('should call onChangeView when a nav item is clicked', async () => {
     const onChangeView = vi.fn();
     render(<SidebarComponent {...defaultProps} onChangeView={onChangeView} />);
 
     const dashboardNav = screen.getByText('仪表盘');
-    fireEvent.click(dashboardNav);
+    await userEvent.click(dashboardNav);
     expect(onChangeView).toHaveBeenCalledWith('dashboard');
   });
 
-  it('should highlight the active nav item', () => {
+  it('should highlight the active nav item', async () => {
     render(<SidebarComponent {...defaultProps} />);
     const dashboardBtn = screen.getByText('仪表盘').closest('button');
-    expect(dashboardBtn?.style.backgroundColor).toBe('var(--accent-blue-bg)');
-    expect(dashboardBtn?.style.color).toBe('var(--accent-blue-dark)');
+    expect(dashboardBtn).toHaveAttribute('aria-current', 'page');
   });
 
-  it('should not highlight inactive nav items', () => {
+  it('should not highlight inactive nav items', async () => {
     render(<SidebarComponent {...defaultProps} currentView="dashboard" />);
     const profitBtn = screen.getByText('利润计算').closest('button');
-    expect(profitBtn?.style.backgroundColor).toBe('transparent');
-    expect(profitBtn?.style.color).toBe('var(--text-secondary)');
+    expect(profitBtn).not.toHaveAttribute('aria-current');
   });
 
-  it('should show user menu dropdown when user button is clicked', () => {
+  it('should show user menu dropdown when user button is clicked', async () => {
     render(<SidebarComponent {...defaultProps} />);
     const userBtn = screen.getByText('Test User').closest('button');
-    fireEvent.click(userBtn!);
+    await userEvent.click(userBtn!);
 
     expect(screen.getByText('个人中心')).toBeInTheDocument();
     expect(screen.getByText('退出登录')).toBeInTheDocument();
     expect(screen.getByText('testuser')).toBeInTheDocument();
   });
 
-  it('should navigate to personal-center when personal center is clicked', () => {
+  it('should navigate to personal-center when personal center is clicked', async () => {
     const onChangeView = vi.fn();
     render(<SidebarComponent {...defaultProps} onChangeView={onChangeView} />);
 
     const userBtn = screen.getByText('Test User').closest('button');
-    fireEvent.click(userBtn!);
-    fireEvent.click(screen.getByText('个人中心'));
+    await userEvent.click(userBtn!);
+    await userEvent.click(screen.getByText('个人中心'));
     expect(onChangeView).toHaveBeenCalledWith('personal-center');
   });
 
-  it('should call logout when logout is clicked', () => {
+  it('should call logout when logout is clicked', async () => {
     mockLogout.mockClear();
     render(<SidebarComponent {...defaultProps} />);
 
     const userBtn = screen.getByText('Test User').closest('button');
-    fireEvent.click(userBtn!);
-    fireEvent.click(screen.getByText('退出登录'));
+    await userEvent.click(userBtn!);
+    await userEvent.click(screen.getByText('退出登录'));
     expect(mockLogout).toHaveBeenCalled();
   });
 
-  it('should show hamburger menu button', () => {
+  it('should show hamburger menu button', async () => {
     render(<SidebarComponent {...defaultProps} />);
     const header = document.querySelector('header');
     expect(header).toBeInTheDocument();
   });
 
-  it('should open mobile drawer when hamburger is clicked', () => {
+  it('should open mobile drawer when hamburger is clicked', async () => {
     render(<SidebarComponent {...defaultProps} />);
     const menuButtons = screen.getAllByRole('button');
     const hamburger = menuButtons.find(btn => btn.querySelector('svg'));
 
     if (hamburger) {
-      fireEvent.click(hamburger);
+      await userEvent.click(hamburger);
       const logos = screen.getAllByAltText('Logo');
       expect(logos.length).toBeGreaterThanOrEqual(2);
     }
   });
+});
+
+
+it('returns focus after closing the navigation sheet and user menu with Escape', async () => {
+  render(<SidebarComponent currentView="dashboard" onChangeView={vi.fn()} darkMode={false} onToggleDarkMode={vi.fn()} />);
+  const navigation = screen.getByRole('button', { name: '打开导航菜单' });
+  await userEvent.click(navigation);
+  expect(screen.getByRole('dialog', { name: /阳零ERP/ })).toBeVisible();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(navigation).toHaveFocus());
+  const user = screen.getByRole('button', { name: '用户菜单' });
+  await userEvent.click(user);
+  expect(screen.getByRole('menuitem', { name: '个人中心' })).toBeVisible();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(user).toHaveFocus());
 });

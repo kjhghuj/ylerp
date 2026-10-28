@@ -1,5 +1,8 @@
+import { Checkbox } from './ui/checkbox';
+import { Label } from './ui/label';
+import { Button } from './ui/button';
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, Minus, LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, ClipboardList, DollarSign, TrendingUp, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, ShoppingCart, Target, BookOpen, Image, Calendar, Eye, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight,  LayoutDashboard, Calculator, Wallet, PackageCheck, PackagePlus, List, DollarSign, AlertTriangle, BarChart3, Receipt, PlusCircle, MinusCircle, FileText, Upload, Settings, Search, Download, Edit3, Truck, Package, BookOpen, Image, Calendar, Eye, Activity } from 'lucide-react';
 
 export interface PermissionNode {
     key: string;
@@ -150,6 +153,7 @@ interface PermissionTreeProps {
 }
 
 export const PermissionTree: React.FC<PermissionTreeProps> = ({ selected, onChange, disabled }) => {
+    const treeId = React.useId();
     const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set(ALL_PERMISSIONS.map(n => n.key)));
 
     const allKeys = getAllPermissionKeys();
@@ -228,118 +232,42 @@ export const PermissionTree: React.FC<PermissionTreeProps> = ({ selected, onChan
     };
 
     return (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <button
-                type="button"
-                onClick={handleToggleAll}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
-                disabled={disabled}
-            >
-                <span className={`
-                    w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 cursor-pointer transition-all duration-200
-                    ${allSelected ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200' :
-                    isPartial ? 'bg-blue-100 border-blue-400 text-blue-500' :
-                    'border-slate-300 hover:border-blue-400'}
-                    ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-                `}>
-                    {allSelected && <Check size={13} strokeWidth={3} />}
-                    {isPartial && <Minus size={13} strokeWidth={3} />}
-                </span>
-                <span className="text-sm font-bold text-slate-700">全部功能模块</span>
-                <span className="ml-auto text-xs text-slate-400 font-medium">
-                    {selected.filter(k => !k.includes('.')).length}/{ALL_PERMISSIONS.length} 模块
-                </span>
-            </button>
-
-            <div className="max-h-[420px] overflow-y-auto">
-                {ALL_PERMISSIONS.map((node) => {
-                    const Icon = node.icon;
-                    const checked = isModuleChecked(node);
-                    const partial = isModulePartial(node);
-                    const isExpanded = expandedModules.has(node.key);
-                    const hasChildren = !!node.children && node.children.length > 0;
-
-                    return (
-                        <div key={node.key}>
-                            <div className={`
-                                flex items-center gap-2 pl-4 pr-4 py-2.5 transition-all duration-200
-                                ${checked ? 'bg-blue-50/50' : 'hover:bg-slate-50'}
-                                ${disabled ? 'opacity-50' : ''}
-                            `}>
-                                {hasChildren && (
-                                    <button
-                                        type="button"
-                                        onClick={() => toggleExpand(node.key)}
-                                        className="p-0.5 text-slate-400 hover:text-slate-600 transition-colors"
-                                    >
-                                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                    </button>
-                                )}
-                                {!hasChildren && <span className="w-[18px]" />}
-
-                                <span
-                                    onClick={() => handleToggleModule(node)}
-                                    className={`
-                                        w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 cursor-pointer transition-all duration-200
-                                        ${checked ? 'bg-blue-500 border-blue-500 text-white shadow-sm shadow-blue-200' :
-                                        partial ? 'bg-blue-100 border-blue-400 text-blue-500' :
-                                        'border-slate-300'}
-                                        ${disabled ? 'cursor-not-allowed' : ''}
-                                    `}
-                                >
-                                    {checked && <Check size={13} strokeWidth={3} />}
-                                    {partial && <Minus size={13} strokeWidth={3} />}
-                                </span>
-                                <Icon size={16} className={checked || partial ? 'text-blue-500' : 'text-slate-400'} />
-                                <span
-                                    onClick={() => handleToggleModule(node)}
-                                    className={`text-sm font-medium flex-1 ${(checked || partial) ? 'text-slate-800' : 'text-slate-500'} ${disabled ? '' : 'cursor-pointer'}`}
-                                >
-                                    {node.label}
-                                </span>
-                                {hasChildren && (
-                                    <span className="text-[10px] text-slate-400">
-                                        {node.children!.filter(c => selected.includes(c.key)).length}/{node.children!.length}
-                                    </span>
-                                )}
-                            </div>
-
-                            {isExpanded && hasChildren && (
-                                <div className="border-t border-slate-50">
-                                    {node.children!.map((child) => {
-                                        const ChildIcon = child.icon;
-                                        const isChildChecked = selected.includes(child.key);
-                                        return (
-                                            <button
-                                                type="button"
-                                                key={child.key}
-                                                onClick={() => handleToggleSub(node.key, child.key)}
-                                                className={`
-                                                    w-full flex items-center gap-3 pl-12 pr-4 py-2 text-left transition-all duration-200
-                                                    ${isChildChecked ? 'bg-blue-50/30' : 'hover:bg-slate-50/50'}
-                                                    ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                                                `}
-                                                disabled={disabled}
-                                            >
-                                                <span className={`
-                                                    w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-all duration-200
-                                                    ${isChildChecked ? 'bg-blue-500 border-blue-500 text-white shadow-sm' : 'border-slate-300'}
-                                                `}>
-                                                    {isChildChecked && <Check size={10} strokeWidth={3} />}
-                                                </span>
-                                                <ChildIcon size={14} className={isChildChecked ? 'text-blue-400' : 'text-slate-300'} />
-                                                <span className={`text-xs font-medium ${isChildChecked ? 'text-slate-700' : 'text-slate-400'}`}>
-                                                    {child.label}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+      <div className="overflow-hidden rounded-lg border border-border bg-card text-foreground">
+        <div className="flex min-h-11 items-center gap-3 border-b border-border px-4 py-3">
+          <Checkbox id={`${treeId}-all`} checked={allSelected ? true : isPartial ? 'indeterminate' : false} onCheckedChange={handleToggleAll} disabled={disabled} />
+          <Label htmlFor={`${treeId}-all`} className="flex-1 cursor-pointer">全部功能模块</Label>
+          <span className="text-xs text-muted-foreground">{selected.filter(k => !k.includes('.')).length}/{ALL_PERMISSIONS.length} 模块</span>
         </div>
+        <div className="max-h-[420px] overflow-y-auto">
+          {ALL_PERMISSIONS.map(node => {
+            const Icon = node.icon;
+            const checked = isModuleChecked(node);
+            const partial = isModulePartial(node);
+            const isExpanded = expandedModules.has(node.key);
+            const hasChildren = !!node.children?.length;
+            return <div key={node.key}>
+              <div className={`flex min-h-11 items-center gap-2 px-3 py-2 ${checked ? 'bg-accent/50' : 'hover:bg-muted/50'}`}>
+                {hasChildren ? <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => toggleExpand(node.key)} aria-label={`${isExpanded ? '收起' : '展开'}${node.label}`} aria-expanded={isExpanded} aria-controls={`${treeId}-children-${node.key}`}>{isExpanded ? <ChevronDown /> : <ChevronRight />}</Button> : <span className="w-7" />}
+                <Checkbox id={`${treeId}-${node.key}`} checked={checked ? true : partial ? 'indeterminate' : false} onCheckedChange={() => handleToggleModule(node)} disabled={disabled} />
+                <Icon size={16} className={checked || partial ? 'text-primary' : 'text-muted-foreground'} />
+                <Label htmlFor={`${treeId}-${node.key}`} className="min-w-0 flex-1 cursor-pointer py-1 text-sm">{node.label}</Label>
+                {hasChildren && <span className="text-xs text-muted-foreground">{node.children!.filter(child => selected.includes(child.key)).length}/{node.children!.length}</span>}
+              </div>
+              {isExpanded && hasChildren && <div id={`${treeId}-children-${node.key}`} className="border-t border-border">
+                {node.children!.map(child => {
+                  const ChildIcon = child.icon;
+                  const checkedChild = selected.includes(child.key);
+                  return <div key={child.key} className={`flex min-h-10 items-center gap-3 pl-12 pr-4 py-2 ${checkedChild ? 'bg-accent/30' : 'hover:bg-muted/50'}`}>
+                    <Checkbox id={`${treeId}-${child.key}`} checked={checkedChild} onCheckedChange={() => handleToggleSub(node.key, child.key)} disabled={disabled} />
+                    <ChildIcon size={14} className={checkedChild ? 'text-primary' : 'text-muted-foreground'} />
+                    <Label htmlFor={`${treeId}-${child.key}`} className="min-w-0 flex-1 cursor-pointer py-1 text-xs">{child.label}</Label>
+                  </div>;
+                })}
+              </div>}
+            </div>;
+          })}
+        </div>
+      </div>
     );
 };
+

@@ -1,3 +1,9 @@
+import { PageHeader } from '../components/PageHeader';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { NativeSelect } from '../components/ui/native-select';
+import { Label } from '../components/ui/label';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import React, { useState, useEffect, useRef } from 'react';
 import {
     User,
@@ -357,34 +363,27 @@ export const PersonalCenter: React.FC = () => {
     };
 
     return (
-        <div className="max-w-4xl mx-auto">
-            <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-800">个人中心</h2>
-                <p className="text-slate-500 mt-1">管理您的账户信息与安全设置</p>
-            </div>
+        <Tabs value={activeTab} onValueChange={value => { setActiveTab(value as TabType); setProfileMsg(null); setPwdMsg(null); setAiMsg(null); setYcMsg(null); }} className="max-w-4xl mx-auto">
+            <PageHeader title="个人中心" description="管理您的账户信息与安全设置" className="mb-6" />
 
-            <div className="flex gap-2 mb-6 border-b border-slate-200 flex-wrap">
+            <TabsList className="mb-6 flex h-auto w-full flex-wrap justify-start gap-1 bg-muted p-1">
                 {(['profile', 'ai', 'yc', 'password', ...(user?.role === 'owner' ? ['shopee'] : [])] as TabType[]).map((tab) => (
-                    <button
+                    <TabsTrigger value={tab}
                         key={tab}
-                        onClick={() => { setActiveTab(tab); setProfileMsg(null); setPwdMsg(null); setAiMsg(null); setYcMsg(null); }}
-                        className={`px-5 py-3 text-sm font-medium border-b-2 transition-all ${
-                            activeTab === tab
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                        }`}
+                        
+                        className="px-4 py-2 text-sm"
                     >
                         {tab === 'profile' ? '基本信息' : tab === 'ai' ? 'AI 服务' : tab === 'yc' ? '元仓开放平台' : tab === 'password' ? '修改密码' : 'Shopee 店铺授权'}
-                    </button>
+                    </TabsTrigger>
                 ))}
-            </div>
+            </TabsList>
 
-            {activeTab === 'shopee' && user?.role === 'owner' && <ShopeeConnections />}
+            {activeTab === 'shopee' && user?.role === 'owner' && <TabsContent value="shopee"><ShopeeConnections /></TabsContent>}
             {activeTab === 'profile' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <TabsContent value="profile" className="bg-card rounded-2xl shadow-sm border border-border p-6 md:p-8">
                     {profileMsg && (
                         <div className={`mb-6 flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
-                            profileMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            profileMsg.type === 'success' ? 'bg-success-subtle text-success' : 'bg-destructive/10 text-danger'
                         }`}>
                             {profileMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                             {profileMsg.text}
@@ -401,13 +400,13 @@ export const PersonalCenter: React.FC = () => {
                                         user?.displayName?.charAt(0) || 'U'
                                     )}
                                 </div>
-                                <button
+                                <Button variant="ghost" size="sm"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                    aria-label="更换头像" className="absolute inset-0 h-full w-full rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                                 >
                                     <Camera size={24} className="text-white" />
-                                </button>
-                                <input
+                                </Button>
+                                <Input
                                     ref={fileInputRef}
                                     type="file"
                                     accept="image/*"
@@ -415,90 +414,90 @@ export const PersonalCenter: React.FC = () => {
                                     className="hidden"
                                 />
                             </div>
-                            <span className="text-xs text-slate-400">点击更换头像</span>
+                            <span className="text-xs text-muted-foreground">点击更换头像</span>
                         </div>
 
                         <div className="flex-1 space-y-5">
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1.5">用户名</label>
-                                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-xl text-slate-400 border border-slate-100">
+                                <Label className="block text-sm font-medium text-muted-foreground mb-1.5">用户名</Label>
+                                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted rounded-xl text-muted-foreground border border-border">
                                     <User size={16} />
                                     <span>{user?.username}</span>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1.5">角色</label>
-                                <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 rounded-xl text-slate-400 border border-slate-100">
+                                <Label className="block text-sm font-medium text-muted-foreground mb-1.5">角色</Label>
+                                <div className="flex items-center gap-2 px-4 py-2.5 bg-muted rounded-xl text-muted-foreground border border-border">
                                     <span>{getRoleLabel(user?.role || '')}</span>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1.5">
-                                    显示名称 <span className="text-red-400">*</span>
-                                </label>
-                                <input
+                                <Label className="block text-sm font-medium text-muted-foreground mb-1.5">
+                                    显示名称 <span className="text-danger">*</span>
+                                </Label>
+                                <Input aria-label="显示名称"
                                     type="text"
                                     value={displayName}
                                     onChange={(e) => setDisplayName(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none"
                                     placeholder="请输入显示名称"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1.5">手机号码</label>
+                                <Label className="block text-sm font-medium text-muted-foreground mb-1.5">手机号码</Label>
                                 <div className="relative">
-                                    <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
+                                    <Phone size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                    <Input aria-label="手机号码"
                                         type="tel"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none"
+                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none"
                                         placeholder="请输入手机号码"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-600 mb-1.5">邮箱地址</label>
+                                <Label className="block text-sm font-medium text-muted-foreground mb-1.5">邮箱地址</Label>
                                 <div className="relative">
-                                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                                    <input
+                                    <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                    <Input aria-label="邮箱地址"
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none"
+                                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none"
                                         placeholder="请输入邮箱地址"
                                     />
                                 </div>
                             </div>
 
                             <div className="pt-2">
-                                <button
+                                <Button variant="default" size="sm"
                                     onClick={handleSaveProfile}
                                     disabled={saving || !displayName.trim()}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary disabled:bg-muted text-primary-foreground rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
                                 >
                                     <Save size={16} />
                                     {saving ? '保存中...' : '保存修改'}
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>
-                </div>
+                </TabsContent>
             )}
 
             {activeTab === 'yc' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <TabsContent value="yc" className="bg-card rounded-2xl shadow-sm border border-border p-6 md:p-8">
                     <div className="flex items-center gap-3 mb-5">
-                        <div className="p-2.5 bg-indigo-50 rounded-xl">
-                            <KeyRound size={20} className="text-indigo-500" />
+                        <div className="p-2.5 bg-accent rounded-xl">
+                            <KeyRound size={20} className="text-primary" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-slate-800">元仓开放平台</h3>
-                            <p className="text-xs text-slate-400">
+                            <h3 className="font-semibold text-foreground">元仓开放平台</h3>
+                            <p className="text-xs text-muted-foreground">
                                 个人配置优先；清空并保存后使用服务器环境变量
                             </p>
                         </div>
@@ -506,7 +505,7 @@ export const PersonalCenter: React.FC = () => {
 
                         {ycMsg && (
                             <div className={`mb-5 flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
-                                ycMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                                ycMsg.type === 'success' ? 'bg-success-subtle text-success' : 'bg-destructive/10 text-danger'
                             }`}>
                                 {ycMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                                 {ycMsg.text}
@@ -515,27 +514,27 @@ export const PersonalCenter: React.FC = () => {
 
                         <div className="space-y-5 max-w-xl">
                             <div>
-                                <label htmlFor="yc-app-key" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                <Label htmlFor="yc-app-key" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                     元仓 appKey
-                                </label>
-                                <input
+                                </Label>
+                                <Input
                                     id="yc-app-key"
                                     type="text"
                                     value={ycAppKey}
                                     onChange={(e) => setYcAppKey(e.target.value)}
                                     disabled={ycLoading || ycSaving}
                                     autoComplete="off"
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                     placeholder="留空则使用 YC_APP_KEY"
                                 />
                             </div>
 
                             <div>
-                                <label htmlFor="yc-app-secret" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                <Label htmlFor="yc-app-secret" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                     元仓 appSecret
-                                </label>
+                                </Label>
                                 <div className="relative">
-                                    <input
+                                    <Input
                                         id="yc-app-secret"
                                         type={showYcSecret ? 'text' : 'password'}
                                         value={ycAppSecret}
@@ -545,20 +544,20 @@ export const PersonalCenter: React.FC = () => {
                                         }}
                                         disabled={ycLoading || ycSaving}
                                         autoComplete="new-password"
-                                        className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                         placeholder="留空则使用 YC_APP_SECRET"
                                     />
-                                    <button
+                                    <Button variant="ghost" size="sm"
                                         type="button"
                                         aria-label={showYcSecret ? '隐藏元仓 appSecret' : '显示元仓 appSecret'}
                                         onClick={() => setShowYcSecret(!showYcSecret)}
                                         disabled={ycLoading || ycSaving}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:text-slate-300"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground disabled:text-muted-foreground"
                                     >
                                         {showYcSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-                                    </button>
+                                    </Button>
                                 </div>
-                                <p className="mt-1.5 text-xs text-slate-400">
+                                <p className="mt-1.5 text-xs text-muted-foreground">
                                     {ycSecretConfigured
                                         ? '已保存个人 appSecret；删除圆点后留空保存可恢复环境变量'
                                         : ycEnvironmentConfigured
@@ -568,28 +567,28 @@ export const PersonalCenter: React.FC = () => {
                             </div>
 
                             <div className="pt-1">
-                                <button
+                                <Button variant="default" size="sm"
                                     onClick={handleSaveYcCredentials}
                                     disabled={ycLoading || ycSaving}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary disabled:bg-muted text-primary-foreground rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
                                 >
                                     <Save size={16} />
                                     {ycSaving ? '保存中...' : '保存元仓配置'}
-                                </button>
+                                </Button>
                             </div>
                         </div>
-                </div>
+                </TabsContent>
             )}
 
             {activeTab === 'ai' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <TabsContent value="ai" className="bg-card rounded-2xl shadow-sm border border-border p-6 md:p-8">
                     <div className="flex items-center gap-3 mb-5">
-                        <div className="p-2.5 bg-indigo-50 rounded-xl">
-                            <Sparkles size={20} className="text-indigo-500" />
+                        <div className="p-2.5 bg-accent rounded-xl">
+                            <Sparkles size={20} className="text-primary" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-slate-800">AI 服务配置</h3>
-                            <p className="text-xs text-slate-400">
+                            <h3 className="font-semibold text-foreground">AI 服务配置</h3>
+                            <p className="text-xs text-muted-foreground">
                                 全系统 AI 功能（商品分析对话、图片制作）优先使用个人配置；留空项回退服务器环境变量
                             </p>
                         </div>
@@ -597,7 +596,7 @@ export const PersonalCenter: React.FC = () => {
 
                         {aiMsg && (
                             <div className={`mb-5 flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
-                                aiMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                                aiMsg.type === 'success' ? 'bg-success-subtle text-success' : 'bg-destructive/10 text-danger'
                             }`}>
                                 {aiMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                                 {aiMsg.text}
@@ -605,52 +604,52 @@ export const PersonalCenter: React.FC = () => {
                         )}
 
                         <div className="space-y-6 max-w-xl">
-                            <div className="rounded-xl border border-slate-100 p-4 space-y-4">
-                                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                                    <MessageSquare size={15} className="text-slate-400" />
+                            <div className="rounded-xl border border-border p-4 space-y-4">
+                                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                    <MessageSquare size={15} className="text-muted-foreground" />
                                     对话模型（商品分析 AI · OpenAI 兼容接口）
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-chat-provider" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-chat-provider" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         服务商
-                                    </label>
-                                    <select
+                                    </Label>
+                                    <NativeSelect
                                         id="ai-chat-provider"
                                         value={aiChatProvider}
                                         onChange={(e) => handleAiProviderChange(e.target.value as AiChatProviderKey)}
                                         disabled={aiLoading || aiSaving}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                     >
                                         <option value="">请选择（或直接手动填写下方配置）</option>
                                         {AI_CHAT_PROVIDERS.map((preset) => (
                                             <option key={preset.key} value={preset.key}>{preset.label}</option>
                                         ))}
-                                    </select>
-                                    <p className="mt-1.5 text-xs text-slate-400">
+                                    </NativeSelect>
+                                    <p className="mt-1.5 text-xs text-muted-foreground">
                                         {AI_CHAT_PROVIDER_HINTS[aiChatProvider] || '选择服务商后自动填充推荐配置，商品分析 AI 对话将使用该配置'}
                                     </p>
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-chat-base-url" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-chat-base-url" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         对话模型 Base URL
-                                    </label>
-                                    <input
+                                    </Label>
+                                    <Input
                                         id="ai-chat-base-url"
                                         type="text"
                                         value={aiChatBaseUrl}
                                         onChange={(e) => setAiChatBaseUrl(e.target.value)}
                                         disabled={aiLoading || aiSaving}
                                         autoComplete="off"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                         placeholder="默认 https://open.bigmodel.cn/api/coding/paas/v4"
                                     />
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-chat-api-key" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-chat-api-key" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         对话模型 API Key
-                                    </label>
+                                    </Label>
                                     <div className="relative">
-                                        <input
+                                        <Input
                                             id="ai-chat-api-key"
                                             type={showAiChatKey ? 'text' : 'password'}
                                             value={aiChatApiKey}
@@ -660,20 +659,20 @@ export const PersonalCenter: React.FC = () => {
                                             }}
                                             disabled={aiLoading || aiSaving}
                                             autoComplete="new-password"
-                                            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                             placeholder="留空则使用服务器 GLM_API_KEY"
                                         />
-                                        <button
+                                        <Button variant="ghost" size="sm"
                                             type="button"
                                             aria-label={showAiChatKey ? '隐藏对话模型 API Key' : '显示对话模型 API Key'}
                                             onClick={() => setShowAiChatKey(!showAiChatKey)}
                                             disabled={aiLoading || aiSaving}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:text-slate-300"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground disabled:text-muted-foreground"
                                         >
                                             {showAiChatKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </button>
+                                        </Button>
                                     </div>
-                                    <p className="mt-1.5 text-xs text-slate-400">
+                                    <p className="mt-1.5 text-xs text-muted-foreground">
                                         {aiChatKeyConfigured
                                             ? '已保存个人 API Key；删除圆点后留空保存可恢复环境变量'
                                             : aiChatEnvConfigured
@@ -682,10 +681,10 @@ export const PersonalCenter: React.FC = () => {
                                     </p>
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-chat-model" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-chat-model" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         模型名称
-                                    </label>
-                                    <input
+                                    </Label>
+                                    <Input
                                         id="ai-chat-model"
                                         type="text"
                                         value={aiChatModel}
@@ -693,7 +692,7 @@ export const PersonalCenter: React.FC = () => {
                                         onChange={(e) => setAiChatModel(e.target.value)}
                                         disabled={aiLoading || aiSaving}
                                         autoComplete="off"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                         placeholder="默认 glm-5.3-flash"
                                     />
                                     <datalist id="ai-chat-model-options">
@@ -708,17 +707,17 @@ export const PersonalCenter: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="rounded-xl border border-slate-100 p-4 space-y-4">
-                                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                                    <ImageIcon size={15} className="text-slate-400" />
+                            <div className="rounded-xl border border-border p-4 space-y-4">
+                                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                    <ImageIcon size={15} className="text-muted-foreground" />
                                     图片生成（图片制作 · 火山方舟）
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-image-api-key" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-image-api-key" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         图片生成 API Key
-                                    </label>
+                                    </Label>
                                     <div className="relative">
-                                        <input
+                                        <Input
                                             id="ai-image-api-key"
                                             type={showAiImageKey ? 'text' : 'password'}
                                             value={aiImageApiKey}
@@ -728,20 +727,20 @@ export const PersonalCenter: React.FC = () => {
                                             }}
                                             disabled={aiLoading || aiSaving}
                                             autoComplete="new-password"
-                                            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                            className="w-full px-4 py-2.5 pr-10 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                             placeholder="留空则使用服务器 ARK_API_KEY"
                                         />
-                                        <button
+                                        <Button variant="ghost" size="sm"
                                             type="button"
                                             aria-label={showAiImageKey ? '隐藏图片生成 API Key' : '显示图片生成 API Key'}
                                             onClick={() => setShowAiImageKey(!showAiImageKey)}
                                             disabled={aiLoading || aiSaving}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 disabled:text-slate-300"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground disabled:text-muted-foreground"
                                         >
                                             {showAiImageKey ? <EyeOff size={16} /> : <Eye size={16} />}
-                                        </button>
+                                        </Button>
                                     </div>
-                                    <p className="mt-1.5 text-xs text-slate-400">
+                                    <p className="mt-1.5 text-xs text-muted-foreground">
                                         {aiImageKeyConfigured
                                             ? '已保存个人 API Key；删除圆点后留空保存可恢复环境变量'
                                             : aiImageEnvConfigured
@@ -750,44 +749,44 @@ export const PersonalCenter: React.FC = () => {
                                     </p>
                                 </div>
                                 <div>
-                                    <label htmlFor="ai-image-base-url" className="block text-sm font-medium text-slate-600 mb-1.5">
+                                    <Label htmlFor="ai-image-base-url" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         图片生成 Base URL
-                                    </label>
-                                    <input
+                                    </Label>
+                                    <Input
                                         id="ai-image-base-url"
                                         type="text"
                                         value={aiImageBaseUrl}
                                         onChange={(e) => setAiImageBaseUrl(e.target.value)}
                                         disabled={aiLoading || aiSaving}
                                         autoComplete="off"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                         placeholder="默认 https://ark.cn-beijing.volces.com/api/v3"
                                     />
                                 </div>
                                 <div>
-                                    <button
+                                    <Button variant="ghost" size="sm"
                                         type="button"
                                         onClick={() => setShowAiEndpoints(!showAiEndpoints)}
-                                        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
+                                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                                     >
                                         {showAiEndpoints ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                                         接入点高级设置（使用自己的方舟账号时需要填写）
-                                    </button>
+                                    </Button>
                                     {showAiEndpoints && (
                                         <div className="mt-3 space-y-3">
                                             {AI_ENDPOINT_FIELDS.map((field) => (
                                                 <div key={field.key}>
-                                                    <label htmlFor={`ai-endpoint-${field.key}`} className="block text-sm font-medium text-slate-600 mb-1.5">
+                                                    <Label htmlFor={`ai-endpoint-${field.key}`} className="block text-sm font-medium text-muted-foreground mb-1.5">
                                                         {field.label}
-                                                    </label>
-                                                    <input
+                                                    </Label>
+                                                    <Input
                                                         id={`ai-endpoint-${field.key}`}
                                                         type="text"
                                                         value={aiEndpoints[field.key]}
                                                         onChange={(e) => setAiEndpoints((current) => ({ ...current, [field.key]: e.target.value }))}
                                                         disabled={aiLoading || aiSaving}
                                                         autoComplete="off"
-                                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none disabled:bg-slate-50"
+                                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                                         placeholder={aiEnvEndpoints[field.key] ? '留空使用服务器配置的接入点' : '服务器未配置，使用个人 Key 时需填写（ep- 开头）'}
                                                     />
                                                 </div>
@@ -798,34 +797,34 @@ export const PersonalCenter: React.FC = () => {
                             </div>
 
                             <div className="pt-1">
-                                <button
+                                <Button variant="default" size="sm"
                                     onClick={handleSaveAiConfig}
                                     disabled={aiLoading || aiSaving}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary disabled:bg-muted text-primary-foreground rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
                                 >
                                     <Save size={16} />
                                     {aiSaving ? '保存中...' : '保存 AI 配置'}
-                                </button>
+                                </Button>
                             </div>
                         </div>
-                </div>
+                </TabsContent>
             )}
 
             {activeTab === 'password' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8">
+                <TabsContent value="password" className="bg-card rounded-2xl shadow-sm border border-border p-6 md:p-8">
                     <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2.5 bg-amber-50 rounded-xl">
-                            <Lock size={20} className="text-amber-500" />
+                        <div className="p-2.5 bg-warning-subtle rounded-xl">
+                            <Lock size={20} className="text-warning" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-slate-800">修改密码</h3>
-                            <p className="text-xs text-slate-400">修改密码后需要重新登录</p>
+                            <h3 className="font-semibold text-foreground">修改密码</h3>
+                            <p className="text-xs text-muted-foreground">修改密码后需要重新登录</p>
                         </div>
                     </div>
 
                     {pwdMsg && (
                         <div className={`mb-6 flex items-center gap-2 px-4 py-3 rounded-xl text-sm ${
-                            pwdMsg.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                            pwdMsg.type === 'success' ? 'bg-success-subtle text-success' : 'bg-destructive/10 text-danger'
                         }`}>
                             {pwdMsg.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
                             {pwdMsg.text}
@@ -834,69 +833,71 @@ export const PersonalCenter: React.FC = () => {
 
                     <div className="space-y-5 max-w-md">
                         <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1.5">当前密码</label>
+                            <Label className="block text-sm font-medium text-muted-foreground mb-1.5">当前密码</Label>
                             <div className="relative">
-                                <input
+                                <Input aria-label="当前密码"
                                     type={showOldPwd ? 'text' : 'password'}
                                     value={oldPassword}
                                     onChange={(e) => setOldPassword(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none pr-10"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none pr-10"
                                     placeholder="请输入当前密码"
                                 />
-                                <button
+                                <Button aria-label={showOldPwd ? '隐藏当前密码' : '显示当前密码'} variant="ghost" size="sm"
                                     type="button"
                                     onClick={() => setShowOldPwd(!showOldPwd)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                                 >
                                     {showOldPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </button>
+                                </Button>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1.5">新密码</label>
+                            <Label className="block text-sm font-medium text-muted-foreground mb-1.5">新密码</Label>
                             <div className="relative">
-                                <input
+                                <Input aria-label="新密码"
                                     type={showNewPwd ? 'text' : 'password'}
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none pr-10"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none pr-10"
                                     placeholder="新密码至少6位"
                                 />
-                                <button
+                                <Button aria-label={showNewPwd ? '隐藏新密码' : '显示新密码'} variant="ghost" size="sm"
                                     type="button"
                                     onClick={() => setShowNewPwd(!showNewPwd)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                                 >
                                     {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
-                                </button>
+                                </Button>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-600 mb-1.5">确认新密码</label>
-                            <input
+                            <Label className="block text-sm font-medium text-muted-foreground mb-1.5">确认新密码</Label>
+                            <Input aria-label="确认新密码"
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all outline-none"
+                                className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none"
                                 placeholder="再次输入新密码"
                             />
                         </div>
 
                         <div className="pt-2">
-                            <button
+                            <Button variant="ghost" size="sm"
                                 onClick={handleChangePassword}
                                 disabled={pwdSaving || !oldPassword || newPassword.length < 6 || newPassword !== confirmPassword}
-                                className="flex items-center gap-2 px-6 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
+                                className="flex items-center gap-2 px-6 py-2.5 bg-warning hover:bg-warning disabled:bg-muted text-warning-foreground rounded-xl font-medium text-sm transition-all shadow-sm hover:shadow-md"
                             >
                                 <Lock size={16} />
                                 {pwdSaving ? '修改中...' : '修改密码'}
-                            </button>
+                            </Button>
                         </div>
                     </div>
-                </div>
+                </TabsContent>
             )}
-        </div>
+        </Tabs>
     );
 };
+
+

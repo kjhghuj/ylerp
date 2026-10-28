@@ -1,3 +1,5 @@
+import { Button } from '../components/ui/button';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
@@ -115,13 +117,13 @@ const SortIcon = ({
 const LoadingRows = ({ columnCount }: { columnCount: number }) => (
   <>
     {Array.from({ length: 5 }, (_, index) => (
-      <tr key={index}>
+      <TableRow key={index}>
         {Array.from({ length: columnCount }, (__, cell) => (
-          <td key={cell} className="px-4 py-3">
-            <div className="h-4 animate-pulse rounded bg-slate-100 dark:bg-slate-700" />
-          </td>
+          <TableCell key={cell} className="px-4 py-3">
+            <div className="h-4 animate-pulse rounded bg-muted dark:bg-muted" />
+          </TableCell>
         ))}
-      </tr>
+      </TableRow>
     ))}
   </>
 );
@@ -217,32 +219,32 @@ const MonitorTable = ({
 
   return (
     <section
-      className="flex h-full min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.04)] xl:min-h-0 dark:border-slate-700/70 dark:bg-slate-800/80"
+      className="flex h-full min-h-[24rem] min-w-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_8px_30px_rgba(15,23,42,0.04)] xl:min-h-0 dark:border-border/70 dark:bg-muted/80"
       aria-label={title}
     >
-      <div className="border-b border-slate-100 px-5 pb-0 pt-5 dark:border-slate-700/70">
+      <div className="border-b border-border px-5 pb-0 pt-5 dark:border-border/70">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Warehouse size={18} className={kind === 'aging' ? 'text-rose-500' : 'text-blue-500'} />
-              <h3 className="font-bold text-slate-800 dark:text-slate-100">{title}</h3>
+              <Warehouse size={18} className={kind === 'aging' ? 'text-danger' : 'text-primary'} />
+              <h3 className="font-bold text-foreground dark:text-muted-foreground">{title}</h3>
             </div>
-            <p className="mt-1 text-xs text-slate-400">{subtitle}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
             {feeCalculatedAt && (
-              <p className="mt-1 text-[11px] font-medium text-slate-400">
+              <p className="mt-1 text-[11px] font-medium text-muted-foreground">
                 {isZh ? `仓储费估算截至 ${feeCalculatedAt}` : `Storage fee estimated as of ${feeCalculatedAt}`}
               </p>
             )}
           </div>
           {data && !loading && (
-            <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+            <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground dark:bg-muted dark:text-muted-foreground">
               {isZh ? `共 ${data.total} 条` : `${data.total} items`}
             </span>
           )}
         </div>
         <div className="-mx-1 flex gap-5 overflow-x-auto px-1 [scrollbar-width:none]">
           {[{ code: 'ALL', name: 'All' }, ...sites].map(entry => (
-            <button
+            <Button variant="outline" size="sm"
               type="button"
               key={entry.code}
               onClick={() => {
@@ -251,30 +253,30 @@ const MonitorTable = ({
               }}
               className={`shrink-0 border-b-2 px-2 pb-2.5 pt-1 text-xs font-semibold transition ${
                 site === entry.code
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-slate-500 hover:border-slate-200 hover:text-slate-700 dark:text-slate-300'
+                  ? 'border-border text-primary dark:text-primary'
+                  : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground dark:text-muted-foreground'
               }`}
             >
               {SITE_NAMES[entry.code]?.[isZh ? 'zh' : 'en'] || entry.name || entry.code}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       {data?.warnings && (
-        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-5 py-2.5 text-[11px] dark:border-slate-700/70">
+        <div className="flex flex-wrap gap-2 border-b border-border px-5 py-2.5 text-[11px] dark:border-border/70">
           {data.warnings.missingSalesCount > 0 && (
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+            <span className="rounded-md bg-warning-subtle px-2 py-1 text-warning dark:bg-warning-subtle/30 dark:text-warning">
               {isZh ? `${data.warnings.missingSalesCount} 项缺少完整 30 天销量` : `${data.warnings.missingSalesCount} missing 30-day sales`}
             </span>
           )}
           {data.warnings.incompleteAgeCount > 0 && (
-            <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-500 dark:bg-slate-700 dark:text-slate-300">
+            <span className="rounded-md bg-muted px-2 py-1 text-muted-foreground dark:bg-muted dark:text-muted-foreground">
               {isZh ? `${data.warnings.incompleteAgeCount} 项入库历史不足` : `${data.warnings.incompleteAgeCount} with incomplete receipt history`}
             </span>
           )}
           {data.warnings.unavailableSites.length > 0 && (
-            <span className="rounded-md bg-rose-50 px-2 py-1 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300">
+            <span className="rounded-md bg-destructive/10 px-2 py-1 text-danger dark:bg-destructive/3 dark:text-danger">
               {isZh ? `部分站点暂不可用：${data.warnings.unavailableSites.join('、')}` : `Sites unavailable: ${data.warnings.unavailableSites.join(', ')}`}
             </span>
           )}
@@ -282,133 +284,133 @@ const MonitorTable = ({
       )}
 
       <div className="min-h-0 flex-1 overflow-auto">
-        <table className={`w-full text-left text-sm ${kind === 'aging' ? 'min-w-[1040px]' : 'min-w-[760px]'}`}>
-          <thead className="bg-slate-50/80 text-[11px] uppercase tracking-wide text-slate-400 dark:bg-slate-900/30 dark:text-slate-500">
-            <tr>
+        <Table wrapped={false} className={`w-full text-left text-sm ${kind === 'aging' ? 'min-w-[1040px]' : 'min-w-[760px]'}`}>
+          <TableHeader className="bg-muted/80 text-[11px] uppercase tracking-wide text-muted-foreground dark:bg-muted/30 dark:text-muted-foreground">
+            <TableRow>
               {columns.map(column => (
-                <th
+                <TableHead
                   key={column.key}
                   className={`px-4 py-3 font-semibold ${column.align === 'right' ? 'text-right' : ''}`}
                 >
-                  <button
+                  <Button variant="ghost" size="sm"
                     type="button"
                     onClick={() => changeSort(column.key)}
-                    className={`inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600 ${
+                    className={`inline-flex items-center gap-1 whitespace-nowrap hover:text-primary ${
                       column.align === 'right' ? 'ml-auto' : ''
-                    } ${sortBy === column.key ? 'text-blue-600 dark:text-blue-400' : ''}`}
+                    } ${sortBy === column.key ? 'text-primary dark:text-primary' : ''}`}
                     aria-label={`${column.label} ${isZh ? '排序' : 'sort'}`}
                   >
                     {column.label}
                     <SortIcon active={sortBy === column.key} direction={sortDir} />
-                  </button>
-                </th>
+                  </Button>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+            </TableRow>
+          </TableHeader>
+          <TableBody className="divide-y divide-border dark:divide-border/60">
             {loading && <LoadingRows columnCount={columnCount} />}
             {!loading && error && (
-              <tr>
-                <td colSpan={columnCount} className="px-5 py-16 text-center">
-                  <AlertCircle className="mx-auto mb-3 text-rose-400" size={26} />
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <TableRow>
+                <TableCell colSpan={columnCount} className="px-5 py-16 text-center">
+                  <AlertCircle className="mx-auto mb-3 text-danger" size={26} />
+                  <p className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
                     {isZh ? '元仓数据暂时不可用' : 'Warehouse data is temporarily unavailable'}
                   </p>
-                  <button
+                  <Button variant="outline" size="sm"
                     type="button"
                     onClick={() => setRetryKey(value => value + 1)}
-                    className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                    className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-primary hover:bg-accent dark:border-border dark:hover:bg-muted"
                   >
                     {isZh ? '重试' : 'Retry'}
-                  </button>
-                </td>
-              </tr>
+                  </Button>
+                </TableCell>
+              </TableRow>
             )}
             {!loading && !error && data?.items.length === 0 && (
-              <tr>
-                <td colSpan={columnCount} className="px-5 py-16 text-center text-sm text-slate-400">
+              <TableRow>
+                <TableCell colSpan={columnCount} className="px-5 py-16 text-center text-sm text-muted-foreground">
                   {kind === 'aging'
                     ? (isZh ? '当前站点暂无库龄超过 60 天的商品' : 'No items older than 60 days')
                     : (isZh ? '当前站点暂无需要补货的商品' : 'No items need restocking')}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
             {!loading && !error && data?.items.map(row => (
-              <tr key={`${row.site}-${row.warehouse}-${row.sku}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-700/30">
-                <td className="max-w-[180px] truncate px-4 py-3 font-semibold text-slate-700 dark:text-slate-200" title={row.name}>
+              <TableRow key={`${row.site}-${row.warehouse}-${row.sku}`} className="hover:bg-muted/70 dark:hover:bg-muted/30">
+                <TableCell className="max-w-[180px] truncate px-4 py-3 font-semibold text-foreground dark:text-muted-foreground" title={row.name}>
                   {row.name}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-slate-500 dark:text-slate-400">{row.sku}</td>
-                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">
+                </TableCell>
+                <TableCell className="px-4 py-3 font-mono text-xs text-muted-foreground dark:text-muted-foreground">{row.sku}</TableCell>
+                <TableCell className="px-4 py-3 text-muted-foreground dark:text-muted-foreground">
                   {SITE_NAMES[row.site]?.[isZh ? 'zh' : 'en']
                     || sites.find(entry => entry.code === row.site)?.name
                     || row.site}
-                </td>
-                <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.warehouse}</td>
-                <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                </TableCell>
+                <TableCell className="px-4 py-3 text-muted-foreground dark:text-muted-foreground">{row.warehouse}</TableCell>
+                <TableCell className="px-4 py-3 text-right font-semibold tabular-nums text-foreground dark:text-muted-foreground">
                   {formatInteger(row.quantity)}
-                </td>
-                <td className="px-4 py-3 text-right">
+                </TableCell>
+                <TableCell className="px-4 py-3 text-right">
                   <span className={`inline-flex min-w-14 justify-center rounded-full px-2.5 py-1 text-xs font-bold tabular-nums ${
                     kind === 'aging'
-                      ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300'
-                      : 'bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300'
+                      ? 'bg-destructive/10 text-danger dark:bg-destructive/3 dark:text-danger'
+                      : 'bg-accent text-primary dark:bg-accent/30 dark:text-primary'
                   }`}>
                     {kind === 'aging' ? row.inboundDays : row.availableDays}
                     {isZh ? ' 天' : ' d'}
                   </span>
-                </td>
+                </TableCell>
                 {kind === 'aging' && row.storageFeeStatus === 'ready'
                   && typeof row.dailyStorageFee === 'number'
                   && typeof row.totalStorageFee === 'number' ? (
                   <>
-                    <td
-                      className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200"
+                    <TableCell
+                      className="px-4 py-3 text-right font-semibold tabular-nums text-foreground dark:text-muted-foreground"
                       title={row.storageFeeCalculatedAt ? `${isZh ? '截至' : 'As of'} ${row.storageFeeCalculatedAt}` : undefined}
                     >
                       {row.dailyStorageFee.toFixed(4)} CNY
-                    </td>
-                    <td
-                      className="px-4 py-3 text-right font-semibold tabular-nums text-slate-700 dark:text-slate-200"
+                    </TableCell>
+                    <TableCell
+                      className="px-4 py-3 text-right font-semibold tabular-nums text-foreground dark:text-muted-foreground"
                       title={row.storageFeeCalculatedAt ? `${isZh ? '截至' : 'As of'} ${row.storageFeeCalculatedAt}` : undefined}
                     >
                       {row.totalStorageFee.toFixed(2)} CNY
-                    </td>
+                    </TableCell>
                   </>
                 ) : kind === 'aging' ? (
-                  <td colSpan={2} className="px-4 py-3 text-right text-xs font-semibold text-amber-600 dark:text-amber-300">
+                  <TableCell colSpan={2} className="px-4 py-3 text-right text-xs font-semibold text-warning dark:text-warning">
                     {storageFeeStatusLabel(row.storageFeeStatus)}
-                  </td>
+                  </TableCell>
                 ) : null}
-              </tr>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-t border-slate-100 px-5 py-3 dark:border-slate-700/70">
-        <span className="text-xs text-slate-400">
+      <div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3 dark:border-border/70">
+        <span className="text-xs text-muted-foreground">
           {data ? (isZh ? `第 ${data.page} / ${data.totalPages} 页` : `Page ${data.page} of ${data.totalPages}`) : '—'}
         </span>
         <div className="flex gap-1.5">
-          <button
+          <Button variant="outline" size="sm"
             type="button"
             aria-label={isZh ? '上一页' : 'Previous page'}
             disabled={loading || !data || data.page <= 1}
             onClick={() => setPage(value => Math.max(1, value - 1))}
-            className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-600 dark:hover:bg-slate-700"
+            className="rounded-lg border border-border p-1.5 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-border dark:hover:bg-muted"
           >
             <ChevronLeft size={15} />
-          </button>
-          <button
+          </Button>
+          <Button variant="outline" size="sm"
             type="button"
             aria-label={isZh ? '下一页' : 'Next page'}
             disabled={loading || !data || data.page >= data.totalPages}
             onClick={() => setPage(value => value + 1)}
-            className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30 dark:border-slate-600 dark:hover:bg-slate-700"
+            className="rounded-lg border border-border p-1.5 text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30 dark:border-border dark:hover:bg-muted"
           >
             <ChevronRight size={15} />
-          </button>
+          </Button>
         </div>
       </div>
     </section>
@@ -429,30 +431,30 @@ const AlertCard = ({
   const restock = kind === 'restock';
   const Icon = restock ? ShoppingCart : TriangleAlert;
   return (
-    <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] dark:border-slate-700/70 dark:bg-slate-800/80">
+    <article className="rounded-2xl border border-border/80 bg-card p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] dark:border-border/70 dark:bg-muted/80">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+          <p className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {restock ? (isZh ? '补货预警' : 'Restock Alert') : (isZh ? '滞销预警' : 'Slow-moving Alert')}
           </p>
           <div className="mt-2 flex items-baseline gap-2">
-            <strong className={`text-3xl font-bold tabular-nums ${restock ? 'text-emerald-600' : 'text-orange-500'}`}>
+            <strong className={`text-3xl font-bold tabular-nums ${restock ? 'text-success' : 'text-warning'}`}>
               {formatInteger(total)}
             </strong>
-            <span className="text-xs text-slate-400">{isZh ? '所有站点总数量' : 'total units'}</span>
+            <span className="text-xs text-muted-foreground">{isZh ? '所有站点总数量' : 'total units'}</span>
           </div>
         </div>
-        <span className={`rounded-xl p-3 ${restock ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30' : 'bg-orange-50 text-orange-500 dark:bg-orange-950/30'}`}>
+        <span className={`rounded-xl p-3 ${restock ? 'bg-success-subtle text-success dark:bg-success-subtle/30' : 'bg-warning-subtle text-warning dark:bg-warning-subtle/30'}`}>
           <Icon size={22} />
         </span>
       </div>
       <div className="mt-4 grid grid-cols-5 gap-1.5">
         {bySite.map(item => (
-          <div key={item.site} className="rounded-lg bg-slate-50 px-2.5 py-2 dark:bg-slate-700/40">
-            <p className="truncate text-[9px] font-medium text-slate-400" title={SITE_NAMES[item.site]?.[isZh ? 'zh' : 'en'] || item.name}>
+          <div key={item.site} className="rounded-lg bg-muted px-2.5 py-2 dark:bg-muted/40">
+            <p className="truncate text-[9px] font-medium text-muted-foreground" title={SITE_NAMES[item.site]?.[isZh ? 'zh' : 'en'] || item.name}>
               {SITE_NAMES[item.site]?.[isZh ? 'zh' : 'en'] || item.name}
             </p>
-            <p className="mt-0.5 text-sm font-bold tabular-nums text-slate-700 dark:text-slate-200">
+            <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground dark:text-muted-foreground">
               {formatInteger(item.quantity)}
             </p>
           </div>
@@ -511,10 +513,10 @@ export const Dashboard: React.FC = () => {
     <div className="flex h-full min-h-full flex-col gap-6">
       <header className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground dark:text-muted-foreground">
             {isZh ? '总览仪表盘' : 'Dashboard Overview'}
           </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-sm text-muted-foreground dark:text-muted-foreground">
             {isZh ? '聚焦资金、补货与元仓库存健康度' : 'Funds, replenishment, and YC warehouse health at a glance'}
           </p>
         </div>
@@ -522,54 +524,54 @@ export const Dashboard: React.FC = () => {
           {CURRENCIES.map(currency => {
             const rate = displayRate(rates[currency], !cnyToLocal);
             return (
-              <span key={currency} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                <span className="text-[10px] text-slate-400">{cnyToLocal ? currency : `1 ${currency}`}</span>
+              <span key={currency} className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-bold text-muted-foreground dark:border-border dark:bg-muted dark:text-muted-foreground">
+                <span className="text-[10px] text-muted-foreground">{cnyToLocal ? currency : `1 ${currency}`}</span>
                 <span className="tabular-nums">{rate === null ? '—' : rate.toFixed(currency === 'IDR' ? 0 : 4)}</span>
-                {!cnyToLocal && <span className="text-[10px] text-slate-400">CNY</span>}
+                {!cnyToLocal && <span className="text-[10px] text-muted-foreground">CNY</span>}
               </span>
             );
           })}
-          <button
+          <Button variant="outline" size="sm"
             type="button"
             onClick={() => setCnyToLocal(value => !value)}
-            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300"
+            className="rounded-md border border-border bg-card px-2 py-1 text-[10px] font-bold text-muted-foreground hover:bg-muted dark:border-border dark:bg-muted dark:text-muted-foreground"
             aria-label={isZh ? '切换汇率方向' : 'Toggle exchange-rate direction'}
           >
             {cnyToLocal ? 'CNY ←' : '→ CNY'}
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost" size="sm"
             type="button"
             onClick={fetchRates}
             disabled={ratesLoading}
             aria-label={isZh ? '刷新汇率' : 'Refresh exchange rates'}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-50 dark:hover:bg-slate-700"
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground disabled:opacity-50 dark:hover:bg-muted"
           >
             <RefreshCw size={14} className={ratesLoading ? 'animate-spin' : ''} />
-          </button>
-          {lastUpdated && <span className="text-[10px] text-slate-400">{lastUpdated}</span>}
+          </Button>
+          {lastUpdated && <span className="text-[10px] text-muted-foreground">{lastUpdated}</span>}
         </div>
       </header>
 
       {(showFunds || showAlerts) && (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           {showFunds && (
-            <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] dark:border-slate-700/70 dark:bg-slate-800/80">
+            <article className="rounded-2xl border border-border/80 bg-card p-5 shadow-[0_8px_30px_rgba(15,23,42,0.04)] dark:border-border/70 dark:bg-muted/80">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+                  <p className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
                     {isZh ? '预估可用资金' : 'Estimated Available Funds'}
                   </p>
-                  <strong className={`mt-2 block text-3xl font-bold tabular-nums ${availableFunds < 0 ? 'text-rose-600' : 'text-blue-600'}`}>
+                  <strong className={`mt-2 block text-3xl font-bold tabular-nums ${availableFunds < 0 ? 'text-danger' : 'text-primary'}`}>
                     {fundsText}
                   </strong>
                 </div>
-                <span className={`rounded-xl p-3 ${availableFunds < 0 ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/30' : 'bg-blue-50 text-blue-600 dark:bg-blue-950/30'}`}>
+                <span className={`rounded-xl p-3 ${availableFunds < 0 ? 'bg-destructive/10 text-danger dark:bg-destructive/3' : 'bg-accent text-primary dark:bg-accent/30'}`}>
                   <WalletCards size={22} />
                 </span>
               </div>
-              <div className="mt-5 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs dark:bg-slate-700/40">
-                <span className="text-slate-400">{isZh ? '账户总余额 − 总负债' : 'Balance − total debt'}</span>
-                <span className="font-semibold text-slate-600 dark:text-slate-300">
+              <div className="mt-5 flex items-center justify-between rounded-lg bg-muted px-3 py-2 text-xs dark:bg-muted/40">
+                <span className="text-muted-foreground">{isZh ? '账户总余额 − 总负债' : 'Balance − total debt'}</span>
+                <span className="font-semibold text-muted-foreground dark:text-muted-foreground">
                   {finiteNumber(accountBalance).toLocaleString()} − {finiteNumber(totalDebt).toLocaleString()}
                 </span>
               </div>
@@ -579,10 +581,10 @@ export const Dashboard: React.FC = () => {
           {showAlerts && summaryLoading && !summary && (
             <>
               {[0, 1].map(index => (
-                <div key={index} className="h-[182px] animate-pulse rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-800">
-                  <div className="h-4 w-24 rounded bg-slate-100 dark:bg-slate-700" />
-                  <div className="mt-4 h-9 w-32 rounded bg-slate-100 dark:bg-slate-700" />
-                  <div className="mt-5 h-12 rounded bg-slate-100 dark:bg-slate-700" />
+                <div key={index} className="h-[182px] animate-pulse rounded-2xl border border-border bg-card p-5 dark:border-border dark:bg-muted">
+                  <div className="h-4 w-24 rounded bg-muted dark:bg-muted" />
+                  <div className="mt-4 h-9 w-32 rounded bg-muted dark:bg-muted" />
+                  <div className="mt-5 h-12 rounded bg-muted dark:bg-muted" />
                 </div>
               ))}
             </>
@@ -594,19 +596,19 @@ export const Dashboard: React.FC = () => {
             </>
           )}
           {showAlerts && summaryError && !summary && (
-            <div className="flex min-h-[182px] items-center justify-center rounded-2xl border border-rose-100 bg-white p-5 text-center lg:col-span-2 dark:border-rose-900/40 dark:bg-slate-800">
+            <div className="flex min-h-[182px] items-center justify-center rounded-2xl border border-border bg-card p-5 text-center lg:col-span-2 dark:border-border/40 dark:bg-muted">
               <div>
-                <AlertCircle className="mx-auto text-rose-400" size={25} />
-                <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+                <AlertCircle className="mx-auto text-danger" size={25} />
+                <p className="mt-2 text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
                   {isZh ? '库存预警暂时不可用，资金与汇率不受影响' : 'Inventory alerts unavailable; funds and rates remain available'}
                 </p>
-                <button
+                <Button variant="outline" size="sm"
                   type="button"
                   onClick={() => setSummaryRetry(value => value + 1)}
-                  className="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 dark:border-slate-600"
+                  className="mt-3 rounded-lg border border-border px-3 py-1.5 text-xs font-bold text-primary hover:bg-accent dark:border-border"
                 >
                   {isZh ? '重试' : 'Retry'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -621,7 +623,7 @@ export const Dashboard: React.FC = () => {
       )}
 
       {noVisibleContent && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 py-20 text-slate-400 dark:border-slate-700">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-muted-foreground dark:border-border">
           <Warehouse size={42} className="mb-3 opacity-40" />
           <p className="font-semibold">{isZh ? '暂无可见的总览模块' : 'No dashboard modules available'}</p>
           <p className="mt-1 text-sm">{isZh ? '请联系管理员分配权限' : 'Ask an administrator to assign access'}</p>
@@ -630,3 +632,4 @@ export const Dashboard: React.FC = () => {
     </div>
   );
 };
+

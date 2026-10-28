@@ -18,6 +18,7 @@ module.exports = {
         primary: { DEFAULT: ui('primary'), foreground: ui('primary-foreground'), light: '#60a5fa', dark: '#2563eb' },
         secondary: { DEFAULT: ui('secondary'), foreground: ui('secondary-foreground') },
         destructive: { DEFAULT: ui('destructive'), foreground: ui('destructive-foreground') },
+        danger: ui('danger'),
         muted: { DEFAULT: ui('muted'), foreground: ui('muted-foreground') },
         accent: { DEFAULT: ui('accent'), foreground: ui('accent-foreground') },
         popover: { DEFAULT: ui('popover'), foreground: ui('popover-foreground') },
@@ -36,4 +37,5 @@ module.exports = {
   },
   plugins: [require('tailwindcss-animate')],
 };
+
 

@@ -1,110 +1,30 @@
-import React, { useState } from 'react';
-import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
-
-interface ChangePasswordModalProps {
-    onClose: () => void;
-    onSubmit: (oldPassword: string, newPassword: string) => Promise<void>;
-    error: string;
-}
-
+import React, { useRef, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { ModalFrame } from './ModalFrame';
+interface ChangePasswordModalProps { onClose: () => void; onSubmit: (oldPassword: string, newPassword: string) => Promise<void>; error: string; }
 export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClose, onSubmit, error }) => {
-    const [oldPassword, setOldPassword] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPwd, setShowPwd] = useState(false);
-    const [loading, setLoading] = useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (oldPassword.length < 1 || newPassword.length < 6 || newPassword !== confirmPassword) return;
-        setLoading(true);
-        try {
-            await onSubmit(oldPassword, newPassword);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-                <div className="flex items-center justify-between p-6 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-                            <KeyRound size={20} className="text-indigo-600" />
-                        </div>
-                        <h3 className="text-lg font-semibold text-slate-800">修改密码</h3>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                        <X size={20} className="text-slate-400" />
-                    </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                    {error && (
-                        <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl">{error}</div>
-                    )}
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">当前密码</label>
-                        <input
-                            type="password"
-                            value={oldPassword}
-                            onChange={e => setOldPassword(e.target.value)}
-                            placeholder="输入当前密码"
-                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            required
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">新密码</label>
-                        <div className="relative">
-                            <input
-                                type={showPwd ? 'text' : 'password'}
-                                value={newPassword}
-                                onChange={e => setNewPassword(e.target.value)}
-                                placeholder="至少6位"
-                                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-10"
-                                required
-                                minLength={6}
-                            />
-                            <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                {showPwd ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">确认新密码</label>
-                        <input
-                            type="password"
-                            value={confirmPassword}
-                            onChange={e => setConfirmPassword(e.target.value)}
-                            placeholder="再次输入新密码"
-                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                            required
-                            minLength={6}
-                        />
-                        {confirmPassword && newPassword !== confirmPassword && (
-                            <p className="text-red-500 text-xs mt-1">两次密码不一致</p>
-                        )}
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                        <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors">
-                            取消
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading || !oldPassword || newPassword.length < 6 || newPassword !== confirmPassword}
-                            className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {loading ? '修改中...' : '确认修改'}
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const lock = useRef(false);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (lock.current || !oldPassword || newPassword.length < 6 || newPassword !== confirmPassword) return;
+    lock.current = true; setLoading(true);
+    try { await onSubmit(oldPassword, newPassword); } catch { /* Parent supplies the visible error prop; retain the entered values. */ } finally { lock.current = false; setLoading(false); }
+  };
+  return <ModalFrame title="修改密码" description="验证当前密码后设置新的登录密码" onClose={onClose} busy={loading}><form onSubmit={event => void handleSubmit(event)} className="space-y-4">
+    {error && <p role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-danger">{error}</p>}
+    <div className="space-y-2"><Label htmlFor="change-old-password">当前密码</Label><Input id="change-old-password" type="password" value={oldPassword} onChange={e => setOldPassword(e.target.value)} placeholder="输入当前密码" required autoComplete="current-password" /></div>
+    <div className="space-y-2"><Label htmlFor="change-new-password">新密码</Label><div className="relative"><Input id="change-new-password" type={showPwd ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="至少6位" className="pr-10" required minLength={6} autoComplete="new-password" /><Button variant="ghost" size="icon" className="absolute right-0 top-0" onClick={() => setShowPwd(value => !value)} aria-label={showPwd ? '隐藏密码' : '显示密码'}>{showPwd ? <EyeOff /> : <Eye />}</Button></div></div>
+    <div className="space-y-2"><Label htmlFor="change-confirm-password">确认新密码</Label><Input id="change-confirm-password" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="再次输入新密码" required minLength={6} autoComplete="new-password" />{confirmPassword && newPassword !== confirmPassword && <p className="text-xs text-danger">两次密码不一致</p>}</div>
+    <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onClose} disabled={loading}>取消</Button><Button type="submit" disabled={loading || !oldPassword || newPassword.length < 6 || newPassword !== confirmPassword}>{loading ? '修改中...' : '确认修改'}</Button></div>
+  </form></ModalFrame>;
 };
+
+
