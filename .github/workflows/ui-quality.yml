@@ -17,6 +17,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -25,14 +27,21 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
       - run: npm test
-      - run: node --test scripts/web-smoke.test.mjs
-      - run: npx eslint components/ui lib
+      - run: node --test scripts/web-smoke.test.mjs ../scripts/deployment-scope.test.mjs
+      - run: node scripts/check-ui-classes.mjs
+      - run: node scripts/lint-ui-changes.mjs
+        env:
+          UI_LINT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       - run: npm run build
       - run: npx playwright install --with-deps chromium firefox webkit
       - name: Cross-browser critical flows
         run: npx playwright test --grep '@cross-browser'
+        env:
+          UI_ARTIFACT_DIR: cross-browser-results
       - name: Chromium module, theme and viewport matrix
-        run: npx playwright test --project=chromium --grep 'all modules'
+        run: npx playwright test --project=chromium --grep 'all modules|@acceptance'
+        env:
+          UI_CAPTURE: '1'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -40,4 +49,5 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+            frontend/cross-browser-results
           retention-days: 14

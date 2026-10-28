@@ -36,23 +36,7 @@ jobs:
           REQUESTED_SCOPE: ${{ inputs.scope }}
           BASE_SHA: ${{ github.event.before }}
           TARGET_SHA: ${{ github.sha }}
-        run: |
-          if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
-            [[ "$REQUESTED_SCOPE" == web || "$REQUESTED_SCOPE" == full ]]
-            selected="$REQUESTED_SCOPE"
-          elif [[ ! "$BASE_SHA" =~ ^[a-f0-9]{40}$ || "$BASE_SHA" == 0000000000000000000000000000000000000000 ]]; then
-            selected=full
-          elif ! git cat-file -e "$BASE_SHA^{commit}"; then
-            selected=full
-          else
-            changed_files="$(git diff --name-only "$BASE_SHA" "$TARGET_SHA")"
-            if grep -Eq '^(backend/|shared/|scripts/|\.github/|docker-compose|deploy\.sh|\.dockerignore)' <<< "$changed_files"; then
-              selected=full
-            else
-              selected=web
-            fi
-          fi
-          echo "scope=$selected" >> "$GITHUB_OUTPUT"
+        run: node scripts/deployment-scope.mjs
   deploy:
     needs: [quality, scope]
     runs-on: ubuntu-latest

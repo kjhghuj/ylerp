@@ -1,5 +1,6 @@
 import { test, expect, installFixtures, navigate } from './fixtures';
 import { writeFile } from 'node:fs/promises';
+import type { Request } from '@playwright/test';
 
 // Run with --workers=1 on the same machine for baseline and candidate.
 // Repeat three isolated browser contexts; retain medians rather than noisy matrix timings.
@@ -9,6 +10,8 @@ test('@performance serial first render, product search and dialog', async ({ bro
   for (let sample = 0; sample < 3; sample++) {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1024 }, locale: 'zh-CN', timezoneId: 'Asia/Singapore', reducedMotion: 'reduce' });
     const page = await context.newPage();
+    const finishedRequests: Request[] = [];
+    page.on('requestfinished', request => finishedRequests.push(request));
     const state = await installFixtures(page);
     const start = performance.now();
     await page.goto(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
@@ -25,13 +28,21 @@ test('@performance serial first render, product search and dialog', async ({ bro
     await expect(page.getByRole('dialog')).toBeVisible();
     const dialogMs = performance.now() - dialogStart;
     const resources = await page.evaluate(() => performance.getEntriesByType('resource').map(entry => ({ name: entry.name, duration: entry.duration, transferSize: (entry as PerformanceResourceTiming).transferSize })));
+    // The fixture clock can mask browser Performance entries. Playwright network timing
+    // remains independent of the fixed business clock and records the real CDN request.
+    const networkResources = await Promise.all(finishedRequests.map(async request => ({
+      name: request.url(), timing: request.timing(),
+      sizes: await request.sizes().catch(() => null),
+      status: (await request.response())?.status(),
+    })));
+    if (process.env.UI_BASELINE) expect(networkResources.some(resource => new URL(resource.name).hostname === 'cdn.tailwindcss.com' && resource.status === 200)).toBe(true);
     expect(state.failures).toEqual([]);
     expect(state.unexpected).toEqual([]);
-    samples.push({ firstRenderMs, searchMs, dialogMs, resources });
+    samples.push({ firstRenderMs, searchMs, dialogMs, resources, networkResources });
     await context.close();
   }
   const median = (key: 'firstRenderMs' | 'searchMs' | 'dialogMs') => samples.map(sample => sample[key]).sort((a, b) => a - b)[1];
-  const report = JSON.stringify({ medians: { firstRenderMs: median('firstRenderMs'), searchMs: median('searchMs'), dialogMs: median('dialogMs') }, samples, note: 'Cross-origin resources can report transferSize=0 without Timing-Allow-Origin; inspect resource duration and baseline CDN request separately.' }, null, 2);
+  const report = JSON.stringify({ medians: { firstRenderMs: median('firstRenderMs'), searchMs: median('searchMs'), dialogMs: median('dialogMs') }, samples, note: 'Business clock can hide browser Performance entries; networkResources uses native Playwright timings/sizes including the actual baseline CDN. Cross-origin transferSize=0 without Timing-Allow-Origin is not zero cost.' }, null, 2);
   await writeFile(testInfo.outputPath('performance.json'), report);
   await testInfo.attach('performance.json', { body: report, contentType: 'application/json' });
 });

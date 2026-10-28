@@ -66,6 +66,10 @@ export async function installFixtures(page: Page, { authenticated = true, dark =
     else document.addEventListener('DOMContentLoaded', applyTheme, { once: true });
   }, { authenticated, dark });
   page.on('pageerror', error => failures.push(error.message));
+  page.on('console', message => {
+    // Keep expected HTTP failures (e.g. rejected credentials) separate from React defects.
+    if (['error', 'warning'].includes(message.type()) && /(?:function components cannot be given refs|invalid hook call|cannot update a component|hydration failed|validateDOMNesting|requires a DialogTitle|Missing.*Description.*DialogContent)/i.test(message.text())) failures.push(message.text());
+  });
   await page.route('https://api.exchangerate-api.com/**', route => route.fulfill({ json: { base: 'CNY', time_last_updated: Date.parse(now) / 1000, rates: { MYR: 0.65, PHP: 8.05, SGD: 0.19, THB: 5.01, IDR: 2150, USD: 0.14 } } }));
   await page.route('**/api/**', async route => {
     const request = route.request();

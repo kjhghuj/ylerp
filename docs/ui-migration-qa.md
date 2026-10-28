@@ -1,5 +1,11 @@
 # UI migration verification
 
+## 当前最终验收（2026-10-28）
+
+前端全量测试 **94 个文件、1235 通过、1 条原有跳过、0 失败**；浏览器 **32 条用例通过并生成 110 张全模块截图**。TypeScript、生产构建通过，lint 为 **0 errors**。同机串行性能对比通过全部三项 10% 回退门禁。详见下文[最终浏览器验收](#final-browser-acceptance)与[最终全量回归和性能证据](#final-full-regression-and-performance-acceptance)。
+
+尚未生产部署。真实 Docker 隔离部署与回滚演练仍待可用环境；本地命令模拟已验证 web 发布与回滚流程。下文 Stage 0 和 intermediate 部分保留历史记录，最终状态以上述结果及最后的详细证据为准。
+
 ## Stage 0 — baseline and release protection (2026-10-26)
 
 The original production build was copied before migration to `.tmp/ui-baseline/dist`.
@@ -74,10 +80,10 @@ network cost. Do not approve the 10% budget using the concurrent module-matrix t
 ## Release protection
 
 - PR quality workflow: locked install, typecheck, frontend tests, smoke-script contract
-  tests, UI-foundation lint, production build, cross-browser critical flows and Chromium
+  tests, lint of all changed UI TypeScript sources, including formerly ignored image-tool modules, production build, cross-browser critical flows and Chromium
   module/theme/viewport matrix. Browser artifacts are retained for 14 days.
 - Production deployment depends on this reusable quality workflow. Pure frontend/docs
-  pushes select `web`; backend/shared/deployment changes select `full`. Missing history
+  pushes select `web`; backend/shared/non-web Compose changes select `full`; CI and release-script-only changes remain `web`. Missing history
   conservatively selects `full`. Manual workflow dispatch explicitly selects either.
 - The exact validated SHA is checked out on the server after verifying it belongs to
   main. The server builds serially, respecting the existing memory constraint.
@@ -113,3 +119,119 @@ matrix at 1440×1024 in light and dark mode. Those checks passed. Intermediate s
 are under `.tmp/ui-pilot-qa`; these are pilot evidence, not the final all-module migration
 acceptance. The final five-viewport matrix, Firefox/WebKit flows, populated analysis and
 computed restock cases, and serial baseline/candidate performance comparison remain pending.
+
+
+## Intermediate verification checkpoint (superseded below)
+
+- Full frontend regression: **94 test files, 1228 passed, 1 existing skipped, 0 failed**.
+  Machine-readable result: `.tmp/ui-final-vitest.json`; log: `.tmp/ui-final-vitest.log`.
+  Later PA-only changes have an additional 203-test targeted run; final browser/build records follow below.
+- Changed-source lint: **0 errors, 86 warnings**, `.tmp/final-lint.log`.
+  CI uses `scripts/lint-ui-changes.mjs` with the PR/push base and `--no-ignore`.
+  Warnings remain visible; the gate does not suppress existing warnings or weaken business assertions.
+- Release scope classification is now executable and tested in `scripts/deployment-scope.mjs`.
+  Four contracts cover this whole UI migration (including CI/release scripts and only-web
+  Compose edits), backend/shared/non-web Compose changes, validated manual overrides,
+  unknown inputs and missing history. Unknown layouts/failed history conservatively select full.
+- `frontend/scripts/check-ui-classes.mjs` rejects invalid repeated Tailwind alpha modifiers.
+- All new browser checks use loopback and explicit synthetic fixtures. They cover populated
+  51-product analysis pagination, details and nested credentials; computed restock with
+  selection, unchanged compute request intent and disabled stale save/export/copy; role
+  navigation; and actual mobile coarse-pointer 44px primary controls. Upload/download
+  regression is included across Chromium/Firefox/WebKit. Check final results before approval.
+- Foundation semantic token pairs were independently measured >=4.5:1 in both themes.
+  This is token-level evidence, not a claim that every rendered page passed a full automated
+  accessibility audit. Browser console collection includes severe React ref/hook/DOM and
+  Dialog title/description errors in addition to uncaught page errors.
+- Real Docker rollback rehearsal is unavailable on this workstation: the
+  `dockerDesktopLinuxEngine` pipe is absent. Prior Bash-stub success/failure rollback
+  simulations remain the available command/control-flow evidence. No production deployment,
+  API restart, schema migration or real business write was performed.
+
+
+### Final browser acceptance
+
+The final candidate build passed **32/32 Playwright cases** on 2026-10-28:
+22 Chromium cases (10 full module/theme/viewport matrices plus critical and populated flows),
+5 Firefox and 5 WebKit critical flows. The latter include real local PNG upload, ordinary
+pointer removal and JSON download with parsed content validation. No forced clicks or live
+business/AI writes are used. Coarse-pointer verification uses `isMobile` + `hasTouch`, confirms
+`(pointer: coarse)`, tests 44px login/navigation controls, taps outside compact Switch artwork
+within its expanded hit area, and taps a second shop's 44px Checkbox label without changing
+its adjacent selected shop. Log: `.tmp/ui-final-verified-browser.log`.
+
+The matrix checks all 11 authenticated views at 1920×1080, 1440×1024, 1366×768,
+768×1024 and 390×844, each in both themes, without document-level horizontal overflow.
+It retains the original fixture data and capture state for comparable screenshots.
+Additional populated analysis screenshots cover page 1/2 of 51 products and a detail dialog;
+computed restock screenshots cover a selected executable SKU before the condition-change lock.
+Runtime errors and enumerated severe React/accessibility console messages are absent.
+This is a defined regression suite, not an exhaustive accessibility or production-load audit.
+
+- Before: `.tmp/ui-baseline/results/ui-migration-all-modules-<width>-<theme>-chromium/`.
+- After: `.tmp/ui-final-verified/ui-migration-all-modules-<width>-<theme>-chromium/`.
+- Open `.tmp/ui-screenshot-comparison.html` for links pairing each of the 110 matching images.
+- Populated analysis/restock: `.tmp/ui-final-verified/acceptance-*/`.
+- The orchestrator visually checked desktop/mobile Chroma, Finance, computed restock and
+  populated analysis. This caught and led to fixes for font-option clipping, help/remove
+  button overlap and low contrast over tinted sales bars. Final affected screenshots were
+  recaptured and reviewed.
+
+Latest production build passed in 16.23s. Existing >500KB chunk warning remains.
+All local JS/CSS chunks together: baseline 3,107,832 raw / 937,581 gzip bytes;
+candidate 3,381,942 raw / 1,016,271 gzip bytes (+8.39% gzip).
+These totals include lazy chunks and **exclude the old runtime CDN**, so they are neither a
+first-screen transfer comparison nor evidence of the interaction timing budget.
+Raw records: `.tmp/ui-build-sizes.json`.
+
+
+### Final full regression and performance acceptance
+
+After the last UI fixes and the test-only CSS-source reader correction:
+**94 frontend test files, 1235 passed, 1 original skipped, 0 failed**.
+The contrast test reads real source CSS through Node fs because Vitest's disabled CSS
+transform can return an empty `?raw` import when that stylesheet was imported earlier in
+another suite. Its 336 contrast combinations and actual source alpha/token checks remain.
+Final evidence: `.tmp/ui-final-complete-verified-vitest.json` and matching `.log`.
+Typecheck passed (`.tmp/ui-final-typecheck.log`); changed-source lint passed with
+0 errors / 86 warnings (`.tmp/ui-final-complete-lint.log`). Nine release/smoke contracts
+and the invalid-class guard passed. The existing single skipped test was not expanded.
+
+Performance was measured serially, baseline then candidate, on this workstation with
+three fresh Chromium contexts per build, identical synthetic data, viewport 1440×1024,
+locale/timezone and reduced motion. The baseline was the original untouched copied build,
+including its live Tailwind CDN script. Both complete three-context trials passed.
+
+| Three-context median | Original | Final | Change |
+|---|---:|---:|---:|
+| First usable Dashboard | 4464.7ms | 255.3ms | -94.3% |
+| Product search | 30.2ms | 24.5ms | -18.8% |
+| Sync dialog opening | 135.1ms | 64.1ms | -52.5% |
+
+`compare-ui-performance.mjs` passed the 10% regression gate for all three metrics.
+This measures the defined synthetic/local workflow on one device, not production latency
+or a general claim of equivalent speedup on every network.
+
+The first measurement round also passed (4829.6→248.1ms first render,
+35.1→25.7ms search, 163.0→63.5ms dialog), but browser ResourceTiming entries were empty
+because the business fixture clock masks that API. We retained that round and corrected
+only the harness by recording native Playwright request timings/sizes after the timed
+operations. The corrected round above was then run once on each build; no faster samples
+were selected or overwritten. Both rounds remain inspectable:
+
+- Initial: `.tmp/ui-final-performance-baseline/` and `.tmp/ui-final-performance-candidate/`.
+- Corrected: `.tmp/ui-final-performance-baseline-network/` and `.tmp/ui-final-performance-candidate-network/`.
+- Gate output: `.tmp/ui-final-performance-network-comparison.log`.
+
+Each corrected baseline context observed the actual CDN redirect and a successful
+`https://cdn.tailwindcss.com/3.4.17` response. The script response bodies were
+126857/126860/126869 bytes. Redirect request durations were approximately
+2395.5/5278.5/3818.0ms; the following script requests took 264.0/296.6/271.8ms.
+The candidate made no Tailwind CDN request. These timings include the network conditions
+of this trial. Zero/unavailable browser cross-origin transfer entries were not treated as
+zero network cost.
+
+All local implementation and defined automated/visual acceptance gates passed. The
+remaining external release qualification is the real-Docker isolated rollback rehearsal;
+the daemon is unavailable here. Production deployment and real API smoke on an isolated
+test environment were not performed by this UI migration task.
