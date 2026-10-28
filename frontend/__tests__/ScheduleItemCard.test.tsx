@@ -51,4 +51,18 @@ describe('Schedule ItemCard', () => {
     expect(onPointerDown).not.toHaveBeenCalled();
     expect(onDelete).toHaveBeenCalledWith('schedule-1');
   });
+
+  it('offers explicit keyboard actions without starting the card long press', () => {
+    const props = renderCard();
+    const edit = screen.getByRole('button', { name: 'Edit Review supplier quote' });
+    fireEvent.pointerDown(edit);
+    fireEvent.click(edit);
+    expect(props.onPointerDown).not.toHaveBeenCalled();
+    expect(props.onDoubleClick).toHaveBeenCalledWith(baseItem);
+    const complete = screen.getByRole('button', { name: 'Complete Review supplier quote' });
+    fireEvent.pointerDown(complete);
+    fireEvent.click(complete);
+    expect(props.onToggle).toHaveBeenCalledWith(baseItem);
+    expect(props.onPointerDown).not.toHaveBeenCalled();
+  });
 });

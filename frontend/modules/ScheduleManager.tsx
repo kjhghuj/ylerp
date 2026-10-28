@@ -1,9 +1,17 @@
+import { Alert } from '../components/ui/alert';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../components/ui/sheet';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Input } from '../components/ui/input';
+import { cn } from '../lib/utils';
+import { Button } from '../components/ui/button';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '../StoreContext';
 import { useAuth } from '../AuthContext';
 import api from '../src/api';
 import {
-    Archive, X, Sparkles, Edit3, Save, Search, CalendarDays
+    Archive, X, Sparkles, Save, Search
 } from 'lucide-react';
 import {
     normalizeType, TYPE_CONFIG, formatDate, formatDateShort, getGreeting,
@@ -12,14 +20,17 @@ import {
 import { KanbanColumn } from './schedule/KanbanColumn';
 
 export const ScheduleManager: React.FC = () => {
-    const { strings, language } = useStore();
-    const { user } = useAuth();
+    const { language } = useStore();
+    useAuth();
     const isZh = language === 'zh';
 
     const [items, setItems] = useState<ScheduleItemData[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState<ItemType | null>(null);
     const [newTitle, setNewTitle] = useState('');
+    const [saving, setSaving] = useState(false);
+    const savingRef = useRef(false);
+    const [formError, setFormError] = useState<string | null>(null);
     const [newDesc, setNewDesc] = useState('');
     const [newDeadline, setNewDeadline] = useState('');
     const [newRemindAt, setNewRemindAt] = useState('');
@@ -32,14 +43,14 @@ export const ScheduleManager: React.FC = () => {
     const [editRemindAt, setEditRemindAt] = useState('');
     const [showEditModal, setShowEditModal] = useState(false);
     const [archiveSearch, setArchiveSearch] = useState('');
-    const [archiveDateFilter, setArchiveDateFilter] = useState('');
+    const [archiveDateFilter] = useState('');
     const [dragId, setDragId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [flyingItemId, setFlyingItemId] = useState<string | null>(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [expandedMobileColumn, setExpandedMobileColumn] = useState<ItemType | null>(null);
     const [archiveOpen, setArchiveOpen] = useState(false);
-    const [pressingId, setPressingId] = useState<string | null>(null);
+    const [, setPressingId] = useState<string | null>(null);
     const [progressMap, setProgressMap] = useState<Record<string, number>>({});
     const progressMapRef = useRef<Record<string, number>>({});
     const pressStartRef = useRef<Record<string, number>>({});
@@ -199,7 +210,8 @@ export const ScheduleManager: React.FC = () => {
     }, [fetchItems]);
 
     const handleCreate = async () => {
-        if (!showCreate || !newTitle.trim()) return;
+        if (!showCreate || !newTitle.trim() || savingRef.current) return;
+        savingRef.current = true; setSaving(true); setFormError(null);
         try {
             const sameType = items.filter(i => i.type === showCreate && !i.completed);
             const maxSortKey = sameType.length > 0 ? Math.max(...sameType.map(i => i.sortKey)) : 0;
@@ -219,7 +231,8 @@ export const ScheduleManager: React.FC = () => {
             setShowCreate(null);
         } catch (e) {
             console.error('Failed to create item', e);
-        }
+            setFormError(isZh ? '保存失败，请重试' : 'Save failed. Please try again.');
+        } finally { savingRef.current = false; setSaving(false); }
     };
 
     const handleToggle = useCallback(async (item: ScheduleItemData) => {
@@ -286,6 +299,7 @@ export const ScheduleManager: React.FC = () => {
 
     const handleDoubleClick = useCallback((item: ScheduleItemData) => {
         if (item.completed) return;
+        setFormError(null);
         setEditTitle(item.title);
         setEditDesc(item.description || '');
         setEditDeadline(item.deadline ? item.deadline.slice(0, 16) : '');
@@ -295,7 +309,8 @@ export const ScheduleManager: React.FC = () => {
     }, []);
 
     const handleSaveEdit = async () => {
-        if (!editingItem) return;
+        if (!editingItem || savingRef.current) return;
+        savingRef.current = true; setSaving(true); setFormError(null);
         try {
             const res = await api.put(`/schedule/${editingItem.id}`, {
                 title: editTitle.trim(),
@@ -308,7 +323,8 @@ export const ScheduleManager: React.FC = () => {
             setEditingItem(null);
         } catch (e) {
             console.error('Failed to update item', e);
-        }
+            setFormError(isZh ? '保存失败，请重试' : 'Save failed. Please try again.');
+        } finally { savingRef.current = false; setSaving(false); }
     };
 
     const handleDragStart = useCallback((e: React.DragEvent, id: string) => {
@@ -412,171 +428,59 @@ export const ScheduleManager: React.FC = () => {
         schedule: [],
     };
 
-    const CreateModal = showCreate ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => setShowCreate(null)}>
-            <div className="w-full max-w-md rounded-2xl p-6 border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${TYPE_CONFIG[showCreate].color} flex items-center justify-center text-white`}>
-                            {React.createElement(TYPE_CONFIG[showCreate].icon, { size: 16 })}
-                        </div>
-                        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                            {isZh ? TYPE_CONFIG[showCreate].label : TYPE_CONFIG[showCreate].labelEn}
-                        </span>
-                    </div>
-                    <button onClick={() => setShowCreate(null)} className="p-1 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
-                        <X size={18} />
-                    </button>
-                </div>
-                <div className="space-y-3">
-                    <input type="text" placeholder={isZh ? '标题' : 'Title'} value={newTitle} onChange={e => setNewTitle(e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg border text-sm font-medium outline-none transition-colors"
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                        autoFocus onKeyDown={e => e.key === 'Enter' && handleCreate()} />
-                    <textarea placeholder={isZh ? '描述（可选）' : 'Description (optional)'} value={newDesc} onChange={e => setNewDesc(e.target.value)} rows={2}
-                        className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    {(showCreate === 'approval' || showCreate === 'shop-event' || showCreate === 'notification') && (
-                        <input type="datetime-local" value={newDeadline} onChange={e => setNewDeadline(e.target.value)}
-                            className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    )}
-                    {showCreate === 'notification' && (
-                        <input type="datetime-local" value={newRemindAt} onChange={e => setNewRemindAt(e.target.value)}
-                            placeholder={isZh ? '提醒时间 (可选)' : 'Reminder time (optional)'}
-                            className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    )}
-                    <button onClick={handleCreate} disabled={!newTitle.trim()}
-                        className="w-full h-10 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 transition-all">
-                        {isZh ? '创建' : 'Create'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    ) : null;
-
-    const EditModal = showEditModal && editingItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }} onClick={() => { setShowEditModal(false); setEditingItem(null); }}>
-            <div className="w-full max-w-md rounded-2xl p-6 border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <Edit3 size={16} style={{ color: 'var(--text-secondary)' }} />
-                        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                            {isZh ? '编辑' : 'Edit'} - {isZh ? TYPE_CONFIG[editingItem.type].label : TYPE_CONFIG[editingItem.type].labelEn}
-                        </span>
-                    </div>
-                    <button onClick={() => { setShowEditModal(false); setEditingItem(null); }} className="p-1 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
-                        <X size={18} />
-                    </button>
-                </div>
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '标题' : 'Title'}</label>
-                        <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)}
-                            className="w-full h-10 px-3 rounded-lg border text-sm font-medium outline-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                            autoFocus onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '描述' : 'Description'}</label>
-                        <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2}
-                            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    </div>
-                    {(editingItem.type === 'approval' || editingItem.type === 'shop-event' || editingItem.type === 'notification') && (
-                        <div>
-                            <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '截止时间' : 'Deadline'}</label>
-                            <input type="datetime-local" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
-                                className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
-                                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                        </div>
-                    )}
-                    {editingItem.type === 'notification' && (
-                        <div>
-                            <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '提醒时间' : 'Reminder'}</label>
-                            <input type="datetime-local" value={editRemindAt} onChange={e => setEditRemindAt(e.target.value)}
-                                className="w-full h-10 px-3 rounded-lg border text-sm outline-none transition-colors"
-                                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                        </div>
-                    )}
-                    <div className="flex gap-2">
-                        <button onClick={() => { setShowEditModal(false); setEditingItem(null); }}
-                            className="flex-1 h-10 rounded-lg text-sm font-bold border transition-all"
-                            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-primary)' }}>
-                            {isZh ? '取消' : 'Cancel'}
-                        </button>
-                        <button onClick={handleSaveEdit} disabled={!editTitle.trim()}
-                            className="flex-1 h-10 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 disabled:opacity-40 transition-all flex items-center justify-center gap-1.5">
-                            <Save size={14} />
-                            {isZh ? '保存' : 'Save'}
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    ) : null;
-
-    const IdeaCompleteModal = editingItem && !showEditModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)' }}>
-            <div className="w-full max-w-lg rounded-2xl p-6 border" style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', boxShadow: '0 4px 20px rgba(0,0,0,0.02)' }}>
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <Sparkles size={18} style={{ color: '#F2C94C' }} />
-                        <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '归档想法' : 'Archive Idea'}</span>
-                    </div>
-                    <button onClick={() => { setEditingItem(null); setEditNotes(''); setEditFeedback(''); }}
-                        className="p-1 rounded-lg" style={{ color: 'var(--text-tertiary)' }}>
-                        <X size={18} />
-                    </button>
-                </div>
-                <div className="p-3 rounded-xl border mb-4" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)' }}>
-                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{editingItem.title}</span>
-                    {editingItem.description && (
-                        <p className="text-xs mt-1" style={{ color: 'var(--text-tertiary)' }}>{editingItem.description}</p>
-                    )}
-                </div>
-                <div className="space-y-3">
-                    <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '笔记' : 'Notes'}</label>
-                        <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2}
-                            placeholder={isZh ? '测试结果、数据、发现...' : 'Test results, data, findings...'}
-                            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold mb-1 block" style={{ color: 'var(--text-secondary)' }}>{isZh ? '反馈总结' : 'Feedback'}</label>
-                        <textarea value={editFeedback} onChange={e => setEditFeedback(e.target.value)} rows={2}
-                            placeholder={isZh ? '学到了什么、是否需要继续跟进...' : 'What was learned, whether to follow up...'}
-                            className="w-full px-3 py-2 rounded-lg border text-sm outline-none resize-none transition-colors"
-                            style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
-                    </div>
-                    <button onClick={handleArchiveWithNotes}
-                        className="w-full h-10 rounded-lg text-sm font-bold text-white bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 transition-all flex items-center justify-center gap-1.5">
-                        <Sparkles size={14} />
-                        {isZh ? '归档完成' : 'Archive Complete'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    ) : null;
+    const CreateModal = <Dialog open={showCreate !== null} onOpenChange={open => { if (!open && !saving) { setShowCreate(null); setFormError(null); } }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl" showCloseButton={!saving} onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
+            <DialogTitle>{isZh ? '新建' : 'New'} {showCreate ? (isZh ? TYPE_CONFIG[showCreate].label : TYPE_CONFIG[showCreate].labelEn) : ''}</DialogTitle>
+            <DialogDescription>{isZh ? '填写任务内容和可选时间。' : 'Enter the task and optional dates.'}</DialogDescription>
+            <form className="space-y-4" onSubmit={event => { event.preventDefault(); void handleCreate(); }} aria-busy={saving}><fieldset disabled={saving} className="space-y-4">{formError && <Alert role="alert" className="border-danger/30 text-danger">{formError}</Alert>}
+                <div className="space-y-2"><Label htmlFor="schedule-new-title">{isZh ? '标题' : 'Title'}</Label><Input id="schedule-new-title" value={newTitle} onChange={event => setNewTitle(event.target.value)} required /></div>
+                <div className="space-y-2"><Label htmlFor="schedule-new-description">{isZh ? '描述（可选）' : 'Description (optional)'}</Label><Textarea id="schedule-new-description" value={newDesc} onChange={event => setNewDesc(event.target.value)} rows={2} /></div>
+                {(showCreate === 'approval' || showCreate === 'shop-event' || showCreate === 'notification') && <div className="space-y-2"><Label htmlFor="schedule-new-deadline">{isZh ? '截止时间' : 'Deadline'}</Label><Input id="schedule-new-deadline" type="datetime-local" value={newDeadline} onChange={event => setNewDeadline(event.target.value)} /></div>}
+                {showCreate === 'notification' && <div className="space-y-2"><Label htmlFor="schedule-new-reminder">{isZh ? '提醒时间（可选）' : 'Reminder (optional)'}</Label><Input id="schedule-new-reminder" type="datetime-local" value={newRemindAt} onChange={event => setNewRemindAt(event.target.value)} /></div>}
+                <Button type="submit" disabled={!newTitle.trim()} className="w-full">{saving ? (isZh ? '创建中…' : 'Creating…') : (isZh ? '创建' : 'Create')}</Button>
+            </fieldset></form>
+        </DialogContent>
+    </Dialog>;
+    const EditModal = <Dialog open={showEditModal && editingItem !== null} onOpenChange={open => { if (!open && !saving) { setShowEditModal(false); setEditingItem(null); setFormError(null); } }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-md rounded-xl" showCloseButton={!saving} onEscapeKeyDown={event => { if (saving) event.preventDefault(); }} onInteractOutside={event => { if (saving) event.preventDefault(); }}>
+            <DialogTitle>{isZh ? '编辑' : 'Edit'} {editingItem ? (isZh ? TYPE_CONFIG[editingItem.type].label : TYPE_CONFIG[editingItem.type].labelEn) : ''}</DialogTitle>
+            <DialogDescription>{isZh ? '修改任务内容，保存后生效。' : 'Update the task and save your changes.'}</DialogDescription>
+            <form className="space-y-4" onSubmit={event => { event.preventDefault(); void handleSaveEdit(); }} aria-busy={saving}><fieldset disabled={saving} className="space-y-4">{formError && <Alert role="alert" className="border-danger/30 text-danger">{formError}</Alert>}
+                <div className="space-y-2"><Label htmlFor="schedule-edit-title">{isZh ? '标题' : 'Title'}</Label><Input id="schedule-edit-title" value={editTitle} onChange={event => setEditTitle(event.target.value)} required /></div>
+                <div className="space-y-2"><Label htmlFor="schedule-edit-description">{isZh ? '描述' : 'Description'}</Label><Textarea id="schedule-edit-description" value={editDesc} onChange={event => setEditDesc(event.target.value)} rows={2} /></div>
+                {editingItem && ['approval','shop-event','notification'].includes(editingItem.type) && <div className="space-y-2"><Label htmlFor="schedule-edit-deadline">{isZh ? '截止时间' : 'Deadline'}</Label><Input id="schedule-edit-deadline" type="datetime-local" value={editDeadline} onChange={event => setEditDeadline(event.target.value)} /></div>}
+                {editingItem?.type === 'notification' && <div className="space-y-2"><Label htmlFor="schedule-edit-reminder">{isZh ? '提醒时间' : 'Reminder'}</Label><Input id="schedule-edit-reminder" type="datetime-local" value={editRemindAt} onChange={event => setEditRemindAt(event.target.value)} /></div>}
+                <div className="flex justify-end gap-2"><Button variant="outline" onClick={() => { setShowEditModal(false); setEditingItem(null); setFormError(null); }}>{isZh ? '取消' : 'Cancel'}</Button><Button type="submit" disabled={!editTitle.trim()}><Save size={14} />{isZh ? '保存' : 'Save'}</Button></div>
+            </fieldset></form>
+        </DialogContent>
+    </Dialog>;
+    const IdeaCompleteModal = <Dialog open={editingItem !== null && !showEditModal} onOpenChange={open => { if (!open) { setEditingItem(null); setEditNotes(''); setEditFeedback(''); } }}>
+        <DialogContent className="w-[calc(100%-2rem)] rounded-xl">
+            <DialogTitle>{isZh ? '归档想法' : 'Archive idea'}</DialogTitle>
+            <DialogDescription>{editingItem?.title}</DialogDescription>
+            {editingItem?.description && <p className="text-sm text-muted-foreground">{editingItem.description}</p>}
+            <div className="space-y-2"><Label htmlFor="schedule-notes">{isZh ? '笔记' : 'Notes'}</Label><Textarea id="schedule-notes" value={editNotes} onChange={event => setEditNotes(event.target.value)} rows={2} /></div>
+            <div className="space-y-2"><Label htmlFor="schedule-feedback">{isZh ? '反馈总结' : 'Feedback'}</Label><Textarea id="schedule-feedback" value={editFeedback} onChange={event => setEditFeedback(event.target.value)} rows={2} /></div>
+            <Button onClick={() => { void handleArchiveWithNotes(); }}><Sparkles size={14} />{isZh ? '归档完成' : 'Archive complete'}</Button>
+        </DialogContent>
+    </Dialog>;
 
     if (loading) {
         return (
             <div className="flex items-center justify-center h-full">
-                <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-primary/30 border-t-transparent rounded-full animate-spin" />
             </div>
         );
     }
 
-    const renderSectionColumn = (type: ItemType, className?: string) => (
+    const renderSectionColumn = (type: ItemType) => (
         <KanbanColumn
             type={type}
             items={itemsByType[type]}
             isAccordion={isMobile}
             isExpanded={expandedMobileColumn === type}
             onAccordionToggle={() => setExpandedMobileColumn(prev => prev === type ? null : type)}
-            onCreate={setShowCreate}
+            onCreate={type => { setFormError(null); setShowCreate(type); }}
             dragId={dragId}
             dragOverId={dragOverId}
             flyingItemId={flyingItemId}
@@ -594,20 +498,21 @@ export const ScheduleManager: React.FC = () => {
     );
 
     return (
-        <div className="h-full flex flex-col">
+        <div className="flex h-full min-w-0 flex-col text-foreground">
             {/* Header */}
             <div className="flex items-center justify-between px-1 py-1.5 shrink-0">
                 <div>
                     <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
                         {todayStr} 周{todayWeekDay} · {getGreeting()}
                     </h3>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
                         {isZh ? `${activeItems.length} 个待办` : `${activeItems.length} pending`} · {isZh ? `${archivedItems.length} 个已归档` : `${archivedItems.length} archived`}
                     </p>
                 </div>
-                <button
+                <Button variant="ghost"
+                    aria-label={isZh ? "打开归档" : "Open archive"}
                     onClick={() => setArchiveOpen(!archiveOpen)}
-                    className="p-1.5 rounded-lg border shrink-0 transition-colors"
+                    className={cn("h-auto", "p-1.5 rounded-lg border shrink-0 transition-colors")}
                     style={{
                         borderColor: 'var(--border-default)',
                         color: archiveOpen ? 'var(--accent-blue)' : 'var(--text-secondary)',
@@ -615,7 +520,7 @@ export const ScheduleManager: React.FC = () => {
                     }}
                 >
                     <Archive size={14} />
-                </button>
+                </Button>
             </div>
 
             {/* Content: 3列 + 归档面板 */}
@@ -623,7 +528,7 @@ export const ScheduleManager: React.FC = () => {
                 <div className="flex-1 flex min-w-0">
                     {activeItems.length === 0 ? (
                         <div className="flex flex-col items-center justify-center flex-1">
-                            <p className="text-sm font-medium" style={{ color: 'var(--text-tertiary)' }}>
+                            <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>
                                 {isZh ? '完成所有任务！' : 'All tasks complete!'}
                             </p>
                         </div>
@@ -650,8 +555,7 @@ export const ScheduleManager: React.FC = () => {
                 </div>
 
                 {/* Archive Panel */}
-                <div className={`archive-panel flex flex-col border-l ${archiveOpen ? '' : 'collapsed'}`}
-                    style={{ borderColor: 'var(--border-default)', backgroundColor: 'var(--bg-primary)' }}>
+                <ArchiveSurface open={archiveOpen} onOpenChange={setArchiveOpen} mobile={isMobile} isZh={isZh}>
                     {archiveOpen ? (
                         <>
                             <div className="px-3 py-2 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--border-default)' }}>
@@ -659,14 +563,14 @@ export const ScheduleManager: React.FC = () => {
                                     <Archive size={14} style={{ color: '#F2C94C' }} />
                                     <span className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{isZh ? '归档' : 'Archive'}</span>
                                 </div>
-                                <button onClick={() => setArchiveOpen(false)} className="p-0.5 rounded" style={{ color: 'var(--text-tertiary)' }}>
+                                <Button aria-label={isZh ? '关闭归档' : 'Close archive'} variant="ghost" onClick={() => setArchiveOpen(false)} className={cn("h-auto", "p-0.5 rounded")} style={{ color: 'var(--text-secondary)' }}>
                                     <X size={14} />
-                                </button>
+                                </Button>
                             </div>
                             <div className="px-2 py-2 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
                                 <div className="relative">
-                                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                                    <input type="text" value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
+                                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-secondary)' }} />
+                                    <Input type="text" value={archiveSearch} onChange={e => setArchiveSearch(e.target.value)}
                                         placeholder={isZh ? '搜索...' : 'Search...'}
                                         className="w-full h-7 pl-7 pr-2 rounded-lg border text-[11px] outline-none"
                                         style={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }} />
@@ -675,8 +579,8 @@ export const ScheduleManager: React.FC = () => {
                             <div className="flex-1 overflow-y-auto p-2 space-y-3">
                                 {filteredArchived.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-10">
-                                        <Archive size={20} className="mb-2 opacity-20" style={{ color: 'var(--text-tertiary)' }} />
-                                        <p className="text-[11px] font-medium text-center" style={{ color: 'var(--text-tertiary)' }}>
+                                        <Archive size={20} className="mb-2 opacity-20" style={{ color: 'var(--text-secondary)' }} />
+                                        <p className="text-[11px] font-medium text-center" style={{ color: 'var(--text-secondary)' }}>
                                             {archivedItems.length === 0 ? (isZh ? '暂无归档' : 'No archive') : (isZh ? '无匹配结果' : 'No match')}
                                         </p>
                                     </div>
@@ -689,14 +593,14 @@ export const ScheduleManager: React.FC = () => {
                                         return (
                                             <div key={dateKey}>
                                                 <div className="flex items-center gap-2 mb-1.5">
-                                                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-tertiary)' }}>{label}</span>
+                                                    <span className="text-[10px] font-bold" style={{ color: 'var(--text-secondary)' }}>{label}</span>
                                                     <div className="flex-1 h-px" style={{ backgroundColor: 'var(--border-default)' }} />
                                                 </div>
                                                 <div className="space-y-1">
                                                     {dateItems.map(item => (
                                                         <div key={item.id} className="rounded-lg p-2" style={{ backgroundColor: 'var(--bg-card)', boxShadow: 'var(--shadow-sm)' }}>
                                                             <div className="flex items-center gap-1.5">
-                                                                <div className={`w-3.5 h-3.5 rounded bg-gradient-to-br ${TYPE_CONFIG[item.type].color} flex items-center justify-center text-white shrink-0`}>
+                                                                <div className={`w-3.5 h-3.5 rounded bg-gradient-to-br ${TYPE_CONFIG[item.type].color} flex items-center justify-center text-foreground shrink-0`}>
                                                                     {React.createElement(TYPE_CONFIG[item.type].icon, { size: 7 })}
                                                                 </div>
                                                                 <span className="text-[11px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>{item.title}</span>
@@ -711,17 +615,17 @@ export const ScheduleManager: React.FC = () => {
                             </div>
                         </>
                     ) : (
-                        <button
+                        <Button aria-label={isZh ? '展开归档' : 'Expand archive'} variant="ghost"
                             onClick={() => setArchiveOpen(true)}
-                            className="flex flex-col items-center py-3 w-full"
-                            style={{ color: 'var(--text-tertiary)' }}
+                            className={cn("h-auto", "flex flex-col items-center py-3 w-full")}
+                            style={{ color: 'var(--text-secondary)' }}
                             title={isZh ? '展开归档' : 'Expand archive'}
                         >
                             <Archive size={14} />
                             <span className="text-[9px] mt-1" style={{ writingMode: 'vertical-rl' }}>{isZh ? '归档' : 'Archive'}</span>
-                        </button>
+                        </Button>
                     )}
-                </div>
+                </ArchiveSurface>
             </div>
 
             {CreateModal}
@@ -730,3 +634,8 @@ export const ScheduleManager: React.FC = () => {
         </div>
     );
 };
+
+function ArchiveSurface({ children, open, onOpenChange, mobile, isZh }: React.PropsWithChildren<{ open: boolean; onOpenChange: (open: boolean) => void; mobile: boolean; isZh: boolean }>) {
+  if (!mobile) return <div className={`archive-panel flex flex-col border-l border-border bg-background ${open ? '' : 'collapsed'}`}>{children}</div>;
+  return <Sheet open={open} onOpenChange={onOpenChange}><SheetContent showCloseButton={false} className="flex w-full flex-col gap-0 bg-card p-0 sm:max-w-lg"><SheetTitle className="sr-only">{isZh ? '归档' : 'Archive'}</SheetTitle><SheetDescription className="sr-only">{isZh ? '搜索并查看已归档任务' : 'Search and view archived tasks'}</SheetDescription>{children}</SheetContent></Sheet>;
+}

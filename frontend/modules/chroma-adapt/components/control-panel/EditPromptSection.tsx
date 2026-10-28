@@ -1,3 +1,7 @@
+import { Input } from '../../../../components/ui/input';
+import { cn } from '../../../../lib/utils';
+import { Button } from '../../../../components/ui/button';
+import { Textarea } from '../../../../components/ui/textarea';
 import React from 'react';
 import { Loader2, Pencil, Sparkles, Zap, Wand2, Images, Palette } from 'lucide-react';
 import { ChromaAppState, ProcessingState, SecondaryWorkflowMode, ColorWorkflowMode } from '../../chromaTypes';
@@ -54,6 +58,14 @@ const helpContent: Record<string, { title: string; content: string }> = {
   }
 };
 
+const StepHeader = ({ step, title, helpKey }: { step: string, title: string, helpKey?: string }) => (
+  <div className="flex items-center gap-2 mb-3">
+    <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-primary text-primary-foreground text-[10px] font-bold">{step}</span>
+    <h2 className="text-sm font-bold text-foreground">{title}</h2>
+    {helpKey && helpContent[helpKey] && <HelpTooltip {...helpContent[helpKey]} />}
+  </div>
+);
+
 const EditPromptSection: React.FC<EditPromptSectionProps> = ({
   state,
   t,
@@ -61,7 +73,6 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
   onEditUserInputChange,
   onAnalyzeSecondary,
   onAnalyzeColorAdapt,
-  onAnalyzeEdit,
   onSecondaryBatchUpload,
   onSecondaryBatchGenerate,
   onRemoveSecondaryBatchItem,
@@ -71,41 +82,33 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 }) => {
   const isProcessing = state.status === ProcessingState.GENERATING || state.status === ProcessingState.ANALYZING;
 
-  const StepHeader = ({ step, title, helpKey }: { step: string, title: string, helpKey?: string }) => (
-    <div className="flex items-center gap-2 mb-3">
-      <span className="flex items-center justify-center w-5 h-5 rounded-lg bg-brand-500 text-white text-[10px] font-bold">{step}</span>
-      <h2 className="text-sm font-bold text-slate-800">{title}</h2>
-      {helpKey && helpContent[helpKey] && <HelpTooltip {...helpContent[helpKey]} />}
-    </div>
-  );
-
   if (state.mode === 'IMAGE_EDIT') {
     return (
       <div className="space-y-3">
         <StepHeader step={t.promptStep} title={t.editInstructions} helpKey="editPrompt" />
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
-            <label className="text-xs font-bold text-slate-600">{t.editInstruction || '修改需求'}</label>
+            <label className="text-xs font-bold text-muted-foreground">{t.editInstruction || '修改需求'}</label>
             <HelpTooltip {...helpContent.editPrompt} />
           </div>
-          <textarea
+          <Textarea aria-label={t.editPlaceholder}
             value={state.editPrompt}
             onChange={(e) => onEditPromptChange?.(e.target.value)}
             placeholder={t.editPlaceholder}
-            className="w-full h-28 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+            className="w-full h-28 bg-card border border-border rounded-xl px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/30 resize-none transition-all"
             disabled={isProcessing}
           />
         </div>
         <div className="space-y-2">
           <div className="flex items-center gap-1.5">
-            <label className="text-xs font-bold text-slate-600">{t.genRequirement || '补充参考文字'}</label>
+            <label className="text-xs font-bold text-muted-foreground">{t.genRequirement || '补充参考文字'}</label>
             <HelpTooltip {...helpContent.editUserInput} />
           </div>
-          <textarea
+          <Textarea aria-label={t.editUserInputPlaceholder || '可选：输入补充说明，帮助AI更好理解需求...'}
             value={state.editUserInput}
             onChange={(e) => onEditUserInputChange?.(e.target.value)}
             placeholder={t.editUserInputPlaceholder || '可选：输入补充说明，帮助AI更好理解需求...'}
-            className="w-full h-20 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+            className="w-full h-20 bg-card border border-border rounded-xl px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/30 resize-none transition-all"
             disabled={isProcessing}
           />
         </div>
@@ -125,48 +128,48 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 
         <div className="flex gap-2">
           {workflowModes.map((mode) => (
-            <button
+            <Button variant={state.secondaryWorkflowMode === mode.id ? "default" : "outline"}
               key={mode.id}
               onClick={() => onSecondaryWorkflowModeChange?.(mode.id)}
               disabled={isProcessing}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto", `flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
                 state.secondaryWorkflowMode === mode.id
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
-                  : 'bg-white text-slate-500 border border-slate-200 hover:border-brand-300 hover:text-brand-600'
-              } disabled:opacity-40`}
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-none'
+                  : 'bg-card text-muted-foreground border border-border hover:border-primary/30 hover:text-primary'
+              } disabled:opacity-40`)}
             >
               {mode.icon} {mode.label}
-            </button>
+            </Button>
           ))}
         </div>
 
         {state.secondaryWorkflowMode === 'single_model' ? (
           <div className="space-y-3">
-            <textarea
+            <Textarea aria-label={t.editPromptPlaceholder}
               value={state.editPrompt}
               onChange={(e) => onEditPromptChange?.(e.target.value)}
               placeholder={t.editPromptPlaceholder}
-              className="w-full h-28 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+              className="w-full h-28 bg-card border border-border rounded-xl px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/30 resize-none transition-all"
               disabled={isProcessing}
             />
-            <button
+            <Button variant={(!isProcessing && state.posterImage && state.editPrompt) ? "default" : "outline"}
               onClick={onAnalyzeSecondary}
               disabled={isProcessing || !state.posterImage || !state.editPrompt}
-              className={`w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
                 (!isProcessing && state.posterImage && state.editPrompt)
-                  ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-500/25 active:scale-[0.98]'
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }`}
+                  ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+              }`)}
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Zap size={16} />}
               1. {t.analyze || 'Analyze & Plan'}
               <span className="ml-1"><HelpTooltip {...helpContent.secondaryAnalyze} /></span>
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="relative">
-              <input
+              <Input aria-label={state.language === "zh" ? "上传图片" : "Upload images"}
                 type="file"
                 accept="image/*"
                 multiple
@@ -174,37 +177,37 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                 disabled={isProcessing}
               />
-              <div className="border-2 border-dashed border-slate-200 hover:border-brand-300 rounded-xl p-4 text-center transition-colors bg-white">
-                <Images className="mx-auto text-slate-300 mb-2" size={24} />
-                <span className="text-xs font-medium text-slate-400">{t.batchUpload || 'Upload multiple images'}</span>
+              <div className="border-2 border-dashed border-border hover:border-primary/30 rounded-xl p-4 text-center transition-colors bg-card">
+                <Images className="mx-auto text-muted-foreground mb-2" size={24} />
+                <span className="text-xs font-medium text-muted-foreground">{t.batchUpload || 'Upload multiple images'}</span>
               </div>
             </div>
 
             {state.secondaryBatchQueue.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-500">{t.batchQueue || 'Queue'} ({state.secondaryBatchQueue.length})</span>
+                  <span className="text-xs font-bold text-muted-foreground">{t.batchQueue || 'Queue'} ({state.secondaryBatchQueue.length})</span>
                   {onClearSecondaryBatch && (
-                    <button
+                    <Button variant="ghost"
                       onClick={onClearSecondaryBatch}
                       disabled={isProcessing}
-                      className="text-[10px] text-red-400 hover:text-red-500 font-medium transition-colors"
+                      className={cn("h-auto", "text-[10px] text-danger hover:text-danger font-medium transition-colors")}
                     >
                       {t.clearAll || 'Clear All'}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <div className="grid grid-cols-4 gap-2 max-h-32 overflow-y-auto custom-scrollbar">
                   {state.secondaryBatchQueue.map((item) => (
-                    <div key={item.id} className="relative aspect-square bg-white border border-slate-200 rounded-lg overflow-hidden group">
+                    <div key={item.id} className="relative aspect-square bg-card border border-border rounded-lg overflow-hidden group">
                       <img src={item.original} alt="" className="w-full h-full object-cover" />
                       {onRemoveSecondaryBatchItem && !isProcessing && (
-                        <button
+                        <Button variant="ghost"
                           onClick={(e) => { e.stopPropagation(); onRemoveSecondaryBatchItem(item.id); }}
-                          className="absolute top-0.5 right-0.5 p-0.5 bg-black/50 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          className={cn("h-auto", "absolute top-0.5 right-0.5 p-0.5 bg-muted/50 hover:bg-destructive text-destructive-foreground rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity")}
                         >
                           <span className="text-[8px] leading-none">×</span>
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))}
@@ -212,19 +215,19 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
               </div>
             )}
 
-            <button
+            <Button variant={(!isProcessing && state.secondaryBatchQueue.length > 0) ? "default" : "outline"}
               onClick={onSecondaryBatchGenerate}
               disabled={isProcessing || state.secondaryBatchQueue.length === 0}
-              className={`w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
                 (!isProcessing && state.secondaryBatchQueue.length > 0)
-                  ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-500/25 active:scale-[0.98]'
-                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-              }`}
+                  ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+              }`)}
             >
               {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Wand2 size={16} />}
               {t.batchGenerate || 'Batch Generate'}
               <span className="ml-1"><HelpTooltip {...helpContent.secondaryBatch} /></span>
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -243,44 +246,44 @@ const EditPromptSection: React.FC<EditPromptSectionProps> = ({
 
         <div className="flex gap-2">
           {colorModes.map((mode) => (
-            <button
+            <Button variant={state.colorWorkflowMode === mode.id ? "default" : "outline"}
               key={mode.id}
               onClick={() => onColorWorkflowModeChange?.(mode.id)}
               disabled={isProcessing}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+              className={cn("h-auto", `flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
                 state.colorWorkflowMode === mode.id
-                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/25'
-                  : 'bg-white text-slate-500 border border-slate-200 hover:border-brand-300 hover:text-brand-600'
-              } disabled:opacity-40`}
+                  ? 'bg-primary text-primary-foreground shadow-md shadow-none'
+                  : 'bg-card text-muted-foreground border border-border hover:border-primary/30 hover:text-primary'
+              } disabled:opacity-40`)}
             >
               {mode.icon} {mode.label}
-            </button>
+            </Button>
           ))}
         </div>
 
         {state.colorWorkflowMode === 'dual_model' && (
-          <textarea
+          <Textarea aria-label={t.editPromptPlaceholder}
             value={state.editPrompt}
             onChange={(e) => onEditPromptChange?.(e.target.value)}
             placeholder={t.editPromptPlaceholder}
-            className="w-full h-28 bg-white border border-slate-200 rounded-xl px-3.5 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-400 resize-none transition-all"
+            className="w-full h-28 bg-card border border-border rounded-xl px-3.5 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-primary/30 resize-none transition-all"
             disabled={isProcessing}
           />
         )}
 
-        <button
+        <Button variant={(!isProcessing && state.posterImage && state.referenceImage) ? "default" : "outline"}
           onClick={onAnalyzeColorAdapt}
           disabled={isProcessing || !state.posterImage || !state.referenceImage}
-          className={`w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
+          className={cn("h-auto", `w-full py-3 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 ${
             (!isProcessing && state.posterImage && state.referenceImage)
-              ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-lg shadow-brand-500/25 active:scale-[0.98]'
-              : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-          }`}
+              ? 'bg-primary text-primary-foreground hover:bg-primary shadow-lg shadow-none active:scale-[0.98]'
+              : 'bg-muted text-muted-foreground cursor-not-allowed'
+          }`)}
         >
           {isProcessing ? <Loader2 className="animate-spin w-4 h-4" /> : <Sparkles size={16} />}
           1. {t.analyzeColor || 'Analyze Colors'}
           <span className="ml-1"><HelpTooltip {...helpContent.colorAnalyze} /></span>
-        </button>
+        </Button>
       </div>
     );
   }

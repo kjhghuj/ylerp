@@ -1,3 +1,5 @@
+import { cn } from '../../lib/utils';
+import { Button } from '../../components/ui/button';
 import React from 'react';
 import { Plus, ChevronDown } from 'lucide-react';
 import { TYPE_CONFIG, type ItemType, type ScheduleItemData } from './constants';
@@ -40,18 +42,18 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 
   const renderEmptyState = () => (
     <div className="flex flex-col items-center justify-center py-8 px-3">
-      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center text-white opacity-25 mb-2`}>
+      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${config.color} flex items-center justify-center text-foreground opacity-25 mb-2`}>
         {React.createElement(config.icon, { size: 16 })}
       </div>
-      <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
         {isZh ? '暂无任务' : 'No items'}
       </p>
-      <button
+      <Button variant="ghost"
         onClick={() => onCreate(type)}
-        className="mt-2 text-[11px] font-medium ghost-btn px-3 py-1 rounded-lg"
+        className={cn("h-auto", "mt-2 text-[11px] font-medium ghost-btn px-3 py-1 rounded-lg")}
         style={{
           borderColor: 'var(--border-default)',
-          color: 'var(--text-tertiary)',
+          color: 'var(--text-secondary)',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = `rgba(${config.progressRgb}, 0.12)`;
@@ -61,12 +63,12 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'transparent';
           e.currentTarget.style.borderColor = 'var(--border-default)';
-          e.currentTarget.style.color = 'var(--text-tertiary)';
+          e.currentTarget.style.color = 'var(--text-secondary)';
         }}
       >
         <Plus size={10} className="inline mr-0.5" />
         {isZh ? '新建' : 'New'}
-      </button>
+      </Button>
     </div>
   );
 
@@ -97,26 +99,29 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
         className={`flex items-center justify-between px-3 py-2 shrink-0 ${isAccordion ? 'cursor-pointer rounded-t-xl' : 'rounded-t-xl'}`}
         style={{ borderBottom: '1px solid var(--border-light)' }}
         onClick={isAccordion ? onAccordionToggle : undefined}
+        role={isAccordion ? "button" : undefined} tabIndex={isAccordion ? 0 : undefined} aria-expanded={isAccordion ? isExpanded : undefined}
+        onKeyDown={event => { if (isAccordion && event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onAccordionToggle?.(); } }}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${config.color} flex items-center justify-center text-white shrink-0`}>
+          <div className={`w-5 h-5 rounded-md bg-gradient-to-br ${config.color} flex items-center justify-center text-foreground shrink-0`}>
             {React.createElement(config.icon, { size: 12 })}
           </div>
           <span className="text-xs font-bold truncate" style={{ color: 'var(--text-secondary)' }}>
             {isZh ? config.label : config.labelEn}
           </span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0"
-            style={{ backgroundColor: 'var(--zebra-even)', color: 'var(--text-tertiary)' }}>
+            style={{ backgroundColor: 'var(--zebra-even)', color: 'var(--text-secondary)' }}>
             {items.length}
           </span>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
+          <Button variant="ghost"
+            aria-label={`${isZh ? "新建" : "New"} ${isZh ? config.label : config.labelEn}`}
             onClick={(e) => { e.stopPropagation(); onCreate(type); }}
-            className="ghost-btn px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5"
+            className={cn("h-auto", "ghost-btn px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-0.5")}
             style={{
               borderColor: 'var(--border-default)',
-              color: 'var(--text-tertiary)',
+              color: 'var(--text-secondary)',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = `rgba(${config.progressRgb}, 0.12)`;
@@ -126,16 +131,16 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
               e.currentTarget.style.borderColor = 'var(--border-default)';
-              e.currentTarget.style.color = 'var(--text-tertiary)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
             }}
           >
             <Plus size={10} />
             <span className="hidden sm:inline">{isZh ? '新建' : 'New'}</span>
-          </button>
+          </Button>
           {isAccordion && (
             <ChevronDown size={14}
               className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-              style={{ color: 'var(--text-tertiary)' }}
+              style={{ color: 'var(--text-secondary)' }}
             />
           )}
         </div>

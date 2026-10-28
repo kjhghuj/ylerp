@@ -1,5 +1,6 @@
+import { Button } from '../../components/ui/button';
 import React from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Trash2, Pencil } from 'lucide-react';
 import { TYPE_CONFIG, getDeadlineStatus, formatDate, type ScheduleItemData } from './constants';
 
 export const DRAG_HANDLE = 'drag-handle';
@@ -48,6 +49,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
 
     return (
         <div
+            data-ui="schedule-card"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onDoubleClick={() => onDoubleClick(item)}
@@ -59,17 +61,17 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
             } ${
                 isDragging ? 'opacity-40 scale-95' : ''
             } ${
-                isDragOver ? 'ring-2 ring-blue-400/50 scale-[1.02]' : ''
+                isDragOver ? 'ring-2 ring-ring/50 scale-[1.02]' : ''
             } ${
                 isFlying ? 'schedule-fly-out' : ''
             } ${
-                isDone ? 'opacity-40' : ''
+                isDone ? 'border-dashed' : ''
             }`}
             style={{
                 backgroundColor: 'var(--bg-card)',
                 borderColor: isUrgent ? undefined : isWarning ? 'rgba(255,183,77,0.3)' : 'var(--border-default)',
                 boxShadow: 'var(--shadow-sm)',
-                touchAction: 'none',
+                touchAction: 'pan-y',
                 ...urgentBorderStyle,
                 ...(showProgress ? { animation: 'cardBreathe 0.8s ease-in-out infinite' } : {}),
             }}
@@ -86,7 +88,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                             {[0, 1, 2].map(i => (
                                 <div key={i} className="flex gap-[2px]">
                                     {[0, 1].map(j => (
-                                        <div key={j} className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--text-tertiary)', opacity: 0.6 }} />
+                                        <div key={j} className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--text-secondary)', opacity: 0.6 }} />
                                     ))}
                                 </div>
                             ))}
@@ -100,7 +102,7 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                 )}
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                        <div className={`w-4 h-4 rounded bg-gradient-to-br ${config.color} flex items-center justify-center text-white shrink-0`}>
+                        <div className={`w-4 h-4 rounded bg-gradient-to-br ${config.color} flex items-center justify-center text-foreground shrink-0`}>
                             {React.createElement(config.icon, { size: 10 })}
                         </div>
                         <span className="text-sm font-bold truncate" title={item.title} style={{ color: 'var(--text-primary)', textDecoration: isDone ? 'line-through' : undefined }}>
@@ -108,13 +110,13 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                         </span>
                     </div>
                     {item.description && (
-                        <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-tertiary)' }}>
+                        <p className="text-xs mt-0.5 line-clamp-1" style={{ color: 'var(--text-secondary)' }}>
                             {item.description}
                         </p>
                     )}
                     <div className="flex items-center gap-2 mt-1">
                         {item.deadline && (
-                            <span className={`text-[10px] font-mono ${isUrgent ? 'text-red-500' : isWarning ? 'text-amber-500' : 'text-slate-400'}`}>
+                            <span className={`text-[10px] font-mono ${isUrgent ? 'text-danger' : isWarning ? 'text-warning' : 'text-muted-foreground'}`}>
                                 {formatDate(item.deadline)}
                             </span>
                         )}
@@ -125,18 +127,11 @@ export const ItemCard: React.FC<ItemCardProps> = React.memo(({
                         )}
                     </div>
                 </div>
-                <button
-                    type="button"
-                    aria-label={`Delete ${item.title}`}
-                    title="Delete"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
-                    className="shrink-0 p-1 rounded-lg opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                    style={{ color: 'var(--text-tertiary)' }}
-                >
-                    <Trash2 size={12} />
-                </button>
+                <div className="flex shrink-0 items-center gap-0.5" onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} onDoubleClick={event => event.stopPropagation()}>
+                    {!isDone && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" aria-label={`Edit ${item.title}`} onClick={event => { event.stopPropagation(); onDoubleClick(item); }}><Pencil size={13} /></Button>}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" aria-label={`${isDone ? 'Restore' : 'Complete'} ${item.title}`} onClick={event => { event.stopPropagation(); onToggle(item); }}><Check size={13} /></Button>
+                    <Button variant="ghost" size="icon" aria-label={`Delete ${item.title}`} title="Delete" onClick={event => { event.stopPropagation(); onDelete(item.id); }} className="h-8 w-8 text-danger"><Trash2 size={13} /></Button>
+                </div>
             </div>
             {showProgress && (
                 <div className="mt-2 h-1 rounded-full overflow-hidden relative" style={{ backgroundColor: 'rgba(var(--border-light-rgb, 0,0,0), 0.1)' }}>

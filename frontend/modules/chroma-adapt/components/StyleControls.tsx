@@ -1,3 +1,5 @@
+import { cn } from '../../../lib/utils';
+import { Button } from '../../../components/ui/button';
 
 import React from 'react';
 import { StyleConfig } from '../chromaTypes';
@@ -24,18 +26,18 @@ const StyleControls: React.FC<StyleControlsProps> = ({ config, onChange, disable
       {styleOptions.map((opt) => {
         const isActive = config[opt.key];
         return (
-          <button
-            key={opt.key}
+          <Button variant={isActive ? "default" : "outline"}
+            key={opt.key} aria-pressed={isActive}
             onClick={() => onChange(opt.key)}
             disabled={disabled}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
+            className={cn("h-auto", `px-3.5 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${
               isActive
-                ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/25'
-                : 'bg-white text-slate-500 border border-slate-200 hover:border-brand-300 hover:text-brand-600'
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
+                ? 'bg-primary text-primary-foreground shadow-sm shadow-none'
+                : 'bg-card text-muted-foreground border border-border hover:border-primary/30 hover:text-primary'
+            } disabled:opacity-40 disabled:cursor-not-allowed`)}
           >
             {lang === 'zh' ? opt.labelZh : opt.labelEn}
-          </button>
+          </Button>
         );
       })}
     </div>
