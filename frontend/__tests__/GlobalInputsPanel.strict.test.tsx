@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { GlobalInputsPanel } from '../modules/profit/GlobalInputsPanel';
 import { zh } from '../locales/zh';
@@ -33,10 +34,21 @@ const baseProps = {
 };
 
 describe('GlobalInputsPanel strict percent-coupon helper', () => {
-  it('offers the US site and shows USD conversion without inventing a US sales-tax estimate', () => {
+  it('offers the US site and shows USD conversion without inventing a US sales-tax estimate', async () => {
     render(<GlobalInputsPanel {...baseProps} siteCountry="USD" rates={{ USD: 0.14 }}
       siteInputs={{ ...DEFAULT_SITE_INPUTS, totalRevenue: 100 }} />);
-    expect(screen.getByRole('option', { name: '美国 (USD)' })).toBeInTheDocument();
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    // Radix scrolls the selected item; jsdom has no layout scrolling.
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
+    try {
+      screen.getByRole('combobox', { name: zh.profit.matrix.siteParams }).focus();
+      await userEvent.keyboard('{ArrowDown}');
+      expect(screen.getByRole('option', { name: '美国 (USD)' })).toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+    } finally {
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
     expect(screen.getByText('买家实付价格：100.00 CNY / 14.00 USD')).toBeInTheDocument();
     expect(screen.queryByText(/跨境买家实付价格/)).not.toBeInTheDocument();
   });

@@ -1,5 +1,6 @@
 import { Button } from '../../components/ui/button';
-import { NativeSelect } from '../../components/ui/native-select';
+import { Label } from '../../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import React from 'react';
 import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
 import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
@@ -62,7 +63,9 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
     onGlobalChange, onSetGlobalInputs, onSetUseLocalCurrency, onSetSiteCountry, t,
     currentRate, isLoadingRate, lastUpdated, onRefreshRates, onReset,
     siteInputs, onSiteInputChange, inputErrors = {}, pricingPanel,
-}) => (
+}) => {
+    const couponTypeId = React.useId();
+    return (
     <div className="bg-card border border-border/50 shadow-sm rounded-xl p-3 mb-3 flex-shrink-0">
         <div className="mb-3 flex flex-col gap-2 border-b border-border pb-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-2">
@@ -105,15 +108,18 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 >
                     {useLocalCurrency ? t.matrix.switchToCNY : t.matrix.switchToLocal}
                 </Button>
-                <NativeSelect
-                    value={siteCountry}
-                    onChange={e => onSetSiteCountry(e.target.value)}
-                    className="text-xs font-bold px-3 py-2 pr-8 bg-accent border border-border rounded-lg outline-none appearance-none cursor-pointer hover:bg-accent text-accent-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 transition-all"
-                >
-                    {Object.entries(t.matrix.sites).map(([code, name]) => (
-                        <option key={code} value={code}>{name} ({code})</option>
-                    ))}
-                </NativeSelect>
+                {/* Controlled Select: https://v3.shadcn.com/docs/components/select */}
+                <Select value={siteCountry} onValueChange={onSetSiteCountry}>
+                    <SelectTrigger aria-label={t.matrix.siteParams}
+                        className="w-full min-w-[9rem] max-w-full bg-accent text-xs font-bold text-accent-foreground sm:w-auto">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {Object.entries(t.matrix.sites).map(([code, name]) => (
+                            <SelectItem key={code} value={code}>{name} ({code})</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
@@ -187,16 +193,19 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                     max={siteInputs.sellerCouponType === 'percent' ? 100 : undefined}
                     error={inputErrors.sellerCoupon}
                 />
-                <SelectInput
-                    label={t.inputs.sellerCouponType}
-                    name="sellerCouponType"
-                    value={siteInputs.sellerCouponType}
-                    onChange={(e) => onSiteInputChange('sellerCouponType', e.target.value)}
-                    options={[
-                        { value: 'fixed', label: t.inputs.fixedType },
-                        { value: 'percent', label: t.inputs.percentType },
-                    ]}
-                />
+                <div className="min-w-0">
+                    <Label htmlFor={couponTypeId} className="mb-0.5 block truncate text-xs font-bold text-muted-foreground">{t.inputs.sellerCouponType}</Label>
+                    <Select value={siteInputs.sellerCouponType} onValueChange={value => onSiteInputChange('sellerCouponType', value)}>
+                        <SelectTrigger id={couponTypeId} aria-label={t.inputs.sellerCouponType}
+                            className="w-full bg-muted px-2 text-sm font-bold text-foreground">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="fixed">{t.inputs.fixedType}</SelectItem>
+                            <SelectItem value="percent">{t.inputs.percentType}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
                 <NumberInput
                     label={t.inputs.couponPlatformRatio}
                     name="sellerCouponPlatformRatio"
@@ -229,4 +238,5 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
             </div>
         </div>
     </div>
-);
+    );
+};
