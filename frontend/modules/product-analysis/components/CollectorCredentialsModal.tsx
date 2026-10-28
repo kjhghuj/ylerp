@@ -1,3 +1,6 @@
+import { Textarea } from '../../../components/ui/textarea';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
 import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {X} from 'lucide-react';
 import type {ShopMeta} from '../types';
@@ -5,7 +8,7 @@ import {getApiErrorDetail} from '../services/productAnalysisApi';
 import {bindCollectorShop,createSource,fetchBinding,fetchSharedCredentials,submitSharedCookies,
   type BindingState,type CollectorSyncStatus,type SharedCredentialsState} from '../services/collectionApi';
 import {CollectorSyncSummary} from './CollectorSyncSummary';
-import {useModalDialog} from '../hooks/useModalDialog';
+import {Dialog,DialogContent,DialogTitle,DialogDescription} from '../../../components/ui/dialog';
 
 const shopIdKey=(id:string)=>`product-analysis:collector-shop-id:${id}`;
 function remembered(id:string){try{return localStorage.getItem(shopIdKey(id))||'';}catch{return '';}}
@@ -22,8 +25,6 @@ export function CollectorCredentialsModal({shop,syncState,onClose,onSaved,onDirt
   const [saved,setSaved]=useState(false),[retrySave,setRetrySave]=useState(0);
   const [status,setStatus]=useState<SharedCredentialsState['credential']['status']>('missing');
   const live=useRef(true),working=useRef(false),readVersion=useRef(0),draft=useRef(false),lastSaved=useRef(''),lastAttempt=useRef('');
-  const section=useRef<HTMLElement>(null);
-  useModalDialog(section,onClose);
   useEffect(()=>{live.current=true;return()=>{live.current=false;};},[]);
   const refresh=useCallback(async()=>{
     const version=++readVersion.current;
@@ -75,32 +76,32 @@ export function CollectorCredentialsModal({shop,syncState,onClose,onSaved,onDirt
   useEffect(()=>{onDirtyChange(Boolean(cookieJson.trim()||spcCds.trim())&&!saved);},[cookieJson,spcCds,saved,onDirtyChange]);
   const changed=()=>{draft.current=true;lastAttempt.current='';setSaved(false);setNotice('');setError('');};
   const statusText=status==='valid'?'登录有效':status==='pending'?'已同步，待真实请求验证':status==='invalid'?'登录失效':'尚未保存采集凭据';
-  return <div className="pa-modal-overlay pa-credentials-overlay" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
-    <section ref={section} tabIndex={-1} className="pa-collection-modal pa-credentials-modal" role="dialog" aria-modal="true" aria-label="凭据详情">
-      <header className="pa-collection-header"><div><strong>凭据详情</strong><div>{shop.name} · {shop.site}</div></div>
-        <button type="button" onClick={onClose} aria-label="关闭凭据详情"><X size={18}/></button></header>
+  return <Dialog open onOpenChange={open=>{if(!open)onClose();}}>
+    <DialogContent className="pa-collection-modal pa-credentials-modal block max-w-[calc(100vw-2rem)] gap-0" showCloseButton={false}>
+      <header className="pa-collection-header"><div><DialogTitle>凭据详情</DialogTitle><DialogDescription>{shop.name} · {shop.site}</DialogDescription></div>
+        <Button variant="ghost" type="button" onClick={onClose} aria-label="关闭凭据详情"><X size={18}/></Button></header>
       <CollectorSyncSummary state={syncState} allShops/>
       <div className="pa-collection-section"><strong>店铺与采集凭据</strong>
         <p>在浏览器插件中点击“开始同步”，即可更新所有店铺共用的 Cookie 和 SPC_CDS，并自动补齐近 30 天缺失数据。</p>
         {!binding&&<p>{error?'店铺配置读取失败，请重试。':'正在读取店铺配置…'}</p>}
         {error&&<p role="alert" className="pa-collection-error">{error}</p>}
-        {!binding&&error&&<button type="button" onClick={()=>void action(async()=>{})}>重新读取店铺配置</button>}
-        <label>Shopee 店铺 ID <input value={shopeeId} inputMode="numeric" autoComplete="off" readOnly={Boolean(binding?.binding)} disabled={busy||!binding}
+        {!binding&&error&&<Button variant="outline" type="button" onClick={()=>void action(async()=>{})}>重新读取店铺配置</Button>}
+        <label>Shopee 店铺 ID <Input value={shopeeId} inputMode="numeric" autoComplete="off" readOnly={Boolean(binding?.binding)} disabled={busy||!binding}
           onChange={e=>{lastAttempt.current='';setError('');setNotice('');setShopeeId(e.target.value);remember(shop.id,e.target.value.trim());}} placeholder="输入 Shopee 数字店铺 ID"/></label>
         <p>{binding?.binding?'已绑定当前 ERP 店铺，切换店铺时自动回填对应 ID。':'店铺 ID 独立保存；绑定后即可使用插件同步的共用凭据。'}</p>
-        {!binding?.binding&&<button type="button" disabled={busy||!binding||!shopeeId.trim()} onClick={()=>void action(async()=>{await saveBinding();if(live.current)setNotice('店铺绑定已保存');})}>保存店铺绑定</button>}
+        {!binding?.binding&&<Button variant="default" type="button" disabled={busy||!binding||!shopeeId.trim()} onClick={()=>void action(async()=>{await saveBinding();if(live.current)setNotice('店铺绑定已保存');})}>保存店铺绑定</Button>}
         <p role="status">{notice||statusText}</p>
-        <button type="button" aria-expanded={manualOpen} onClick={()=>setManualOpen(open=>!open)}>手动输入凭据（备用）</button>
+        <Button variant="outline" type="button" aria-expanded={manualOpen} onClick={()=>setManualOpen(open=>!open)}>手动输入凭据（备用）</Button>
         {manualOpen&&<div className="pa-manual-credentials">
           <p>在 Shopee 卖家中心使用 Cookie-Editor 导出 JSON，并使用同一次登录的 SPC_CDS。填写完整后自动保存。</p>
-          <label className="pa-collection-cookie-field">Cookie-Editor JSON <textarea value={cookieJson} disabled={busy||!binding} autoComplete="off" spellCheck={false}
+          <label className="pa-collection-cookie-field">Cookie-Editor JSON <Textarea value={cookieJson} disabled={busy||!binding} autoComplete="off" spellCheck={false}
             onChange={e=>{changed();setCookieJson(e.target.value);}} placeholder="粘贴 Cookie-Editor 导出的完整 JSON 数组"/></label>
-          <label>SPC_CDS <input value={spcCds} disabled={busy||!binding} autoComplete="off" spellCheck={false}
+          <label>SPC_CDS <Input value={spcCds} disabled={busy||!binding} autoComplete="off" spellCheck={false}
             onChange={e=>{changed();setSpcCds(e.target.value);}} placeholder="单独粘贴 SPC_CDS 的值"/></label>
           <p>手动保存不计为插件今日同步。凭据只保存在服务端，店铺 ID 按店铺单独记忆。</p>
-          {error&&binding&&cookieJson.trim()&&spcCds.trim()&&<button type="button" disabled={busy} onClick={()=>{lastAttempt.current='';setError('');setRetrySave(value=>value+1);}}>重试</button>}
+          {error&&binding&&cookieJson.trim()&&spcCds.trim()&&<Button variant="outline" type="button" disabled={busy} onClick={()=>{lastAttempt.current='';setError('');setRetrySave(value=>value+1);}}>重试</Button>}
         </div>}
       </div>
-    </section>
-  </div>;
+    </DialogContent>
+  </Dialog>;
 }

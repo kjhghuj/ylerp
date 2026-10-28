@@ -1,3 +1,7 @@
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import { NativeSelect } from '../../../components/ui/native-select';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
 import React, { useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, PackageX } from 'lucide-react';
 import { formatCount, formatMoney, formatPercent, type SortDirection } from '../utils/format';
@@ -48,9 +52,9 @@ interface ProductListProps {
 
 /** 状态徽章颜色映射：Normal 绿 / Banned·Deleted 红 / 其余黄（自 ProductCard 平移） */
 function statusStyle(status: string | undefined): { background: string; color: string } {
-  if (status === 'Normal') return { background: 'rgba(34,197,94,0.14)', color: '#16a34a' };
-  if (status === 'Banned' || status === 'Deleted') return { background: 'rgba(239,68,68,0.14)', color: '#dc2626' };
-  return { background: 'rgba(245,158,11,0.14)', color: '#d97706' };
+  if (status === 'Normal') return { background: 'rgba(34,197,94,0.14)', color: 'hsl(var(--ui-success))' };
+  if (status === 'Banned' || status === 'Deleted') return { background: 'rgba(239,68,68,0.14)', color: 'hsl(var(--ui-danger))' };
+  return { background: 'rgba(245,158,11,0.14)', color: 'hsl(var(--ui-warning))' };
 }
 
 /** 商品列表：整行点击打开详情，列头点击排序（降/升切换），左下角分页器（Element 风格） */
@@ -93,7 +97,7 @@ export const ProductList: React.FC<ProductListProps> = ({
   const maxPageSales = Math.max(...visibleItems.map((item) => item.salesOrdered ?? 0), 1);
 
   const navButtonStyle = (disabled: boolean): React.CSSProperties => ({
-    color: 'var(--text-secondary)',
+    color: 'hsl(var(--ui-muted-foreground))',
     opacity: disabled ? 0.35 : 1,
     cursor: disabled ? 'not-allowed' : 'pointer',
   });
@@ -101,31 +105,31 @@ export const ProductList: React.FC<ProductListProps> = ({
   return (
     <div className="pa-product-list flex flex-col gap-3">
       <div className="pa-table-wrap">
-        <table className="pa-table min-w-[720px] text-sm">
-          <thead>
-            <tr>
-              <th>{strings.table.product}</th>
-              <th>{strings.card.status}</th>
-              <th className="pa-th-num">{strings.card.variations}</th>
+        <Table wrapped={false} className="pa-table min-w-[720px] text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead>{strings.table.product}</TableHead>
+              <TableHead>{strings.card.status}</TableHead>
+              <TableHead className="pa-th-num">{strings.card.variations}</TableHead>
               <SortableHeader label={strings.card.sales} column="salesOrdered" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
               <SortableHeader label={strings.card.orders} column="ordersOrdered" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
               <SortableHeader label={strings.card.cvr} column="cvrConfirmed" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
               <SortableHeader label={strings.card.visitors} column="visitors" sortKey={sortKey} sortDirection={sortDirection} onSortChange={onSortChange} />
-            </tr>
-          </thead>
-          <tbody>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {visibleItems.map((item) => (
               <ProductRow key={item.itemId} item={item} currency={currency} onSelect={onSelect} maxSales={maxPageSales} />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
       {/* 分页器（Element 风格）：共 X 条 · 每页条数 · 上一页 · 页码（省略号快捷跳转）· 下一页 · 快速跳转 */}
       <div className="pa-pagination flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-        <span className="tabular-nums" style={{ color: 'var(--text-tertiary)' }}>
+        <span className="tabular-nums" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           {strings.pagination.total.replace('{total}', String(items.length))}
         </span>
-        <select
+        <NativeSelect
           value={pageSize}
           aria-label={strings.pagination.sizeLabel}
           onChange={(event) => {
@@ -136,29 +140,29 @@ export const ProductList: React.FC<ProductListProps> = ({
             const nextTotalPages = Math.max(1, Math.ceil(items.length / size));
             onPageChange(Math.min(page, nextTotalPages));
           }}
-          className="px-1.5 py-1 rounded-lg border cursor-pointer outline-none"
-          style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+          className="h-8 w-auto px-1.5 py-1 rounded-lg border cursor-pointer outline-none"
+          style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
               {strings.pagination.sizeOption.replace('{size}', String(size))}
             </option>
           ))}
-        </select>
+        </NativeSelect>
         <div className="flex items-center gap-1">
-          <button
+          <Button variant="ghost"
             type="button"
             aria-label={strings.prevPage}
             disabled={safePage <= 1}
             onClick={() => onPageChange(Math.max(1, safePage - 1))}
-            className="p-1 rounded-lg transition-colors duration-200"
+            className="h-8 px-2 p-1 rounded-lg transition-colors duration-200"
             style={navButtonStyle(safePage <= 1)}
           >
             <ChevronLeft size={15} />
-          </button>
+          </Button>
           {buildPager(safePage, totalPages).map((item) =>
             item === 'prev-more' || item === 'next-more' ? (
-              <button
+              <Button variant="ghost"
                 key={item}
                 type="button"
                 aria-label={item === 'prev-more' ? strings.pagination.prevMore : strings.pagination.nextMore}
@@ -170,13 +174,13 @@ export const ProductList: React.FC<ProductListProps> = ({
                     )
                   )
                 }
-                className="min-w-[28px] h-7 px-1 rounded-lg flex items-center justify-center transition-colors duration-200 hover:opacity-80"
-                style={{ color: 'var(--text-tertiary)' }}
+                className="h-8 px-2 min-w-[28px] h-7 px-1 rounded-lg flex items-center justify-center transition-colors duration-200 hover:opacity-80"
+                style={{ color: 'hsl(var(--ui-muted-foreground))' }}
               >
                 …
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button variant={item === safePage ? 'default' : 'ghost'}
                 key={item}
                 type="button"
                 onClick={() => onPageChange(item)}
@@ -189,27 +193,27 @@ export const ProductList: React.FC<ProductListProps> = ({
                 style={
                   item === safePage
                     ? { backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }
-                    : { color: 'var(--text-secondary)' }
+                    : { color: 'hsl(var(--ui-muted-foreground))' }
                 }
               >
                 {item}
-              </button>
+              </Button>
             )
           )}
-          <button
+          <Button variant="ghost"
             type="button"
             aria-label={strings.nextPage}
             disabled={safePage >= totalPages}
             onClick={() => onPageChange(Math.min(totalPages, safePage + 1))}
-            className="p-1 rounded-lg transition-colors duration-200"
+            className="h-8 px-2 p-1 rounded-lg transition-colors duration-200"
             style={navButtonStyle(safePage >= totalPages)}
           >
             <ChevronRight size={15} />
-          </button>
+          </Button>
         </div>
         <span className="inline-flex items-center gap-1">
-          <span style={{ color: 'var(--text-tertiary)' }}>{strings.pagination.jumpPrefix}</span>
-          <input
+          <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.pagination.jumpPrefix}</span>
+          <Input
             value={jumpInput}
             aria-label={strings.pagination.jumpLabel}
             inputMode="numeric"
@@ -219,11 +223,11 @@ export const ProductList: React.FC<ProductListProps> = ({
             }}
             onBlur={commitJump}
             placeholder={String(safePage)}
-            className="w-11 px-1 py-1 text-center rounded-lg border outline-none tabular-nums"
-            style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-primary)' }}
+            className="h-8 w-11 px-1 py-1 text-center rounded-lg border outline-none tabular-nums"
+            style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-foreground))' }}
           />
           {strings.pagination.jumpSuffix && (
-            <span style={{ color: 'var(--text-tertiary)' }}>{strings.pagination.jumpSuffix}</span>
+            <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.pagination.jumpSuffix}</span>
           )}
         </span>
       </div>
@@ -247,19 +251,19 @@ function SortableHeader({
   const active = sortKey === column;
   const Icon = active ? (sortDirection === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
   return (
-    <th
+    <TableHead
       className="pa-th-num"
       aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
-      <button
+      <Button variant="ghost"
         type="button"
         onClick={() => onSortChange(column)}
-        className="inline-flex items-center gap-1 transition-colors duration-200 hover:opacity-80"
+        className="h-auto p-0 inline-flex items-center gap-1 transition-colors duration-200 hover:opacity-80"
       >
         {label}
         <Icon size={11} />
-      </button>
-    </th>
+      </Button>
+    </TableHead>
   );
 }
 
@@ -270,7 +274,7 @@ const ProductRow = React.memo<{
   maxSales: number;
   onSelect: (item: ParentProduct) => void;
 }>(({ item, currency, maxSales, onSelect }) => (
-  <tr
+  <TableRow
     tabIndex={0}
     onClick={() => onSelect(item)}
     onKeyDown={(event) => {
@@ -281,15 +285,15 @@ const ProductRow = React.memo<{
     }}
     className="cursor-pointer outline-none"
   >
-    <td className="max-w-[320px]">
-      <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
+    <TableCell className="max-w-[320px]">
+      <p className="font-medium truncate" style={{ color: 'hsl(var(--ui-foreground))' }} title={item.itemName}>
         {item.itemName}
       </p>
-      <p className="text-xs mt-0.5 font-mono" style={{ color: 'var(--text-tertiary)' }}>
+      <p className="text-xs mt-0.5 font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         #{item.itemId}
       </p>
-    </td>
-    <td className="whitespace-nowrap">
+    </TableCell>
+    <TableCell className="whitespace-nowrap">
       {item.status ? (
         <span
           className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -298,27 +302,27 @@ const ProductRow = React.memo<{
           {item.status}
         </span>
       ) : (
-        <span style={{ color: 'var(--text-tertiary)' }}>—</span>
+        <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>—</span>
       )}
-    </td>
-    <td className="text-right font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+    </TableCell>
+    <TableCell className="text-right font-mono text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
       {formatCount(item.variations?.length ?? 0)}
-    </td>
-    <td
+    </TableCell>
+    <TableCell
       className="pa-cellbar text-right font-mono font-semibold"
       style={{ '--bar-w': `${Math.max(0, Math.round(((item.salesOrdered ?? 0) / maxSales) * 100))}%` } as React.CSSProperties}
     >
       <span style={{ color: 'var(--pa-accent-text)' }}>{formatMoney(item.salesOrdered, currency)}</span>
-    </td>
-    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    </TableCell>
+    <TableCell className="text-right font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
       {formatCount(item.ordersOrdered)}
-    </td>
-    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    </TableCell>
+    <TableCell className="text-right font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
       {formatPercent(item.cvrConfirmed)}
-    </td>
-    <td className="text-right font-mono" style={{ color: 'var(--text-secondary)' }}>
+    </TableCell>
+    <TableCell className="text-right font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
       {formatCount(item.visitors)}
-    </td>
-  </tr>
+    </TableCell>
+  </TableRow>
 ));
 ProductRow.displayName = 'ProductRow';

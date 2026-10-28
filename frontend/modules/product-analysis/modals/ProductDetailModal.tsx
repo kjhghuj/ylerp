@@ -1,4 +1,7 @@
+import { Button } from '../../../components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../../components/ui/tabs';
 import React, { useEffect, useState } from 'react';
+import {Dialog,DialogContent,DialogTitle,DialogDescription} from '../../../components/ui/dialog';
 import '../product-analysis.css';
 import { ChartStateProvider } from '../components/charts/ChartControls';
 import { X, Loader2 } from 'lucide-react';
@@ -43,13 +46,6 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
 
   // 详情查询 = 店铺 × 商品 × 区间：查询变化即重置为加载态（旧内容/旧错误不得兜底到新查询）
   useEffect(() => {
@@ -98,79 +94,71 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
 
   return (
     <ChartStateProvider key={`${shopId}|${itemId}|${from}|${to}`}>
-    <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className="pa-detail-modal rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Dialog open onOpenChange={open=>{if(!open)onClose();}}>
+      <DialogContent showCloseButton={false} className="pa-detail-modal max-w-[calc(100vw-2rem)] rounded-xl flex flex-col overflow-hidden gap-0 p-0">
+        <Tabs value={activeTab} onValueChange={value => setActiveTab(value as ModalTab)} className="flex min-h-0 flex-1 flex-col">
         {/* 头部 */}
         <div className="px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--pa-card-border)' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-bold line-clamp-2 leading-5" style={{ color: 'var(--text-primary)' }} title={itemName}>
+              <DialogTitle className="text-sm font-bold line-clamp-2 leading-5" title={itemName}>
                 {itemName}
-              </p>
-              <p className="text-xs mt-1 font-mono break-words" style={{ color: 'var(--text-tertiary)' }}>
+              </DialogTitle>
+              <DialogDescription className="text-xs mt-1 font-mono break-words">
                 #{itemId}
                 {status ? ` · ${status}` : ''}
                 {` · ${from} ~ ${to}`}
-              </p>
+              </DialogDescription>
             </div>
-            <button
+            <Button variant="ghost"
               type="button"
               onClick={onClose}
               className="p-1.5 rounded-lg shrink-0 transition-colors duration-200"
-              style={{ color: 'var(--text-tertiary)' }}
+              style={{ color: 'hsl(var(--ui-muted-foreground))' }}
               aria-label="close"
             >
               <X size={18} />
-            </button>
+            </Button>
           </div>
           {/* 分段式胶囊标签：浅色软底 + 主题色激活 */}
-          <div
-            className="flex gap-1 mt-3 p-1 rounded-xl w-fit max-w-full overflow-x-auto"
+          <TabsList
+            aria-label={itemName}
+            className="flex h-auto justify-start gap-1 mt-3 p-1 rounded-xl w-fit max-w-full overflow-x-auto"
             style={{ backgroundColor: 'var(--pa-accent-soft)' }}
           >
             {MODAL_TABS.map(({ key, labelKey }) => {
               const active = activeTab === key;
               return (
-                <button
+                <TabsTrigger
                   key={key}
-                  type="button"
-                  aria-current={active ? 'true' : undefined}
-                  onClick={() => setActiveTab(key)}
+                  value={key}
                   className="px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors duration-200"
                   style={{
                     backgroundColor: active ? 'var(--pa-card)' : 'transparent',
-                    color: active ? 'var(--pa-accent-text)' : 'var(--text-secondary)',
+                    color: active ? 'var(--pa-accent-text)' : 'hsl(var(--ui-muted-foreground))',
                     boxShadow: active ? 'var(--shadow-sm)' : undefined,
                   }}
                 >
                   {strings.modal[labelKey]}
-                </button>
+                </TabsTrigger>
               );
             })}
-          </div>
+          </TabsList>
         </div>
 
         {/* 内容：加载 / 错误（含币种异常，附重试）/ 成功 三态 */}
         <div className="pa-detail-content flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">
           {error ? (
             <div className="py-10 flex flex-col items-center gap-3 text-center">
-              <p className="text-sm break-all" style={{ color: '#dc2626' }}>{error}</p>
-              <button
+              <p className="text-sm break-all" style={{ color: 'hsl(var(--ui-danger))' }}>{error}</p>
+              <Button variant="default"
                 type="button"
                 onClick={() => setRetryToken((token) => token + 1)}
                 className="px-4 py-1.5 rounded-lg text-xs font-medium"
                 style={{ backgroundColor: 'var(--pa-accent-ui)', color: 'var(--pa-on-accent)' }}
               >
                 {strings.potential.retry}
-              </button>
+              </Button>
             </div>
           ) : !detail ? (
             <div className="h-60 flex items-center justify-center" role="status" aria-label="detail-loading">
@@ -178,9 +166,9 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
             </div>
           ) : (
             <>
-              {activeTab === 'overview' && <OverviewTab item={displayItem} currency={currency} days={detail.item.days} />}
-              {activeTab === 'trend' && <DailyTrendChart series={detail.series} currency={currency} />}
-              {activeTab === 'charts' && (
+              <TabsContent value="overview" className="mt-0"><OverviewTab item={displayItem} currency={currency} days={detail.item.days} /></TabsContent>
+              <TabsContent value="trend" className="mt-0"><DailyTrendChart series={detail.series} currency={currency} /></TabsContent>
+              <TabsContent value="charts" className="mt-0">
                 <div className="flex flex-col gap-4">
                   <div className="pa-detail-chart-grid">
                     <ConversionFunnelChart item={displayItem} />
@@ -188,21 +176,22 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ shopId, 
                   </div>
                   <KeyRatioBars item={displayItem} />
                 </div>
-              )}
-              {activeTab === 'variations' && (
+              </TabsContent>
+              <TabsContent value="variations" className="mt-0">
                 <div className="flex flex-col gap-4">
                   <VariationUnitsChart variations={variations} />
                   <VariationTable variations={variations} />
                 </div>
-              )}
-              {activeTab === 'ai' && (
+              </TabsContent>
+              <TabsContent value="ai" className="mt-0">
                 <AiChatPanel shopId={shopId} itemId={itemId} itemTitle={itemName} from={from} to={to} />
-              )}
+              </TabsContent>
             </>
           )}
         </div>
-      </div>
-    </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
     </ChartStateProvider>
   );
 };
@@ -316,15 +305,15 @@ function OverviewTab({ item, currency, days }: { item: ParentProduct; currency: 
 function MetricGroup({ title, entries }: { title: string; entries: MetricEntry[] }) {
   return (
     <div className="rounded-2xl border p-4" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
-      <div className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+      <div className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         <div className="w-1 h-3.5 rounded-full" style={{ backgroundColor: 'var(--pa-accent-ui)' }}></div>
         <span className="truncate" title={title}>{title}</span>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-2.5">
         {entries.map((entry) => (
           <div key={entry.label} className="min-w-0">
-            <p className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>{entry.label}</p>
-            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }} title={entry.value}>
+            <p className="text-[11px] truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{entry.label}</p>
+            <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ui-foreground))' }} title={entry.value}>
               {entry.value}
             </p>
           </div>

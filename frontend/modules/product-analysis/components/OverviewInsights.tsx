@@ -1,3 +1,4 @@
+import { Button } from '../../../components/ui/button';
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Loader2, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { useProductAnalysisStrings } from '../i18n';
@@ -22,9 +23,9 @@ function RankingPager({ title, page, pageSize, total, onPageChange }: {
         .replace('{end}', String(Math.min(page * pageSize, total)))
         .replace('{total}', String(total))}</span>
       <div className="pa-insight-page-actions">
-        <button type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label={`${title}${strings.prevPage}`}>{strings.prevPage}</button>
+        <Button variant="ghost" type="button" onClick={() => onPageChange(page - 1)} disabled={page <= 1} aria-label={`${title}${strings.prevPage}`}>{strings.prevPage}</Button>
         <span>{page} / {pageCount}</span>
-        <button type="button" onClick={() => onPageChange(page + 1)} disabled={page >= pageCount} aria-label={`${title}${strings.nextPage}`}>{strings.nextPage}</button>
+        <Button variant="ghost" type="button" onClick={() => onPageChange(page + 1)} disabled={page >= pageCount} aria-label={`${title}${strings.nextPage}`}>{strings.nextPage}</Button>
       </div>
     </nav>
   );
@@ -36,7 +37,7 @@ function CardState({ state, onRetry }: { state: OverviewState<unknown>; onRetry:
   if (state.status === 'error') return (
     <div className="pa-insight-state pa-insight-error" role="alert">
       <span>{strings.refreshFailed.replace('{detail}', state.detail)}</span>
-      <button type="button" className="pa-insight-link" onClick={onRetry}>{strings.potential.retry}</button>
+      <Button variant="ghost" type="button" className="pa-insight-link" onClick={onRetry}>{strings.potential.retry}</Button>
     </div>
   );
   return null;
@@ -62,7 +63,7 @@ export function NewPotentialCard({ state, pageSize, onRetry, onMore, onSelect }:
           <h3 className="pa-card-title"><Sparkles size={16} />{strings.overview.newPotentialTitle}</h3>
           <p className="pa-card-sub">{strings.overview.newPotentialHint}</p>
         </div>
-        <button type="button" className="pa-insight-link" onClick={onMore}>{strings.overview.viewPotential}<ArrowRight size={14} /></button>
+        <Button variant="ghost" type="button" className="pa-insight-link" onClick={onMore}>{strings.overview.viewPotential}<ArrowRight size={14} /></Button>
       </div>
       {state.status !== 'success' ? <CardState state={state} onRetry={onRetry} /> : state.data.length === 0 ? (
         <div className="pa-insight-state" role="status">{strings.potential.empty}</div>
@@ -70,12 +71,12 @@ export function NewPotentialCard({ state, pageSize, onRetry, onMore, onSelect }:
         <>
         <div className={`pa-insight-list${visibleItems.length >= 6 ? ' pa-insight-list-fill' : ''}`}>
           {visibleItems.map((item) => (
-            <button type="button" key={item.itemId} className="pa-insight-row" onClick={() => onSelect(item)} title={item.itemName}>
+            <Button variant="ghost" type="button" key={item.itemId} className="h-auto whitespace-normal justify-start text-left pa-insight-row" onClick={() => onSelect(item)} title={item.itemName}>
               <span className="pa-insight-rank">{item.rank}</span>
               <span className="pa-insight-name">{item.itemName}</span>
               <span className="pa-insight-meta">{strings.card.orders} {formatCount(item.metrics.ordersOrdered)}</span>
               <span className="pa-insight-score">{strings.potential.score} {item.score.toFixed(1)}</span>
-            </button>
+            </Button>
           ))}
         </div>
         <RankingPager title={strings.overview.newPotentialTitle} page={currentPage} pageSize={pageSize} total={state.data.length} onPageChange={setPage} />
@@ -136,7 +137,7 @@ export function EstablishedTrendCard({ state, pageSize, onRetry, onSelect }: {
               ? strings.overview.newOrders
               : `${item.changePercent > 0 ? '+' : ''}${item.changePercent.toFixed(0)}%`;
             return (
-              <button type="button" key={item.itemId} className="pa-insight-row pa-trend-row" onClick={() => onSelect(item)} title={strings.overview.oldTrendCoverage
+              <Button variant="ghost" type="button" key={item.itemId} className="h-auto whitespace-normal justify-start text-left pa-insight-row pa-trend-row" onClick={() => onSelect(item)} title={strings.overview.oldTrendCoverage
                 .replace('{prev}', String(item.previousObservedDays)).replace('{recent}', String(item.recentObservedDays))
                 .replaceAll('{window}', String(state.data.windowDays))}>
                 <span className="pa-insight-name">{item.itemName}</span>
@@ -145,7 +146,7 @@ export function EstablishedTrendCard({ state, pageSize, onRetry, onSelect }: {
                 <span className={`pa-trend-change ${decline ? 'pa-trend-down' : 'pa-trend-up'}`}>
                   {decline ? <TrendingDown size={13} /> : <TrendingUp size={13} />}{change}
                 </span>
-              </button>
+              </Button>
             );
           })}
         </div>

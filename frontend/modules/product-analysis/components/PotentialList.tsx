@@ -1,3 +1,4 @@
+import { Button } from '../../../components/ui/button';
 import React from 'react';
 import { Trophy, Sparkles } from 'lucide-react';
 import { formatCount, formatPercent } from '../utils/format';
@@ -17,7 +18,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
     return (
       <div
         className="rounded-2xl border p-10 flex flex-col items-center gap-3 text-center"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
       >
         <Trophy size={36} />
         <p className="text-sm">{strings.potential.empty}</p>
@@ -26,25 +27,25 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
   }
 
   const rankStyle = (rank: number) => {
-    if (rank === 1) return { background: 'rgba(245,158,11,0.16)', color: '#d97706' };
+    if (rank === 1) return { background: 'rgba(245,158,11,0.16)', color: 'hsl(var(--ui-warning))' };
     if (rank === 2) return { background: 'rgba(148,163,184,0.2)', color: '#64748b' };
-    if (rank === 3) return { background: 'rgba(217,119,6,0.12)', color: '#b45309' };
-    return { background: 'var(--bg-card-hover)', color: 'var(--text-tertiary)' };
+    if (rank === 3) return { background: 'rgba(217,119,6,0.12)', color: 'hsl(var(--ui-warning))' };
+    return { background: 'var(--bg-card-hover)', color: 'hsl(var(--ui-muted-foreground))' };
   };
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-        <Trophy size={16} style={{ color: '#d97706' }} />
+      <div className="flex items-center gap-2 text-sm font-bold" style={{ color: 'hsl(var(--ui-foreground))' }}>
+        <Trophy size={16} style={{ color: 'hsl(var(--ui-warning))' }} />
         {strings.potential.title}
       </div>
       <div className="flex flex-col gap-2">
         {items.map((item) => (
-          <button
+          <Button variant="outline"
             key={item.itemId}
             type="button"
             onClick={() => onSelect(item)}
-            className="text-left rounded-2xl border p-4 flex flex-col gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md w-full"
+            className="h-auto whitespace-normal justify-start text-left text-left rounded-2xl border p-4 flex flex-col gap-2.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md w-full"
             style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
           >
             <div className="flex items-center gap-3">
@@ -55,13 +56,13 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
                 {item.rank}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }} title={item.itemName}>
+                <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ui-foreground))' }} title={item.itemName}>
                   {item.itemName}
                 </p>
-                <p className="text-xs mt-0.5 font-mono break-all" style={{ color: 'var(--text-tertiary)' }}>#{item.itemId}</p>
+                <p className="text-xs mt-0.5 font-mono break-all" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>#{item.itemId}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{strings.potential.score}</p>
+                <p className="text-[10px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.potential.score}</p>
                 <p className="text-base font-bold" style={{ color: 'var(--pa-accent-text)' }}>{item.score.toFixed(1)}</p>
               </div>
             </div>
@@ -82,7 +83,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
               />
             </div>
             {/* 环比覆盖度：窗口日历天数 vs 有效订单观测天数；覆盖不完整时明确提示 */}
-            <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
               <span
                 title={strings.potential.growthScope}
                 className="font-mono"
@@ -96,7 +97,7 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
                 && (item.metrics.growthPreviousObservedDays ?? 0) < item.metrics.growthWindowDays || (item.metrics.growthRecentObservedDays ?? 0) < item.metrics.growthWindowDays ? (
                 <span
                   className="px-1.5 py-0.5 rounded-full"
-                  style={{ backgroundColor: 'rgba(245,158,11,0.14)', color: '#b45309' }}
+                  style={{ backgroundColor: 'rgba(245,158,11,0.14)', color: 'hsl(var(--ui-warning))' }}
                 >
                   {strings.potential.growthIncomplete}
                 </span>
@@ -107,14 +108,14 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
                 <span
                   key={reason}
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
-                  style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-secondary)' }}
+                  style={{ backgroundColor: 'var(--bg-card-hover)', color: 'hsl(var(--ui-muted-foreground))' }}
                 >
                   <Sparkles size={10} style={{ color: 'var(--pa-accent-text)' }} />
                   {reason}
                 </span>
               ))}
             </div>
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -124,8 +125,8 @@ export const PotentialList: React.FC<PotentialListProps> = ({ items, onSelect })
 function Metric({ label, value, title }: { label: string; value: string; title?: string }) {
   return (
     <div className="min-w-0" title={title}>
-      <p style={{ color: 'var(--text-tertiary)' }}>{label}</p>
-      <p className="font-semibold truncate" style={{ color: 'var(--text-secondary)' }} title={value}>
+      <p style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{label}</p>
+      <p className="font-semibold truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }} title={value}>
         {value}
       </p>
     </div>

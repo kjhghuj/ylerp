@@ -5,7 +5,7 @@
  * 覆盖：单日上传→同日覆盖指标更新→删除后列表与新品榜更新→新品打开详情→
  *       汇总/详情/新品口径一致→AI 使用当前区间→缺失数据与真实零值显示不同。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -239,15 +239,16 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     // 删除当日：列表与新品榜随刷新清空
     mockFetchShopAgg.mockResolvedValueOnce({ ...reproAgg(null, 0), sheets: [], itemCount: 0, days: 0 });
     mockFetchPotential.mockResolvedValueOnce({ from: '2026-08-31', to: '2026-09-06', items: [] });
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     await openView('数据日历');
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
+    expect(mockDelete).not.toHaveBeenCalled();
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('2026-09-06');
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '删除' }));
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('shop-1', '2026-09-06'));
     await openView('概览');
     await waitFor(() => expect(screen.queryByText('验收商品')).toBeNull());
-    confirmSpy.mockRestore();
   });
 
   it('potential item opens its own detail; summary/detail/potential CVRs agree at 10%; AI uses the current range', async () => {
@@ -268,7 +269,7 @@ describe('business acceptance (isolated, mocked data, simulated AI)', () => {
     await waitFor(() => expect(screen.getAllByText('10.00%').length).toBeGreaterThanOrEqual(1));
 
     // AI（模拟流）：使用当前区间发起请求
-    fireEvent.click(await screen.findByRole('button', { name: 'AI 分析' }));
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: 'AI 分析' }), { button: 0, ctrlKey: false });
     const textarea = await screen.findByPlaceholderText('问问 AI 关于这个商品或店铺的问题…');
     fireEvent.change(textarea, { target: { value: '总结表现' } });
     fireEvent.click(screen.getByRole('button', { name: '发送' }));

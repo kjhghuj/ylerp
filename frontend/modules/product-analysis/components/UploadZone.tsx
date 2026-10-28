@@ -1,3 +1,4 @@
+import { Input } from '../../../components/ui/input';
 import React, { useRef, useState } from 'react';
 import { Upload, Loader2, Lock } from 'lucide-react';
 import { useProductAnalysisStrings } from '../i18n';
@@ -57,7 +58,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
-      <input
+      <Input
         ref={inputRef}
         type="file"
         accept=".xlsx,.xls"
@@ -72,15 +73,15 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
       {isUploading ? (
         <Loader2 size={20} className="animate-spin shrink-0" style={{ color: 'var(--pa-accent-text)' }} />
       ) : disabled ? (
-        <Lock size={20} className="shrink-0" style={{ color: 'var(--text-tertiary)' }} />
+        <Lock size={20} className="shrink-0" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
       ) : (
         <Upload size={20} className="shrink-0" style={{ color: 'var(--pa-accent-text)' }} />
       )}
       <div className="min-w-0 flex-1">
-        <p className="font-semibold text-[13px]" style={{ color: 'var(--text-primary)' }}>
+        <p className="font-semibold text-[13px]" style={{ color: 'hsl(var(--ui-foreground))' }}>
           {isUploading ? (uploadingLabel ?? strings.uploading) : strings.uploadTitle}
         </p>
-        <p className="text-[11px] mt-0.5 leading-snug break-all" style={{ color: 'var(--text-tertiary)' }}>
+        <p className="text-[11px] mt-0.5 leading-snug break-all" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           {disabled ? strings.uploadDisabled : strings.uploadHint}
         </p>
       </div>

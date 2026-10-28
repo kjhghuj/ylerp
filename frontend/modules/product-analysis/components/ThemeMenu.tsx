@@ -1,4 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import React, { useEffect, useState } from 'react';
+import {Popover,PopoverContent,PopoverTrigger} from '../../../components/ui/popover';
 import { Check, Palette } from 'lucide-react';
 import { useProductAnalysisStrings } from '../i18n';
 import { usePaTheme } from '../themeContext';
@@ -14,7 +17,6 @@ export const ThemeMenu: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [customInput, setCustomInput] = useState('');
   const [isInvalid, setIsInvalid] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
 
   // 打开菜单时用当前色回填输入框；关闭时清除错误态
   useEffect(() => {
@@ -23,25 +25,6 @@ export const ThemeMenu: React.FC = () => {
       setIsInvalid(false);
     }
   }, [isOpen, color]);
-
-  // 点击菜单外部 / Escape 关闭
-  useEffect(() => {
-    if (!isOpen) return;
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setIsOpen(false);
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen]);
 
   const applyCustom = (raw: string) => {
     const normalized = normalizeHexColor(raw);
@@ -58,11 +41,11 @@ export const ThemeMenu: React.FC = () => {
   const isPreset = (hex: string) => normalizeHexColor(hex) === color;
 
   return (
-    <div ref={rootRef} className="relative shrink-0">
-      <button
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+      <Button variant="ghost"
         type="button"
-        onClick={() => setIsOpen((open) => !open)}
-        aria-haspopup="menu"
+        aria-haspopup="dialog"
         aria-expanded={isOpen}
         aria-label={words.title}
         title={words.title}
@@ -71,20 +54,18 @@ export const ThemeMenu: React.FC = () => {
         <Palette size={15} />
         <span className="pa-theme-dot" aria-hidden="true" style={{ backgroundColor: 'var(--pa-accent-ui)' }} />
         <span className="hidden lg:inline">{words.title}</span>
-      </button>
-
-      {isOpen && (
-        <div className="pa-theme-menu" role="menu" aria-label={words.title}>
+      </Button>
+      </PopoverTrigger>
+        <PopoverContent align="end" className="pa-theme-menu" aria-label={words.title} style={{position:'relative',inset:'auto',width:'min(288px,calc(100vw - 2rem))'}}>
           <p className="pa-theme-menu-title">{words.title}</p>
           <div className="pa-theme-presets">
             {PA_THEME_PRESETS.map((preset) => {
               const active = isPreset(preset.hex);
               return (
-                <button
+                <Button variant="ghost"
                   key={preset.key}
                   type="button"
-                  role="menuitemradio"
-                  aria-checked={active}
+                  aria-pressed={active}
                   onClick={() => setColor(preset.hex)}
                   className="pa-theme-preset"
                   title={`${words.presets[preset.key]} ${preset.hex}`}
@@ -93,7 +74,7 @@ export const ThemeMenu: React.FC = () => {
                     {active && <Check size={13} strokeWidth={3} />}
                   </span>
                   <span>{words.presets[preset.key]}</span>
-                </button>
+                </Button>
               );
             })}
           </div>
@@ -103,7 +84,7 @@ export const ThemeMenu: React.FC = () => {
               {words.custom}
             </label>
             <div className="pa-theme-custom-row">
-              <input
+              <Input
                 id="pa-theme-hex"
                 value={customInput}
                 onChange={(event) => {
@@ -119,7 +100,7 @@ export const ThemeMenu: React.FC = () => {
                 aria-invalid={isInvalid}
                 className={`pa-theme-hex-input ${isInvalid ? 'pa-theme-hex-invalid' : ''}`}
               />
-              <input
+              <Input data-ui="color"
                 type="color"
                 value={normalizeHexColor(color) ?? '#7048EC'}
                 onChange={(event) => applyCustom(event.target.value)}
@@ -132,8 +113,7 @@ export const ThemeMenu: React.FC = () => {
               {isInvalid ? words.invalid : words.customHint}
             </p>
           </div>
-        </div>
-      )}
-    </div>
+        </PopoverContent>
+    </Popover>
   );
 };

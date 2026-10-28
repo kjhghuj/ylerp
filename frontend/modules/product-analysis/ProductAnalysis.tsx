@@ -1,3 +1,8 @@
+import { NativeSelect } from '../../components/ui/native-select';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../components/ui/table';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
+import { createPaUiVariables } from './theme';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './product-analysis.css';
 import { AlertTriangle, Loader2, Search, Store, PackageCheck, X, FileSpreadsheet, CloudDownload } from 'lucide-react';
@@ -488,26 +493,29 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   const handleDeleteDay = async (date: string) => {
     // 删除目标 = 展示日历所属店铺；数据尚未加载/已过期/归属其他店铺时禁止操作（防止误删新店数据）
     const calendarShopId = daysBelongToActiveShop ? daysState!.shopId : null;
-    if (!calendarShopId || calendarShopId !== activeShopIdRef.current) return;
-    if (!window.confirm(`${strings.dayDeleteConfirm}\n（${date}）`)) return;
+    if (!calendarShopId || calendarShopId !== activeShopIdRef.current) return false;
     try {
       await deleteDailyUpload(calendarShopId, date);
       await refreshAfterWrite();
       showToast(`${date} ${strings.deleteDay} ✓`);
+      return true;
     } catch (error) {
       showToast(getApiErrorDetail(error), 'error');
+      return false;
     }
   };
 
   const handleBatchDeleteDays = async (dates: string[]) => {
     const calendarShopId = daysBelongToActiveShop ? daysState!.shopId : null;
-    if (!calendarShopId || calendarShopId !== activeShopIdRef.current || dates.length === 0) return;
+    if (!calendarShopId || calendarShopId !== activeShopIdRef.current || dates.length === 0) return false;
     try {
       const deletedCount = await batchDeleteDailyUploads(calendarShopId, dates);
       await refreshAfterWrite();
       showToast(strings.batchDeletedToast.replace('{count}', String(deletedCount)));
+      return true;
     } catch (error) {
       showToast(getApiErrorDetail(error), 'error');
+      return false;
     }
   };
 
@@ -581,12 +589,12 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
       return (
         <div
           className="pa-card pa-calendar-state flex-col gap-2 text-xs text-center px-4"
-          style={{ borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+          style={{ borderColor: 'rgba(220,38,38,0.35)', color: 'hsl(var(--ui-danger))' }}
           role="alert"
         >
           <AlertTriangle size={18} />
           <span className="break-all">{daysError}</span>
-          <span style={{ color: 'var(--text-tertiary)' }}>{strings.calendarLoadFailed}</span>
+          <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.calendarLoadFailed}</span>
         </div>
       );
     }
@@ -596,13 +604,14 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
           key={activeShopId}
           days={days}
           canDelete={hasUploadPermission}
-          onDeleteDay={(date) => void handleDeleteDay(date)}
-          onBatchDelete={(dates) => void handleBatchDeleteDays(dates)}
+          onDeleteDay={handleDeleteDay}
+          onBatchDelete={handleBatchDeleteDays}
+          fallbackFocus={() => document.getElementById('pa-manage-shops')}
         />
       );
     }
     return (
-      <div className="pa-card pa-calendar-state text-xs text-center px-4" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="pa-card pa-calendar-state text-xs text-center px-4" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         {strings.noData}
       </div>
     );
@@ -613,7 +622,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
     <div className="flex flex-col gap-3">
       <div
         className="flex items-start gap-2 rounded-2xl border px-4 py-3 text-sm"
-        style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+        style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: 'hsl(var(--ui-danger))' }}
       >
         <AlertTriangle size={15} className="shrink-0 mt-0.5" />
         <span className="break-all">{strings.refreshFailed.replace('{detail}', aggError ?? '')}</span>
@@ -621,23 +630,23 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
       {/* 币种异常排查：复用日历的日期列表（含上传币种/文件名），只提示人工处理，不自动删除/改标签/换算 */}
       {aggErrorCode === 'CURRENCY_MISMATCH' && activeShop && (
         <div className="rounded-2xl border p-4 flex flex-col gap-3" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          <p className="text-sm font-semibold" style={{ color: 'hsl(var(--ui-foreground))' }}>
             {strings.currencyAuditTitle.replace('{currency}', activeShop.currency)}
           </p>
           <div className="flex flex-col gap-1.5 text-xs">
             {currencyMismatchedDays.length > 0 ? (
               currencyMismatchedDays.map((day) => (
-                <div key={day.date} className="flex flex-wrap items-center gap-2 font-mono" style={{ color: 'var(--text-secondary)' }}>
-                  <span style={{ color: '#b45309' }}>{day.date}</span>
+                <div key={day.date} className="flex flex-wrap items-center gap-2 font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
+                  <span style={{ color: 'hsl(var(--ui-warning))' }}>{day.date}</span>
                   <span>{day.currency}</span>
-                  <span className="truncate" style={{ color: 'var(--text-tertiary)' }} title={day.fileName}>{day.fileName}</span>
+                  <span className="truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }} title={day.fileName}>{day.fileName}</span>
                 </div>
               ))
             ) : (
-              <span style={{ color: 'var(--text-tertiary)' }}>{strings.currencyAuditEmpty}</span>
+              <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.currencyAuditEmpty}</span>
             )}
           </div>
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-xs leading-relaxed" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
             {strings.currencyAuditHint}
           </p>
         </div>
@@ -648,7 +657,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   const sheetChips = (agg?.sheets ?? []).map((sheet) => {
     const isActive = sheet.sheetKey === activeSheetKey;
     return (
-      <button
+      <Button variant="outline"
         key={sheet.sheetKey}
         type="button"
         onClick={() => setActiveSheetKey(sheet.sheetKey)}
@@ -656,7 +665,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
         className="pa-chip"
       >
         {strings.sheets[sheet.sheetKey] || sheet.sheetKey}（{sheet.items.length}）
-      </button>
+      </Button>
     );
   });
 
@@ -713,8 +722,8 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
               {sheetChips}
               <div className="pa-search flex items-center gap-2 min-w-0">
                 <div className="relative flex-1 min-w-0">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-tertiary)' }} />
-                  <input
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+                  <Input
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder={strings.searchPlaceholder}
@@ -722,11 +731,11 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
                     style={{
                       backgroundColor: 'var(--pa-card)',
                       borderColor: 'var(--pa-card-border)',
-                      color: 'var(--text-primary)',
+                      color: 'hsl(var(--ui-foreground))',
                     }}
                   />
                 </div>
-                <span className="text-xs shrink-0" style={{ color: 'var(--text-tertiary)' }}>
+                <span className="text-xs shrink-0" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                   {filteredItems.length} {strings.resultCount}
                 </span>
               </div>
@@ -762,18 +771,18 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
       {potentialViewForCurrentQuery.status === 'error' ? (
         <div
           className="flex items-start gap-2 rounded-xl border px-3 py-2 text-xs"
-          style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: '#b91c1c' }}
+          style={{ backgroundColor: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.35)', color: 'hsl(var(--ui-danger))' }}
         >
           <AlertTriangle size={13} className="shrink-0 mt-0.5" />
           {/* 失败（含同查询写入后刷新失败）仅展示错误与重试，不回退旧榜单 */}
           <span className="break-all">{strings.refreshFailed.replace('{detail}', potentialViewForCurrentQuery.detail)}</span>
-          <button
+          <Button variant="outline"
             type="button"
             onClick={() => setPotentialRetryToken((token) => token + 1)}
             className="ml-auto shrink-0 font-medium underline"
           >
             {strings.potential.retry}
-          </button>
+          </Button>
         </div>
       ) : potentialViewForCurrentQuery.status === 'loading' ? (
         <div className="flex-1 flex items-center justify-center py-10">
@@ -821,41 +830,41 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
           <div className="pa-chart-empty" role="status">{emptyHint}</div>
         ) : (
           <div className="pa-records-scroll pa-table-wrap">
-            <table className="pa-records pa-table">
-              <thead>
-                <tr>
-                  <th>{strings.overview.recordsColumns.date}</th>
-                  <th>{strings.overview.recordsColumns.file}</th>
-                  <th>{strings.overview.recordsColumns.items}</th>
-                  <th>{strings.overview.recordsColumns.currency}</th>
-                  <th>{strings.overview.recordsColumns.version}</th>
-                  <th>{strings.overview.recordsColumns.createdAt}</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table wrapped={false} className="pa-records pa-table">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{strings.overview.recordsColumns.date}</TableHead>
+                  <TableHead>{strings.overview.recordsColumns.file}</TableHead>
+                  <TableHead>{strings.overview.recordsColumns.items}</TableHead>
+                  <TableHead>{strings.overview.recordsColumns.currency}</TableHead>
+                  <TableHead>{strings.overview.recordsColumns.version}</TableHead>
+                  <TableHead>{strings.overview.recordsColumns.createdAt}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {newestDays.map((day) => (
-                  <tr key={day.date}>
-                    <td className="pa-records-date">{day.date}</td>
-                    <td title={day.fileName}>
+                  <TableRow key={day.date}>
+                    <TableCell className="pa-records-date">{day.date}</TableCell>
+                    <TableCell title={day.fileName}>
                       <span className="inline-flex items-center gap-1.5 font-mono">
-                        <FileSpreadsheet size={12} style={{ color: 'var(--text-tertiary)' }} />
+                        <FileSpreadsheet size={12} style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
                         <span style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', verticalAlign: 'bottom' }}>
                           {day.fileName}
                         </span>
                       </span>
-                    </td>
-                    <td>{day.itemCount}</td>
-                    <td>{day.currency}</td>
-                    <td>v{day.version ?? 1}</td>
-                    <td title={day.createdAt}>{day.createdAt.slice(0, 16).replace('T', ' ')}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell>{day.itemCount}</TableCell>
+                    <TableCell>{day.currency}</TableCell>
+                    <TableCell>v{day.version ?? 1}</TableCell>
+                    <TableCell title={day.createdAt}>{day.createdAt.slice(0, 16).replace('T', ' ')}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
         {currencyMismatchedDays.length > 0 && (
-          <p className="text-[11px]" style={{ color: '#b45309' }}>
+          <p className="text-[11px]" style={{ color: 'hsl(var(--ui-warning))' }}>
             ⚠ {currencyMismatchedDays.map((day) => day.date).join('、')} {activeShop ? `≠ ${activeShop.currency}` : ''}
           </p>
         )}
@@ -864,41 +873,41 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
   );
 
   return (
-    <div className={`pa-shell${view === 'overview' ? ' pa-shell-overview' : ''}`} style={theme.cssVars as React.CSSProperties}>
+    <div className={`pa-shell${view === 'overview' ? ' pa-shell-overview' : ''}`} style={createPaUiVariables(theme)}>
       {/* 工具栏：店铺与操作（左） + 主题颜色菜单（右上角） */}
       <div className="pa-toolbar">
         <div className="pa-toolbar-group">
           {shops.length > 0 ? (
             <>
-              <label className="text-xs font-medium shrink-0" style={{ color: 'var(--text-secondary)' }} htmlFor="shop-select">
+              <label className="text-xs font-medium shrink-0" style={{ color: 'hsl(var(--ui-muted-foreground))' }} htmlFor="shop-select">
                 {strings.shop.label}
               </label>
-              <select
+              <NativeSelect
                 id="shop-select"
                 value={activeShopId}
                 onChange={(event) => setActiveShopId(event.target.value)}
-                className="pa-shop-select truncate"
+                className="w-auto min-w-0 pa-shop-select truncate"
               >
                 {shops.map((shop) => (
                   <option key={shop.id} value={shop.id}>
                     {shop.name}（{shop.site}）
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </>
           ) : (
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>{strings.shop.emptyHint}</span>
+            <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.shop.emptyHint}</span>
           )}
-          <button type="button" onClick={() => setShopManagerOpen(true)} className="pa-btn pa-btn-ghost">
+          <Button id="pa-manage-shops" variant="outline" type="button" onClick={() => setShopManagerOpen(true)} className="pa-btn pa-btn-ghost">
             <Store size={13} />
             {strings.shop.manage}
-          </button>
-          {activeShop && hasUploadPermission && <button type="button" onClick={() => setCollectionOpen(true)} className="pa-btn pa-btn-ghost">
+          </Button>
+          {activeShop && hasUploadPermission && <Button variant="outline" type="button" onClick={() => setCollectionOpen(true)} className="pa-btn pa-btn-ghost">
             <CloudDownload size={13} />采集店铺数据
-          </button>}
+          </Button>}
           {hasUploadPermission && <CollectorSyncSummary state={collectorSync.state} error={collectorSync.error} />}
           {onGenerateRestock && activeShopId && (
-            <button
+            <Button variant="default"
               type="button"
               onClick={() => {
                 onGenerateRestock(activeShopId, range.from, range.to);
@@ -911,7 +920,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
             >
               <PackageCheck size={13} />
               生成补货建议
-            </button>
+            </Button>
           )}
           {activeShop && (
             <span className="pa-shop-meta truncate">
@@ -929,7 +938,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
       <nav className="pa-viewbar" aria-label={strings.views.overview}>
         <div className="pa-view-tabs">
           {VIEW_KEYS.map((key) => (
-            <button
+            <Button variant="outline"
               key={key}
               type="button"
               aria-current={view === key ? 'page' : undefined}
@@ -937,13 +946,13 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
               className="pa-view-tab"
             >
               {strings.views[key]}
-            </button>
+            </Button>
           ))}
         </div>
         {activeShopId && (
           <div className="pa-viewbar-right">
             {(['7d', '30d', '90d'] as const).map((preset) => (
-              <button
+              <Button variant="outline"
                 key={preset}
                 type="button"
                 onClick={() => setRangePreset(preset)}
@@ -951,40 +960,40 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
                 className="pa-chip"
               >
                 {preset === '7d' ? strings.date.last7 : preset === '30d' ? strings.date.last30 : strings.date.last90}
-              </button>
+              </Button>
             ))}
             {rangePreset === 'custom' ? (
               <div className="pa-custom-range">
-                <input
+                <Input
                   type="date"
                   value={customFrom}
                   onChange={(event) => setCustomFrom(event.target.value)}
                   className="pa-chip text-xs"
-                  style={{ color: 'var(--text-primary)' }}
+                  style={{ color: 'hsl(var(--ui-foreground))' }}
                 />
-                <span style={{ color: 'var(--text-tertiary)' }}>~</span>
-                <input
+                <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>~</span>
+                <Input
                   type="date"
                   value={customTo}
                   onChange={(event) => setCustomTo(event.target.value)}
                   className="pa-chip text-xs"
-                  style={{ color: 'var(--text-primary)' }}
+                  style={{ color: 'hsl(var(--ui-foreground))' }}
                 />
-                <button type="button" onClick={handleApplyCustomRange} className="pa-chip" aria-pressed>
+                <Button variant="outline" type="button" onClick={handleApplyCustomRange} className="pa-chip" aria-pressed>
                   {strings.date.apply}
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   type="button"
                   onClick={() => setRangePreset('7d')}
                   className="p-1 rounded-lg"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                   aria-label="close-custom"
                 >
                   <X size={14} />
-                </button>
+                </Button>
               </div>
             ) : (
-              <button
+              <Button variant="outline"
                 type="button"
                 onClick={() => {
                   setCustomFrom(range.from);
@@ -994,7 +1003,7 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
                 className="pa-chip"
               >
                 {strings.date.custom}
-              </button>
+              </Button>
             )}
             <span className="pa-range-label">
               {range.from} ~ {range.to}

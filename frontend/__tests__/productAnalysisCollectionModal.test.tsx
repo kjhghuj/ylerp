@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
@@ -86,9 +87,9 @@ it('keeps keyboard focus within the upper dialog and backdrop closes only that d
   await screen.findByRole('dialog',{name:'凭据详情'});
   await waitFor(()=>expect(screen.getByLabelText('Shopee 店铺 ID')).not.toBeDisabled());
   const first=screen.getByRole('button',{name:'关闭凭据详情'}),last=screen.getByRole('button',{name:'手动输入凭据（备用）'});
-  first.focus();fireEvent.keyDown(document,{key:'Tab',shiftKey:true});expect(last).toHaveFocus();
-  fireEvent.keyDown(document,{key:'Tab'});expect(first).toHaveFocus();
-  fireEvent.mouseDown(screen.getByRole('dialog',{name:'凭据详情'}).parentElement!);
+  first.focus();await userEvent.tab({shift:true});expect(last).toHaveFocus();
+  await userEvent.tab();expect(first).toHaveFocus();
+  await userEvent.click(screen.getByRole('dialog',{name:'凭据详情'}).previousElementSibling!);
   expect(screen.queryByRole('dialog',{name:'凭据详情'})).toBeNull();expect(onClose).not.toHaveBeenCalled();
 });
 
@@ -104,7 +105,7 @@ it('HTTP 页面没有 randomUUID 时仍能使用共用凭据创建采集任务',
   vi.mocked(api.createCollectionRun).mockResolvedValue(run);
   vi.mocked(api.fetchCollectionRun).mockResolvedValue({run,batch:null,tasks:[],page:1,pages:1});
   render(view());await ready();
-  fireEvent.click(screen.getByRole('button',{name:'开始采集'}));
+  fireEvent.click(screen.getByRole('button',{name:'开始采集',hidden:true}));
   await waitFor(()=>expect(api.createCollectionRun).toHaveBeenCalledTimes(1));
   expect(vi.mocked(api.createCollectionRun).mock.calls[0][4]).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -119,7 +120,7 @@ describe('manual collection credentials',()=>{
       tasks:[{id:42,report_date:'2026-09-28',status:'IMPORTED',hasFile:true}],page:1,pages:1});
     vi.mocked(api.downloadCollectionReport).mockResolvedValue();
     render(view());await ready();
-    fireEvent.click(await screen.findByRole('button',{name:'下载原始报表'}));
+    fireEvent.click(await screen.findByRole('button',{name:'下载原始报表',hidden:true}));
     await waitFor(()=>expect(api.downloadCollectionReport).toHaveBeenCalledWith(shopA.id,'run-a',42,'2026-09-28'));
   });
 
@@ -129,7 +130,7 @@ describe('manual collection credentials',()=>{
     vi.mocked(api.fetchCollectionRun).mockResolvedValue({run,batch:null,tasks:[],page:1,pages:1});
     render(view());await ready();
     expect(screen.queryByLabelText('Cookie 来源')).toBeNull();
-    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByRole('button',{name:'保存采集凭据'})).toBeNull();
     fill();await waitForAutoSave();
     await screen.findByText(/采集凭据已自动保存/);
@@ -140,8 +141,8 @@ describe('manual collection credentials',()=>{
     expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe(' test-cds ');
     expect(localStorage.length).toBe(1);
     expect(localStorage.getItem(storageKey(shopA.id))).toBe('12345678');
-    await waitFor(()=>expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false));
-    fireEvent.click(screen.getByRole('button',{name:'开始采集'}));
+    await waitFor(()=>expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole('button',{name:'开始采集',hidden:true}));
     await waitFor(()=>expect(api.createCollectionRun).toHaveBeenCalledWith(shopA.id,expect.any(String),expect.any(String),false,expect.any(String)));
   });
 
@@ -182,7 +183,7 @@ describe('manual collection credentials',()=>{
     await waitForAutoSave();
     expect(api.createSource).toHaveBeenCalledTimes(2);
     expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('restores the server binding over a local draft and reuses its source',async()=>{
@@ -236,11 +237,11 @@ describe('manual collection credentials',()=>{
     await act(async()=>{await vi.advanceTimersByTimeAsync(3000);});
     expect(api.submitSharedCookies).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByLabelText('SPC_CDS'),{target:{value:'updated-cds'}});
-    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(true);
     await act(async()=>{await vi.advanceTimersByTimeAsync(800);});
     expect(api.submitSharedCookies).toHaveBeenLastCalledWith(cookies,'updated-cds');
     expect(api.submitSharedCookies).toHaveBeenCalledTimes(2);
-    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('saves shared credentials before a shop ID is entered and reuses them when binding',async()=>{
@@ -263,7 +264,7 @@ describe('manual collection credentials',()=>{
     await waitForAutoSave();
     rendered.rerender(view(shopB));await ready();
     expect((screen.getByLabelText('SPC_CDS') as HTMLInputElement).value).toBe('renewed-cds');
-    expect((screen.getByRole('button',{name:'开始采集'}) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button',{name:'开始采集',hidden:true}) as HTMLButtonElement).disabled).toBe(false);
     expect(api.submitSharedCookies).toHaveBeenCalledTimes(2);
     for(let index=0;index<localStorage.length;index++){
       expect(localStorage.getItem(localStorage.key(index)!)).not.toContain('test-session');

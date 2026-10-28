@@ -171,6 +171,47 @@ export interface PaTheme {
   cssVars: Record<string, string>;
 }
 
+/** shadcn tokens use HSL channels; retain the already contrast-corrected PA pairs. */
+function hslChannels(hex: string): string {
+  const rgb = hexToRgb(hex);
+  const [r, g, b] = [rgb.r, rgb.g, rgb.b].map((value) => value / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  const light = (max + min) / 2;
+  const saturation = delta === 0 ? 0 : delta / (1 - Math.abs(2 * light - 1));
+  let hue = 0;
+  if (delta !== 0) {
+    hue = max === r ? ((g - b) / delta) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    hue = (hue * 60 + 360) % 360;
+  }
+  return `${hue.toFixed(6)} ${(saturation * 100).toFixed(6)}% ${(light * 100).toFixed(6)}%`;
+}
+
+/** Identical resolved variables are applied to the module and body Portal host. */
+export function createPaUiVariables(theme: PaTheme): Record<`--${string}`, string> {
+  const suffix = theme.isDark ? 'd' : 'l';
+  const value = (name: string) => theme.cssVars[`--pa-${name}-${suffix}`];
+  return {
+    ...theme.cssVars,
+    '--pa-accent': value('a'),
+    '--pa-accent-ui': value('u'),
+    '--pa-on-accent': value('on-a'),
+    '--pa-accent-text': value('t'),
+    '--pa-accent-soft': value('s'),
+    '--pa-accent-soft-2': value('s2'),
+    '--pa-border-soft': value('b'),
+    '--pa-canvas': value('c'),
+    '--pa-card': theme.isDark ? 'var(--bg-card)' : '#FFFFFF',
+    '--pa-card-border': theme.isDark ? 'var(--border-default)' : '#ECE9F6',
+    '--pa-ink': theme.isDark ? 'var(--text-primary)' : '#171334',
+    '--ui-primary': hslChannels(value('u')),
+    '--ui-primary-foreground': hslChannels(value('on-a')),
+    '--ui-ring': hslChannels(value('t')),
+    '--ui-background': hslChannels(value('c')),
+  };
+}
+
 /** 把颜色亮度逼近目标值（向白/黑二分混合，保留色相） */
 export function withLuminance(hex: string, target: number): string {
   const normalized = normalizeHexColor(hex) ?? DEFAULT_PA_THEME_COLOR;

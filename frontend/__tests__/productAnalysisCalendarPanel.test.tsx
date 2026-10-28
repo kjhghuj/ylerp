@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { CalendarPanel } from '../modules/product-analysis/components/CalendarPanel';
@@ -40,7 +40,6 @@ describe('CalendarPanel', () => {
   it('selects uploaded days in batch mode and deletes them after confirm', async () => {
     const user = userEvent.setup();
     const onBatchDelete = vi.fn();
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(<CalendarPanel days={DAYS} canDelete onDeleteDay={vi.fn()} onBatchDelete={onBatchDelete} />);
 
     await user.click(screen.getByText('批量管理'));
@@ -49,9 +48,11 @@ describe('CalendarPanel', () => {
     expect(screen.getByText('已选 2 天')).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: '删除所选' }));
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('2'));
+    const confirm = screen.getByRole('alertdialog');
+    expect(within(confirm).getByText(/2 天数据/)).toBeTruthy();
+    expect(onBatchDelete).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole('button', { name: '删除' }));
     expect(onBatchDelete).toHaveBeenCalledWith(['2026-09-05', '2026-09-06']);
-    confirmSpy.mockRestore();
   });
 
   it('cannot select days without data in batch mode', async () => {

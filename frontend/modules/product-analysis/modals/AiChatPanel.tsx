@@ -1,3 +1,5 @@
+import { Textarea } from '../../../components/ui/textarea';
+import { Button } from '../../../components/ui/button';
 import React, { useEffect, useRef, useState } from 'react';
 import { Send, Loader2, Bot, User, RotateCcw, Sparkles, Lock, Brain, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../../../AuthContext';
@@ -157,7 +159,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
     return (
       <div
         className="rounded-2xl border p-10 flex flex-col items-center gap-3"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
       >
         <Lock size={28} />
         <p className="text-sm">{strings.aiDisabled}</p>
@@ -168,7 +170,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
   return (
     <div className="flex flex-col rounded-2xl border overflow-hidden" style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}>
       {/* 上下文指示 + 深度思考开关 */}
-      <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}>
+      <div className="px-4 py-2.5 border-b flex items-center gap-2 text-xs" style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}>
         <Sparkles size={13} style={{ color: 'var(--pa-accent-text)' }} />
         <span className="truncate">
           {itemId
@@ -180,7 +182,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
             {from} ~ {to}
           </span>
         )}
-        <button
+        <Button variant="outline"
           type="button"
           onClick={() => setDeepThinking((value) => !value)}
           disabled={isSending}
@@ -189,39 +191,39 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           className="ml-auto shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-full border transition-colors"
           style={{
             borderColor: deepThinking ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
-            color: deepThinking ? 'var(--pa-accent-text)' : 'var(--text-tertiary)',
+            color: deepThinking ? 'var(--pa-accent-text)' : 'hsl(var(--ui-muted-foreground))',
           }}
         >
           <Brain size={12} />
           {strings.ai.deepThinking}
-        </button>
+        </Button>
       </div>
 
-      {itemId && <div className="px-4 py-2 text-xs border-b" role="status" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}>
+      {itemId && <div className="px-4 py-2 text-xs border-b" role="status" style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}>
         {historyLoading ? strings.ai.historyLoading : isSending ? strings.ai.thinking :
           saveStatus === 'saved' ? strings.ai.historySaved : saveStatus === 'unsaved' ? strings.ai.historyUnsaved : strings.ai.historyReady}
       </div>}
-      {historyError && <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2" role="alert" style={{ color: '#dc2626' }}>
+      {historyError && <div className="px-4 py-2 text-xs flex flex-wrap items-center gap-2" role="alert" style={{ color: 'hsl(var(--ui-danger))' }}>
         <span>{historyError}</span>
-        <button type="button" onClick={() => setHistoryRetry(value => value + 1)}>{strings.ai.historyRetry}</button>
+        <Button variant="ghost" type="button" onClick={() => setHistoryRetry(value => value + 1)}>{strings.ai.historyRetry}</Button>
       </div>}
 
       {/* 消息区 */}
       <div className="flex-1 min-h-[240px] max-h-[380px] overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.length === 0 && !historyLoading && !historyError && (
           <div className="flex flex-col items-center gap-3 py-6">
-            <Bot size={28} style={{ color: 'var(--text-tertiary)' }} />
+            <Bot size={28} style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
             <div className="flex flex-wrap justify-center gap-2 max-w-md">
               {strings.ai.suggest.map((suggestion) => (
-                <button
+                <Button variant="outline"
                   key={suggestion}
                   type="button"
                   onClick={() => sendMessage(suggestion)}
                   className="px-3 py-1.5 rounded-full border text-xs transition-colors duration-200"
-                  style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+                  style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
                 >
                   {suggestion}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -241,32 +243,32 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                   className="rounded-xl border px-3 py-2"
                   style={{ borderColor: 'var(--pa-card-border)', backgroundColor: 'var(--pa-canvas)' }}
                 >
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     onClick={() => setExpandedReasoning((prev) => ({ ...prev, [index]: !reasoningExpanded }))}
                     className="w-full flex items-center justify-between text-[11px] mb-1"
-                    style={{ color: 'var(--text-tertiary)' }}
+                    style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                   >
                     <span className="inline-flex items-center gap-1 font-medium">
                       {thinkingStreaming ? <Loader2 size={11} className="animate-spin" /> : <Brain size={11} />}
                       {thinkingStreaming ? strings.ai.thinkingNow : strings.ai.reasoningLabel}
                     </span>
                     {!thinkingStreaming && <ChevronUp size={12} />}
-                  </button>
+                  </Button>
                   <div
                     className="max-h-28 overflow-y-auto text-[11px] leading-relaxed whitespace-pre-wrap break-words"
-                    style={{ color: 'var(--text-tertiary)' }}
+                    style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                   >
                     {message.reasoning}
                     {thinkingStreaming && <span className="animate-pulse">▍</span>}
                   </div>
                 </div>
               ) : (
-                <button
+                <Button variant="outline"
                   type="button"
                   onClick={() => setExpandedReasoning((prev) => ({ ...prev, [index]: true }))}
                   className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border transition-colors"
-                  style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-tertiary)' }}
+                  style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
                 >
                   <Brain size={11} />
                   {strings.ai.thoughtFor.replace(
@@ -274,7 +276,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
                     String(Math.max(1, Math.round((message.reasoningMs ?? 0) / 1000)))
                   )}
                   <ChevronDown size={11} />
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -285,7 +287,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
               className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
               style={{
                 backgroundColor: message.role === 'user' ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
-                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'var(--text-secondary)',
+                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'hsl(var(--ui-muted-foreground))',
               }}
             >
               {message.role === 'user' ? <User size={13} /> : <Bot size={13} />}
@@ -298,7 +300,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
               }`}
               style={{
                 backgroundColor: message.role === 'user' ? 'var(--pa-accent-ui)' : 'var(--bg-card-hover)',
-                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'var(--text-primary)',
+                color: message.role === 'user' ? 'var(--pa-on-accent)' : 'hsl(var(--ui-foreground))',
                 borderBottomRightRadius: message.role === 'user' ? 6 : undefined,
                 borderBottomLeftRadius: message.role === 'assistant' ? 6 : undefined,
               }}
@@ -314,7 +316,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           );
         })}
         {isSending && !messages[messages.length - 1]?.content && !messages[messages.length - 1]?.reasoning && (
-          <div className="flex items-center gap-2 self-start text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          <div className="flex items-center gap-2 self-start text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
             <Loader2 size={14} className="animate-spin" />
             {strings.ai.thinking}
           </div>
@@ -324,16 +326,16 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
 
       {/* 错误 + 输入区 */}
       {error && (
-        <div className="mx-4 mb-2 px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2" style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: '#dc2626' }}>
+        <div className="mx-4 mb-2 px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2" style={{ backgroundColor: 'rgba(239,68,68,0.08)', color: 'hsl(var(--ui-danger))' }}>
           <span className="truncate" title={error}>{error}</span>
-          <button type="button" onClick={() => setError(null)} className="shrink-0 flex items-center gap-1 font-medium">
+          <Button variant="ghost" type="button" onClick={() => setError(null)} className="shrink-0 flex items-center gap-1 font-medium">
             <RotateCcw size={12} />
             {strings.ai.retry}
-          </button>
+          </Button>
         </div>
       )}
       <div className="px-4 pb-4 flex items-end gap-2">
-        <textarea
+        <Textarea
           ref={inputRef}
           value={input}
           onChange={(event) => setInput(event.target.value)}
@@ -351,10 +353,10 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           style={{
             backgroundColor: 'var(--pa-canvas)',
             borderColor: 'var(--pa-card-border)',
-            color: 'var(--text-primary)',
+            color: 'hsl(var(--ui-foreground))',
           }}
         />
-        <button
+        <Button variant="default"
           type="button"
           onClick={() => sendMessage(input)}
           disabled={isSending || historyLoading || Boolean(historyError) || !input.trim()}
@@ -363,7 +365,7 @@ export const AiChatPanel: React.FC<AiChatPanelProps> = ({ shopId, itemId, itemTi
           aria-label={strings.ai.send}
         >
           {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-        </button>
+        </Button>
       </div>
     </div>
   );

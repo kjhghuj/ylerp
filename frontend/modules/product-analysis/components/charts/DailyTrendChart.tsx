@@ -1,3 +1,5 @@
+import { Input } from '../../../../components/ui/input';
+import { Button } from '../../../../components/ui/button';
 import { chartAxisTick, finiteMetric, useChartState } from './chartState';
 import React, { useMemo, useState } from 'react';
 import { Area, Bar, Brush, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
@@ -47,17 +49,17 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
   const compactTick = (value: number) => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(value);
   return <ChartCard title={strings.trend.title}>
     <div className="pa-chart-groups" role="group" aria-label={strings.trend.title}>
-      {TREND_GROUPS.map(({ key }) => <button key={key} type="button" aria-pressed={groupKey === key} onClick={() => setGroupKey(key)}>{words.groups[key]}</button>)}
+      {TREND_GROUPS.map(({ key }) => <Button className="h-8 px-2" variant="ghost" key={key} type="button" aria-pressed={groupKey === key} onClick={() => setGroupKey(key)}>{words.groups[key]}</Button>)}
     </div>
     <ChartLegend items={group.metrics.map((key) => ({ key, label: strings.metrics[key], color: metricColor(group, key, chartSeries) }))}
       selected={selected} defaults={group.defaults} onChange={(keys) => setSelections((old) => ({ ...old, [groupKey]: keys }))} />
     {data.length === 0 ? <div className="pa-chart-empty">{strings.chart.noData}</div> : <>
       <div className="pa-trend-range">
         <span>{words.range}</span>
-        <input type="date" aria-label={words.rangeStart} value={data[startIndex].date} min={data[0].date} max={data[endIndex].date}
+        <Input type="date" aria-label={words.rangeStart} value={data[startIndex].date} min={data[0].date} max={data[endIndex].date}
           onChange={(event) => { const index = data.findIndex((point) => point.date === event.target.value); if (index >= 0 && index <= endIndex) { setRange({ start: index, end: endIndex }); setBrushResetKey((key) => key + 1); } }} />
         <span>—</span>
-        <input type="date" aria-label={words.rangeEnd} value={data[endIndex].date} min={data[startIndex].date} max={data[lastIndex].date}
+        <Input type="date" aria-label={words.rangeEnd} value={data[endIndex].date} min={data[startIndex].date} max={data[lastIndex].date}
           onChange={(event) => { const index = data.findIndex((point) => point.date === event.target.value); if (index >= startIndex) { setRange({ start: startIndex, end: index }); setBrushResetKey((key) => key + 1); } }} />
       </div>
       {visible.length === 0 ? <ChartEmptySelection /> : <>
@@ -103,7 +105,7 @@ export const DailyTrendChart: React.FC<DailyTrendChartProps> = ({ series, curren
         {data.length > 1 && <div className="pa-trend-brush">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-              <Brush key={brushResetKey} dataKey="date" height={28} stroke="var(--text-tertiary)" fill="var(--pa-card)" travellerWidth={10}
+              <Brush key={brushResetKey} dataKey="date" height={28} stroke="hsl(var(--ui-muted-foreground))" fill="var(--pa-card)" travellerWidth={10}
                 startIndex={startIndex} endIndex={endIndex} tickFormatter={(date: string) => date.slice(5)}
                 onChange={(next) => { if (next.startIndex !== undefined && next.endIndex !== undefined && (next.startIndex !== startIndex || next.endIndex !== endIndex)) setRange({ start: next.startIndex, end: next.endIndex }); }} />
             </ComposedChart>

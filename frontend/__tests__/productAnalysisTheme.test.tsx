@@ -201,12 +201,12 @@ describe('ThemeMenu', () => {
       </PaThemeProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: '主题颜色' }));
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /蓝色/ }));
+    fireEvent.click(screen.getByRole('button', { name: /蓝色/ }));
     expect(screen.getByTestId('probe-color').textContent).toBe('#2563EB');
     expect(screen.getByTestId('probe-primary').textContent).toBe('#2563EB');
     expect(localStorage.getItem(PA_THEME_STORAGE_KEY)).toBe('#2563EB');
     // 预设选中态
-    expect(screen.getByRole('menuitemradio', { name: /蓝色/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: /蓝色/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('applies a custom hex from the text input and rejects invalid values', async () => {
@@ -248,7 +248,7 @@ describe('ThemeMenu', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: '主题颜色' }));
     for (const preset of PA_THEME_PRESETS) {
-      expect(screen.getByRole('menuitemradio', { name: new RegExp(preset.key === 'purple' ? '紫色' : preset.key === 'blue' ? '蓝色' : preset.key === 'green' ? '绿色' : '橙色') })).toBeTruthy();
+      expect(screen.getByRole('button', { name: new RegExp(preset.key === 'purple' ? '紫色' : preset.key === 'blue' ? '蓝色' : preset.key === 'green' ? '绿色' : '橙色') })).toBeTruthy();
     }
     expect(screen.getByLabelText('取色器')).toBeTruthy();
   });

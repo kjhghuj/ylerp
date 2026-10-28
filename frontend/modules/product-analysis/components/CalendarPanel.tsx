@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import { Button } from '../../../components/ui/button';
+import React, { useMemo, useRef, useState } from 'react';
+import { DeleteConfirmation } from './DeleteConfirmation';
 import { ChevronLeft, ChevronRight, ListChecks, Trash2, X } from 'lucide-react';
 import { useStore } from '../../../StoreContext';
 import { useProductAnalysisStrings } from '../i18n';
@@ -31,8 +33,9 @@ interface CalendarPanelProps {
   days: DayMeta[];
   /** 无 product-analysis.upload 权限时隐藏删除入口（单个与批量） */
   canDelete: boolean;
-  onDeleteDay: (date: string) => void;
-  onBatchDelete: (dates: string[]) => void;
+  onDeleteDay: (date: string) => Promise<boolean | void> | boolean | void;
+  onBatchDelete: (dates: string[]) => Promise<boolean | void> | boolean | void;
+  fallbackFocus?: () => HTMLElement | null;
 }
 
 /** 数据日历（只读展示）：标记每天是否已上传；批量模式下点选日期批量删除 */
@@ -41,12 +44,15 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
   canDelete,
   onDeleteDay,
   onBatchDelete,
+  fallbackFocus,
 }) => {
   const strings = useProductAnalysisStrings();
   const { language } = useStore();
   const [view, setView] = useState<YearMonth>(() => parseYearMonth(days[0]?.date ?? todayString()));
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [deletion, setDeletion] = useState<{ dates: string[]; batch: boolean } | null>(null);
+  const previousMonthButton = useRef<HTMLButtonElement>(null);
 
   const uploadedMap = useMemo(() => new Map(days.map((day) => [day.date, day])), [days]);
   // days 变化（切店/删除）后清掉已不存在的选择
@@ -84,17 +90,15 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
 
   const handleBatchDeleteClick = () => {
     if (selected.length === 0) return;
-    const message = strings.batchDayDeleteConfirm.replace('{count}', String(selected.length));
-    if (!window.confirm(message)) return;
-    onBatchDelete([...selected]);
+    setDeletion({ dates: [...selected], batch: true });
   };
 
   const renderToolbar = () => (
     <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2 pt-1">
-      <span className="text-[11px] mr-auto" style={{ color: 'var(--text-tertiary)' }}>
+      <span className="text-[11px] mr-auto" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         {strings.batchSelectedCount.replace('{count}', String(selected.length))}
       </span>
-      <button
+      <Button variant="outline"
         type="button"
         onClick={() =>
           setSelectedDates((current) =>
@@ -102,19 +106,19 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
           )
         }
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
       >
         {strings.batchSelectMonth}
-      </button>
-      <button
+      </Button>
+      <Button variant="outline"
         type="button"
         onClick={() => setSelectedDates([])}
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
       >
         {strings.batchDeselectAll}
-      </button>
-      <button
+      </Button>
+      <Button variant="outline"
         type="button"
         onClick={handleBatchDeleteClick}
         disabled={selected.length === 0}
@@ -122,73 +126,74 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
         style={{
           backgroundColor: selected.length === 0 ? 'var(--pa-card)' : '#dc2626',
           borderColor: selected.length === 0 ? 'var(--pa-card-border)' : '#dc2626',
-          color: selected.length === 0 ? 'var(--text-tertiary)' : '#fff',
+          color: selected.length === 0 ? 'hsl(var(--ui-muted-foreground))' : '#fff',
           cursor: selected.length === 0 ? 'not-allowed' : 'pointer',
         }}
       >
         <Trash2 size={11} />
         {strings.batchDeleteSelected}
-      </button>
-      <button
+      </Button>
+      <Button variant="outline"
         type="button"
         onClick={() => {
           setIsBatchMode(false);
           setSelectedDates([]);
         }}
         className="px-2 py-1 rounded-lg text-[11px] border transition-colors"
-        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+        style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
       >
         {strings.batchExit}
-      </button>
+      </Button>
     </div>
   );
 
   return (
     <div
-      className="rounded-2xl border flex flex-col"
+      className="pa-data-calendar rounded-2xl border flex flex-col"
       style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)' }}
     >
       <div className="flex items-center justify-between px-3 pt-3">
         <div className="flex items-center gap-0.5">
-          <button
+          <Button variant="ghost"
+            ref={previousMonthButton}
             type="button"
             onClick={() => setView((current) => shiftMonth(current, -1))}
             aria-label={strings.calendarPrevMonth}
             className="p-1 rounded-lg transition-colors"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: 'hsl(var(--ui-muted-foreground))' }}
           >
             <ChevronLeft size={15} />
-          </button>
-          <span className="text-sm font-semibold min-w-[5.5em] text-center" style={{ color: 'var(--text-primary)' }}>
+          </Button>
+          <span className="text-sm font-semibold min-w-[5.5em] text-center" style={{ color: 'hsl(var(--ui-foreground))' }}>
             {monthTitle}
           </span>
-          <button
+          <Button variant="ghost"
             type="button"
             onClick={() => setView((current) => shiftMonth(current, 1))}
             aria-label={strings.calendarNextMonth}
             className="p-1 rounded-lg transition-colors"
-            style={{ color: 'var(--text-secondary)' }}
+            style={{ color: 'hsl(var(--ui-muted-foreground))' }}
           >
             <ChevronRight size={15} />
-          </button>
+          </Button>
         </div>
         {canDelete && !isBatchMode && (
-          <button
+          <Button variant="outline"
             type="button"
             onClick={() => {
               setSelectedDates([]);
               setIsBatchMode(true);
             }}
             className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors"
-            style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}
+            style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
           >
             <ListChecks size={11} />
             {strings.batchManage}
-          </button>
+          </Button>
         )}
       </div>
 
-      <div className="flex items-center gap-3 px-3 pt-1 text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="flex items-center gap-3 px-3 pt-1 text-[11px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         <span className="inline-flex items-center gap-1">
           <span
             className="w-2.5 h-2.5 rounded-sm inline-block"
@@ -199,13 +204,13 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
         <span>{strings.calendarMissing}</span>
       </div>
 
-      <div className="grid grid-cols-7 px-2 py-1 text-[11px] text-center" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="pa-calendar-grid grid grid-cols-7 px-2 py-1 text-[11px] text-center" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         {WEEKDAY_LABELS.map((label) => (
           <span key={label}>{label}</span>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1 px-2 pb-2">
+      <div className="pa-calendar-grid grid grid-cols-7 gap-1 px-2 pb-2">
         {cells.map((date, index) => {
           if (date === null) return <span key={`blank-${index}`} className="aspect-square" />;
           const day = uploadedMap.get(date);
@@ -224,7 +229,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
 
           if (isBatchMode) {
             return (
-              <button
+              <Button variant="outline"
                 key={date}
                 type="button"
                 disabled={!isUploaded}
@@ -232,18 +237,18 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
                 aria-pressed={isSelected}
                 aria-label={date}
                 title={day ? `${day.fileName} · ${day.itemCount}${sourceStatus}` : date}
-                className="aspect-square rounded-lg text-[11px] font-semibold border transition-colors"
+                className="h-auto min-w-0 p-0 aspect-square rounded-lg text-[11px] font-semibold border transition-colors"
                 style={{
                   backgroundColor: isSelected ? '#dc2626' : isUploaded ? 'var(--pa-accent-soft)' : 'transparent',
                   borderColor: isSelected ? '#dc2626' : isUploaded ? 'var(--pa-border-soft)' : 'transparent',
-                  color: isSelected ? '#fff' : isUploaded ? 'var(--pa-accent-text)' : 'var(--text-tertiary)',
+                  color: isSelected ? '#fff' : isUploaded ? 'var(--pa-accent-text)' : 'hsl(var(--ui-muted-foreground))',
                   opacity: isUploaded ? 1 : 0.45,
                   cursor: isUploaded ? 'pointer' : 'default',
                   boxShadow: isToday ? 'inset 0 0 0 1.5px var(--pa-accent-ui)' : undefined,
                 }}
               >
                 {Number(date.slice(8))}
-              </button>
+              </Button>
             );
           }
 
@@ -254,7 +259,7 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
               style={{
                 backgroundColor: isUploaded ? 'var(--pa-accent-soft)' : 'transparent',
                 borderColor: isUploaded ? 'var(--pa-border-soft)' : 'transparent',
-                color: isUploaded ? 'var(--pa-accent-text)' : isFuture ? 'var(--text-tertiary)' : 'var(--text-secondary)',
+                color: isUploaded ? 'var(--pa-accent-text)' : isFuture ? 'hsl(var(--ui-muted-foreground))' : 'hsl(var(--ui-muted-foreground))',
                 fontWeight: isUploaded ? 600 : undefined,
                 opacity: isFuture && !isUploaded ? 0.55 : 1,
                 boxShadow: isToday ? 'inset 0 0 0 1.5px var(--pa-accent-ui)' : undefined,
@@ -266,22 +271,22 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
               {day?.sourceComplete === false && (
                 <span
                   className="absolute left-0.5 top-0 text-[8px] font-bold"
-                  style={{ color: '#fef3c7' }}
+                  style={{ color: 'hsl(var(--ui-warning))' }}
                   aria-hidden="true"
                 >
                   !
                 </span>
               )}
               {isUploaded && canDelete && (
-                <button
+                <Button variant="ghost"
                   type="button"
-                  onClick={() => onDeleteDay(date)}
-                  className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-full flex items-center justify-center w-3.5 h-3.5"
-                  style={{ backgroundColor: '#dc2626', color: '#fff' }}
+                  onClick={() => setDeletion({ dates: [date], batch: false })}
+                  className="absolute -top-1 -right-1 p-0 opacity-60 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity rounded-full flex items-center justify-center w-6 h-6"
+                  style={{ backgroundColor: 'hsl(var(--ui-destructive))', color: 'hsl(var(--ui-destructive-foreground))' }}
                   aria-label={`${strings.deleteDay} ${date}`}
                 >
                   <X size={9} />
-                </button>
+                </Button>
               )}
             </span>
           );
@@ -289,6 +294,14 @@ export const CalendarPanel: React.FC<CalendarPanelProps> = ({
       </div>
 
       {isBatchMode && renderToolbar()}
+      {deletion && <DeleteConfirmation
+        description={deletion.batch
+          ? strings.batchDayDeleteConfirm.replace('{count}', String(deletion.dates.length))
+          : `${strings.dayDeleteConfirm}\n（${deletion.dates[0]}）`}
+        onClose={() => setDeletion(null)}
+        onConfirm={() => deletion.batch ? onBatchDelete(deletion.dates) : onDeleteDay(deletion.dates[0])}
+        fallbackFocus={fallbackFocus ?? (() => previousMonthButton.current)}
+      />}
     </div>
   );
 };

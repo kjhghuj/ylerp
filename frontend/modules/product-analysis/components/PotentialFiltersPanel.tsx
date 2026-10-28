@@ -1,3 +1,6 @@
+import { Switch } from '../../../components/ui/switch';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
 import React from 'react';
 import { Filter, RotateCcw } from 'lucide-react';
 import { useProductAnalysisStrings } from '../i18n';
@@ -22,10 +25,10 @@ interface NumberFilterProps {
 function NumberFilter({ id, label, placeholder, value, min = 0, onChange }: NumberFilterProps) {
   return (
     <div className="min-w-0">
-      <label htmlFor={id} className="block text-[11px] mb-1" style={{ color: 'var(--text-tertiary)' }}>
+      <label htmlFor={id} className="block text-[11px] mb-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
         {label}
       </label>
-      <input
+      <Input
         id={id}
         type="number"
         inputMode="numeric"
@@ -45,7 +48,7 @@ function NumberFilter({ id, label, placeholder, value, min = 0, onChange }: Numb
         style={{
           backgroundColor: 'var(--pa-canvas)',
           borderColor: 'var(--pa-card-border)',
-          color: 'var(--text-primary)',
+          color: 'hsl(var(--ui-foreground))',
         }}
       />
     </div>
@@ -60,7 +63,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
   const inputStyle = (checked: boolean): React.CSSProperties => ({
     backgroundColor: 'var(--pa-card)',
     borderColor: checked ? 'var(--pa-accent-ui)' : 'var(--pa-card-border)',
-    color: checked ? 'var(--pa-accent-text)' : 'var(--text-secondary)',
+    color: checked ? 'var(--pa-accent-text)' : 'hsl(var(--ui-muted-foreground))',
   });
 
   return (
@@ -70,10 +73,10 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
     >
       <div className="flex flex-wrap items-center gap-2">
         <Filter size={13} style={{ color: 'var(--pa-accent-text)' }} />
-        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+        <span className="text-xs font-semibold" style={{ color: 'hsl(var(--ui-foreground))' }}>
           {strings.potential.filters}
         </span>
-        <span className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }}>
+        <span className="text-[11px] truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           {strings.potential.base}
         </span>
         {!isDefault && (
@@ -81,7 +84,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
             自定义
           </span>
         )}
-        <button
+        <Button variant="outline"
           type="button"
           onClick={onReset}
           disabled={isDefault}
@@ -90,7 +93,7 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
         >
           <RotateCcw size={11} />
           {strings.potential.reset}
-        </button>
+        </Button>
       </div>
       <div className="pa-potential-filters grid gap-2">
         <NumberFilter
@@ -123,20 +126,10 @@ export const PotentialFiltersPanel: React.FC<PotentialFiltersPanelProps> = ({ va
           onChange={(limit) => onChange({ ...value, limit: limit ?? DEFAULT_POTENTIAL_FILTERS.limit })}
         />
         <div className="min-w-0">
-          <span className="block text-[11px] mb-1" style={{ color: 'var(--text-tertiary)' }}>
+          <span className="block text-[11px] mb-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
             {strings.potential.excludeBanned}
           </span>
-          <button
-            type="button"
-            role="switch"
-            aria-label={strings.potential.excludeBanned}
-            aria-checked={value.excludeBannedDeleted}
-            onClick={() => onChange({ ...value, excludeBannedDeleted: !value.excludeBannedDeleted })}
-            className="w-full px-2 py-1.5 rounded-lg border text-xs transition-colors"
-            style={inputStyle(value.excludeBannedDeleted)}
-          >
-            {value.excludeBannedDeleted ? 'ON' : 'OFF'}
-          </button>
+          <div className="flex items-center gap-2 h-9"><Switch aria-label={strings.potential.excludeBanned} checked={value.excludeBannedDeleted} onCheckedChange={checked => onChange({ ...value, excludeBannedDeleted: checked })} /><span className="text-xs text-muted-foreground">{value.excludeBannedDeleted ? 'ON' : 'OFF'}</span></div>
         </div>
       </div>
     </div>

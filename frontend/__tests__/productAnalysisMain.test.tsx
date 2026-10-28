@@ -5,7 +5,7 @@
  * - 任务1：多日区间报表在前端被拒绝并提示原因。
  * - 任务8：筛选条件中的合法 null（不限）持久化/恢复时不回退默认阈值。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductAnalysis, loadPotentialFilters } from '../modules/product-analysis/ProductAnalysis';
@@ -245,13 +245,15 @@ describe('ProductAnalysis write-then-refresh', () => {
     mockFetchShops.mockResolvedValue([makeShop('shop-1', 'MY 主店', '2026-09-06')]);
     render(<ProductAnalysis />);
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(1));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     await openCalendarView();
 
     // 悬停删除按钮位于日历单元格内（2026-09-06 有数据）
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
+
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('2026-09-06');
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '删除' }));
 
     await waitFor(() => expect(mockFetchShopAgg).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockFetchPotential).toHaveBeenCalledTimes(2));

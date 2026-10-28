@@ -1,4 +1,8 @@
-import React, { useState } from 'react';
+import { NativeSelect } from '../../../components/ui/native-select';
+import { Input } from '../../../components/ui/input';
+import { Button } from '../../../components/ui/button';
+import React, { useEffect, useRef, useState } from 'react';
+import {Dialog,DialogContent,DialogTitle,DialogDescription} from '../../../components/ui/dialog';
 import { X, Plus, Trash2, Pencil, Store } from 'lucide-react';
 import { useToast } from '../../../components/Toast';
 import {
@@ -9,6 +13,7 @@ import {
 } from '../services/productAnalysisApi';
 import { useProductAnalysisStrings } from '../i18n';
 import { SITE_OPTIONS, type ShopMeta } from '../types';
+import { DeleteConfirmation } from './DeleteConfirmation';
 
 interface ShopManagerProps {
   shops: ShopMeta[];
@@ -26,6 +31,10 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
   const [creating, setCreating] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const renameInput = useRef<HTMLInputElement>(null);
+  const createInput = useRef<HTMLInputElement>(null);
+  const [deletingShop, setDeletingShop] = useState<ShopMeta | null>(null);
+  useEffect(() => { if (renamingId) renameInput.current?.focus(); }, [renamingId]);
 
   const handleCreate = async () => {
     const trimmed = name.trim();
@@ -62,49 +71,45 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
   };
 
   const handleDelete = async (shop: ShopMeta) => {
-    if (!window.confirm(`${strings.shop.deleteConfirm}\n（${shop.name} · ${shop.site}）`)) return;
     try {
       await deleteShop(shop.id);
       await onRefresh();
       showToast(`${shop.name} ${strings.shop.delete} ✓`);
+      return true;
     } catch (error) {
       showToast(getApiErrorDetail(error), 'error');
+      return false;
     }
   };
 
   const inputStyle = {
     backgroundColor: 'var(--pa-canvas)',
     borderColor: 'var(--pa-card-border)',
-    color: 'var(--text-primary)',
+    color: 'hsl(var(--ui-foreground))',
   } as const;
 
   return (
-    <div
-      className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <Dialog open onOpenChange={open=>{if(!open)onClose();}}>
+      <DialogContent showCloseButton={false} className="rounded-xl max-w-[min(512px,calc(100vw-2rem))] max-h-[85dvh] flex flex-col overflow-hidden gap-0 p-0">
+        <DialogDescription className="sr-only">{strings.shop.manage}</DialogDescription>
         <div className="px-5 py-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: 'var(--pa-card-border)' }}>
-          <p className="font-bold text-sm flex items-center gap-2" style={{ color: 'var(--text-primary)' }}>
+          <DialogTitle className="font-bold text-sm flex items-center gap-2">
             <Store size={16} style={{ color: 'var(--pa-accent-text)' }} />
             {strings.shop.manage}
-          </p>
-          <button type="button" onClick={onClose} className="p-1.5 rounded-lg" style={{ color: 'var(--text-tertiary)' }} aria-label="close">
+          </DialogTitle>
+          <Button variant="ghost" type="button" onClick={onClose} className="p-1.5 rounded-lg" style={{ color: 'hsl(var(--ui-muted-foreground))' }} aria-label="close">
             <X size={18} />
-          </button>
+          </Button>
         </div>
 
         <div className="p-5 overflow-y-auto flex flex-col gap-5">
           {/* 新建 */}
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex flex-col gap-1 min-w-[180px] flex-1">
-              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{strings.shop.name}</label>
-              <input
+              <label htmlFor="pa-create-shop-name" className="text-xs font-medium" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.shop.name}</label>
+              <Input
+                ref={createInput}
+                id="pa-create-shop-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={50}
@@ -114,19 +119,20 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{strings.shop.site}</label>
-              <select
+              <label htmlFor="pa-create-shop-site" className="text-xs font-medium" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.shop.site}</label>
+              <NativeSelect
+                id="pa-create-shop-site"
                 value={site}
                 onChange={(event) => setSite(event.target.value as (typeof SITE_OPTIONS)[number])}
-                className="rounded-lg border px-3 py-2 text-sm"
+                className="h-8 w-auto rounded-lg border px-3 py-2 text-sm"
                 style={inputStyle}
               >
                 {SITE_OPTIONS.map((option) => (
                   <option key={option} value={option}>{option}</option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
-            <button
+            <Button variant="default"
               type="button"
               onClick={handleCreate}
               disabled={creating || !name.trim()}
@@ -135,7 +141,7 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
             >
               <Plus size={14} />
               {strings.shop.createBtn}
-            </button>
+            </Button>
           </div>
 
           {/* 列表 */}
@@ -148,13 +154,13 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
               >
                 <div className="min-w-0 flex-1">
                   {renamingId === shop.id ? (
-                    <input
-                      autoFocus
+                    <Input
+                      ref={renameInput}
                       value={renameValue}
                       onChange={(event) => setRenameValue(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' && !event.nativeEvent.isComposing) void handleRename(shop);
-                        if (event.key === 'Escape') setRenamingId(null);
+                        if (event.key === 'Escape') { event.stopPropagation(); setRenamingId(null); }
                       }}
                       onBlur={() => void handleRename(shop)}
                       maxLength={50}
@@ -163,47 +169,53 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
                     />
                   ) : (
                     <>
-                      <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      <p className="text-sm font-medium truncate" style={{ color: 'hsl(var(--ui-foreground))' }}>
                         {shop.name}
                       </p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+                      <p className="text-xs mt-0.5" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                         {shop.site} · {shop.currency} · {shop.dayCount} {strings.shop.dayUnit}
                         {shop.latestUploadDate ? ` · ${strings.shop.latest} ${shop.latestUploadDate}` : ''}
                       </p>
                     </>
                   )}
                 </div>
-                <button
+                <Button variant="ghost"
                   type="button"
                   onClick={() => {
                     setRenamingId(shop.id);
                     setRenameValue(shop.name);
                   }}
                   className="p-1.5 rounded-lg transition-colors"
-                  style={{ color: 'var(--text-tertiary)' }}
+                  style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                   title={strings.shop.rename}
                 >
                   <Pencil size={14} />
-                </button>
-                <button
+                </Button>
+                <Button variant="ghost"
                   type="button"
-                  onClick={() => void handleDelete(shop)}
+                  onClick={() => setDeletingShop(shop)}
                   className="p-1.5 rounded-lg transition-colors"
-                  style={{ color: '#dc2626' }}
+                  style={{ color: 'hsl(var(--ui-danger))' }}
                   title={strings.shop.delete}
                 >
                   <Trash2 size={14} />
-                </button>
+                </Button>
               </div>
             ))}
             {shops.length === 0 && (
-              <p className="text-xs text-center py-6" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-xs text-center py-6" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                 {strings.shop.emptyHint}
               </p>
             )}
           </div>
         </div>
-      </div>
-    </div>
+        {deletingShop && <DeleteConfirmation
+          description={`${strings.shop.deleteConfirm}\n（${deletingShop.name} · ${deletingShop.site}）`}
+          onClose={() => setDeletingShop(null)}
+          onConfirm={() => handleDelete(deletingShop)}
+          fallbackFocus={() => createInput.current}
+        />}
+      </DialogContent>
+    </Dialog>
   );
 };

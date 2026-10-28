@@ -1,3 +1,4 @@
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
 import React, { useMemo, useState } from 'react';
 import { ArrowUpDown, PackageX } from 'lucide-react';
 import { formatCount } from '../utils/format';
@@ -33,14 +34,14 @@ export const VariationTable: React.FC<VariationTableProps> = ({ variations }) =>
 
   return (
     <div className="pa-table-wrap max-h-[420px]">
-      <table className="pa-table text-xs">
-        <thead>
-          <tr>
-            <th>{strings.variationTable.name}</th>
-            <th>{strings.variationTable.sku}</th>
-            <th>{strings.variationTable.status}</th>
+      <Table wrapped={false} className="pa-table text-xs">
+        <TableHeader>
+          <TableRow>
+            <TableHead>{strings.variationTable.name}</TableHead>
+            <TableHead>{strings.variationTable.sku}</TableHead>
+            <TableHead>{strings.variationTable.status}</TableHead>
             {SORTABLE_COLUMNS.map((column) => (
-              <th
+              <TableHead
                 key={column}
                 className="pa-th-num cursor-pointer select-none"
                 aria-sort={sortColumn === column ? 'descending' : 'none'}
@@ -50,28 +51,28 @@ export const VariationTable: React.FC<VariationTableProps> = ({ variations }) =>
                   {strings.variationTable[column]}
                   <ArrowUpDown size={11} />
                 </span>
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {sorted.map((variation, index) => (
-            <tr
+            <TableRow
               key={variation.variationSku ?? `${variation.variationName ?? 'v'}-${index}`}
             >
-              <td className="max-w-[220px] truncate font-medium" style={{ color: 'var(--text-primary)' }} title={variation.variationName}>
+              <TableCell className="max-w-[220px] truncate font-medium" style={{ color: 'hsl(var(--ui-foreground))' }} title={variation.variationName}>
                 {variation.variationName ?? '—'}
-              </td>
-              <td className="font-mono" style={{ color: 'var(--text-tertiary)' }}>{variation.variationSku ?? '—'}</td>
-              <td style={{ color: 'var(--text-secondary)' }}>{variation.variationStatus ?? '—'}</td>
-              <td className="text-right font-semibold" style={{ color: 'var(--text-primary)' }}>{formatCount(variation.unitsOrdered ?? null)}</td>
-              <td className="text-right" style={{ color: 'var(--text-secondary)' }}>{formatCount(variation.unitsConfirmed ?? null)}</td>
-              <td className="text-right" style={{ color: 'var(--text-secondary)' }}>{formatCount(variation.buyersOrdered ?? null)}</td>
-              <td className="text-right" style={{ color: 'var(--text-secondary)' }}>{formatCount(variation.cartUnits ?? null)}</td>
-            </tr>
+              </TableCell>
+              <TableCell className="font-mono" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{variation.variationSku ?? '—'}</TableCell>
+              <TableCell style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{variation.variationStatus ?? '—'}</TableCell>
+              <TableCell className="text-right font-semibold" style={{ color: 'hsl(var(--ui-foreground))' }}>{formatCount(variation.unitsOrdered ?? null)}</TableCell>
+              <TableCell className="text-right" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{formatCount(variation.unitsConfirmed ?? null)}</TableCell>
+              <TableCell className="text-right" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{formatCount(variation.buyersOrdered ?? null)}</TableCell>
+              <TableCell className="text-right" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{formatCount(variation.cartUnits ?? null)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { Table, TableHead, TableCell } from '../../../components/ui/table';
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -24,7 +25,7 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
         </a>
       ),
       blockquote: ({ children }) => (
-        <blockquote className="my-1.5 pl-2.5 border-l-2" style={{ borderColor: 'var(--pa-card-border)', color: 'var(--text-secondary)' }}>
+        <blockquote className="my-1.5 pl-2.5 border-l-2" style={{ borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}>
           {children}
         </blockquote>
       ),
@@ -51,11 +52,11 @@ export const MarkdownText: React.FC<{ content: string }> = ({ content }) => (
       ),
       table: ({ children }) => (
         <div className="my-1.5 overflow-x-auto">
-          <table className="pa-md-table">{children}</table>
+          <Table wrapped={false} className="pa-md-table">{children}</Table>
         </div>
       ),
-      th: ({ children }) => <th>{children}</th>,
-      td: ({ children }) => <td>{children}</td>,
+      th: ({ children }) => <TableHead>{children}</TableHead>,
+      td: ({ children }) => <TableCell>{children}</TableCell>,
       img: ({ src, alt }) => <img src={src} alt={alt ?? ''} className="max-w-full rounded-lg my-1" />,
     }}
   >

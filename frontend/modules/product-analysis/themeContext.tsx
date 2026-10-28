@@ -1,11 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   buildPaTheme,
+  createPaUiVariables,
   loadThemeColor,
   normalizeHexColor,
   saveThemeColor,
   type PaTheme,
 } from './theme';
+import { UIThemeScope } from '../../components/ui/theme-scope';
 
 interface PaThemeContextValue {
   theme: PaTheme;
@@ -63,7 +65,7 @@ export const PaThemeProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setColor,
   }), [color, isDark, setColor]);
 
-  return <PaThemeContext.Provider value={value}>{children}</PaThemeContext.Provider>;
+  return <PaThemeContext.Provider value={value}><UIThemeScope variables={createPaUiVariables(value.theme)}>{children}</UIThemeScope></PaThemeContext.Provider>;
 };
 
 export function usePaTheme(): PaThemeContextValue {

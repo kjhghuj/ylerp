@@ -69,6 +69,30 @@ function countRows(container: HTMLElement): number {
 }
 
 describe('ProductList', () => {
+  it('changes active page and displayed rows with more than 50 products', async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 65 }, (_, index) => makeItem({ itemId: `i-${index}`, itemName: `分页商品 ${index + 1}` }));
+    const onPageChange = vi.fn();
+    function Host() {
+      const [page, setPage] = useState(1);
+      return <ProductList {...PROPS} items={many} page={page} onPageChange={next => { onPageChange(next); setPage(next); }} />;
+    }
+    const { container } = render(<Host />);
+    await user.selectOptions(screen.getByRole('combobox', { name: '每页条数' }), '50');
+    expect(countRows(container)).toBe(50);
+    expect(screen.getByText('分页商品 1')).toBeInTheDocument();
+    expect(screen.queryByText('分页商品 51')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '2' })).not.toHaveAttribute('aria-current');
+    await user.click(screen.getByRole('button', { name: '2' }));
+    expect(onPageChange).toHaveBeenLastCalledWith(2);
+    expect(countRows(container)).toBe(15);
+    expect(screen.getByText('分页商品 51')).toBeInTheDocument();
+    expect(screen.getByText('分页商品 65')).toBeInTheDocument();
+    expect(screen.queryByText('分页商品 1')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '2' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: '1' })).not.toHaveAttribute('aria-current');
+  });
   it('renders one clickable row per item with pagination disabled when all fit one page', () => {
     const { container } = render(<ProductList {...PROPS} items={ITEMS} />);
     expect(countRows(container)).toBe(3);
@@ -170,3 +194,4 @@ describe('ProductList', () => {
     expect(screen.getByText('没有匹配的商品')).toBeTruthy();
   });
 });
+import React, { useState } from 'react';

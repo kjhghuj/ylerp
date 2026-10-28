@@ -5,7 +5,7 @@
  * - 新品榜结果绑定查询标识（店铺|区间|筛选）：失败不回退旧查询榜单、可重试；
  *   乱序响应不覆盖当前结果；改筛选不额外请求商品聚合。
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductAnalysis } from '../modules/product-analysis/ProductAnalysis';
@@ -234,7 +234,6 @@ describe('calendar binds to its owning shop (task 2)', () => {
     mockFetchShops.mockResolvedValue([makeShop('shop-1', 'MY 主店', '2026-09-06'), makeShop('shop-2', 'PH 分店', '2026-09-06')]);
     mockFetchPotential.mockResolvedValue(potentialResponse(['A 店爆款']));
     mockFetchShopDays.mockResolvedValue(SHOP_A_DAYS);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<ProductAnalysis />);
     await openCalendarView();
@@ -245,6 +244,8 @@ describe('calendar binds to its owning shop (task 2)', () => {
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
+    expect(mockDeleteDailyUpload).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '删除' }));
     await waitFor(() => expect(mockDeleteDailyUpload).toHaveBeenCalledWith('shop-2', '2026-09-06'));
 
     // 批量删除同样只针对 B 店
@@ -252,8 +253,9 @@ describe('calendar binds to its owning shop (task 2)', () => {
     fireEvent.click(screen.getByText('批量管理'));
     fireEvent.click(screen.getByRole('button', { name: '2026-09-05' }));
     fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
+    expect(mockBatchDeleteDailyUploads).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '删除' }));
     await waitFor(() => expect(mockBatchDeleteDailyUploads).toHaveBeenCalledWith('shop-2', ['2026-09-05']));
-    confirmSpy.mockRestore();
   });
 
   it('A→B→A with out-of-order responses never pollutes the calendar', async () => {
@@ -450,7 +452,6 @@ describe('potential refresh failure hides the stale list (task 3)', () => {
     mockFetchShopDays.mockResolvedValue(SHOP_A_DAYS);
     mockDeleteDailyUpload.mockResolvedValue(undefined);
     mockFetchPotential.mockResolvedValueOnce(potentialResponse(['将被删除的商品']));
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     render(<ProductAnalysis />);
     await openPotentialTab();
@@ -461,13 +462,13 @@ describe('potential refresh failure hides the stale list (task 3)', () => {
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
     fireEvent.click(deleteButton);
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '删除' }));
     await waitFor(() => expect(mockDeleteDailyUpload).toHaveBeenCalledWith('shop-1', '2026-09-06'));
 
     // 刷新失败：已删除商品不可见（不回退旧榜单），错误可见
     await openPotentialTab();
     expect(await screen.findByText(/删除后刷新失败/)).toBeTruthy();
     expect(screen.queryByText('将被删除的商品')).toBeNull();
-    confirmSpy.mockRestore();
   });
 });
 

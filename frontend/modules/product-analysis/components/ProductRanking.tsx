@@ -1,3 +1,4 @@
+import { Button } from '../../../components/ui/button';
 import React from 'react';
 import { useProductAnalysisStrings } from '../i18n';
 import { formatCount, formatMoney, formatPercent } from '../utils/format';
@@ -34,10 +35,10 @@ export const ProductRanking: React.FC<ProductRankingProps> = ({ items, currency,
           {ranked.map(({ rank, item }) => {
             const rankClass = rank <= 3 ? `pa-rank-${rank}` : 'pa-rank-n';
             return (
-              <button
+              <Button variant="ghost"
                 key={item.itemId}
                 type="button"
-                className="pa-rank-row"
+                className="h-auto whitespace-normal justify-start text-left pa-rank-row"
                 onClick={() => onSelect(item)}
                 title={item.itemName}
               >
@@ -45,16 +46,16 @@ export const ProductRanking: React.FC<ProductRankingProps> = ({ items, currency,
                 <span className="min-w-0 flex-1">
                   <span
                     className="block text-[13px] font-semibold truncate"
-                    style={{ color: 'var(--text-primary)' }}
+                    style={{ color: 'hsl(var(--ui-foreground))' }}
                   >
                     {item.itemName}
                   </span>
-                  <span className="block text-[11.5px] truncate" style={{ color: 'var(--text-secondary)' }}>
+                  <span className="block text-[11.5px] truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                     {strings.card.orders} {formatCount(item.ordersOrdered)} · {strings.card.cvr} {formatPercent(item.cvrConfirmed)}
                   </span>
                 </span>
                 <span className="pa-rank-sales text-[13px] shrink-0">{formatMoney(item.salesOrdered, currency)}</span>
-              </button>
+              </Button>
             );
           })}
         </div>

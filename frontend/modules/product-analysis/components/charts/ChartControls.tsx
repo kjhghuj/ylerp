@@ -1,3 +1,4 @@
+import { Button } from '../../../../components/ui/button';
 import React, { useState } from 'react';
 import { useProductAnalysisStrings } from '../../i18n';
 import { ChartStateContext, type SavedChartState } from './chartState';
@@ -21,15 +22,15 @@ export function ChartLegend({ items, selected, onChange, defaults }: {
     <div className="pa-chart-legend" role="group" aria-label={words.legend}>
       <div className="pa-chart-legend-items">
         {items.map(({ key, label, color }) => (
-          <button key={key} type="button" aria-pressed={selected.includes(key)}
-            className="pa-legend-item" onClick={() => onChange(selected.includes(key) ? selected.filter((id) => id !== key) : [...selected, key])}>
+          <Button variant="ghost" key={key} type="button" aria-pressed={selected.includes(key)}
+            className="h-8 px-2 pa-legend-item" onClick={() => onChange(selected.includes(key) ? selected.filter((id) => id !== key) : [...selected, key])}>
             <span aria-hidden="true" style={{ backgroundColor: color }} />{label}
-          </button>
+          </Button>
         ))}
       </div>
       <div className="pa-chart-actions">
-        <button type="button" onClick={() => onChange(items.map(({ key }) => key))}>{words.showAll}</button>
-        <button type="button" onClick={() => onChange([...defaults])}>{words.reset}</button>
+        <Button className="h-8 px-2" variant="ghost" type="button" onClick={() => onChange(items.map(({ key }) => key))}>{words.showAll}</Button>
+        <Button className="h-8 px-2" variant="ghost" type="button" onClick={() => onChange([...defaults])}>{words.reset}</Button>
       </div>
     </div>
   );

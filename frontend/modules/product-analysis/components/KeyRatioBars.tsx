@@ -63,7 +63,7 @@ export const KeyRatioBars: React.FC<KeyRatioBarsProps> = ({ item }) => {
 function DayCard({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="flex-1 rounded-xl px-3 py-2 min-w-0" style={{ backgroundColor: 'var(--bg-primary)' }}>
-      <p className="text-[10px] text-slate-400 truncate" title={label}>{label}</p>
+      <p className="text-[10px] text-muted-foreground truncate" title={label}>{label}</p>
       <p className="text-sm font-bold">{formatCount(value)}</p>
     </div>
   );
