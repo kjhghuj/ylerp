@@ -99,7 +99,7 @@ const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
                 <img src={state.posterImage} alt="Poster" className="h-full w-full object-contain rounded-lg" />
                 <Button variant="ghost"
                   aria-label={state.language === 'zh' ? '移除原图' : 'Remove original'} onClick={(e) => onRemoveImage('poster', e)}
-                  className={cn("h-auto", "absolute top-1 right-1 p-1.5 bg-card/90 hover:bg-destructive/10 text-muted-foreground hover:text-danger rounded-full transition-colors z-20 shadow-sm")}
+                  className={cn("h-auto", "absolute top-1 left-1 p-1.5 bg-card/90 hover:bg-destructive/10 text-muted-foreground hover:text-danger rounded-full transition-colors z-20 shadow-sm")}
                 >
                   <XCircle size={16} />
                 </Button>
@@ -143,7 +143,7 @@ const ImageUploadSection: React.FC<ImageUploadSectionProps> = ({
                   <img src={state.referenceImage} alt="Ref" className="h-full w-full object-contain rounded-lg" />
                   <Button variant="ghost"
                     aria-label={state.language === 'zh' ? '移除参考图' : 'Remove reference'} onClick={(e) => onRemoveImage('reference', e)}
-                    className={cn("h-auto", "absolute top-1 right-1 p-1.5 bg-card/90 hover:bg-destructive/10 text-muted-foreground hover:text-danger rounded-full transition-colors z-20 shadow-sm")}
+                    className={cn("h-auto", "absolute top-1 left-1 p-1.5 bg-card/90 hover:bg-destructive/10 text-muted-foreground hover:text-danger rounded-full transition-colors z-20 shadow-sm")}
                   >
                     <XCircle size={16} />
                   </Button>

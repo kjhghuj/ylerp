@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import ImageUploadSection from '../modules/chroma-adapt/components/control-panel/ImageUploadSection';
 import PreviewPanel from '../modules/chroma-adapt/components/PreviewPanel';
 import type { ChromaAppState } from '../modules/chroma-adapt/chromaTypes';
 import ComparisonSlider from '../modules/chroma-adapt/components/ComparisonSlider';
@@ -8,6 +9,26 @@ import HelpTooltip from '../modules/chroma-adapt/components/HelpTooltip';
 import GenerationHistory from '../modules/chroma-adapt/components/GenerationHistory';
 
 describe('image tools UI contracts', () => {
+  it('uploads and removes each image without opening upload help', async () => {
+    const uploaded = vi.fn(), removed = vi.fn();
+    function Harness() {
+      const [images, setImages] = useState({ posterImage: null as string | null, referenceImage: null as string | null });
+      return <ImageUploadSection state={{ mode: 'COLOR_ADAPT', language: 'zh', status: 'IDLE', ...images } as ChromaAppState}
+        t={{ assetsStep: '1', assets: '素材', originalPoster: '原图', productRef: '参考图' }} showReferenceUpload
+        onFileUpload={(event, type) => { uploaded(type, event.target.files?.[0]); setImages(current => ({ ...current, [type === 'poster' ? 'posterImage' : 'referenceImage']: type + '.png' })); }}
+        onRemoveImage={(type) => { removed(type); setImages(current => ({ ...current, [type === 'poster' ? 'posterImage' : 'referenceImage']: null })); }} />;
+    }
+    render(<Harness />);
+    const file = new File(['fixture'], 'fixture.png', { type: 'image/png' });
+    for (const [label, type, removeName] of [['原图', 'poster', '移除原图'], ['参考图', 'reference', '移除参考图']]) {
+      await userEvent.upload(screen.getByLabelText(label), file);
+      expect(uploaded).toHaveBeenLastCalledWith(type, file);
+      await userEvent.click(screen.getByRole('button', { name: removeName }));
+      expect(removed).toHaveBeenLastCalledWith(type);
+      expect(screen.queryByRole('button', { name: removeName })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    }
+  });
   it('opens an unselected result as a preview without selecting or removing it', async () => {
     const select = vi.fn(), remove = vi.fn();
     const state = { mode: 'COLOR_ADAPT', language: 'zh', status: 'COMPLETE', resultImage: 'chosen.png', resultImages: ['chosen.png', 'other.png'], pipelineQueue: [], secondaryBatchQueue: [], concurrentCount: 2, posterImage: null } as unknown as ChromaAppState;
