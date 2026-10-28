@@ -1,3 +1,5 @@
+import { Button } from '../../components/ui/button';
+import { Switch } from '../../components/ui/switch';
 import React from 'react';
 import type { NodeData } from './types';
 import type { translations } from '../../translations';
@@ -52,40 +54,40 @@ export const TiktokShippingControls: React.FC<TiktokShippingControlsProps> = ({
     const formatAmount = (local: number, cny: number) => useLocalCurrency ? `${local.toFixed(2)} ${currency}` : `¥${cny.toFixed(2)}`;
     return <div className={`rounded-xl border border-sky-100 bg-sky-50/50 ${compact ? 'p-2 space-y-1.5' : 'p-3 mb-3 space-y-2'}`}>
         {isUS ? <div className="flex flex-wrap items-center justify-between gap-1">
-            <span className="text-xs font-bold text-slate-700">{mode === 4 ? t.usDirectShipping : mode === 3 ? t.usSegmentedShipping : t.usManualShipping}</span>
-            {mode === 3 ? <button type="button" onClick={switchToManual} className="text-xs font-bold text-blue-700 underline">{t.switchManualShipping}</button>
-                : usSegmentedSupported && <button type="button" onClick={() => onUpdate({ shippingCalculationMode: 3 })} className="text-xs font-bold text-blue-700 underline">{t.usUseSegmentedShipping}</button>}
-        </div> : <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <input type="checkbox" role="switch" checked={mode === 1} disabled={!supported}
+            <span className="text-xs font-bold text-foreground">{mode === 4 ? t.usDirectShipping : mode === 3 ? t.usSegmentedShipping : t.usManualShipping}</span>
+            {mode === 3 ? <Button variant="ghost" size="sm" type="button" onClick={switchToManual} className="text-xs font-bold text-primary underline">{t.switchManualShipping}</Button>
+                : usSegmentedSupported && <Button variant="ghost" size="sm" type="button" onClick={() => onUpdate({ shippingCalculationMode: 3 })} className="text-xs font-bold text-primary underline">{t.usUseSegmentedShipping}</Button>}
+        </div> : <label className="flex items-center gap-2 text-xs font-bold text-foreground">
+            <Switch checked={mode === 1} disabled={!supported}
                 aria-label={t.automaticShipping}
-                onChange={event => event.target.checked ? onUpdate({ shippingCalculationMode: 1 }) : switchToManual()}
-                className="h-4 w-4 accent-blue-600 disabled:opacity-40" />
+                onCheckedChange={checked => checked ? onUpdate({ shippingCalculationMode: 1 }) : switchToManual()}
+                 />
             {t.automaticShipping}
         </label>}
-        {isUS && <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
-            <input type="checkbox" role="switch" checked={mode === 4} disabled={!usSegmentedSupported}
+        {isUS && <label className="flex items-center gap-2 text-xs font-bold text-foreground">
+            <Switch checked={mode === 4} disabled={!usSegmentedSupported}
                 aria-label={t.usAutomaticDirectShipping}
-                onChange={event => event.target.checked ? onUpdate({ shippingCalculationMode: 4 }) : switchToManual()}
-                className="h-4 w-4 accent-blue-600 disabled:opacity-40" />
+                onCheckedChange={checked => checked ? onUpdate({ shippingCalculationMode: 4 }) : switchToManual()}
+                 />
             {t.usAutomaticDirectShipping}
         </label>}
-        {isUS && mode !== 3 && mode !== 4 && <p className="text-xs text-slate-500">{t.usShippingHint}</p>}
+        {isUS && mode !== 3 && mode !== 4 && <p className="text-xs text-muted-foreground">{t.usShippingHint}</p>}
         {!supported && !isUS && <p className="text-xs text-amber-800">{compact ? t.compactUnsupportedShipping : t.unsupportedShipping}</p>}
-        {!supported && mode === 1 && <button type="button" onClick={switchToManual} className="text-xs font-bold text-blue-700 underline">{t.switchManualShipping}</button>}
+        {!supported && mode === 1 && <Button variant="ghost" size="sm" type="button" onClick={switchToManual} className="text-xs font-bold text-primary underline">{t.switchManualShipping}</Button>}
         {isTemplateMode && <div className={compact ? 'flex flex-wrap items-center gap-x-2 gap-y-1' : 'space-y-2'}>
-            <p className="text-xs text-slate-500">{compact ? t.compactTemplateShippingHint : t.templateShippingHint}</p>
-            <button type="button" onClick={switchToManual} className="text-xs font-bold text-blue-700 underline">{t.switchManualShipping}</button>
+            <p className="text-xs text-muted-foreground">{compact ? t.compactTemplateShippingHint : t.templateShippingHint}</p>
+            <Button variant="ghost" size="sm" type="button" onClick={switchToManual} className="text-xs font-bold text-primary underline">{t.switchManualShipping}</Button>
         </div>}
         {mode === 2 && <>
-            {!compact && <p className="text-xs text-slate-500">{t.manualShippingHint}</p>}
+            {!compact && <p className="text-xs text-muted-foreground">{t.manualShippingHint}</p>}
             <div className="max-w-xs">{renderInput('manualShippingFee')}</div>
         </>}
         {isUS && mode === 4 && <>
             {quote ? <>
                 <p className="text-sm font-bold text-blue-800">{t.usTotalShippingQuote}: {formatAmount(quote.amountLocal, quote.amountCNY)}</p>
-                <p className="text-xs text-slate-500">{t.shippingWeight}: {quote.billableWeightGrams} g</p>
-                <p className="text-xs text-slate-500">{t.usDirectIncluded}</p>
-                {quote.sourceUrl && <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-blue-700 underline">{t.usDirectRateSource} · {quote.effectiveDate}</a>}
+                <p className="text-xs text-muted-foreground">{t.shippingWeight}: {quote.billableWeightGrams} g</p>
+                <p className="text-xs text-muted-foreground">{t.usDirectIncluded}</p>
+                {quote.sourceUrl && <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-primary underline">{t.usDirectRateSource} · {quote.effectiveDate}</a>}
             </> : <p className="text-xs text-amber-800" role={quoteError ? 'alert' : undefined}>{quoteError || t.shippingWeightRequired}</p>}
         </>}
         {isUS && mode === 3 && <>
@@ -93,23 +95,23 @@ export const TiktokShippingControls: React.FC<TiktokShippingControlsProps> = ({
                 <p className="text-sm font-bold text-blue-800">{t.usTotalShippingQuote}: {formatAmount(quote.amountLocal, quote.amountCNY)}</p>
                 {quote.headFreightFeeLocal !== undefined && quote.headFreightFeeCNY !== undefined
                     && quote.localDeliveryFeeLocal !== undefined && quote.localDeliveryFeeCNY !== undefined &&
-                    <p className="text-xs text-slate-600">{t.usHeadFreight}: {formatAmount(quote.headFreightFeeLocal, quote.headFreightFeeCNY)} · {t.usLocalDelivery}: {formatAmount(quote.localDeliveryFeeLocal, quote.localDeliveryFeeCNY)}</p>}
-                {quote.billableWeightGrams !== null && <p className="text-xs text-slate-500">{t.shippingWeight}: {Math.round(quote.billableWeightGrams)} g</p>}
-                <p className="text-xs text-slate-500">{quote.isOfficialLocalQuote ? t.usQuoteOfficialLocal : t.usQuoteManualLocal}</p>
-                {quote.sourceUrl && <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-blue-700 underline">{t.usLocalRateSource}{quote.shippingDate ? ` · ${quote.shippingDate}` : ''}</a>}
+                    <p className="text-xs text-muted-foreground">{t.usHeadFreight}: {formatAmount(quote.headFreightFeeLocal, quote.headFreightFeeCNY)} · {t.usLocalDelivery}: {formatAmount(quote.localDeliveryFeeLocal, quote.localDeliveryFeeCNY)}</p>}
+                {quote.billableWeightGrams !== null && <p className="text-xs text-muted-foreground">{t.shippingWeight}: {Math.round(quote.billableWeightGrams)} g</p>}
+                <p className="text-xs text-muted-foreground">{quote.isOfficialLocalQuote ? t.usQuoteOfficialLocal : t.usQuoteManualLocal}</p>
+                {quote.sourceUrl && <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-xs text-primary underline">{t.usLocalRateSource}{quote.shippingDate ? ` · ${quote.shippingDate}` : ''}</a>}
             </> : <p className="text-xs text-amber-800" role={quoteError ? 'alert' : undefined}>{quoteError || t.usQuoteRequired}</p>}
         </>}
         {mode === 1 && supported && <>
-            {!compact && <p className="text-xs text-slate-500">{t.automaticShippingHint}</p>}
+            {!compact && <p className="text-xs text-muted-foreground">{t.automaticShippingHint}</p>}
             {quote ? <>
                 <div className={compact ? 'flex flex-wrap items-baseline gap-x-2 gap-y-1' : undefined}>
                     <p className="text-sm font-bold text-blue-800">
                         {t.shippingQuote}: {useLocalCurrency ? `${quote.amountLocal.toFixed(2)} ${currency}` : `¥${quote.amountCNY.toFixed(2)}`}
                     </p>
-                    <p className="text-xs text-slate-500">{t.shippingWeight}: {quote.billableWeightGrams} g{!compact && ` · ${quote.routeLabel}`}</p>
+                    <p className="text-xs text-muted-foreground">{t.shippingWeight}: {quote.billableWeightGrams} g{!compact && ` · ${quote.routeLabel}`}</p>
                 </div>
-                {compact ? <p className="text-xs text-slate-500">{t.compactShippingHint}</p> : quote.sourceUrl &&
-                    <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-700 underline">{t.shippingRateSource} · {quote.sourceRevision ?? quote.effectiveDate}</a>}
+                {compact ? <p className="text-xs text-muted-foreground">{t.compactShippingHint}</p> : quote.sourceUrl &&
+                    <a href={quote.sourceUrl} target="_blank" rel="noreferrer" className="text-xs text-primary underline">{t.shippingRateSource} · {quote.sourceRevision ?? quote.effectiveDate}</a>}
             </> : <p className="text-xs text-amber-800" role={quoteError ? 'alert' : undefined}>{quoteError || t.shippingWeightRequired}</p>}
             {!compact && <div className="max-w-xs">{renderInput('lastMileFee')}</div>}
         </>}

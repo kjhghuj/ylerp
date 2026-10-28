@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,7 +13,7 @@ const base = () => ({
     supplierInvoice: 'no' as const, vatRate: 1, corporateIncomeTaxRate: 5 },
   siteInputs: { ...DEFAULT_SITE_INPUTS, totalRevenue: 10 }, onApply: vi.fn(), onBasisChange: vi.fn(),
 });
-const open = () => fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+const open = () => { fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' })); act(() => { vi.advanceTimersByTime(0); }); };
 const target = (value: string) => fireEvent.change(screen.getByLabelText('目标收入利润率'), { target: { value } });
 const flush = () => act(() => { vi.advanceTimersByTime(300); });
 const apply = () => screen.getByRole('button', { name: '应用此售价' });
@@ -40,6 +41,7 @@ describe('TargetPricingPanel', () => {
     expect(props.onApply).toHaveBeenCalledWith(expect.any(Number));
     expect(props.siteInputs.totalRevenue).toBe(10);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(0); });
     expect(screen.getByRole('button', { name: '按目标利润率定价' })).toHaveFocus();
   });
 
@@ -49,7 +51,7 @@ describe('TargetPricingPanel', () => {
     const dialog = screen.getByRole('dialog', { name: '按目标利润率定价 MYR' });
     expect(container).not.toContainElement(dialog);
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.body).toHaveAttribute('data-scroll-locked', '1');
     expect(screen.getByLabelText('目标收入利润率')).toHaveFocus();
     target('20'); flush();
     const close = screen.getByRole('button', { name: '关闭定价弹窗' });
@@ -61,6 +63,7 @@ describe('TargetPricingPanel', () => {
     fireEvent.keyDown(close, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.body.style.overflow).toBe('');
+    act(() => { vi.advanceTimersByTime(0); });
     expect(screen.getByRole('button', { name: '按目标利润率定价' })).toHaveFocus();
     open();
     expect(screen.getByLabelText('目标收入利润率')).toHaveValue('20');
@@ -69,20 +72,25 @@ describe('TargetPricingPanel', () => {
     expect(apply()).toBeEnabled();
   });
 
-  it('closes by button or backdrop without applying, and releases the scroll lock on unmount', () => {
+  it('closes by button or backdrop without applying, and releases the scroll lock on unmount', async () => {
     const props = base();
     const { unmount } = render(<TargetPricingPanel {...props} />);
     open(); target('25'); flush();
     fireEvent.click(screen.getByRole('button', { name: '关闭定价弹窗' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    open();
-    fireEvent.click(screen.getByRole('dialog').parentElement!);
+    act(() => { vi.advanceTimersByTime(0); });
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '按目标利润率定价' }));
+    await user.click(document.querySelector<HTMLElement>('[data-ui="dialog"][data-state="open"]')!);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(props.onApply).not.toHaveBeenCalled();
+    expect(document.body).not.toHaveAttribute('data-scroll-locked');
     document.body.style.overflow = 'auto';
-    open();
+    await user.click(screen.getByRole('button', { name: '按目标利润率定价' }));
     unmount();
     expect(document.body.style.overflow).toBe('auto');
+    expect(document.body).not.toHaveAttribute('data-scroll-locked');
     document.body.style.overflow = '';
   });
 

@@ -1,3 +1,6 @@
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../../components/ui/dialog';
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
 import React, { useState, useEffect } from 'react';
 import { Calendar, X, Save } from 'lucide-react';
 import { useStore } from '../../../StoreContext';
@@ -26,12 +29,12 @@ const FIELD_CONFIG = [
 ] as const;
 
 const COLORS: Record<string, { bg: string; text: string; border: string; focus: string }> = {
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', focus: 'focus:border-emerald-400 focus:ring-emerald-100' },
-    amber: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', focus: 'focus:border-amber-400 focus:ring-amber-100' },
-    indigo: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', focus: 'focus:border-indigo-400 focus:ring-indigo-100' },
-    slate: { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200', focus: 'focus:border-slate-400 focus:ring-slate-100' },
+    emerald: { bg: 'bg-success-subtle', text: 'text-success', border: 'border-success/20', focus: 'focus:border-emerald-400 focus:ring-emerald-100' },
+    amber: { bg: 'bg-warning-subtle', text: 'text-warning', border: 'border-warning/20', focus: 'focus:border-amber-400 focus:ring-amber-100' },
+    indigo: { bg: 'bg-accent', text: 'text-primary', border: 'border-indigo-200', focus: 'focus:border-primary focus:ring-indigo-100' },
+    slate: { bg: 'bg-muted', text: 'text-foreground', border: 'border-border', focus: 'focus:border-slate-400 focus:ring-slate-100' },
     teal: { bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', focus: 'focus:border-teal-400 focus:ring-teal-100' },
-    rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', focus: 'focus:border-rose-400 focus:ring-rose-100' },
+    rose: { bg: 'bg-destructive/10', text: 'text-danger', border: 'border-destructive/20', focus: 'focus:border-rose-400 focus:ring-rose-100' },
 };
 
 export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t }) => {
@@ -106,17 +109,17 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 z-[100] flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh] border border-white/50" onClick={e => e.stopPropagation()}>
-                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-indigo-50/50 to-purple-50/50 rounded-t-2xl">
+        <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+            <DialogContent showCloseButton={false} aria-label={date || ''} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg flex-col gap-0 overflow-hidden rounded-xl p-0">
+                <div className="p-5 border-b border-border flex justify-between items-center bg-muted/40 rounded-t-2xl">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm text-indigo-600"><Calendar size={20} /></div>
+                        <div className="p-2 bg-card rounded-xl shadow-sm text-primary"><Calendar size={20} /></div>
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800">{date}</h3>
-                            <p className="text-xs text-slate-400">编辑当日财务数据</p>
+                            <DialogTitle className="text-lg font-bold text-foreground">{date}</DialogTitle>
+                            <DialogDescription className="text-xs text-muted-foreground">编辑当日财务数据</DialogDescription>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-white/80 rounded-xl transition text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                    <Button aria-label="关闭" variant="ghost" size="sm" onClick={onClose} className="p-2 hover:bg-card/80 rounded-xl transition text-muted-foreground hover:text-muted-foreground"><X size={20} /></Button>
                 </div>
 
                 <div className="overflow-y-auto p-5 space-y-3 flex-1">
@@ -128,22 +131,20 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
                                 <label className={`text-sm font-bold ${c.text} mb-2 block`}>{cfg.label}</label>
                                 <div className="flex gap-3">
                                     <div className="relative flex-1">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">¥</span>
-                                        <input
-                                            type="number"
-                                            step="0.01"
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">¥</span>
+                                        <Input
+                                            type="number" aria-label={`${cfg.label}金额`} step="0.01"
                                             value={f.amount}
                                             onChange={e => updateField(cfg.key, 'amount', e.target.value)}
                                             placeholder="0.00"
-                                            className={`w-full pl-7 pr-3 py-2 rounded-lg border ${c.border} bg-white text-sm font-medium text-slate-800 outline-none ${c.focus} transition`}
+                                            className={`w-full pl-7 pr-3 py-2 rounded-lg border ${c.border} bg-card text-sm font-medium text-foreground outline-none ${c.focus} transition`}
                                         />
                                     </div>
-                                    <input
-                                        type="text"
-                                        value={f.note}
+                                    <Input
+                                        type="text" aria-label={`${cfg.label}备注`} value={f.note}
                                         onChange={e => updateField(cfg.key, 'note', e.target.value)}
                                         placeholder="备注（选填）"
-                                        className="flex-1 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-100 transition placeholder:text-slate-300"
+                                        className="flex-1 px-3 py-2 rounded-lg border border-border bg-card text-sm text-muted-foreground outline-none focus:border-slate-400 focus:ring-1 focus:ring-slate-100 transition placeholder:text-muted-foreground"
                                     />
                                 </div>
                             </div>
@@ -156,21 +157,21 @@ export const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, onClose, t
                         const modifier = dayRecords.find(r => r.updatedBy)?.updatedBy;
                         if (!creator && !modifier) return null;
                         return (
-                            <div className="mt-3 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 space-y-1">
-                                {creator && <p>创建者: <span className="font-medium text-slate-700">{creator}</span></p>}
-                                {modifier && <p>最后修改: <span className="font-medium text-slate-700">{modifier}</span></p>}
+                            <div className="mt-3 px-4 py-3 bg-muted rounded-xl border border-border text-xs text-muted-foreground space-y-1">
+                                {creator && <p>创建者: <span className="font-medium text-foreground">{creator}</span></p>}
+                                {modifier && <p>最后修改: <span className="font-medium text-foreground">{modifier}</span></p>}
                             </div>
                         );
                     })()}
                 </div>
 
-                <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-2xl">
-                    <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-white transition">取消</button>
-                    <button onClick={handleSave} disabled={saving} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-bold hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                <div className="p-4 border-t border-border flex justify-end gap-3 bg-muted/50 rounded-b-2xl">
+                    <Button variant="ghost" size="sm" onClick={onClose} className="px-5 py-2.5 rounded-xl border border-border text-muted-foreground text-sm font-medium hover:bg-card transition">取消</Button>
+                    <Button variant="default" size="sm" onClick={handleSave} disabled={saving} className="px-6 py-2.5 text-sm font-bold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
                         <Save size={16} />{saving ? '保存中...' : '保存'}
-                    </button>
+                    </Button>
                 </div>
-            </div>
-        </div>
+            </DialogContent>
+        </Dialog>
     );
 };

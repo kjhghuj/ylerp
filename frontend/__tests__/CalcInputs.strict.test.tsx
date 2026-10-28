@@ -6,6 +6,13 @@ import { resolve } from 'node:path';
 import { NumberInput } from '../components/CalcInputs';
 
 describe('CalcInputs canonical numeric conversion', () => {
+  it('associates the visible field label and validation message with its input', () => {
+    render(<NumberInput label="Purchase cost" name="purchaseCost" value="" error="Enter a valid amount" onChange={() => undefined} />);
+    const input = screen.getByRole('textbox', { name: 'Purchase cost' });
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveAccessibleDescription('Enter a valid amount');
+    expect(screen.getByLabelText('Purchase cost')).toBe(input);
+  });
   it('shows a valid numeric value with exactly two decimals while idle', () => {
     render(<NumberInput
       label="Weight"

@@ -46,26 +46,26 @@ export const ProductTemplateExecutionPanel: React.FC<ProductTemplateExecutionPan
 
     return (
         <div className="mb-4">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
                 {labels.graphOutputsTitle}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {viewModel.outputs.map(output => (
                     <div
                         key={output.id}
-                        className="flex items-center justify-between p-3 bg-emerald-50/60 rounded-xl border border-emerald-100"
+                        className="flex items-center justify-between p-3 bg-success-subtle/60 rounded-xl border border-success/20"
                     >
                         <div>
-                            <div className="text-sm font-bold text-slate-700">{output.name}</div>
-                            <div className="text-[10px] text-slate-400 font-mono">{output.id}</div>
+                            <div className="text-sm font-bold text-foreground">{output.name}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{output.id}</div>
                         </div>
-                        <div className="text-lg font-black text-emerald-700">
+                        <div className="text-lg font-black text-success">
                             {Number(output.value.toFixed(4))}
                         </div>
                     </div>
                 ))}
             </div>
-            <div className="mt-2 text-[11px] text-slate-400">
+            <div className="mt-2 text-[11px] text-muted-foreground">
                 {labels.graphOutputsDisclaimer}
             </div>
         </div>

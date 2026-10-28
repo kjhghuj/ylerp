@@ -54,7 +54,7 @@ export const BuyerPaidPrices = ({ siteInputs, siteCountry, exchangeRate, t }: {
     siteInputs: SiteLevelInputs; siteCountry: string; exchangeRate: number; t: typeof translations.zh.profit;
 }) => (
     <div className="space-y-0.5">
-        <div className="text-blue-600">{renderBuyerPaidPrice(
+        <div className="text-primary">{renderBuyerPaidPrice(
             siteInputs.totalRevenue, siteInputs.sellerCoupon, siteInputs.sellerCouponType,
             exchangeRate, siteCountry, t.inputs.buyerPaidPrice,
         )}</div>

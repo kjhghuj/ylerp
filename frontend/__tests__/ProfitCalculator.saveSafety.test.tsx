@@ -22,7 +22,11 @@ const productA: ProductCalcData = {
   cost: 10, productWeight: 100, supplierTaxPoint: 0, supplierInvoice: 'no',
 };
 let store: ReturnType<typeof useStore>;
-const Probe = () => { store = useStore(); return null; };
+const Probe = () => {
+  const currentStore = useStore();
+  React.useEffect(() => { store = currentStore; }, [currentStore]);
+  return null;
+};
 
 async function mount(editingId: string | null = productA.id) {
   localStorage.setItem('yl-profit-global-inputs', JSON.stringify({
@@ -259,7 +263,7 @@ describe('ProfitCalculator product save safety with the real store', () => {
     expect(within(dialog).getByRole('button', { name: '取消' })).toHaveFocus();
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(button).toHaveFocus();
+    await waitFor(() => expect(button).toHaveFocus());
     expect(mocks.api.put).not.toHaveBeenCalled();
   });
 

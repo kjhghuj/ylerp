@@ -1,3 +1,6 @@
+import { Button } from '../../components/ui/button';
+import { Checkbox } from '../../components/ui/checkbox';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../../components/ui/sheet';
 import React, {
   useCallback,
   useEffect,
@@ -52,14 +55,6 @@ export interface ProfitBreakdownProps {
 
 const POPOVER_MAX_WIDTH = 360;
 const POPOVER_FALLBACK_HEIGHT = 280;
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(',');
 
 const signedValue = (row: BreakdownRow): number => (
   row.tone === 'deduction' && row.cnyValue !== 0 ? -Math.abs(row.cnyValue) : row.cnyValue
@@ -77,9 +72,9 @@ const formatLocal = (value: number, currency: CurrencyCode): string => {
 };
 
 const rowToneClass = (tone: RowTone): string => {
-  if (tone === 'deduction') return 'text-rose-600 dark:text-rose-300';
+  if (tone === 'deduction') return 'text-danger dark:text-rose-300';
   if (tone === 'info') return 'text-sky-600 dark:text-sky-300';
-  return 'text-slate-800 dark:text-slate-100';
+  return 'text-foreground dark:text-slate-100';
 };
 
 export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
@@ -239,15 +234,6 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
     };
   }, [tooltipOpen, updateTooltipPosition]);
 
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    closeButtonRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [drawerOpen]);
 
   const openDrawer = () => {
     setTooltipOpen(false);
@@ -256,34 +242,7 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
 
   const closeDrawer = useCallback(() => {
     setDrawerOpen(false);
-    triggerRef.current?.focus();
   }, []);
-
-  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      closeDrawer();
-      return;
-    }
-    if (event.key !== 'Tab' || !dialogRef.current) return;
-    const focusable = Array.from(
-      dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
-    ).filter(element => !element.hasAttribute('disabled'));
-    if (focusable.length === 0) {
-      event.preventDefault();
-      dialogRef.current.focus();
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
 
   const tooltip = tooltipOpen && !drawerOpen && typeof document !== 'undefined'
     ? createPortal(
@@ -344,72 +303,56 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
     : null;
 
   const drawer = drawerOpen && typeof document !== 'undefined'
-    ? createPortal(
-      <div className="profit-dialog fixed inset-0 z-[130] flex items-end sm:items-stretch sm:justify-end">
-        <div
-          data-testid="profit-breakdown-backdrop"
-          className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px]"
-          onClick={closeDrawer}
-        />
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={dialogTitleId}
-          tabIndex={-1}
-          onKeyDown={handleDialogKeyDown}
-          className="relative flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl dark:bg-slate-900 sm:max-h-none sm:max-w-[480px] sm:rounded-none"
-        >
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+    ? <Sheet open onOpenChange={open => { if (!open) closeDrawer(); }}><SheetContent ref={dialogRef} aria-modal="true" aria-labelledby={dialogTitleId} showCloseButton={false} overlayClassName="z-[130]" onOpenAutoFocus={event => { event.preventDefault(); closeButtonRef.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); triggerRef.current?.focus(); }} className="profit-dialog top-auto z-[130] flex h-auto max-h-[90dvh] w-full flex-col gap-0 overflow-hidden rounded-t-xl bg-card p-0 text-card-foreground sm:top-0 sm:h-full sm:max-h-none sm:max-w-[480px] sm:rounded-none">
+          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-5 py-4 dark:border-slate-700">
             <div className="min-w-0">
-              <h2 id={dialogTitleId} className="text-base font-black text-slate-900 dark:text-white">
+              <SheetTitle id={dialogTitleId} className="text-base font-black text-foreground dark:text-white">
                 {t.breakdown.detailsTitle}
-              </h2>
-              <p className="mt-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+              </SheetTitle>
+              <SheetDescription className="mt-1 truncate text-xs font-medium text-muted-foreground dark:text-muted-foreground">
                 {[platformName, siteName, nodeName].filter(Boolean).join(' · ')}
-              </p>
+              </SheetDescription>
             </div>
-            <button
+            <Button variant="ghost" size="sm"
               ref={closeButtonRef}
               type="button"
               aria-label={t.breakdown.closeDetails}
               onClick={closeDrawer}
-              className="shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+              className="shrink-0 rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
             >
               <X size={18} />
-            </button>
+            </Button>
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-            <div className="flex rounded-lg border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
-              <button
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted px-5 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+            <div className="flex rounded-lg border border-border bg-card p-0.5 dark:border-slate-700 dark:bg-slate-900">
+              <Button variant="ghost" size="sm"
                 type="button"
                 aria-pressed={currencyMode === 'CNY'}
                 onClick={() => setCurrencyMode('CNY')}
                 className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currencyMode === 'CNY'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-white'}`}
               >
                 {t.breakdown.cny}
-              </button>
+              </Button>
               {canUseLocal && (
-                <button
+                <Button variant="ghost" size="sm"
                   type="button"
                   aria-pressed={currencyMode === 'LOCAL'}
                   onClick={() => setCurrencyMode('LOCAL')}
                   className={`rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${currencyMode === 'LOCAL'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'}`}
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-white'}`}
                 >
                   {currency}
-                </button>
+                </Button>
               )}
             </div>
-            <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-bold text-muted-foreground dark:text-muted-foreground">
+              <Checkbox
                 checked={showZeroValues}
-                onChange={event => setShowZeroValues(event.target.checked)}
+                onCheckedChange={checked => setShowZeroValues(checked === true)}
                 className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
               />
               {t.breakdown.showZeroValues}
@@ -420,18 +363,18 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
             <div className="space-y-5">
               {groups.map(group => (
                 <section key={group.id} aria-labelledby={`${dialogTitleId}-${group.id}`}>
-                  <h3 id={`${dialogTitleId}-${group.id}`} className="mb-2 text-xs font-black uppercase tracking-wider text-slate-400">
+                  <h3 id={`${dialogTitleId}-${group.id}`} className="mb-2 text-xs font-black uppercase tracking-wider text-muted-foreground">
                     {group.title}
                   </h3>
-                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                  <div className="overflow-hidden rounded-xl border border-border bg-card dark:border-slate-700 dark:bg-slate-900">
                     {group.rows
                       .filter(row => showZeroValues || !row.optional || row.cnyValue !== 0)
                       .map((row, index, visibleRows) => (
                         <div
                           key={row.id}
-                          className={`flex items-center justify-between gap-4 px-3 py-2.5 text-sm ${index < visibleRows.length - 1 ? 'border-b border-slate-100 dark:border-slate-800' : ''}`}
+                          className={`flex items-center justify-between gap-4 px-3 py-2.5 text-sm ${index < visibleRows.length - 1 ? 'border-b border-border dark:border-slate-800' : ''}`}
                         >
-                          <span className={`${row.nested ? 'pl-3 text-xs' : ''} text-slate-500 dark:text-slate-400`}>
+                          <span className={`${row.nested ? 'pl-3 text-xs' : ''} text-muted-foreground dark:text-muted-foreground`}>
                             {row.label}
                           </span>
                           <span className={`shrink-0 font-bold ${rowToneClass(row.tone)}`}>
@@ -445,15 +388,15 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
             </div>
           </div>
 
-          <div className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-900">
+          <div className="shrink-0 border-t border-border bg-card px-5 py-4 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] dark:border-slate-700 dark:bg-slate-900">
             <div className="flex items-end justify-between gap-4">
-              <span className="text-sm font-black text-slate-600 dark:text-slate-300">{t.results.finalRevenue}</span>
-              <span className={result.finalRevenueCNY >= 0 ? 'text-2xl font-black text-emerald-600 dark:text-emerald-400' : 'text-2xl font-black text-rose-600 dark:text-rose-400'}>
+              <span className="text-sm font-black text-muted-foreground dark:text-muted-foreground">{t.results.finalRevenue}</span>
+              <span className={result.finalRevenueCNY >= 0 ? 'text-2xl font-black text-success dark:text-emerald-400' : 'text-2xl font-black text-danger dark:text-rose-400'}>
                 {displayValue(result.finalRevenueCNY, result.finalRevenueLocal)}
               </span>
             </div>
             <div className="mt-2 flex justify-end gap-2">
-              <span className="rounded bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+              <span className="rounded bg-accent px-2 py-1 text-xs font-bold text-primary dark:bg-blue-950/50 dark:text-blue-300">
                 {t.matrix.margin}: {result.margin.toFixed(1)}%
               </span>
               <span className="rounded bg-purple-50 px-2 py-1 text-xs font-bold text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">
@@ -461,15 +404,12 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
               </span>
             </div>
           </div>
-        </div>
-      </div>,
-      document.body,
-    )
+        </SheetContent></Sheet>
     : null;
 
   return (
     <>
-      <button
+      <Button variant="ghost" size="sm"
         ref={triggerRef}
         type="button"
         aria-label={t.breakdown.openDetails}
@@ -485,24 +425,24 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
         onFocus={() => setTooltipOpen(true)}
         onBlur={() => setTooltipOpen(false)}
         onClick={openDrawer}
-        className="flex w-full cursor-pointer flex-col items-center border-b border-slate-100/50 p-4 text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+        className="flex w-full cursor-pointer flex-col items-center border-b border-border/50 p-4 text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
       >
-        <span className="mb-1 border-b border-dashed border-slate-300 pb-0.5 text-[10px] font-bold tracking-wider text-slate-400">
+        <span className="mb-1 border-b border-dashed border-slate-300 pb-0.5 text-[10px] font-bold tracking-wider text-muted-foreground">
           {t.matrix.netProfitCNY}
         </span>
-        <span className={`text-4xl font-black tracking-tight transition-transform hover:scale-105 ${result.finalRevenueCNY > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-          <span className="text-xl text-slate-400">¥</span>{result.finalRevenueCNY.toFixed(2)}
+        <span className={`text-4xl font-black tracking-tight transition-transform hover:scale-105 ${result.finalRevenueCNY > 0 ? 'text-success' : 'text-danger'}`}>
+          <span className="text-xl text-muted-foreground">¥</span>{result.finalRevenueCNY.toFixed(2)}
         </span>
         {canUseLocal && (
-          <span className={`mt-0.5 text-sm font-bold ${result.finalRevenueLocal > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+          <span className={`mt-0.5 text-sm font-bold ${result.finalRevenueLocal > 0 ? 'text-success' : 'text-danger'}`}>
             ≈ {formatCurrencyAmount(result.finalRevenueLocal, currency)} {currency}
           </span>
         )}
         <span className="mt-2 flex gap-2">
-          <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{t.matrix.margin}: {result.margin.toFixed(1)}%</span>
+          <span className="rounded bg-accent px-2 py-0.5 text-xs font-bold text-primary">{t.matrix.margin}: {result.margin.toFixed(1)}%</span>
           <span className="rounded bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-700">{t.matrix.roi}: {result.roi.toFixed(0)}%</span>
         </span>
-      </button>
+      </Button>
       {tooltip}
       {drawer}
     </>

@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/button';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../StoreContext';
 import { Save, Calculator, Building } from 'lucide-react';
@@ -119,12 +120,12 @@ export const ProfitCalculator: React.FC = () => {
     return (
         <div className="profit-workspace flex min-h-full min-w-0 flex-col">
             {/* Header Bar */}
-            <div className="px-3 py-2 bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 mb-2 flex flex-wrap gap-2 justify-between items-center shrink-0 z-20">
-                <div className="flex items-center gap-3 text-slate-800">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg text-white shadow-lg"><Calculator size={18} /></div>
+            <div className="px-3 py-2 bg-card rounded-xl shadow-sm border border-border/50 mb-2 flex flex-wrap gap-2 justify-between items-center shrink-0 z-20">
+                <div className="flex items-center gap-3 text-foreground">
+                    <div className="p-2 bg-primary rounded-lg text-primary-foreground shadow-lg"><Calculator size={18} /></div>
                     <div>
                         <h2 className="text-sm font-black tracking-wide uppercase">{t.matrix.title}</h2>
-                        <div className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">{t.matrix.subtitle}</div>
+                        <div className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">{t.matrix.subtitle}</div>
                     </div>
                 </div>
 
@@ -145,20 +146,20 @@ export const ProfitCalculator: React.FC = () => {
                     />
 
                     {editingProductId && (
-                        <button type="button" onClick={() => { void handleSaveAsNew(); }} disabled={isSaving}
-                            className="rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-bold text-blue-700 disabled:opacity-50">
+                        <Button variant="ghost" size="sm" type="button" onClick={() => { void handleSaveAsNew(); }} disabled={isSaving}
+                            className="rounded-lg border border-blue-200 bg-card px-3 py-1.5 text-xs font-bold text-primary disabled:opacity-50">
                             {t.saveIdentity.saveAsNew}
-                        </button>
+                        </Button>
                     )}
-                    <button type="button" onClick={() => { void handleSaveProduct(); }} disabled={isSaving}
+                    <Button variant="default" size="sm" type="button" onClick={() => { void handleSaveProduct(); }} disabled={isSaving}
                         aria-busy={isSaving}
-                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-4 rounded-lg flex items-center gap-1.5 transition shadow-sm disabled:opacity-50">
+                        className="text-xs font-bold py-1.5 px-4 flex items-center gap-1.5 transition disabled:opacity-50">
                         <Save size={14} /> <span>{editingProductId ? t.matrix.updateLibrary : t.matrix.saveToLibrary}</span>
-                    </button>
+                    </Button>
                 </div>
             </div>
 
-            <p className="mb-2 break-words text-xs text-slate-600" role="status">
+            <p className="mb-2 break-words text-xs text-muted-foreground" role="status">
                 {editingProductId
                     ? editingProduct
                         ? `${t.saveIdentity.editing} ${editingProduct.name} · ${editingProduct.sku}`
@@ -174,7 +175,7 @@ export const ProfitCalculator: React.FC = () => {
             )}
 
             {inputErrors.length > 0 && (
-                <div role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                <div role="alert" className="mb-3 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs font-bold text-danger">
                     <div>{t.errors.inputValidationFailed}</div>
                     <ul className="mt-1 list-disc pl-5 font-medium">
                         {inputErrors.map(error => (
@@ -217,7 +218,7 @@ export const ProfitCalculator: React.FC = () => {
             <div className="grid min-w-0 items-start gap-3"
                 style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))' }}>
                 {nodes.length === 0 ? (
-                    <div className="col-span-full flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-4 text-center text-slate-400">
+                    <div className="col-span-full flex min-h-40 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/50 p-4 text-center text-muted-foreground">
                         <Building size={48} className="mb-4 opacity-20" />
                         <p className="font-bold">{t.matrix.nodeEmpty}</p>
                         <p className="text-sm mt-1">{t.matrix.nodeEmptyDesc}</p>

@@ -1,3 +1,5 @@
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { PlatformType } from '../../platformConfig';
@@ -130,36 +132,36 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
     };
 
     return (
-        <div className="min-w-0 w-full border-2 border-emerald-200 rounded-xl bg-white shadow-sm flex flex-col overflow-hidden">
-            <div className="bg-emerald-50/70 px-4 py-3 flex items-center justify-between border-b border-emerald-100">
+        <div className="min-w-0 w-full border-2 border-success/20 rounded-xl bg-card shadow-sm flex flex-col overflow-hidden">
+            <div className="bg-success-subtle/70 px-4 py-3 flex items-center justify-between border-b border-success/20">
                 <div>
                     <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold text-white bg-emerald-600">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold text-white bg-emerald-700">
                             节点模板
                         </span>
-                        <span className="text-sm font-black text-slate-800">{runtimeCurrency}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase">{platform}</span>
+                        <span className="text-sm font-black text-foreground">{runtimeCurrency}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{platform}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 font-bold mt-1 bg-white/70 px-1.5 py-0.5 rounded border border-emerald-100 inline-block">
+                    <div className="text-[11px] text-muted-foreground font-bold mt-1 bg-card/70 px-1.5 py-0.5 rounded border border-success/20 inline-block">
                         {template.name}
                     </div>
                     {hasDifferentSnapshotSite && (
-                        <div className="text-[10px] text-amber-700 mt-1">
+                        <div className="text-[10px] text-warning mt-1">
                             原模板站点：{template.country}
                         </div>
                     )}
                 </div>
-                <button onClick={() => onDelete(node.id)} className="p-2 -mr-2 text-slate-400 hover:text-red-500 transition-colors">
+                <Button variant="ghost" size="sm" onClick={() => onDelete(node.id)} className="p-2 -mr-2 text-muted-foreground hover:text-red-500 transition-colors">
                     <Trash2 size={16} />
-                </button>
+                </Button>
             </div>
 
             <div className="p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                     {inputs.map(input => (
                         <label key={input.id} className="block">
-                            <span className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{input.name}</span>
-                            <input
+                            <span className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">{input.name}</span>
+                            <Input
                                 type="number"
                                 value={inputDrafts[input.id] ?? ''}
                                 onChange={(event) => handleInputChange(input.id, event.target.value)}
@@ -167,20 +169,20 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
                                 aria-invalid={result.ok === false && result.errors.some(error => error.inputId === input.id)}
                                 min={input.min}
                                 max={input.max}
-                                className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold border-slate-200 bg-white text-slate-700 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                                className="w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold border-border bg-card text-foreground focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                             />
                         </label>
                     ))}
                 </div>
 
-                <div className="border-t border-slate-100 pt-3 space-y-2">
+                <div className="border-t border-border pt-3 space-y-2">
                     {result.ok === true ? result.outputs.map(output => (
-                        <div key={output.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50">
-                            <span className="text-xs font-bold text-slate-500">{output.name}</span>
-                            <span className="text-lg font-black text-emerald-600">{Number(output.value.toFixed(4))}</span>
+                        <div key={output.id} className="flex items-center justify-between p-2 rounded-lg bg-muted">
+                            <span className="text-xs font-bold text-muted-foreground">{output.name}</span>
+                            <span className="text-lg font-black text-success">{Number(output.value.toFixed(4))}</span>
                         </div>
                     )) : (
-                        <div role="alert" className="text-xs text-red-700 bg-red-50 border border-red-100 rounded-lg p-2 space-y-1">
+                        <div role="alert" className="text-xs text-danger bg-red-50 border border-red-100 rounded-lg p-2 space-y-1">
                             {result.errors.map((error, index) => (
                                 <div key={`${error.code}-${error.nodeId || 'graph'}-${index}`}>
                                     {formatNodeGraphEvaluationError(error, errorLabels)}
@@ -189,7 +191,7 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
                         </div>
                     )}
                     {result.ok === true && result.outputs.length === 0 && (
-                        <div className="text-xs text-slate-400 text-center py-3">暂无输出节点</div>
+                        <div className="text-xs text-muted-foreground text-center py-3">暂无输出节点</div>
                     )}
                 </div>
             </div>

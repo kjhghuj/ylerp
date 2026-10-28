@@ -1,11 +1,13 @@
 import React from 'react';
-import { Plus, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
 import type { NodeGraphTemplate } from './nodeGraphTypes';
 import { matchesActiveSite } from '../productTemplateImport';
 import { translations } from '../../translations';
-
 type ProfitStrings = typeof translations['zh']['profit'];
 
 interface AddNodeMenuProps {
@@ -23,72 +25,38 @@ interface AddNodeMenuProps {
     t: ProfitStrings;
 }
 
-export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({
-    showAddMenu, setShowAddMenu, selectedPlatform, setSelectedPlatform,
-    siteCountry, allTemplates, graphTemplates = [], onAddFromTemplate, onAddFromGraphTemplate, onAddBlank, onDeleteTemplate, t
-}) => (
-    <div className="relative">
-        <button onClick={() => setShowAddMenu(!showAddMenu)} className="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition shadow-sm">
-            <Plus size={14} /> {t.matrix.addNode}
-        </button>
-        
-        {showAddMenu && (
-            <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 p-4 z-50">
-                <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">{t.matrix.useTemplate}</h4>
-                {graphTemplates.length > 0 && (
-                    <div className="space-y-1 mb-4 max-h-40 overflow-y-auto">
-                        {graphTemplates.map(tpl => (
-                            <div key={tpl.id} className="flex justify-between items-center p-2 hover:bg-emerald-50 rounded-lg cursor-pointer border border-transparent hover:border-emerald-100" onClick={() => onAddFromGraphTemplate?.(tpl)}>
-                                <div>
-                                    <div className="text-sm font-bold text-slate-700">{tpl.name}</div>
-                                    <div className="text-[10px] text-emerald-600 capitalize">节点设计 · {tpl.platform || 'other'}</div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                <div className="space-y-1 mb-4 max-h-48 overflow-y-auto">
-                    {allTemplates.filter(tpl => matchesActiveSite(tpl.country, siteCountry)).map(tpl => (
-                        <div key={tpl.id} className="flex justify-between items-center p-2 hover:bg-slate-50 rounded-lg cursor-pointer border border-transparent hover:border-slate-200" onClick={() => onAddFromTemplate(tpl)}>
-                            <div>
-                                <div className="text-sm font-bold text-slate-700">{tpl.name}</div>
-                                <div className="text-[10px] text-slate-400 capitalize">{t.matrix.platforms[tpl.platform || 'other'] || tpl.platform}</div>
-                            </div>
-                            <button onClick={(e) => tpl.id && onDeleteTemplate(tpl.id, e)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded">
-                                <Trash2 size={12} />
-                            </button>
-                        </div>
-                    ))}
-                    {allTemplates.filter(tpl => matchesActiveSite(tpl.country, siteCountry)).length === 0 && <p className="text-xs text-slate-400 text-center py-2">{t.templates.empty}</p>}
-                </div>
-                <div className="pt-3 border-t border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-2 tracking-tighter">{t.matrix.createBlank}</h4>
-                    <div className="flex gap-2 mb-3">
-                        <div className="flex-1 relative group">
-                            <div className="w-full text-[11px] font-bold p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-blue-700">{t.matrix.sites[siteCountry] || siteCountry} ({siteCountry})</div>
-                        </div>
-                        <div className="flex-1 relative group">
-                            <select 
-                                value={siteCountry === 'USD' ? 'tiktok' : selectedPlatform}
-                                onChange={e => setSelectedPlatform(e.target.value as PlatformType)} 
-                                className="w-full text-[11px] font-bold p-2.5 pr-8 bg-slate-50 border border-slate-200 rounded-xl outline-none appearance-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer capitalize shadow-sm hover:bg-slate-100/50"
-                            >
-                                {Object.keys(PLATFORMS).filter(p => siteCountry !== 'USD' || p === 'tiktok').map(p => (
-                                    <option key={p} value={p} className="font-sans py-2">{t.matrix.platforms[p as PlatformType] || PLATFORMS[p as PlatformType].name}</option>
-                                ))}
-                            </select>
-                            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none transition-colors group-hover:text-slate-600" />
-                        </div>
-                    </div>
-                    <button 
-                        onClick={onAddBlank}
-                        className="w-full bg-slate-900 hover:bg-black text-white font-bold text-[11px] py-2.5 rounded-xl transition-all shadow-md active:scale-[0.98]"
-                    >
-                        {siteCountry === 'USD' ? t.templates.newCrossBorderNode : t.matrix.newNode}
-                    </button>
-                </div>
+
+export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({ showAddMenu, setShowAddMenu, selectedPlatform, setSelectedPlatform, siteCountry, allTemplates, graphTemplates = [], onAddFromTemplate, onAddFromGraphTemplate, onAddBlank, onDeleteTemplate, t }) => {
+    const platformId = React.useId();
+    const siteTemplates = allTemplates.filter(tpl => matchesActiveSite(tpl.country, siteCountry));
+    return <Popover open={showAddMenu} onOpenChange={setShowAddMenu}>
+        <PopoverTrigger asChild><Button variant="outline" size="sm"><Plus size={14} />{t.matrix.addNode}</Button></PopoverTrigger>
+        <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-3">
+            <h4 className="text-xs font-semibold text-muted-foreground">{t.matrix.useTemplate}</h4>
+            {graphTemplates.length > 0 && <div className="max-h-40 space-y-1 overflow-y-auto">
+                {graphTemplates.map(tpl => <Button key={tpl.id} variant="ghost" onClick={() => onAddFromGraphTemplate?.(tpl)} className="h-auto w-full justify-start px-2 py-2 text-left">
+                    <span className="min-w-0"><span className="block truncate text-sm font-medium">{tpl.name}</span><span className="block text-xs text-success">节点设计 · {tpl.platform || 'other'}</span></span>
+                </Button>)}
+            </div>}
+            <div className="max-h-48 space-y-1 overflow-y-auto">
+                {siteTemplates.map(tpl => <div key={tpl.id} className="flex items-center gap-1 rounded-md hover:bg-muted">
+                    <Button variant="ghost" onClick={() => onAddFromTemplate(tpl)} className="h-auto min-w-0 flex-1 justify-start p-2 text-left">
+                        <span className="min-w-0"><span className="block truncate text-sm font-medium">{tpl.name}</span><span className="block text-xs text-muted-foreground">{t.matrix.platforms[tpl.platform || 'other'] || tpl.platform}</span></span>
+                    </Button>
+                    <Button variant="ghost" size="icon" aria-label="删除模板" title={tpl.name} className="h-8 w-8 shrink-0 text-danger" onClick={event => { if (tpl.id) onDeleteTemplate(tpl.id, event); }}><Trash2 size={14} /></Button>
+                </div>)}
+                {!siteTemplates.length && <p className="py-2 text-center text-xs text-muted-foreground">{t.templates.empty}</p>}
             </div>
-        )}
-        {showAddMenu && <div className="fixed inset-0 z-40" onClick={() => setShowAddMenu(false)} />}
-    </div>
-);
+            <div className="space-y-3 border-t border-border pt-3">
+                <h4 className="text-xs font-semibold text-muted-foreground">{t.matrix.createBlank}</h4>
+                <div className="grid grid-cols-2 items-center gap-2">
+                    <span className="rounded-md bg-accent p-2 text-xs font-medium text-primary">{t.matrix.sites[siteCountry] || siteCountry} ({siteCountry})</span>
+                    <NativeSelect id={platformId} aria-label="平台" value={siteCountry === 'USD' ? 'tiktok' : selectedPlatform} onChange={event => setSelectedPlatform(event.target.value as PlatformType)} className="text-xs">
+                        {Object.keys(PLATFORMS).filter(platform => siteCountry !== 'USD' || platform === 'tiktok').map(platform => <option key={platform} value={platform}>{t.matrix.platforms[platform as PlatformType] || PLATFORMS[platform as PlatformType].name}</option>)}
+                    </NativeSelect>
+                </div>
+                <Button onClick={onAddBlank} className="w-full">{siteCountry === 'USD' ? t.templates.newCrossBorderNode : t.matrix.newNode}</Button>
+            </div>
+        </PopoverContent>
+    </Popover>;
+};

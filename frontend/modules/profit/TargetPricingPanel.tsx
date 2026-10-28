@@ -1,5 +1,8 @@
+import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Target, X } from 'lucide-react';
 import type { translations } from '../../translations';
 import { PLATFORMS } from '../../platformConfig';
@@ -51,17 +54,6 @@ export const TargetPricingPanel = ({ nodes, globalInputs, siteInputs, currency, 
   const canCalculate = expanded && selected && validTarget && rateReady && relevantDraftErrors.length === 0;
   const current = canCalculate && preview?.version === versionRef.current.version ? preview.result : null;
   useEffect(() => {
-    if (!expanded) return;
-    const previousOverflow = document.body.style.overflow;
-    const launcher = launcherRef.current;
-    document.body.style.overflow = 'hidden';
-    targetRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      launcher?.focus();
-    };
-  }, [expanded]);
-  useEffect(() => {
     onBasisChange(expanded ? selected?.id ?? null : null);
   }, [expanded, selected?.id, onBasisChange]);
   useEffect(() => {
@@ -94,107 +86,87 @@ export const TargetPricingPanel = ({ nodes, globalInputs, siteInputs, currency, 
 
   return (
     <>
-      <button ref={launcherRef} type="button" aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? panelId : undefined}
+      <Button variant="ghost" size="sm" ref={launcherRef} type="button" aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? panelId : undefined}
         onClick={() => setExpanded(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-accent px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         <Target size={14} aria-hidden="true" /><span>{labels.title}</span>
-      </button>
-      {expanded && createPortal(<div className="profit-dialog fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 p-3 backdrop-blur-sm sm:p-6"
-        onClick={event => { if (event.target === event.currentTarget) setExpanded(false); }}>
-        <div ref={dialogRef} id={panelId} role="dialog" aria-modal="true" aria-labelledby={titleId}
-          className="flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-          onKeyDown={event => {
-            if (event.key === 'Escape') {
-              event.stopPropagation();
-              setExpanded(false);
-            }
-            if (event.key !== 'Tab') return;
-            const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement | HTMLInputElement | HTMLSelectElement>('button, input, select') ?? [])
-              .filter(control => !control.disabled);
-            if (!controls?.length) return;
-            const first = controls[0];
-            const last = controls[controls.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-              event.preventDefault(); last.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-              event.preventDefault(); first.focus();
-            }
-          }}>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
-          <h2 id={titleId} className="flex items-center gap-2 text-base font-bold text-slate-800">
-            <Target size={18} className="shrink-0 text-blue-600" aria-hidden="true" />{labels.title}{' '}
-            <span className="text-xs font-medium text-slate-400">{currency}</span>
-          </h2>
-          <button type="button" aria-label={labels.close} onClick={() => setExpanded(false)}
-            className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:ring-2 focus-visible:ring-blue-400">
+      </Button>
+      {expanded && <Dialog open onOpenChange={setExpanded}><DialogContent ref={dialogRef} aria-modal="true" id={panelId} aria-labelledby={titleId} aria-describedby={undefined} showCloseButton={false} onOpenAutoFocus={event => { event.preventDefault(); targetRef.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); launcherRef.current?.focus(); }} className="profit-dialog flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-4 sm:px-6">
+          <DialogTitle id={titleId} className="flex items-center gap-2 text-base font-bold text-foreground">
+            <Target size={18} className="shrink-0 text-primary" aria-hidden="true" />{labels.title}{' '}
+            <span className="text-xs font-medium text-muted-foreground">{currency}</span>
+          </DialogTitle>
+          <Button variant="ghost" size="sm" type="button" aria-label={labels.close} onClick={() => setExpanded(false)}
+            className="shrink-0 rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-blue-400">
             <X size={18} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
-        <div className="space-y-4 overflow-y-auto bg-blue-50/40 p-4 sm:p-6">
+        <div className="space-y-4 overflow-y-auto bg-accent/40 p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label htmlFor={targetId} className="mb-1 block text-xs font-bold text-slate-600">{labels.target}</label>
+            <label htmlFor={targetId} className="mb-1 block text-xs font-bold text-muted-foreground">{labels.target}</label>
             <div className="relative">
-              <input ref={targetRef} id={targetId} type="text" inputMode="decimal" value={preference.target} placeholder="20.00"
+              <Input ref={targetRef} id={targetId} type="text" inputMode="decimal" value={preference.target} placeholder="20.00"
                 aria-invalid={Boolean(preference.target && !validTarget)} aria-describedby={`${targetId}-help`}
                 onChange={event => changePreference({ target: event.target.value })}
-                className="h-10 w-full rounded-lg border border-blue-200 bg-white px-3 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-300" />
-              <span className="absolute right-3 top-2 text-slate-500">%</span>
+                className="h-10 w-full rounded-lg border border-blue-200 bg-card px-3 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-300" />
+              <span className="absolute right-3 top-2 text-muted-foreground">%</span>
             </div>
-            <p id={`${targetId}-help`} className="mt-1 text-[11px] text-slate-500">{labels.definition}</p>
+            <p id={`${targetId}-help`} className="mt-1 text-[11px] text-muted-foreground">{labels.definition}</p>
             <div className="mt-2 flex flex-wrap gap-2" aria-label={labels.presets}>
-              {[15, 20, 25, 30].map(value => <button key={value} type="button"
+              {[15, 20, 25, 30].map(value => <Button variant="ghost" size="sm" key={value} type="button"
                 onClick={() => changePreference({ target: String(value) })}
-                className="rounded-md border border-blue-100 bg-white px-2 py-1 text-xs text-blue-700">{value}%</button>)}
+                className="rounded-md border border-blue-100 bg-card px-2 py-1 text-xs text-primary">{value}%</Button>)}
             </div>
           </div>
           <div>
-            <label htmlFor={selectId} className="mb-1 block text-xs font-bold text-slate-600">{labels.basis}</label>
-            <select id={selectId} value={selected?.id ?? ''} disabled={!eligible.length}
+            <label htmlFor={selectId} className="mb-1 block text-xs font-bold text-muted-foreground">{labels.basis}</label>
+            <NativeSelect id={selectId} value={selected?.id ?? ''} disabled={!eligible.length}
               onChange={event => changePreference({ nodeId: event.target.value })}
-              className="h-10 w-full min-w-0 rounded-lg border border-blue-200 bg-white px-2 text-sm">
+              className="h-10 w-full min-w-0 rounded-lg border border-blue-200 bg-card px-2 text-sm">
               <option value="" disabled>{labels.selectNode}</option>
               {eligible.map((node, index) => <option key={node.id} value={node.id}>
                 {PLATFORMS[node.platform]?.name ?? node.platform} · {node.name || t.templates.unnamedNode} · #{index + 1}
               </option>)}
-            </select>
-            <p className="mt-1 text-[11px] text-slate-500">{labels.nodeHint}</p>
+            </NativeSelect>
+            <p className="mt-1 text-[11px] text-muted-foreground">{labels.nodeHint}</p>
           </div>
         </div>
         <div aria-live="polite" aria-busy={Boolean(canCalculate && !current)}>
-          {message && <p role={current && !current.ok ? 'alert' : 'status'} className="rounded-lg bg-white p-3 text-xs text-slate-600">
+          {message && <p role={current && !current.ok ? 'alert' : 'status'} className="rounded-lg bg-card p-3 text-xs text-muted-foreground">
             {message}{errorFields && ` (${errorFields})`}
           </p>}
-          {current?.ok && <div className="space-y-3 rounded-lg border border-blue-100 bg-white p-3">
+          {current?.ok && <div className="space-y-3 rounded-lg border border-blue-100 bg-card p-3">
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="min-w-0"><dt className="text-xs text-slate-500">{labels.suggestedRevenue}</dt>
-                <dd className="mt-1 break-words text-base font-bold text-blue-700" data-testid="suggested-revenue">
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">{labels.suggestedRevenue}</dt>
+                <dd className="mt-1 break-words text-base font-bold text-primary" data-testid="suggested-revenue">
                   {formatCNYAndLocalAmount(current.totalRevenue, exchangeRate, currency)}</dd></div>
-              <div><dt className="text-xs text-slate-500">{labels.actualMargin}</dt>
-                <dd className="mt-1 text-base font-bold text-emerald-700">{current.profit.margin.toFixed(2)}%</dd></div>
-              <div className="min-w-0"><dt className="text-xs text-slate-500">{labels.netProfit}</dt>
-                <dd className="mt-1 break-words text-sm font-semibold text-slate-700">
+              <div><dt className="text-xs text-muted-foreground">{labels.actualMargin}</dt>
+                <dd className="mt-1 text-base font-bold text-success">{current.profit.margin.toFixed(2)}%</dd></div>
+              <div className="min-w-0"><dt className="text-xs text-muted-foreground">{labels.netProfit}</dt>
+                <dd className="mt-1 break-words text-sm font-semibold text-foreground">
                   {formatCNYAndLocalAmount(current.profit.finalRevenueCNY, exchangeRate, currency)}</dd></div>
             </dl>
-            <div className="break-words border-t border-slate-100 pt-2 text-xs font-semibold">
+            <div className="break-words border-t border-border pt-2 text-xs font-semibold">
               <BuyerPaidPrices siteInputs={{ ...siteInputs, totalRevenue: current.totalRevenue }}
                 siteCountry={currency} exchangeRate={exchangeRate} t={t} />
             </div>
           </div>}
         </div>
         </div>
-        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p className="text-[11px] text-slate-500">{labels.previewHint}</p>
-          <button type="button" disabled={!current?.ok} onClick={() => {
+        <div className="flex shrink-0 flex-col gap-3 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="text-[11px] text-muted-foreground">{labels.previewHint}</p>
+          <Button variant="default" size="sm" type="button" disabled={!current?.ok} onClick={() => {
             if (!current?.ok || preview?.version !== versionRef.current.version) return;
             onApply(current.totalRevenue);
             setExpanded(false);
-          }} className="w-full shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
+          }} className="w-full shrink-0 px-4 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto">
             {labels.apply}
-          </button>
+          </Button>
         </div>
-        </div>
-      </div>, document.body)}
+        </DialogContent>
+      </Dialog>}
     </>
   );
 };

@@ -1,3 +1,7 @@
+import { Checkbox } from '../components/ui/checkbox';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { NativeSelect } from '../components/ui/native-select';
 import React, { useState, useMemo } from 'react';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
@@ -281,9 +285,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 : localValue !== null ? localValue.toFixed(2) : String(data[key] ?? '');
             return (
                 <div key={key} className="col-span-1">
-                    <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">{inputLabel} ({country})</label>
+                    <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">{inputLabel} ({country})</label>
                     <div className="relative">
-                        <input
+                        <Input
                             key={`${key}-local`}
                             type="text"
                             inputMode="decimal"
@@ -311,13 +315,13 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             }}
                             onFocus={(e) => e.target.select()}
                             className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all ${resolvedInputErrors[key]
-                                ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                                ? 'border-rose-400 bg-destructive/10 text-danger focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                : 'border-border bg-card text-foreground focus:border-primary focus:ring-2 focus:ring-slate-100'}`}
                         />
                     </div>
-                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
+                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-danger font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
                     {cnyEquiv !== null && (
-                        <div className="text-[10px] text-blue-600 font-bold text-right mt-0.5 px-1">
+                        <div className="text-[10px] text-primary font-bold text-right mt-0.5 px-1">
                             ≈ {cnyEquiv.toFixed(2)} CNY
                         </div>
                     )}
@@ -336,9 +340,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 : cnyValue !== null ? cnyValue.toFixed(2) : String(data[key] ?? '');
             return (
                 <div key={key} className="col-span-1">
-                    <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate" title={`${inputLabel} (CNY)`}>{inputLabel} (CNY)</label>
+                    <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate" title={`${inputLabel} (CNY)`}>{inputLabel} (CNY)</label>
                     <div className="relative">
-                        <input
+                        <Input
                             type="text"
                             inputMode="decimal"
                             name={key}
@@ -371,13 +375,13 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             }}
                             onFocus={(e) => e.target.select()}
                             className={`w-full h-9 px-2 rounded-lg border outline-none text-sm font-bold transition-all ${resolvedInputErrors[key]
-                                ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                                : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                                ? 'border-rose-400 bg-destructive/10 text-danger focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                                : 'border-border bg-card text-foreground focus:border-primary focus:ring-2 focus:ring-slate-100'}`}
                         />
                     </div>
-                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
+                    {resolvedInputErrors[key] && <div id={`${nodeId}-${key}-error`} className="text-[10px] text-danger font-bold mt-0.5 px-1">{resolvedInputErrors[key]}</div>}
                     {localValue !== null && (
-                        <div className="text-[10px] text-emerald-600 font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
+                        <div className="text-[10px] text-success font-bold text-right mt-0.5 flex items-center justify-end gap-1 px-1">
                             <span>≈ {formatLocal(localValue)} {country}</span>
                         </div>
                     )}
@@ -452,11 +456,11 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
     const renderPlatformCouponRateInput = () => (
         <div className="col-span-1">
-            <label className="block text-xs font-bold text-slate-500 mb-0.5 truncate">
+            <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">
                 {t.inputs.platformCouponRate}
             </label>
             <div className="relative">
-                <input
+                <Input
                     type="text"
                     inputMode="decimal"
                     name="platformCouponRate"
@@ -488,14 +492,14 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         }
                     }}
                     onFocus={(event) => event.target.select()}
-                    className={`w-full h-9 px-2 pr-7 rounded-lg border outline-none text-sm font-bold transition-all disabled:bg-slate-100 disabled:text-slate-400 ${platformCouponRateInvalid
-                        ? 'border-rose-400 bg-rose-50/50 text-rose-700 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                        : 'border-slate-200 bg-white text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-slate-100'}`}
+                    className={`w-full h-9 px-2 pr-7 rounded-lg border outline-none text-sm font-bold transition-all disabled:bg-muted disabled:text-muted-foreground ${platformCouponRateInvalid
+                        ? 'border-rose-400 bg-destructive/10 text-danger focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+                        : 'border-border bg-card text-foreground focus:border-primary focus:ring-2 focus:ring-slate-100'}`}
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold pointer-events-none">%</span>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold pointer-events-none">%</span>
             </div>
             {platformCouponRateInvalid && (
-                <div id={`${nodeId}-platformCouponRate-error`} className="text-[10px] text-rose-600 font-bold mt-0.5 px-1">
+                <div id={`${nodeId}-platformCouponRate-error`} className="text-[10px] text-danger font-bold mt-0.5 px-1">
                     {platformCouponRateErrorMessage}
                 </div>
             )}
@@ -568,14 +572,14 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const error = resolvedInputErrors[key];
         const id = `${nodeId}-${key}`;
         return <div className="col-span-2" key={key}>
-            <label htmlFor={id} className="block text-xs font-bold text-slate-500 mb-0.5">{label}</label>
-            <select id={id} name={key} value={value} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
+            <label htmlFor={id} className="block text-xs font-bold text-muted-foreground mb-0.5">{label}</label>
+            <NativeSelect id={id} name={key} value={value} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
                 onChange={event => onUpdate(nodeId, { [key]: Number(event.target.value) })}
-                className={`w-full p-2 rounded-lg border text-xs ${error ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`}>
+                className={`w-full p-2 rounded-lg border text-xs ${error ? 'border-rose-400 bg-destructive/10 text-danger' : 'border-border bg-card text-foreground'}`}>
                 {!options.some(([number]) => String(number) === value) && <option value={value} disabled>—</option>}
                 {options.map(([number, text]) => <option value={number} key={number}>{text}</option>)}
-            </select>
-            {error && <div id={`${id}-error`} className="text-[10px] text-rose-600 font-bold mt-0.5">{error}</div>}
+            </NativeSelect>
+            {error && <div id={`${id}-error`} className="text-[10px] text-danger font-bold mt-0.5">{error}</div>}
         </div>;
     };
     const renderUSLogisticsSettings = () => {
@@ -587,15 +591,15 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const dateValue = /^\d{8}$/.test(rawDate) ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}` : '';
         return <div className="space-y-2 mb-3">
             {showHead && <>
-                <p className="text-xs text-slate-500">{t.tiktok.usHeadFreightHint}</p>
+                <p className="text-xs text-muted-foreground">{t.tiktok.usHeadFreightHint}</p>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-2">{renderInput('usHeadFreightFee')}{renderInput('usHeadFreightRatePerKg')}</div>
-                <label className="flex items-center gap-2 text-xs text-slate-600">
-                    <input type="checkbox" name="usHeadFreightConfigured" checked={Number(data.usHeadFreightConfigured) === 1}
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Checkbox name="usHeadFreightConfigured" checked={Number(data.usHeadFreightConfigured) === 1}
                         aria-invalid={Boolean(resolvedInputErrors.usHeadFreightConfigured)} aria-describedby={resolvedInputErrors.usHeadFreightConfigured ? `${nodeId}-usHeadFreightConfigured-error` : undefined}
-                        onChange={event => onUpdate(nodeId, { usHeadFreightConfigured: event.target.checked ? 1 : 0 })} className="h-4 w-4 accent-blue-600" />
+                        onCheckedChange={checked => onUpdate(nodeId, { usHeadFreightConfigured: checked === true ? 1 : 0 })} className="h-4 w-4 accent-blue-600" />
                     {t.tiktok.usHeadConfirmed}
                 </label>
-                {resolvedInputErrors.usHeadFreightConfigured && <p id={`${nodeId}-usHeadFreightConfigured-error`} className="text-[10px] text-rose-600 font-bold">{resolvedInputErrors.usHeadFreightConfigured}</p>}
+                {resolvedInputErrors.usHeadFreightConfigured && <p id={`${nodeId}-usHeadFreightConfigured-error`} className="text-[10px] text-danger font-bold">{resolvedInputErrors.usHeadFreightConfigured}</p>}
             </>}
             {(active || resolvedInputErrors.usLocalDeliveryMode) && renderUSSelect('usLocalDeliveryMode', t.tiktok.usLocalMode, [
                 [0, t.tiktok.usLocalUnconfigured], [1, t.tiktok.usLocalManual], [2, t.tiktok.usLocalStandardLive], [3, t.tiktok.usLocalCbtLive], [4, t.tiktok.usLocalIncluded],
@@ -606,15 +610,15 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                 {['usPackageLengthCm', 'usPackageWidthCm', 'usPackageHeightCm'].filter(key => live || resolvedInputErrors[key]).map(renderInput)}
                 {(live || resolvedInputErrors.usShippingDate) && <div className="col-span-2">
-                    <label htmlFor={`${nodeId}-usShippingDate`} className="block text-xs font-bold text-slate-500 mb-0.5">{t.tiktok.usShippingDate}</label>
-                    <input id={`${nodeId}-usShippingDate`} name="usShippingDate" type="date" min={live ? '2026-09-21' : undefined} max={live ? '2027-01-17' : undefined} value={dateValue}
+                    <label htmlFor={`${nodeId}-usShippingDate`} className="block text-xs font-bold text-muted-foreground mb-0.5">{t.tiktok.usShippingDate}</label>
+                    <Input id={`${nodeId}-usShippingDate`} name="usShippingDate" type="date" min={live ? '2026-09-21' : undefined} max={live ? '2027-01-17' : undefined} value={dateValue}
                         aria-invalid={Boolean(resolvedInputErrors.usShippingDate)} aria-describedby={resolvedInputErrors.usShippingDate ? `${nodeId}-usShippingDate-error` : undefined}
                         onChange={event => onUpdate(nodeId, { [event.target.name]: event.target.value ? Number(event.target.value.replaceAll('-', '')) : '' })}
-                        className={`w-full h-9 px-2 rounded-lg border text-sm ${resolvedInputErrors.usShippingDate ? 'border-rose-400 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`} />
-                    {resolvedInputErrors.usShippingDate && <p id={`${nodeId}-usShippingDate-error`} className="text-[10px] text-rose-600 font-bold mt-0.5">{resolvedInputErrors.usShippingDate}</p>}
+                        className={`w-full h-9 px-2 rounded-lg border text-sm ${resolvedInputErrors.usShippingDate ? 'border-rose-400 bg-destructive/10 text-danger' : 'border-border bg-card text-foreground'}`} />
+                    {resolvedInputErrors.usShippingDate && <p id={`${nodeId}-usShippingDate-error`} className="text-[10px] text-danger font-bold mt-0.5">{resolvedInputErrors.usShippingDate}</p>}
                 </div>}
             </div>
-            {live && <p className="text-xs text-slate-500">{t.tiktok.usLiveEligibility}</p>}
+            {live && <p className="text-xs text-muted-foreground">{t.tiktok.usLiveEligibility}</p>}
         </div>;
     };
 
@@ -626,50 +630,50 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 [0, t.tiktok.usDirectGeneral], [1, t.tiktok.usDirectSpecial], [2, t.tiktok.usDirectSensitive],
             ])}
             {(active || resolvedInputErrors.usDirectExtraFee) && renderInput('usDirectExtraFee')}
-            {active && <p className="text-xs text-slate-500">{t.tiktok.usDirectBuyerHint}</p>}
+            {active && <p className="text-xs text-muted-foreground">{t.tiktok.usDirectBuyerHint}</p>}
         </div>;
     };
 
     const renderTiktokPresetControls = () => isTiktok ? <>
-        {isUSCrossBorder && <label className="block text-xs text-slate-600">{t.tiktok.usCampaignProgram}
-            <select aria-label={t.tiktok.usCampaignProgram} className="block w-full mt-1 p-2 rounded border"
+        {isUSCrossBorder && <label className="block text-xs text-muted-foreground">{t.tiktok.usCampaignProgram}
+            <NativeSelect aria-label={t.tiktok.usCampaignProgram} className="block w-full mt-1 p-2 rounded border"
                 value={[0, 1].includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'}
                 onChange={event => onUpdate(nodeId, { campaignServiceFeeRate: Number(event.target.value), campaignServiceFeeCap: 0 })}>
                 <option value="0">{t.tiktok.usNoCampaign}</option>
                 <option value="1">{t.tiktok.usStandardCampaign}</option>
                 <option value="manual" disabled>{t.tiktok.manual}</option>
-            </select>
+            </NativeSelect>
         </label>}
-        {(country === 'THB' || country === 'PHP') && <label className="block text-xs text-slate-600">{t.tiktok.growthGroup}
-            <select aria-label={t.tiktok.growthGroup} className="block w-full mt-1 p-2 rounded border" value={(country === 'THB' ? [8.03, 6.96] : [1.5, 1]).includes(Number(data.growthServiceFeeRate)) ? String(data.growthServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { growthServiceFeeRate: Number(e.target.value) })}>
+        {(country === 'THB' || country === 'PHP') && <label className="block text-xs text-muted-foreground">{t.tiktok.growthGroup}
+            <NativeSelect aria-label={t.tiktok.growthGroup} className="block w-full mt-1 p-2 rounded border" value={(country === 'THB' ? [8.03, 6.96] : [1.5, 1]).includes(Number(data.growthServiceFeeRate)) ? String(data.growthServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { growthServiceFeeRate: Number(e.target.value) })}>
                 {country === 'THB' ? <><option value="8.03">{t.tiktok.otherGoods}</option><option value="6.96">{t.tiktok.electronics}</option></> : <><option value="1.5">{t.tiktok.higherGroup}</option><option value="1">{t.tiktok.lowerGroup}</option></>}
                 <option value="manual" disabled>{t.tiktok.manual}</option>
-            </select>
+            </NativeSelect>
         </label>}
-        {(country === 'MYR' || country === 'SGD') && <label className="block text-xs text-slate-600">{t.tiktok.bxp}
-            <select aria-label={t.tiktok.bxp} className="block w-full mt-1 p-2 rounded border" value={(country === 'MYR' ? [0, 4.86] : [0, 3.27, 5.45, 4.36, 6.54]).includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { campaignServiceFeeRate: Number(e.target.value), campaignServiceFeeCap: country === 'SGD' ? 30 : 0 })}>
+        {(country === 'MYR' || country === 'SGD') && <label className="block text-xs text-muted-foreground">{t.tiktok.bxp}
+            <NativeSelect aria-label={t.tiktok.bxp} className="block w-full mt-1 p-2 rounded border" value={(country === 'MYR' ? [0, 4.86] : [0, 3.27, 5.45, 4.36, 6.54]).includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { campaignServiceFeeRate: Number(e.target.value), campaignServiceFeeCap: country === 'SGD' ? 30 : 0 })}>
                 <option value="0">{t.tiktok.noBxp}</option>
                 {country === 'MYR' ? <option value="4.86">{t.tiktok.myBxp}</option> : <><option value="3.27">{t.tiktok.dailyLow}</option><option value="5.45">{t.tiktok.dailyHigh}</option><option value="4.36">{t.tiktok.campaignLow}</option><option value="6.54">{t.tiktok.campaignHigh}</option></>}
                 <option value="manual" disabled>{t.tiktok.manual}</option>
-            </select>
+            </NativeSelect>
         </label>}
     </> : null;
 
     const renderTiktokSettings = () => <div className="p-3 space-y-2">
-        {!policyState.invalid && <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-500">
+        {!policyState.invalid && <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-muted-foreground">
             <span>{isTiktok ? policyState.context.tiktokFeePolicy?.verifiedAt ? t.tiktok.compactAssumptions : t.tiktok.compactManualWarning : t.tiktok.compactLegacy}</span>
-            {!isTiktok && <button type="button" onClick={() => onUpgrade?.(nodeId)} disabled={!onUpgrade}
-                className="font-bold text-blue-700 disabled:opacity-40">{t.tiktok.upgrade}</button>}
+            {!isTiktok && <Button variant="ghost" size="sm" type="button" onClick={() => onUpgrade?.(nodeId)} disabled={!onUpgrade}
+                className="font-bold text-primary disabled:opacity-40">{t.tiktok.upgrade}</Button>}
         </div>}
         {isUpgradePreview && <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-amber-800">
             <span>{t.tiktok.compactUpgradePreview}</span>
-            <button type="button" className="font-bold underline" onClick={() => onCancelUpgrade?.(nodeId)}>{t.tiktok.cancelUpgrade}</button>
+            <Button variant="ghost" size="sm" type="button" className="font-bold underline" onClick={() => onCancelUpgrade?.(nodeId)}>{t.tiktok.cancelUpgrade}</Button>
         </div>}
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
             {renderInput('platformCommissionRate')}
             {(isTiktok || resolvedInputErrors.affiliateCommissionRate) && renderInput('affiliateCommissionRate')}
         </div>
-        {isTiktok && <p className="text-[10px] text-slate-500">{isUSCrossBorder ? t.tiktok.usCrossBorderCategoryHint : t.tiktok.compactCategoryHint}</p>}
+        {isTiktok && <p className="text-[10px] text-muted-foreground">{isUSCrossBorder ? t.tiktok.usCrossBorderCategoryHint : t.tiktok.compactCategoryHint}</p>}
         <TiktokShippingControls compact data={data} strings={t} currency={country} useLocalCurrency={useLocalCurrency}
             usSegmentedSupported={isTiktok}
             supported={shippingPreview.supported} quote={shippingPreview.quote} quoteError={shippingPreview.error}
@@ -678,7 +682,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         <TiktokSettingsGroup title={t.tiktok.groupLogistics} summary={logisticsSummary}
             hasError={hasFieldError([...logisticsKeys.filter(key => key !== 'manualShippingFee' || shippingMode !== 2), ...usLogisticsKeys])
                 || country === 'USD' && [3, 4].includes(shippingMode) && Boolean(shippingPreview.error)}>
-            {resolvedInputErrors.shippingCalculationMode && <p role="alert" className="mb-2 text-xs text-rose-700">{resolvedInputErrors.shippingCalculationMode}</p>}
+            {resolvedInputErrors.shippingCalculationMode && <p role="alert" className="mb-2 text-xs text-danger">{resolvedInputErrors.shippingCalculationMode}</p>}
             {renderUSLogisticsSettings()}
             {renderUSDirectSettings()}
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">{logisticsInputs.map(renderInput)}</div>
@@ -699,9 +703,9 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         <TiktokSettingsGroup title={t.tiktok.groupRules}
             summary={isTiktok ? policyState.context.tiktokFeePolicy?.verifiedAt ? `${t.tiktok.compactAssumptions} · ${policyState.context.tiktokFeePolicy.verifiedAt}` : t.tiktok.compactManualWarning : t.tiktok.compactLegacy}
             hasError={policyState.invalid}>
-            <div className="space-y-2 text-xs text-slate-600">
+            <div className="space-y-2 text-xs text-muted-foreground">
                 <p className="font-bold">{isUSCrossBorder ? t.tiktok.usCrossBorderAssumptions : country === 'USD' ? t.tiktok.usAssumptions : t.tiktok.assumptions}</p>
-                {policyState.invalid ? <p role="alert" className="text-rose-700">{t.errors.inputValidationFailed}</p> : !isTiktok ? <p>{t.tiktok.legacy}</p> : <>
+                {policyState.invalid ? <p role="alert" className="text-danger">{t.errors.inputValidationFailed}</p> : !isTiktok ? <p>{t.tiktok.legacy}</p> : <>
                     <p>{policyState.context.tiktokFeePolicy?.verifiedAt ? `${country === 'USD' ? t.tiktok.usSnapshot : t.tiktok.snapshot}${policyState.context.tiktokFeePolicy.verifiedAt}` : t.tiktok.manualWarning}</p>
                     {isUpgradePreview && <p className="text-amber-800">{t.tiktok.upgradePreview}</p>}
                     <p>{isUSCrossBorder ? t.tiktok.usCrossBorderCategoryHint : t.tiktok.categoryHint}</p><p>{t.tiktok.adjustmentHint}</p>
@@ -709,66 +713,66 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                     {isUSCrossBorder && <>
                         <p>{t.tiktok.usCrossBorderTaxHint}</p><p>{t.tiktok.usCampaignHint}</p><p>{t.tiktok.usRefundFeeHint}</p>
                         <div className="flex flex-wrap gap-2">
-                            <a href={TIKTOK_US_CROSS_BORDER_FEE_SOURCE} target="_blank" rel="noreferrer" className="underline text-blue-700">{t.tiktok.usCrossBorderFeeSource} · 2026-02-11</a>
-                            <a href={TIKTOK_US_CAMPAIGN_FEE_SOURCE} target="_blank" rel="noreferrer" className="underline text-blue-700">{t.tiktok.usCampaignFeeSource}</a>
-                            <a href={TIKTOK_US_STANDARD_CAMPAIGN_SOURCE} target="_blank" rel="noreferrer" className="underline text-blue-700">{t.tiktok.usStandardCampaignSource}</a>
+                            <a href={TIKTOK_US_CROSS_BORDER_FEE_SOURCE} target="_blank" rel="noreferrer" className="underline text-primary">{t.tiktok.usCrossBorderFeeSource} · 2026-02-11</a>
+                            <a href={TIKTOK_US_CAMPAIGN_FEE_SOURCE} target="_blank" rel="noreferrer" className="underline text-primary">{t.tiktok.usCampaignFeeSource}</a>
+                            <a href={TIKTOK_US_STANDARD_CAMPAIGN_SOURCE} target="_blank" rel="noreferrer" className="underline text-primary">{t.tiktok.usStandardCampaignSource}</a>
                         </div>
                     </>}
                     {country === 'MYR' && <p>{t.tiktok.bnplHint}</p>}
                     <div className="flex flex-wrap gap-2">
-                        {(TIKTOK_PRESETS[currencyCode]?.sources ?? []).map(source => <a key={source.label} href={source.url} target="_blank" rel="noreferrer" className="underline text-blue-700">{source.label === 'bxp' ? t.tiktok.sourceBxp : t.tiktok[source.label]}</a>)}
-                        <a href={getTiktokAffiliateSource(country)} target="_blank" rel="noreferrer" className="underline text-blue-700">{t.tiktok.affiliate}</a>
+                        {(TIKTOK_PRESETS[currencyCode]?.sources ?? []).map(source => <a key={source.label} href={source.url} target="_blank" rel="noreferrer" className="underline text-primary">{source.label === 'bxp' ? t.tiktok.sourceBxp : t.tiktok[source.label]}</a>)}
+                        <a href={getTiktokAffiliateSource(country)} target="_blank" rel="noreferrer" className="underline text-primary">{t.tiktok.affiliate}</a>
                     </div>
                 </>}
                 <p>{shippingMode === 4 && country === 'USD' ? t.tiktok.usDirectHint : shippingMode === 3 && country === 'USD' ? t.tiktok.usHeadFreightHint : shippingMode === 1 ? t.tiktok.automaticShippingHint : shippingMode === 2 ? t.tiktok.manualShippingHint : t.tiktok.templateShippingHint}</p>
                 {country === 'USD' && <>
                     <p>{t.tiktok.usDirectConditions}</p>
-                    <a href={TIKTOK_US_DIRECT_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">{t.tiktok.usDirectRateSource} · {TIKTOK_US_DIRECT_SOURCE_UPDATED_AT}</a>
+                    <a href={TIKTOK_US_DIRECT_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline">{t.tiktok.usDirectRateSource} · {TIKTOK_US_DIRECT_SOURCE_UPDATED_AT}</a>
                     <p>{t.tiktok.usLocalShippingRules}</p><p>{t.tiktok.usShippingExtras}</p>
                     <p>{t.tiktok.usSnapshot}{TIKTOK_US_SHIPPING_VERIFIED_AT}</p>
                     <div className="flex flex-wrap gap-2">
-                        <a href={TIKTOK_US_SHIPPING_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">TikTok Shipping · Standard Delivery</a>
-                        <a href={TIKTOK_US_LIVE_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">{t.tiktok.usLocalRateSource}</a>
-                        <a href={TIKTOK_US_CBT_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">Collection by TikTok</a>
-                        <a href={TIKTOK_US_PEAK_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">{t.tiktok.usPeakSource}</a>
-                        <a href={TIKTOK_US_SHIPPING_CALCULATOR_URL} target="_blank" rel="noreferrer" className="text-blue-700 underline">{t.tiktok.usShippingCalculator}</a>
+                        <a href={TIKTOK_US_SHIPPING_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline">TikTok Shipping · Standard Delivery</a>
+                        <a href={TIKTOK_US_LIVE_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline">{t.tiktok.usLocalRateSource}</a>
+                        <a href={TIKTOK_US_CBT_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline">Collection by TikTok</a>
+                        <a href={TIKTOK_US_PEAK_SOURCE_URL} target="_blank" rel="noreferrer" className="text-primary underline">{t.tiktok.usPeakSource}</a>
+                        <a href={TIKTOK_US_SHIPPING_CALCULATOR_URL} target="_blank" rel="noreferrer" className="text-primary underline">{t.tiktok.usShippingCalculator}</a>
                     </div>
                 </>}
                 {getTiktokShippingRate(country) && <>
                     <p>{t.tiktok.shippingRoute}</p>
-                    <a href={getTiktokShippingRate(country)!.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-blue-700 underline">{t.tiktok.shippingRateSource} · {getTiktokShippingRate(country)!.sourceRevision}</a>
+                    <a href={getTiktokShippingRate(country)!.sourceUrl} target="_blank" rel="noreferrer" className="inline-block text-primary underline">{t.tiktok.shippingRateSource} · {getTiktokShippingRate(country)!.sourceRevision}</a>
                 </>}
             </div>
         </TiktokSettingsGroup>
     </div>;
 
     return (
-        <div className={`min-w-0 w-full border-2 ${config.colors.border} rounded-xl bg-white shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
+        <div className={`min-w-0 w-full border-2 ${config.colors.border} rounded-xl bg-card shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
             {/* Header */}
             <div className={`${config.colors.bg} px-3 py-2 flex items-center justify-between gap-2 border-b ${config.colors.border}`}>
                 <div className="min-w-0 flex flex-col">
                     <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-white bg-gradient-to-r ${config.colors.gradient}`}>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-primary-foreground bg-primary`}>
                             {t.matrix.platforms[platform] || config.name}
                         </span>
-                        <span className="text-sm font-black text-slate-800 tracking-tight">{siteName}</span>
+                        <span className="text-sm font-black text-foreground tracking-tight">{siteName}</span>
                     </div>
                     {nodeName && (
-                        <div className="max-w-full break-words text-[11px] text-slate-500 font-bold mt-1 bg-slate-100/50 px-1.5 py-0.5 rounded border border-slate-200/50 inline-block w-fit">
+                        <div className="max-w-full break-words text-[11px] text-muted-foreground font-bold mt-1 bg-muted/50 px-1.5 py-0.5 rounded border border-border/50 inline-block w-fit">
                             {nodeName}
                         </div>
                     )}
-                    {isPricingBasis && <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                    {isPricingBasis && <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-primary">
                         {t.targetPricing.basisBadge}
                     </span>}
                 </div>
-                <button onClick={() => onDelete(nodeId)} className="p-2 -mr-2 text-slate-400 hover:text-red-500 transition-colors">
+                <Button variant="ghost" size="sm" onClick={() => onDelete(nodeId)} className="p-2 -mr-2 text-muted-foreground hover:text-red-500 transition-colors">
                     <Trash2 size={16} />
-                </button>
+                </Button>
             </div>
 
             {results && (
-                <div className="border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
+                <div className="border-b border-border bg-gradient-to-b from-muted to-card">
                     <ProfitBreakdown
                         result={results}
                         currency={currencyCode}
@@ -807,30 +811,30 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             </div>
 
             {preview.errors.length > 0 && (
-                <div role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-[11px] font-bold text-rose-700">
+                <div role="alert" className="border-t border-rose-100 bg-destructive/10 px-4 py-2 text-[11px] font-bold text-danger">
                     {t.errors.inputValidationFailed}
                 </div>
             )}
 
             {/* Results Block */}
             {results && (
-                <div className="border-t border-slate-100 bg-gradient-to-b from-slate-50 to-white pb-3 rounded-b-2xl">
+                <div className="border-t border-border bg-gradient-to-b from-muted to-card pb-3 rounded-b-2xl">
                     {/* Save Template Action */}
                     <div className="px-4 pt-3 pb-1 flex gap-2">
-                        <input
+                        <Input
                             type="text"
                             placeholder={t.matrix.templateName}
                             value={templateName}
                             onChange={(e) => setTemplateName(e.target.value)}
-                            className="min-w-0 flex-1 text-xs px-3 py-2 border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition-colors"
+                            className="min-w-0 flex-1 text-xs px-3 py-2 border border-border rounded-lg outline-none focus:border-primary transition-colors"
                         />
-                        <button
+                        <Button variant="default" size="sm"
                             onClick={() => { onSaveTemplate(nodeId, templateName); setTemplateName(''); }}
                             disabled={!templateName}
-                            className="bg-blue-600 disabled:bg-slate-300 text-white px-4 text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"
+                            className="disabled:bg-slate-300 px-4 text-xs font-bold transition-colors"
                         >
                             {t.matrix.saveTemplate}
-                        </button>
+                        </Button>
                     </div>
                 </div>
             )}

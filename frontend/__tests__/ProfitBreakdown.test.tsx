@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ProfitBreakdown } from '../modules/profit/ProfitBreakdown';
@@ -191,7 +191,7 @@ describe('ProfitBreakdown', () => {
     expect(within(dialog).getByText('¥100.00')).toBeInTheDocument();
   });
 
-  it('closes with Escape, restores trigger focus, and traps reverse tab navigation', () => {
+  it('closes with Escape, restores trigger focus, and traps reverse tab navigation', async () => {
     renderBreakdown();
     const trigger = screen.getByRole('button', { name: '查看完整利润明细' });
     fireEvent.click(trigger);
@@ -200,22 +200,23 @@ describe('ProfitBreakdown', () => {
     const close = within(dialog).getByRole('button', { name: '关闭利润明细' });
     expect(close).toHaveFocus();
 
-    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
     const showZeroValues = within(dialog).getByRole('checkbox', { name: '显示零值项目' });
     expect(showZeroValues).toHaveFocus();
 
-    fireEvent.keyDown(dialog, { key: 'Tab' });
+    fireEvent.keyDown(showZeroValues, { key: 'Tab' });
     expect(close).toHaveFocus();
 
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
-  it('closes when the backdrop is clicked', () => {
+  it('closes when the backdrop is clicked', async () => {
+    const user = userEvent.setup();
     renderBreakdown();
     fireEvent.click(screen.getByRole('button', { name: '查看完整利润明细' }));
-    fireEvent.click(screen.getByTestId('profit-breakdown-backdrop'));
+    await user.click(document.querySelector<HTMLElement>('[data-ui="sheet"][data-state="open"]')!);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

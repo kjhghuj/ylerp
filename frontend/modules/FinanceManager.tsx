@@ -1,3 +1,6 @@
+import { useToast } from '../components/Toast';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../StoreContext';
 import {
@@ -18,6 +21,7 @@ import { MonthGroup } from './finance/components/MonthGroup';
 export const FinanceManager: React.FC = () => {
     const { financeRecords, addTransaction, importTransactions, clearAllTransactions, accountBalance, totalDebt, strings, language, deleteTransactionsByMonth } = useStore();
     const t = strings.finance;
+    const { showToast } = useToast();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Active Date State (Defaults to Today) ---
@@ -131,14 +135,14 @@ export const FinanceManager: React.FC = () => {
 
                 if(newRecords.length > 0) {
                     await importTransactions(newRecords);
-                    alert(`导入成功！共导入了 ${newRecords.length} 条流水数据。`);
+                    showToast(`导入成功！共导入了 ${newRecords.length} 条流水数据。`, 'success');
                 } else {
-                    alert('未找到有效的可导入数据，请检查 JSON 格式。');
+                    showToast('未找到有效的可导入数据，请检查 JSON 格式。', 'error');
                 }
                 
             } catch (error) {
                 console.error("Failed to parse JSON", error);
-                alert("文件解析失败，请确保格式是正确的 JSON");
+                showToast("文件解析失败，请确保格式是正确的 JSON", 'error');
             } finally {
                 if(fileInputRef.current) fileInputRef.current.value = '';
             }
@@ -159,7 +163,7 @@ export const FinanceManager: React.FC = () => {
 
     const handleExportJSON = () => {
         if (financeRecords.length === 0) {
-            alert("没有可导出的财务数据");
+            showToast("没有可导出的财务数据", 'info');
             return;
         }
 
@@ -444,7 +448,7 @@ export const FinanceManager: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full gap-5 bg-gradient-to-br from-slate-50 to-blue-50/50 p-1 -m-1 rounded-3xl">
+        <div className="flex flex-col h-full gap-5 bg-gradient-to-br from-muted to-blue-50/50 p-1 -m-1 rounded-3xl">
             {/* Modals */}
             <DayDetailModal date={selectedDetailDate} onClose={() => setSelectedDetailDate(null)} t={t} />
             <MonthPickerModal isOpen={showMonthPicker} onClose={() => setShowMonthPicker(false)} onSelect={(dateStr) => {
@@ -474,10 +478,10 @@ export const FinanceManager: React.FC = () => {
 
             {/* Top Section: KPIs */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 shrink-0">
-                <KPICard title={t.cards.balance} value={`¥${accountBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={Wallet} colorClass="text-indigo-600" bgClass="bg-indigo-50" gradient="from-indigo-400 to-purple-500" />
-                <KPICard title={t.cards.debt} value={`¥${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={CreditCard} colorClass="text-rose-600" bgClass="bg-rose-50" gradient="from-rose-400 to-orange-500" />
-                <KPICard title={t.cards.income} value={`¥${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} colorClass="text-emerald-600" bgClass="bg-emerald-50" gradient="from-emerald-400 to-teal-500" />
-                <KPICard title={t.cards.expense} value={`¥${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} colorClass="text-slate-600" bgClass="bg-slate-100" gradient="from-slate-400 to-gray-500" />
+                <KPICard title={t.cards.balance} value={`¥${accountBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={Wallet} colorClass="text-primary" bgClass="bg-accent" gradient="from-indigo-400 to-purple-500" />
+                <KPICard title={t.cards.debt} value={`¥${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={CreditCard} colorClass="text-danger" bgClass="bg-destructive/10" gradient="from-rose-400 to-orange-500" />
+                <KPICard title={t.cards.income} value={`¥${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} colorClass="text-success" bgClass="bg-success-subtle" gradient="from-emerald-400 to-teal-500" />
+                <KPICard title={t.cards.expense} value={`¥${totalExpense.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingDown} colorClass="text-muted-foreground" bgClass="bg-muted" gradient="from-slate-400 to-gray-500" />
             </div>
 
             {/* Middle Section: Charts */}
@@ -486,40 +490,40 @@ export const FinanceManager: React.FC = () => {
             </div>
 
             {/* Bottom Section: Ledger */}
-            <div className="flex-1 bg-white/70 backdrop-blur-xl p-4 md:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/50 flex flex-col min-h-0 overflow-hidden hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] transition-all duration-300 relative z-10">
+            <div className="flex-1 bg-card p-4 md:p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border/50 flex flex-col min-h-0 overflow-hidden hover:shadow-[0_12px_40px_rgb(0,0,0,0.08)] transition-all duration-300 relative z-10">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3">
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-md">
+                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-md">
                             <ArrowRightLeft size={16} />
                         </div>
                         {t.ledgerTitle}
                     </h3>
                     <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-                        <button onClick={handleClearData} disabled={financeRecords.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm whitespace-nowrap ${financeRecords.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-rose-200 text-rose-600 bg-white hover:bg-rose-50 hover:border-rose-300'}`}>
-                            <Trash2 size={16} className={financeRecords.length === 0 ? "text-slate-300" : "text-rose-500"} /> 清空数据
-                        </button>
-                        <input 
+                        <Button variant="ghost" size="sm" onClick={handleClearData} disabled={financeRecords.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm whitespace-nowrap ${financeRecords.length === 0 ? 'border-border text-muted-foreground bg-muted cursor-not-allowed' : 'border-destructive/20 text-danger bg-card hover:bg-destructive/10 hover:border-rose-300'}`}>
+                            <Trash2 size={16} className={financeRecords.length === 0 ? "text-muted-foreground" : "text-danger"} /> 清空数据
+                        </Button>
+                        <Input 
                             type="file" 
                             accept=".json" 
                             className="hidden" 
                             ref={fileInputRef} 
                             onChange={handleFileUpload} 
                         />
-                        <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 bg-white rounded-xl hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600 text-sm font-medium transition shadow-sm whitespace-nowrap">
-                            <Upload size={16} className="text-indigo-500" /> {(t.actions as any)?.import || '导入 JSON'}
-                        </button>
-                        <button onClick={handleExportJSON} disabled={financeRecords.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm whitespace-nowrap ${financeRecords.length === 0 ? 'border-slate-100 text-slate-300 bg-slate-50 cursor-not-allowed' : 'border-slate-200 text-slate-600 bg-white hover:bg-slate-50 hover:border-slate-300 hover:text-indigo-600'}`}>
-                            <Download size={16} className={financeRecords.length === 0 ? "text-slate-300" : "text-emerald-500"} /> {(t.actions as any)?.export || '导出 JSON'}
-                        </button>
-                        <button onClick={openAddTransModal} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl hover:shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 text-sm font-bold transition whitespace-nowrap">
+                        <Button variant="ghost" size="sm" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 border border-border text-muted-foreground bg-card rounded-xl hover:bg-muted hover:border-input hover:text-primary text-sm font-medium transition shadow-sm whitespace-nowrap">
+                            <Upload size={16} className="text-primary" /> {(t.actions as any)?.import || '导入 JSON'}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={handleExportJSON} disabled={financeRecords.length === 0} className={`flex items-center gap-2 px-4 py-2 border rounded-xl text-sm font-medium transition shadow-sm whitespace-nowrap ${financeRecords.length === 0 ? 'border-border text-muted-foreground bg-muted cursor-not-allowed' : 'border-border text-muted-foreground bg-card hover:bg-muted hover:border-input hover:text-primary'}`}>
+                            <Download size={16} className={financeRecords.length === 0 ? "text-muted-foreground" : "text-success"} /> {(t.actions as any)?.export || '导出 JSON'}
+                        </Button>
+                        <Button variant="default" size="sm" onClick={openAddTransModal} className="flex items-center gap-2 px-4 py-2 text-sm font-bold transition whitespace-nowrap">
                             <Plus size={16} /> {t.form.add}
-                        </button>
-                        <button onClick={() => setShowMonthPicker(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:border-slate-300 text-sm font-medium transition shadow-sm whitespace-nowrap">
-                            <Calendar size={16} className="text-indigo-500" /> {t.actions.addMonth}
-                        </button>
-                        <button onClick={() => setShowDatePicker(true)} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 hover:border-slate-300 text-sm font-medium transition shadow-sm whitespace-nowrap">
-                            <Plus size={16} className="text-indigo-500" /> {t.actions.addDate}
-                        </button>
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setShowMonthPicker(true)} className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-muted-foreground rounded-xl hover:bg-muted hover:border-input text-sm font-medium transition shadow-sm whitespace-nowrap">
+                            <Calendar size={16} className="text-primary" /> {t.actions.addMonth}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => setShowDatePicker(true)} className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-muted-foreground rounded-xl hover:bg-muted hover:border-input text-sm font-medium transition shadow-sm whitespace-nowrap">
+                            <Plus size={16} className="text-primary" /> {t.actions.addDate}
+                        </Button>
                     </div>
                 </div>
 
@@ -553,8 +557,8 @@ export const FinanceManager: React.FC = () => {
                         );
                     })}
                     {sortedMonthKeys.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-16 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 shadow-sm">
-                            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground bg-card rounded-2xl border border-dashed border-border shadow-sm">
+                            <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
                                 <Calendar size={32} className="opacity-30" />
                             </div>
                             <p className="font-medium">暂无财务记录</p>
