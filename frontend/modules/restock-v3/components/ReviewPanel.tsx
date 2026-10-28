@@ -1,3 +1,7 @@
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
+import { NativeSelect } from '../../../components/ui/native-select';
 /**
  * 异常处理区：默认只显示未匹配/冲突/缺数据商品；展示销量商品与候选对照、匹配依据与原因。
  * - 冲突（conflict）与待匹配（pending）分状态展示。
@@ -139,108 +143,108 @@ export default function ReviewPanel(props: ReviewPanelProps) {
   return (
     <section
       className="mx-4 mb-3 rounded-xl border overflow-hidden"
-      style={{ borderColor: 'rgba(217, 119, 6, 0.4)', backgroundColor: 'rgba(217, 119, 6, 0.04)' }}
+      style={{ borderColor: 'hsl(var(--ui-warning) / 0.4)', backgroundColor: 'hsl(var(--ui-warning) / 0.04)' }}
     >
-      <button
+      <Button variant="ghost" size="sm"
         type="button"
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
-        className="flex items-center gap-2 w-full px-3 py-2 text-left"
+        className="h-auto flex flex-wrap justify-start items-center gap-2 w-full px-3 py-2 text-left whitespace-normal"
       >
         {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span className="text-[13px] font-semibold" style={{ color: '#b45309' }}>
+        <span className="text-[13px] font-semibold" style={{ color: 'hsl(var(--ui-warning))' }}>
           待核对商品（{review.length}）
         </span>
         {conflictCount > 0 && (
-          <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(220, 38, 38, 0.1)', color: '#b91c1c' }}>
+          <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'hsl(var(--ui-destructive) / 0.1)', color: 'hsl(var(--ui-danger))' }}>
             其中冲突 {conflictCount} 项（映射矛盾，必须人工裁决）
           </span>
         )}
-        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+        <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           未匹配 / 映射冲突 / 编码异常 —— 处理完成后需重新计算
         </span>
-      </button>
+      </Button>
       {open && (
         <div className="px-3 pb-3">
-          {error && <p className="text-xs mb-2" style={{ color: '#b91c1c' }} role="alert">{error}</p>}
+          {error && <p className="text-xs mb-2" style={{ color: 'hsl(var(--ui-danger))' }} role="alert">{error}</p>}
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <label className="flex items-center gap-1 rounded-lg border px-2 py-1 flex-1 min-w-[180px] max-w-[300px]" style={{ borderColor: 'var(--border-light)' }}>
-              <Search size={12} style={{ color: 'var(--text-tertiary)' }} />
-              <input
+            <label className="relative flex-1 min-w-[180px] max-w-[300px]" style={{ borderColor: 'hsl(var(--ui-border))' }}>
+              <Search size={12} className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+              <Input
                 type="search"
                 value={filterText}
                 onChange={event => { setFilterText(event.target.value); setPage(1); }}
                 placeholder="搜索货号 / 商品名"
                 aria-label="搜索待核对商品"
-                className="bg-transparent outline-none text-[12.5px] w-full"
-                style={{ color: 'var(--text-primary)' }}
+                className="h-8 pl-8 text-[12.5px] w-full"
+                style={{ color: 'hsl(var(--ui-foreground))' }}
               />
             </label>
-            <label className="flex items-center gap-1 rounded-lg border px-2 py-1 flex-1 min-w-[200px] max-w-[320px]" style={{ borderColor: 'var(--border-light)' }}>
-              <Search size={12} style={{ color: 'var(--text-tertiary)' }} />
-              <input
+            <label className="relative flex-1 min-w-[200px] max-w-[320px]" style={{ borderColor: 'hsl(var(--ui-border))' }}>
+              <Search size={12} className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+              <Input
                 type="search"
                 value={ycSearch}
                 onChange={event => setYcSearch(event.target.value)}
                 placeholder="搜索全部元仓货品（≥2 字符）"
                 aria-label="搜索全部元仓货品"
-                className="bg-transparent outline-none text-[12.5px] w-full"
-                style={{ color: 'var(--text-primary)' }}
+                className="h-8 pl-8 text-[12.5px] w-full"
+                style={{ color: 'hsl(var(--ui-foreground))' }}
               />
             </label>
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
               {filtered.length} 项 · 第 {currentPage}/{pageCount} 页
             </span>
             <div className="flex items-center gap-1">
-              <button type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="rounded border px-1.5 py-0.5 text-xs disabled:opacity-40" style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}>上一页</button>
-              <button type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="rounded border px-1.5 py-0.5 text-xs disabled:opacity-40" style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}>下一页</button>
+              <Button variant="outline" size="sm" type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} className="h-8 rounded border px-1.5 py-0.5 text-xs disabled:opacity-40" style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}>上一页</Button>
+              <Button variant="outline" size="sm" type="button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)} className="h-8 rounded border px-1.5 py-0.5 text-xs disabled:opacity-40" style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}>下一页</Button>
             </div>
           </div>
           {entriesByShop.map(([shopLabel, entries]) => (
             <div key={shopLabel} className="mb-3 last:mb-0">
-              <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>{shopLabel}</p>
-              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-card)' }}>
-                <table className="w-full text-[12.5px] border-collapse" style={{ minWidth: 900 }}>
-                  <thead>
-                    <tr style={{ color: 'var(--text-tertiary)' }}>
-                      <th className="px-2 py-1.5 text-left font-medium">状态</th>
-                      <th className="px-2 py-1.5 text-left font-medium">规格货号（来源）</th>
-                      <th className="px-2 py-1.5 text-left font-medium">商品 / 规格</th>
-                      <th className="px-2 py-1.5 text-right font-medium">件数</th>
-                      <th className="px-2 py-1.5 text-left font-medium">原因</th>
-                      <th className="px-2 py-1.5 text-left font-medium w-[280px]">映射到（人工确认）</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <p className="text-xs font-medium mb-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{shopLabel}</p>
+              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-card))' }}>
+                <Table wrapped={false} className="w-full text-[12.5px] border-collapse" style={{ minWidth: 900 }}>
+                  <TableHeader>
+                    <TableRow style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
+                      <TableHead className="h-9 px-2 py-1.5 text-left font-medium">状态</TableHead>
+                      <TableHead className="h-9 px-2 py-1.5 text-left font-medium">规格货号（来源）</TableHead>
+                      <TableHead className="h-9 px-2 py-1.5 text-left font-medium">商品 / 规格</TableHead>
+                      <TableHead className="h-9 px-2 py-1.5 text-right font-medium">件数</TableHead>
+                      <TableHead className="h-9 px-2 py-1.5 text-left font-medium">原因</TableHead>
+                      <TableHead className="h-9 px-2 py-1.5 text-left font-medium w-[280px]">映射到（人工确认）</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {entries.map(entry => {
                       const key = `${entry.shopId}:${entry.identityKey ?? entry.externalSku}`;
                       const selection = selections[key];
                       const ranked = rankedFor(entry);
                       const isConflict = entry.status === 'conflict';
                       return (
-                        <tr key={key} style={{ borderTop: '1px solid var(--border-light)' }}>
-                          <td className="px-2 py-1.5">
+                        <TableRow key={key} style={{ borderTop: '1px solid hsl(var(--ui-border))' }}>
+                          <TableCell className="px-2 py-1.5">
                             <span
                               className="text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap"
                               style={isConflict
-                                ? { backgroundColor: 'rgba(220, 38, 38, 0.1)', color: '#b91c1c' }
-                                : { backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}
+                                ? { backgroundColor: 'hsl(var(--ui-destructive) / 0.1)', color: 'hsl(var(--ui-danger))' }
+                                : { backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-muted-foreground))' }}
                             >
                               {isConflict ? '冲突' : '待匹配'}
                             </span>
-                          </td>
-                          <td className="px-2 py-1.5" style={{ color: 'var(--text-primary)' }}>
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5" style={{ color: 'hsl(var(--ui-foreground))' }}>
                             <span className="font-medium">{entry.displaySku}</span>
-                            <span className="ml-1" style={{ color: 'var(--text-tertiary)' }}>（{SKU_SOURCE_LABELS[entry.skuSource]}）</span>
-                          </td>
-                          <td className="px-2 py-1.5" style={{ color: 'var(--text-secondary)' }}>
+                            <span className="ml-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>（{SKU_SOURCE_LABELS[entry.skuSource]}）</span>
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                             {entry.itemName}{entry.variationName ? ` / ${entry.variationName}` : ''}
-                          </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{formatInt(entry.units)}</td>
-                          <td className="px-2 py-1.5" style={{ color: isConflict ? '#b91c1c' : '#b45309' }}>
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5 text-right tabular-nums">{formatInt(entry.units)}</TableCell>
+                          <TableCell className="px-2 py-1.5" style={{ color: isConflict ? 'hsl(var(--ui-danger))' : 'hsl(var(--ui-warning))' }}>
                             {entry.reasons.map(reason => <div key={reason}>{reason}</div>)}
-                          </td>
-                          <td className="px-2 py-1.5">
+                          </TableCell>
+                          <TableCell className="px-2 py-1.5">
                             {canEdit ? (
                               <div className="flex items-center gap-1.5">
                                 <div className="flex-1 min-w-0">
@@ -254,32 +258,32 @@ export default function ReviewPanel(props: ReviewPanelProps) {
                                     }))}
                                   />
                                 </div>
-                                <select
+                                <NativeSelect
                                   aria-label="映射作用域"
                                   value={selection?.scope ?? 'shop'}
                                   onChange={event => selection && setSelections(previous => ({
                                     ...previous,
                                     [key]: { targetSku: selection.targetSku, scope: event.target.value as 'shop' | 'site' },
                                   }))}
-                                  className="rounded border px-1 py-1 text-[12px]"
-                                  style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                                  className="h-8 w-auto rounded border px-1 py-1 text-[12px]"
+                                  style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
                                   title="店铺级仅本店生效；站点级写入 V2 共享映射"
                                 >
                                   <option value="shop">店铺级</option>
                                   <option value="site">站点级</option>
-                                </select>
-                                <button
+                                </NativeSelect>
+                                <Button variant="default" size="sm"
                                   type="button"
                                   disabled={!selection?.targetSku || savingKey === `${entry.shopId}:${entry.externalSku}`}
                                   onClick={() => void save(entry)}
-                                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-white disabled:opacity-40"
-                                  style={{ backgroundColor: 'var(--primary)' }}
+                                  className="h-8 flex items-center gap-1 rounded-lg px-2 py-1 text-[12px]  disabled:opacity-40"
+                                  
                                 >
                                   <Save size={11} />
                                   {savingKey === `${entry.shopId}:${entry.externalSku}` ? '保存中' : '保存'}
-                                </button>
+                                </Button>
                                 {selection?.targetSku && (
-                                  <button
+                                  <Button variant="outline" size="sm"
                                     type="button"
                                     aria-label="清除选择"
                                     onClick={() => setSelections(previous => {
@@ -287,26 +291,26 @@ export default function ReviewPanel(props: ReviewPanelProps) {
                                       delete next[key];
                                       return next;
                                     })}
-                                    className="p-1 rounded"
-                                    style={{ color: 'var(--text-tertiary)' }}
+                                    className="h-8 p-1 rounded"
+                                    style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                                   >
                                     <X size={12} />
-                                  </button>
+                                  </Button>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>只读权限，无法修改映射</span>
+                              <span className="text-[12px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>只读权限，无法修改映射</span>
                             )}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           ))}
-          <p className="text-[11px] mt-2" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-[11px] mt-2" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
             提示：名称/前缀相似的候选仅供参考（匹配度百分比），系统不会自动确认；冲突项（如元仓同码与历史映射矛盾）必须人工裁决后才能参与计算。保存映射后结果将标记为过期，需重新计算。
             {site && ` 站点级映射会同步到补货V2（${site}）。`}
           </p>

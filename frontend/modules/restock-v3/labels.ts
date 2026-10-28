@@ -31,12 +31,12 @@ interface StatusMeta {
 }
 
 export const RESTOCK_STATUS_META: Record<RestockStatus, StatusMeta> = {
-  critical: { label: '断货风险', color: '#dc2626', bg: 'rgba(220, 38, 38, 0.1)' },
-  warning: { label: '需补货', color: '#d97706', bg: 'rgba(217, 119, 6, 0.1)' },
-  no_stock_data: { label: '库存未知', color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.1)' },
-  missing_sales: { label: '无有效销量', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
-  zero_sales: { label: '零销量', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
-  healthy: { label: '库存充足', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.1)' },
+  critical: { label: '断货风险', color: 'hsl(var(--ui-danger))', bg: 'hsl(var(--ui-destructive) / 0.1)' },
+  warning: { label: '需补货', color: 'hsl(var(--ui-warning))', bg: 'hsl(var(--ui-warning) / 0.1)' },
+  no_stock_data: { label: '库存未知', color: 'var(--restock-unknown)', bg: 'rgba(124, 58, 237, 0.1)' },
+  missing_sales: { label: '无有效销量', color: 'hsl(var(--ui-muted-foreground))', bg: 'rgba(100, 116, 139, 0.12)' },
+  zero_sales: { label: '零销量', color: 'hsl(var(--ui-muted-foreground))', bg: 'rgba(100, 116, 139, 0.12)' },
+  healthy: { label: '库存充足', color: 'hsl(var(--ui-success))', bg: 'hsl(var(--ui-success) / 0.1)' },
 };
 
 export const QUALITY_LABELS: Record<SalesQualityStatus, string> = {

@@ -1,5 +1,9 @@
+import { Input } from '../../../components/ui/input';
+import { NativeSelect } from '../../../components/ui/native-select';
+import { Button } from '../../../components/ui/button';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
 /** 计划列表抽屉：搜索/分页、详情（历史计算依据）、草稿编辑、确认（重复提醒）、作废、复制为新版本、导出 */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Copy, Download, XCircle } from 'lucide-react';
 import Drawer from './ui/Drawer';
 import type { PlanListItem, PlanSnapshot } from '../types';
@@ -18,9 +22,9 @@ interface PlanHistoryDrawerProps {
 }
 
 const STATUS_META: Record<PlanListItem['status'], { label: string; color: string }> = {
-  draft: { label: '草稿', color: '#64748b' },
-  confirmed: { label: '已确认', color: '#16a34a' },
-  void: { label: '已作废', color: '#94a3b8' },
+  draft: { label: '草稿', color: 'hsl(var(--ui-muted-foreground))' },
+  confirmed: { label: '已确认', color: 'hsl(var(--ui-success))' },
+  void: { label: '已作废', color: 'hsl(var(--ui-muted-foreground))' },
 };
 
 const PAGE_SIZE = 10;
@@ -38,6 +42,7 @@ export default function PlanHistoryDrawer(props: PlanHistoryDrawerProps) {
   const [error, setError] = useState<string | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
   const [voidReason, setVoidReason] = useState('');
+  const voidReasonRef = useRef<HTMLInputElement>(null);
   const [detail, setDetail] = useState<{ plan: PlanSnapshot; legacy: boolean } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -182,44 +187,44 @@ export default function PlanHistoryDrawer(props: PlanHistoryDrawerProps) {
 
   return (
     <Drawer open={open} onClose={onClose} title="补货计划" subtitle="快照版本：草稿 → 已确认 → 已作废；确认不等于下单" width={620}>
-      {error && <p className="text-xs mb-2" style={{ color: '#b91c1c' }} role="alert">{error}</p>}
+      {error && <p className="text-xs mb-2" style={{ color: 'hsl(var(--ui-danger))' }} role="alert">{error}</p>}
 
       {/* 搜索与筛选 */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <label className="flex items-center gap-1 rounded-lg border px-2 py-1 flex-1 min-w-[160px]" style={{ borderColor: 'var(--border-light)' }}>
-          <input
+        <label className="flex-1 min-w-[160px]" style={{ borderColor: 'hsl(var(--ui-border))' }}>
+          <Input
             type="search"
             value={search}
             onChange={event => { setSearch(event.target.value); setPage(1); }}
             placeholder="按计划名称搜索"
             aria-label="搜索计划名称"
-            className="bg-transparent outline-none text-[12.5px] w-full"
-            style={{ color: 'var(--text-primary)' }}
+            className="h-8 bg-transparent outline-none text-[12.5px] w-full"
+            style={{ color: 'hsl(var(--ui-foreground))' }}
           />
         </label>
-        <select
+        <NativeSelect
           value={statusFilter}
           onChange={event => { setStatusFilter(event.target.value as '' | PlanListItem['status']); setPage(1); }}
           aria-label="按状态筛选"
-          className="rounded-lg border px-2 py-1 text-[12.5px]"
-          style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+          className="h-8 w-auto rounded-lg border px-2 py-1 text-[12.5px]"
+          style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
         >
           <option value="">全部状态</option>
           <option value="draft">草稿</option>
           <option value="confirmed">已确认</option>
           <option value="void">已作废</option>
-        </select>
+        </NativeSelect>
       </div>
 
-      {loading && <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>加载中…</p>}
+      {loading && <p className="text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>加载中…</p>}
       {!loading && loadError && (
-        <p className="text-[13px] mb-2" style={{ color: '#b91c1c' }} role="alert">
+        <p className="text-[13px] mb-2" style={{ color: 'hsl(var(--ui-danger))' }} role="alert">
           {loadError}
-          <button type="button" className="ml-2 underline" onClick={() => void load()}>重试</button>
+          <Button variant="outline" size="sm" type="button" className="h-8 ml-2 underline" onClick={() => void load()}>重试</Button>
         </p>
       )}
       {!loading && !loadError && plans !== null && plans.length === 0 && (
-        <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+        <p className="text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           暂无计划。在结果表中勾选可执行 SKU 后点击「保存计划」生成草稿。
         </p>
       )}
@@ -229,119 +234,120 @@ export default function PlanHistoryDrawer(props: PlanHistoryDrawerProps) {
           const meta = STATUS_META[plan.status];
           const summary = plan.summary as { totalSuggestedQty?: number; savedItemCount?: number; totalConfirmedQty?: number };
           return (
-            <div key={plan.id} className="rounded-lg border p-2.5" style={{ borderColor: 'var(--border-light)' }}>
+            <div key={plan.id} className="rounded-lg border p-2.5" style={{ borderColor: 'hsl(var(--ui-border))' }}>
               <div className="flex items-center gap-2">
-                <button
+                <Button variant="outline" size="sm"
                   type="button"
                   onClick={() => void openDetail(plan.id)}
-                  className="text-[13px] font-medium truncate flex-1 text-left underline-offset-2 hover:underline"
-                  style={{ color: 'var(--text-primary)' }}
+                  className="h-8 text-[13px] font-medium truncate flex-1 text-left underline-offset-2 hover:underline"
+                  style={{ color: 'hsl(var(--ui-foreground))' }}
                   title="查看详情（含历史计算依据）"
                 >
                   {plan.name}
-                </button>
+                </Button>
                 <span className="text-[11px] px-1.5 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: 'rgba(0,0,0,0.05)', color: meta.color }}>
                   {meta.label}{plan.version && plan.version > 1 ? ` v${plan.version}` : ''}
                 </span>
               </div>
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-[11px] mt-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                 {plan.site} · {plan.rangeFrom} ~ {plan.rangeTo} · {formatDateTime(plan.confirmedAt ?? plan.createdAt)}
                 {summary?.savedItemCount !== undefined && ` · ${summary.savedItemCount} SKU`}
                 {summary?.totalConfirmedQty !== undefined && ` · 确认 ${formatInt(summary.totalConfirmedQty)} 件`}
                 {(plan.warehouseCodes?.length ?? 0) > 0 ? ` · ${plan.warehouseCodes!.length} 仓` : ' · 整站范围'}
               </p>
               <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <button
+                <Button variant="outline" size="sm"
                   type="button"
                   disabled={busyId === plan.id || detailLoading}
                   onClick={() => void openDetail(plan.id)}
-                  className="rounded-lg border px-2 py-1 text-[12px]"
-                  style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+                  className="h-8 rounded-lg border px-2 py-1 text-[12px]"
+                  style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
                 >
                   详情
-                </button>
+                </Button>
                 {plan.status === 'draft' && canEdit && (
-                  <button
+                  <Button variant="outline" size="sm"
                     type="button"
                     disabled={busyId === plan.id}
                     onClick={() => void confirm(plan)}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] text-white disabled:opacity-40"
-                    style={{ backgroundColor: '#16a34a' }}
+                    className="h-8 flex items-center gap-1 rounded-lg px-2 py-1 text-[12px]  disabled:opacity-40"
+                    style={{ backgroundColor: 'hsl(var(--ui-success))', color: 'hsl(var(--ui-success-foreground))' }}
                   >
                     <CheckCircle2 size={12} />
                     确认
-                  </button>
+                  </Button>
                 )}
                 {plan.status !== 'void' && canEdit && (
                   voidingId === plan.id ? (
                     <span className="flex items-center gap-1">
-                      <input
-                        autoFocus
+                      <Input
+                        
+                        ref={voidReasonRef}
                         value={voidReason}
                         onChange={event => setVoidReason(event.target.value)}
                         placeholder="作废原因（必填）"
                         aria-label="作废原因"
                         maxLength={200}
-                        className="rounded border px-1.5 py-1 text-[12px] w-40"
-                        style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                        className="h-8 rounded border px-1.5 py-1 text-[12px] w-40"
+                        style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
                       />
-                      <button
+                      <Button variant="destructive" size="sm"
                         type="button"
                         disabled={!voidReason.trim() || busyId === plan.id}
                         onClick={() => void voidPlan(plan, voidReason)}
-                        className="rounded-lg px-2 py-1 text-[12px] text-white disabled:opacity-40"
-                        style={{ backgroundColor: '#dc2626' }}
+                        className="h-8 rounded-lg px-2 py-1 text-[12px]  disabled:opacity-40"
+                        
                       >
                         确认作废
-                      </button>
-                      <button
+                      </Button>
+                      <Button variant="outline" size="sm"
                         type="button"
                         onClick={() => { setVoidingId(null); setVoidReason(''); }}
-                        className="text-[12px]"
-                        style={{ color: 'var(--text-tertiary)' }}
+                        className="h-8 text-[12px]"
+                        style={{ color: 'hsl(var(--ui-muted-foreground))' }}
                       >
                         取消
-                      </button>
+                      </Button>
                     </span>
                   ) : (
-                    <button
+                    <Button variant="outline" size="sm"
                       type="button"
                       disabled={busyId === plan.id}
-                      onClick={() => setVoidingId(plan.id)}
-                      className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
-                      style={{ borderColor: 'var(--border-light)', color: '#dc2626' }}
+                      onClick={() => { setVoidingId(plan.id); requestAnimationFrame(() => voidReasonRef.current?.focus()); }}
+                      className="h-8 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
+                      style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-danger))' }}
                     >
                       <XCircle size={12} />
                       作废
-                    </button>
+                    </Button>
                   )
                 )}
                 {plan.status === 'confirmed' && canEdit && (
-                  <button
+                  <Button variant="outline" size="sm"
                     type="button"
                     disabled={busyId === plan.id}
                     onClick={() => void copyPlan(plan)}
-                    className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
-                    style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+                    className="h-8 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
+                    style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
                     title="复制为新草稿版本（原计划保留在历史中）"
                   >
                     <Copy size={12} />
                     复制为新版本
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button variant="outline" size="sm"
                   type="button"
                   disabled={busyId === plan.id}
                   onClick={() => void exportPlan(plan)}
-                  className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
-                  style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+                  className="h-8 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] disabled:opacity-40"
+                  style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
                   title="导出与保存版本一致的 CSV（含计划号/时间/口径）"
                 >
                   <Download size={12} />
                   导出
-                </button>
+                </Button>
                 {plan.voidReason && (
-                  <span className="text-[11px] truncate" style={{ color: 'var(--text-tertiary)' }} title={plan.voidReason}>
+                  <span className="text-[11px] truncate" style={{ color: 'hsl(var(--ui-muted-foreground))' }} title={plan.voidReason}>
                     作废原因：{plan.voidReason}
                   </span>
                 )}
@@ -352,62 +358,62 @@ export default function PlanHistoryDrawer(props: PlanHistoryDrawerProps) {
       </div>
 
       {total > PAGE_SIZE && (
-        <div className="flex items-center justify-end gap-2 mt-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
+        <div className="flex items-center justify-end gap-2 mt-3 text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           <span>第 {page} / {pageCount} 页 · 共 {total} 条</span>
-          <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded-lg border px-2 py-0.5 disabled:opacity-40" style={{ borderColor: 'var(--border-light)' }}>上一页</button>
-          <button type="button" disabled={page >= pageCount} onClick={() => setPage(page + 1)} className="rounded-lg border px-2 py-0.5 disabled:opacity-40" style={{ borderColor: 'var(--border-light)' }}>下一页</button>
+          <Button variant="outline" size="sm" type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="h-8 rounded-lg border px-2 py-0.5 disabled:opacity-40" style={{ borderColor: 'hsl(var(--ui-border))' }}>上一页</Button>
+          <Button variant="outline" size="sm" type="button" disabled={page >= pageCount} onClick={() => setPage(page + 1)} className="h-8 rounded-lg border px-2 py-0.5 disabled:opacity-40" style={{ borderColor: 'hsl(var(--ui-border))' }}>下一页</Button>
         </div>
       )}
 
       {/* 详情视图：历史计算依据 */}
-      {detailLoading && <p className="text-[13px] mt-3" style={{ color: 'var(--text-tertiary)' }}>加载详情…</p>}
+      {detailLoading && <p className="text-[13px] mt-3" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>加载详情…</p>}
       {detail && !detailLoading && (
-        <div className="mt-4 rounded-xl border p-3" style={{ borderColor: 'var(--border-light)' }}>
+        <div className="mt-4 rounded-xl border p-3" style={{ borderColor: 'hsl(var(--ui-border))' }}>
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-sm font-semibold flex-1 truncate" style={{ color: 'var(--text-primary)' }}>
+            <h3 className="text-sm font-semibold flex-1 truncate" style={{ color: 'hsl(var(--ui-foreground))' }}>
               {detail.plan.name}{detail.plan.version && detail.plan.version > 1 ? `（v${detail.plan.version}）` : ''}
             </h3>
-            <button type="button" onClick={() => setDetail(null)} className="text-xs underline" style={{ color: 'var(--text-tertiary)' }}>收起</button>
+            <Button variant="outline" size="sm" type="button" onClick={() => setDetail(null)} className="h-8 text-xs underline" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>收起</Button>
           </div>
           {detail.legacy && (
-            <p className="text-[12px] mb-2 px-2 py-1 rounded-lg" style={{ backgroundColor: 'rgba(217, 119, 6, 0.1)', color: '#b45309' }} role="note">
+            <p className="text-[12px] mb-2 px-2 py-1 rounded-lg" style={{ backgroundColor: 'hsl(var(--ui-warning) / 0.1)', color: 'hsl(var(--ui-warning))' }} role="note">
               历史版本：信息不完整（仅含保存时的 SKU 与数量，无计算依据快照）
             </p>
           )}
           {!detail.legacy && (
             <>
-              <p className="text-[11px] mb-2" style={{ color: 'var(--text-tertiary)' }}>
+              <p className="text-[11px] mb-2" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                 计算依据快照：算法 {String((detail.plan.snapshotMeta as Record<string, unknown>)?.algorithmVersion ?? '—')}
                 · 数据获取 {formatDateTime(String((detail.plan.snapshotMeta as Record<string, unknown>)?.salesFetchedAt ?? '') || null)}
                 {detail.plan.resultId ? ' · 含完整溯源（来源/逐仓/在途/中间值）' : ''}
               </p>
-              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border-light)' }}>
-                <table className="w-full text-[12px] border-collapse" style={{ minWidth: 520 }}>
-                  <thead>
-                    <tr style={{ color: 'var(--text-tertiary)' }}>
-                      <th className="px-2 py-1 text-left font-medium">SKU</th>
-                      <th className="px-2 py-1 text-right font-medium">预测日销</th>
-                      <th className="px-2 py-1 text-right font-medium">可用库存</th>
-                      <th className="px-2 py-1 text-right font-medium">确定在途</th>
-                      <th className="px-2 py-1 text-right font-medium">建议量</th>
-                      <th className="px-2 py-1 text-right font-medium">确认量</th>
-                      <th className="px-2 py-1 text-left font-medium">原因</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'hsl(var(--ui-border))' }}>
+                <Table wrapped={false} className="w-full text-[12px] border-collapse" style={{ minWidth: 520 }}>
+                  <TableHeader>
+                    <TableRow style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
+                      <TableHead className="h-9 px-2 py-1 text-left font-medium">SKU</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-right font-medium">预测日销</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-right font-medium">可用库存</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-right font-medium">确定在途</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-right font-medium">建议量</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-right font-medium">确认量</TableHead>
+                      <TableHead className="h-9 px-2 py-1 text-left font-medium">原因</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {((detail.plan.items ?? []) as Array<Record<string, unknown>>).map((item, index) => (
-                      <tr key={String(item.sku ?? index)} style={{ borderTop: '1px solid var(--border-light)' }}>
-                        <td className="px-2 py-1" style={{ color: 'var(--text-primary)' }}>{String(item.sku ?? '')}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{Number(item.adjustedDailySales ?? 0)}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{Number(item.availableStock ?? 0)}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{Number(item.inTransit ?? 0)}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{Number(item.suggestedQty ?? 0)}</td>
-                        <td className="px-2 py-1 text-right tabular-nums">{Number(item.confirmedQty ?? 0)}</td>
-                        <td className="px-2 py-1" style={{ color: 'var(--text-tertiary)' }}>{String(item.adjustReason ?? '')}</td>
-                      </tr>
+                      <TableRow key={String(item.sku ?? index)} style={{ borderTop: '1px solid hsl(var(--ui-border))' }}>
+                        <TableCell className="px-2 py-1" style={{ color: 'hsl(var(--ui-foreground))' }}>{String(item.sku ?? '')}</TableCell>
+                        <TableCell className="px-2 py-1 text-right tabular-nums">{Number(item.adjustedDailySales ?? 0)}</TableCell>
+                        <TableCell className="px-2 py-1 text-right tabular-nums">{Number(item.availableStock ?? 0)}</TableCell>
+                        <TableCell className="px-2 py-1 text-right tabular-nums">{Number(item.inTransit ?? 0)}</TableCell>
+                        <TableCell className="px-2 py-1 text-right tabular-nums">{Number(item.suggestedQty ?? 0)}</TableCell>
+                        <TableCell className="px-2 py-1 text-right tabular-nums">{Number(item.confirmedQty ?? 0)}</TableCell>
+                        <TableCell className="px-2 py-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{String(item.adjustReason ?? '')}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           )}

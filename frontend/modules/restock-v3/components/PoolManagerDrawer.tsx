@@ -1,8 +1,12 @@
+import { Input } from '../../../components/ui/input';
+import { NativeSelect } from '../../../components/ui/native-select';
+import { Button } from '../../../components/ui/button';
+import { Checkbox } from '../../../components/ui/checkbox';
 /**
  * 库存池管理抽屉：创建（名称+站点+从元仓真实仓库多选）、删除、重叠提醒。
  * 仓库列表来自 /restock-v3/warehouses（接口失败明确报错，不静默变空列表）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import Drawer from './ui/Drawer';
 import type { RestockShop, StockPool } from '../types';
@@ -31,6 +35,7 @@ export default function PoolManagerDrawer(props: PoolManagerDrawerProps) {
   const [warehousesError, setWarehousesError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const nameRef = useRef<HTMLInputElement>(null);
   const [site, setSite] = useState('');
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -115,52 +120,52 @@ export default function PoolManagerDrawer(props: PoolManagerDrawerProps) {
 
   return (
     <Drawer open={open} onClose={onClose} title="库存池" subtitle="需求店铺 ↔ 供应仓库范围的关联；确认计划需使用明确范围" width={520}>
-      {error && <p className="text-xs mb-2" style={{ color: '#b91c1c' }} role="alert">{error}</p>}
+      {error && <p className="text-xs mb-2" style={{ color: 'hsl(var(--ui-danger))' }} role="alert">{error}</p>}
 
       {canEdit && (creating ? (
-        <div className="rounded-lg border p-3 mb-4" style={{ borderColor: 'var(--border-light)' }}>
+        <div className="rounded-lg border p-3 mb-4" style={{ borderColor: 'hsl(var(--ui-border))' }}>
           <div className="flex items-center gap-2 mb-2">
             <label className="flex flex-col gap-1 flex-1">
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>池名称</span>
-              <input
-                autoFocus
+              <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>池名称</span>
+              <Input
+                
+                ref={nameRef}
                 value={name}
                 onChange={event => setName(event.target.value)}
                 maxLength={100}
                 aria-label="库存池名称"
-                className="rounded-lg border px-2 py-1.5 text-[13px]"
-                style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                className="h-8 rounded-lg border px-2 py-1.5 text-[13px]"
+                style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
               />
             </label>
             <label className="flex flex-col gap-1 w-28">
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>站点</span>
-              <select
+              <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>站点</span>
+              <NativeSelect
                 value={effectiveSite}
                 onChange={event => { setSite(event.target.value); setSelectedCodes(new Set()); }}
                 aria-label="库存池站点"
-                className="rounded-lg border px-2 py-1.5 text-[13px]"
-                style={{ borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)' }}
+                className="h-8 w-auto rounded-lg border px-2 py-1.5 text-[13px]"
+                style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
               >
                 {sites.map(candidate => <option key={candidate} value={candidate}>{candidate}</option>)}
-              </select>
+              </NativeSelect>
             </label>
           </div>
-          <p className="text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>
+          <p className="text-xs mb-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
             选择仓库（{siteWarehouses.length} 个可用{warehouses === null ? '，加载中…' : ''}）：
           </p>
           {warehousesError ? (
-            <p className="text-xs mb-2" style={{ color: '#b91c1c' }} role="alert">
+            <p className="text-xs mb-2" style={{ color: 'hsl(var(--ui-danger))' }} role="alert">
               {warehousesError}
-              <button type="button" className="ml-2 underline" onClick={() => void loadWarehouses()}>重试</button>
+              <Button variant="outline" size="sm" type="button" className="h-8 ml-2 underline" onClick={() => void loadWarehouses()}>重试</Button>
             </p>
           ) : (
-            <div className="max-h-40 overflow-y-auto rounded-lg border p-2 mb-2" style={{ borderColor: 'var(--border-light)' }}>
+            <div className="max-h-40 overflow-y-auto rounded-lg border p-2 mb-2" style={{ borderColor: 'hsl(var(--ui-border))' }}>
               {siteWarehouses.map(warehouse => (
-                <label key={warehouse.code} className="flex items-center gap-2 py-0.5 text-[13px] cursor-pointer" style={{ color: 'var(--text-primary)' }}>
-                  <input
-                    type="checkbox"
+                <label key={warehouse.code} className="flex items-center gap-2 py-0.5 text-[13px] cursor-pointer" style={{ color: 'hsl(var(--ui-foreground))' }}>
+                  <Checkbox
                     checked={selectedCodes.has(warehouse.code)}
-                    onChange={() => setSelectedCodes(previous => {
+                    onCheckedChange={() => setSelectedCodes(previous => {
                       const next = new Set(previous);
                       if (next.has(warehouse.code)) next.delete(warehouse.code);
                       else next.add(warehouse.code);
@@ -172,70 +177,70 @@ export default function PoolManagerDrawer(props: PoolManagerDrawerProps) {
                 </label>
               ))}
               {warehouses !== null && siteWarehouses.length === 0 && (
-                <p className="text-xs py-1" style={{ color: 'var(--text-tertiary)' }}>该站点暂无仓库</p>
+                <p className="text-xs py-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>该站点暂无仓库</p>
               )}
             </div>
           )}
           {overlapWarnings.map(warning => (
-            <p key={warning} className="flex items-start gap-1 text-[11px] mb-1" style={{ color: '#b45309' }}>
+            <p key={warning} className="flex items-start gap-1 text-[11px] mb-1" style={{ color: 'hsl(var(--ui-warning))' }}>
               <AlertTriangle size={11} className="shrink-0 mt-0.5" />
               {warning}
             </p>
           ))}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={resetForm} className="rounded-lg border px-2.5 py-1 text-xs" style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}>
+            <Button variant="outline" size="sm" type="button" onClick={resetForm} className="h-8 rounded-lg border px-2.5 py-1 text-xs" style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}>
               取消
-            </button>
-            <button
+            </Button>
+            <Button variant="default" size="sm"
               type="button"
               disabled={!name.trim() || selectedCodes.size === 0 || busy}
               onClick={() => void create()}
-              className="rounded-lg px-3 py-1 text-xs text-white font-medium disabled:opacity-40"
-              style={{ backgroundColor: 'var(--primary)' }}
+              className="h-8 rounded-lg px-3 py-1 text-xs  font-medium disabled:opacity-40"
+              
             >
               创建（{selectedCodes.size} 仓）
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
-        <button
+        <Button variant="outline" size="sm"
           type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs mb-3"
-          style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+          onClick={() => { setCreating(true); requestAnimationFrame(() => nameRef.current?.focus()); }}
+          className="h-8 flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs mb-3"
+          style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
         >
           <Plus size={13} />
           新建库存池
-        </button>
+        </Button>
       ))}
 
-      {pools.length === 0 && <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>暂无库存池。未选择库存池时计算将使用整站仓库（仅可预览，确认计划需明确范围）。</p>}
+      {pools.length === 0 && <p className="text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>暂无库存池。未选择库存池时计算将使用整站仓库（仅可预览，确认计划需明确范围）。</p>}
       <div className="flex flex-col gap-2">
         {pools.map(pool => (
-          <div key={pool.id} className="rounded-lg border p-2.5" style={{ borderColor: 'var(--border-light)' }}>
+          <div key={pool.id} className="rounded-lg border p-2.5" style={{ borderColor: 'hsl(var(--ui-border))' }}>
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-medium flex-1 truncate" style={{ color: 'var(--text-primary)' }}>{pool.name}</span>
-              <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-tertiary)' }}>
+              <span className="text-[13px] font-medium flex-1 truncate" style={{ color: 'hsl(var(--ui-foreground))' }}>{pool.name}</span>
+              <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-muted-foreground))' }}>
                 {pool.site}
               </span>
             </div>
-            <p className="text-[11px] mt-1" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-[11px] mt-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
               仓库：{pool.warehouseCodes.join('、')} · 创建于 {formatDateTime(pool.createdAt)}
             </p>
-            <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+            <p className="text-[11px] mt-0.5" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
               关联店铺：同站点店铺可选此池（{shops.filter(shop => shop.site === pool.site).map(shop => shop.name).join('、') || '暂无'}）
             </p>
             {canEdit && (
-              <button
+              <Button variant="outline" size="sm"
                 type="button"
                 disabled={busy}
                 onClick={() => void remove(pool)}
-                className="flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] mt-1.5 disabled:opacity-40"
-                style={{ borderColor: 'var(--border-light)', color: '#dc2626' }}
+                className="h-8 flex items-center gap-1 rounded-lg border px-2 py-1 text-[12px] mt-1.5 disabled:opacity-40"
+                style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-danger))' }}
               >
                 <Trash2 size={12} />
                 删除
-              </button>
+              </Button>
             )}
           </div>
         ))}

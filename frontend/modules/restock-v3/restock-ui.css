@@ -1,0 +1,5 @@
+/* Unknown inventory keeps its distinct purple signal in both themes. */
+:root { --restock-unknown: #6d28d9; }
+.dark { --restock-unknown: #c4b5fd; }
+
+@media (pointer: coarse) { .restock-radio-option { min-height: 44px; } }

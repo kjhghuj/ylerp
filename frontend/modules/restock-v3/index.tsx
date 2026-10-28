@@ -1,3 +1,5 @@
+import './restock-ui.css';
+import { Button } from '../../components/ui/button';
 /**
  * 补货工作台（补货V3）：店铺（需求源）× 库存池（供应源）× 元仓直连。
  * 布局：顶部工具栏 → 数据状态条 → 紧凑摘要 → 异常处理区 → 计划操作区 → 主表格 → 分页；
@@ -160,7 +162,7 @@ export default function RestockV3({ initialParams }: RestockV3Props) {
   }, [workbench.shopsLoading, workbench.shopsError, workbench.shops.length]);
 
   return (
-    <div className="flex flex-col min-h-full" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="flex min-h-full min-w-0 flex-col text-foreground" style={{ backgroundColor: 'hsl(var(--ui-background))' }}>
       <Toolbar
         shops={workbench.shops}
         shopsLoading={workbench.shopsLoading}
@@ -190,22 +192,22 @@ export default function RestockV3({ initialParams }: RestockV3Props) {
         <div
           className="mx-4 mt-3 rounded-lg border px-3 py-2 text-[13px]"
           style={{
-            borderColor: workbench.refreshFailed ? 'rgba(217, 119, 6, 0.4)' : 'rgba(220, 38, 38, 0.4)',
-            backgroundColor: workbench.refreshFailed ? 'rgba(217, 119, 6, 0.06)' : 'rgba(220, 38, 38, 0.06)',
-            color: workbench.refreshFailed ? '#b45309' : '#b91c1c',
+            borderColor: workbench.refreshFailed ? 'hsl(var(--ui-warning) / 0.4)' : 'hsl(var(--ui-destructive) / 0.4)',
+            backgroundColor: workbench.refreshFailed ? 'hsl(var(--ui-warning) / 0.06)' : 'hsl(var(--ui-destructive) / 0.06)',
+            color: workbench.refreshFailed ? 'hsl(var(--ui-warning))' : 'hsl(var(--ui-danger))',
           }}
           role="alert"
         >
           {workbench.refreshFailed
             ? `刷新源数据失败：${workbench.computeError}。下方展示的是此前旧快照的结果，保存/导出/复制已禁用；条件未变化时可直接重试。`
             : workbench.computeError}
-          <button
+          <Button variant="outline" size="sm"
             type="button"
             onClick={onCompute}
-            className="ml-2 underline"
+            className="h-8 ml-2 underline"
           >
             重试
-          </button>
+          </Button>
         </div>
       )}
 
@@ -274,34 +276,34 @@ export default function RestockV3({ initialParams }: RestockV3Props) {
         <div className="flex-1 flex flex-col items-center justify-center gap-2 py-20 text-center px-6">
           {emptyState ? (
             <>
-              <span style={{ color: 'var(--text-tertiary)' }}>{emptyState.icon}</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>{emptyState.title}</p>
-              {emptyState.hint && <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>{emptyState.hint}</p>}
+              <span style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{emptyState.icon}</span>
+              <p className="text-sm font-medium" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{emptyState.title}</p>
+              {emptyState.hint && <p className="text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{emptyState.hint}</p>}
             </>
           ) : workbench.computing ? (
             <>
-              <Loader2 size={18} className="animate-spin" style={{ color: 'var(--text-tertiary)' }} />
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>正在拉取销量与元仓库存并计算…</p>
+              <Loader2 size={18} className="animate-spin" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+              <p className="text-sm" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>正在拉取销量与元仓库存并计算…</p>
             </>
           ) : (
             <>
-              <PackageCheck size={22} style={{ color: 'var(--text-tertiary)' }} />
-              <p className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>选择店铺与区间后计算补货建议</p>
-              <p className="text-[13px] max-w-md" style={{ color: 'var(--text-tertiary)' }}>
+              <PackageCheck size={22} style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+              <p className="text-sm font-medium" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>选择店铺与区间后计算补货建议</p>
+              <p className="text-[13px] max-w-md" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                 正常商品自动关联（店铺映射 → 元仓同码 → 站点映射）并直接计算；
                 未匹配或冲突商品会进入「待核对」单独处理。日销口径 = 已下订单件数 ÷ 统计天数。
               </p>
             </>
           )}
           {workbench.shopsError && (
-            <button
+            <Button variant="outline" size="sm"
               type="button"
               onClick={() => void workbench.loadShops()}
-              className="mt-2 rounded-lg border px-3 py-1.5 text-[13px]"
-              style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+              className="h-8 mt-2 rounded-lg border px-3 py-1.5 text-[13px]"
+              style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
             >
               重新加载店铺
-            </button>
+            </Button>
           )}
         </div>
       )}

@@ -1,3 +1,4 @@
+import { Button } from '../../../components/ui/button';
 import React, {
   useCallback,
   useEffect,
@@ -27,10 +28,10 @@ const prefersReducedMotion = () =>
 
 const percentageStyle = (percentage: number) =>
   percentage === 100
-    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    ? "bg-success-subtle text-success ring-success/20"
     : percentage >= 80
-      ? "bg-blue-50 text-blue-700 ring-blue-200"
-      : "bg-slate-100 text-slate-600 ring-slate-200";
+      ? "bg-accent text-accent-foreground ring-primary/20"
+      : "bg-muted text-muted-foreground ring-border";
 
 interface CandidatePickerProps {
   itemId: string;
@@ -241,14 +242,14 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
           data-placement={menuPosition.placement}
           style={{
             position: "fixed",
-            zIndex: 100,
+            zIndex: 200,
             left: menuPosition.left,
             width: menuPosition.width,
             maxHeight: menuPosition.maxHeight,
             top: menuPosition.top,
             bottom: menuPosition.bottom,
           }}
-          className={`overflow-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl transition-[opacity,transform] duration-[160ms] motion-reduce:transition-none motion-reduce:transform-none ${
+          className={`overflow-auto rounded-xl border border-border bg-popover text-popover-foreground p-1 shadow-xl transition-[opacity,transform] [transition-duration:160ms] motion-reduce:transition-none motion-reduce:transform-none ${
             menuVisible
               ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
               : `pointer-events-none scale-[.98] opacity-0 ${menuPosition.placement === "top" ? "translate-y-1" : "-translate-y-1"}`
@@ -256,7 +257,7 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
         >
           {candidates.length ? (
             candidates.map((candidate, index) => (
-              <button
+              <Button variant="ghost" size="sm"
                 id={candidateOptionId(itemId, candidate.id)}
                 key={candidate.id}
                 type="button"
@@ -264,7 +265,7 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
                 aria-selected={sameSku(candidate.sku, selectedSku)}
                 onMouseEnter={() => setActiveIndex(index)}
                 onClick={() => select(candidate)}
-                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${index === activeIndex ? "bg-blue-50 text-blue-800" : "text-slate-700 hover:bg-slate-50"}`}
+                className={`h-auto flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${index === activeIndex ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-muted"}`}
               >
                 <span className="font-medium">{candidate.sku}</span>
                 {candidate.matchPercentage !== undefined ? (
@@ -274,10 +275,10 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
                     {candidate.matchPercentage}%
                   </span>
                 ) : null}
-              </button>
+              </Button>
             ))
           ) : (
-            <p className="px-3 py-3 text-sm text-slate-500">没有符合的 SKU</p>
+            <p className="px-3 py-3 text-sm text-muted-foreground">没有符合的 SKU</p>
           )}
         </div>,
         document.body,
@@ -286,7 +287,7 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
 
   return (
     <div ref={rootRef} className="relative min-w-[13rem]">
-      <button
+      <Button variant="ghost" size="sm"
         ref={triggerRef}
         type="button"
         data-testid={`target-sku-select-${itemId}`}
@@ -297,7 +298,7 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
         aria-activedescendant={activeDescendant}
         onClick={() => (expanded ? closeMenu() : openMenu())}
         onKeyDown={handleKeyDown}
-        className="flex h-10 w-full items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-left text-sm font-medium text-slate-800 shadow-sm transition duration-[160ms] hover:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-input bg-card px-3 text-left text-sm font-medium text-foreground shadow-sm transition [transition-duration:160ms] hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30"
       >
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate">
@@ -313,9 +314,9 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
         </span>
         <ChevronDown
           size={16}
-          className={`shrink-0 text-slate-500 transition-transform duration-[160ms] motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
+          className={`shrink-0 text-muted-foreground transition-transform [transition-duration:160ms] motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
         />
-      </button>
+      </Button>
       {menu}
     </div>
   );

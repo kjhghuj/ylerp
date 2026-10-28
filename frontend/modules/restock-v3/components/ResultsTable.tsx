@@ -1,3 +1,7 @@
+import { Button } from '../../../components/ui/button';
+import { Input } from '../../../components/ui/input';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
+import { Checkbox } from '../../../components/ui/checkbox';
 /** 主结果表：需补货/断货风险/库存未知/全部筛选、搜索、排序、分页、密度切换、批量选择、固定表头与商品列 */
 import { useMemo, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search } from 'lucide-react';
@@ -82,18 +86,18 @@ export default function ResultsTable(props: ResultsTableProps) {
   };
 
   const sortButton = (key: SortKey, label: string, align: 'left' | 'right' = 'right') => (
-    <button
+    <Button variant="ghost" size="sm"
       type="button"
       onClick={() => toggleSort(key)}
-      className={`flex items-center gap-0.5 hover:opacity-80 ${align === 'right' ? 'ml-auto' : ''}`}
-      style={{ color: sortKey === key ? 'var(--text-primary)' : 'var(--text-tertiary)' }}
-      aria-sort={sortKey === key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+      className={`h-auto rounded-sm p-0 hover:bg-transparent flex items-center gap-0.5 hover:opacity-80 ${align === 'right' ? 'ml-auto' : ''}`}
+      style={{ color: sortKey === key ? 'hsl(var(--ui-foreground))' : 'hsl(var(--ui-muted-foreground))' }}
+      
     >
       {label}
       {sortKey === key
         ? (sortDirection === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
         : <ArrowUpDown size={11} opacity={0.5} />}
-    </button>
+    </Button>
   );
 
   const cellPadding = dense ? 'py-1 px-2' : 'py-1.5 px-2.5';
@@ -106,162 +110,159 @@ export default function ResultsTable(props: ResultsTableProps) {
       <div className="flex flex-wrap items-center gap-2 px-4 py-2">
         <div
           className="flex items-center rounded-lg border overflow-hidden"
-          style={{ borderColor: 'var(--border-light)' }}
+          style={{ borderColor: 'hsl(var(--ui-border))' }}
           role="group"
           aria-label="结果筛选"
         >
           {FILTERS.map(item => (
-            <button
+            <Button variant="ghost" size="sm"
               key={item.key}
               type="button"
               onClick={() => { onFilterChange(item.key); setPage(1); }}
               aria-pressed={filter === item.key}
-              className="px-2.5 py-1 text-xs transition-colors"
+              className="h-8 px-2.5 py-1 text-xs transition-colors"
               style={{
-                color: filter === item.key ? '#fff' : 'var(--text-secondary)',
-                backgroundColor: filter === item.key ? 'var(--primary)' : 'transparent',
+                color: filter === item.key ? 'hsl(var(--ui-primary-foreground))' : 'hsl(var(--ui-muted-foreground))',
+                backgroundColor: filter === item.key ? 'hsl(var(--ui-primary))' : 'transparent',
               }}
             >
               {item.label}
-            </button>
+            </Button>
           ))}
         </div>
-        <label className="flex items-center gap-1 rounded-lg border px-2 py-1 flex-1 min-w-[160px] max-w-[280px]">
-          <Search size={13} style={{ color: 'var(--text-tertiary)' }} />
-          <input
+        <label className="relative flex-1 min-w-[160px] max-w-[280px]">
+          <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2" style={{ color: 'hsl(var(--ui-muted-foreground))' }} />
+          <Input
             type="search"
             value={search}
             onChange={event => { setSearch(event.target.value); setPage(1); }}
             placeholder="搜索 SKU / 名称"
             aria-label="搜索 SKU 或名称"
-            className="bg-transparent outline-none text-[13px] w-full"
-            style={{ color: 'var(--text-primary)' }}
+            className="h-8 pl-8 text-[13px] w-full"
+            style={{ color: 'hsl(var(--ui-foreground))' }}
           />
         </label>
         <div className="flex-1" />
-        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+        <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           {sortedItems.length} 项 · 已选 {selectedSkus.size} 项
         </span>
-        <button
+        <Button variant="outline" size="sm"
           type="button"
           onClick={() => setDense(value => !value)}
           aria-pressed={dense}
-          className="rounded-lg border px-2 py-1 text-xs"
-          style={{ borderColor: 'var(--border-light)', color: 'var(--text-secondary)' }}
+          className="h-8 rounded-lg border px-2 py-1 text-xs"
+          style={{ borderColor: 'hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))' }}
         >
           {dense ? '紧凑' : '舒适'}
-        </button>
+        </Button>
       </div>
 
       {/* 表格：容器内滚动，固定表头 + 固定左侧两列 */}
       <div
         className="mx-4 mb-2 overflow-auto rounded-lg border"
-        style={{ borderColor: 'var(--border-light)', maxHeight: 'calc(100vh - 320px)' }}
+        style={{ borderColor: 'hsl(var(--ui-border))', maxHeight: 'calc(100vh - 320px)' }}
       >
-        <table className="w-full border-collapse" style={{ minWidth: 1080 }}>
-          <thead className="sticky top-0 z-10">
-            <tr style={{ backgroundColor: 'var(--bg-primary)' }}>
-              <th className={`${cellPadding} text-left w-9 sticky left-0 z-10`} style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
-                <input
-                  type="checkbox"
+        <Table wrapped={false} className="w-full border-collapse" style={{ minWidth: 1080 }}>
+          <TableHeader className="sticky top-0 z-10">
+            <TableRow style={{ backgroundColor: 'hsl(var(--ui-background))' }}>
+              <TableHead className={`${cellPadding} text-left w-9 sticky left-0 z-10`} style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))' }}>
+                <Checkbox
                   checked={pageAllSelected}
-                  onChange={() => onSelectPage(pageItems.map(item => item.sku), !pageAllSelected)}
+                  onCheckedChange={() => onSelectPage(pageItems.map(item => item.sku), !pageAllSelected)}
                   aria-label="全选本页"
                 />
-              </th>
-              <th
+              </TableHead>
+              <TableHead aria-sort={sortKey === 'sku' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                 className={`${cellPadding} text-left font-medium sticky left-9 z-10 min-w-[200px]`}
-                style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 12 }}
+                style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))', fontSize: 12 }}
               >
                 {sortButton('sku', '商品 / SKU', 'left')}
-              </th>
+              </TableHead>
               {[
                 { key: 'dailySales' as SortKey, label: '预测日销' },
                 { key: 'availableStock' as SortKey, label: '可用库存' },
                 { key: 'inTransit' as SortKey, label: '确定在途' },
                 { key: 'stockoutDate' as SortKey, label: '预计断货日' },
               ].map(column => (
-                <th
+                <TableHead aria-sort={sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
                   key={column.key}
                   className={`${cellPadding} text-right font-medium w-24`}
-                  style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 12 }}
+                  style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))', fontSize: 12 }}
                 >
                   {sortButton(column.key, column.label)}
-                </th>
+                </TableHead>
               ))}
-              <th className={`${cellPadding} text-right font-medium w-24`} style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 12 }}>
+              <TableHead aria-sort={sortKey === 'suggestedQty' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} className={`${cellPadding} text-right font-medium w-24`} style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))', fontSize: 12 }}>
                 {sortButton('suggestedQty', '建议补货量')}
-              </th>
-              <th className={`${cellPadding} text-center font-medium w-32`} style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 12 }}>
+              </TableHead>
+              <TableHead className={`${cellPadding} text-center font-medium w-32`} style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))', fontSize: 12 }}>
                 确认补货量
-              </th>
-              <th className={`${cellPadding} text-left font-medium w-28`} style={{ backgroundColor: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)', color: 'var(--text-secondary)', fontSize: 12 }}>
+              </TableHead>
+              <TableHead aria-sort={sortKey === 'status' ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'} className={`${cellPadding} text-left font-medium w-28`} style={{ backgroundColor: 'hsl(var(--ui-background))', borderBottom: '1px solid hsl(var(--ui-border))', color: 'hsl(var(--ui-muted-foreground))', fontSize: 12 }}>
                 {sortButton('status', '状态', 'left')}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {pageItems.map(item => {
               const statusMeta = RESTOCK_STATUS_META[item.status];
               const edit = edits[item.sku];
-              const effectiveQty = edit?.confirmedQty ?? item.suggestedQty;
               const selected = selectedSkus.has(item.sku);
               return (
-                <tr
+                <TableRow
                   key={item.sku}
                   className="cursor-pointer transition-colors"
                   style={{
                     backgroundColor: selected ? 'var(--accent-blue-bg)' : undefined,
-                    borderBottom: '1px solid var(--border-light)',
+                    borderBottom: '1px solid hsl(var(--ui-border))',
                   }}
                   onClick={event => {
                     if ((event.target as HTMLElement).closest('input,button,a')) return;
                     onOpenDetail(item);
                   }}
                 >
-                  <td className={`${cellPadding} sticky left-0`} style={{ backgroundColor: selected ? 'var(--accent-blue-bg)' : 'var(--bg-card)' }}>
-                    <input
-                      type="checkbox"
+                  <TableCell className={`${cellPadding} sticky left-0`} style={{ backgroundColor: selected ? 'var(--accent-blue-bg)' : 'hsl(var(--ui-card))' }}>
+                    <Checkbox
                       checked={selected}
                       disabled={!item.executable}
-                      onChange={() => onToggleSelect(item.sku)}
+                      onCheckedChange={() => onToggleSelect(item.sku)}
                       aria-label={`选择 ${item.sku}`}
                       title={!item.executable ? '该商品不可执行（库存未知/零销量/数据质量不足），不能保存为计划' : undefined}
                     />
-                  </td>
-                  <td
+                  </TableCell>
+                  <TableCell
                     className={`${cellPadding} sticky left-9`}
-                    style={{ backgroundColor: selected ? 'var(--accent-blue-bg)' : 'var(--bg-card)', ...rowStyle }}
+                    style={{ backgroundColor: selected ? 'var(--accent-blue-bg)' : 'hsl(var(--ui-card))', ...rowStyle }}
                   >
-                    <div className="font-medium truncate" style={{ color: 'var(--text-primary)' }} title={`${item.sku} · ${item.name}`}>
+                    <div className="font-medium truncate" style={{ color: 'hsl(var(--ui-foreground))' }} title={`${item.sku} · ${item.name}`}>
                       {item.sku}
                     </div>
-                    <div className="text-[11px] truncate flex items-center gap-1" style={{ color: 'var(--text-tertiary)' }}>
+                    <div className="text-[11px] truncate flex items-center gap-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                       <span className="truncate max-w-[140px]" title={item.name}>{item.name}</span>
                       <span className="shrink-0">{MATCH_TYPE_LABELS[item.matchType]}</span>
                       {item.salesSources.length > 1 && <span className="shrink-0">· {item.salesSources.length}来源</span>}
                     </div>
-                  </td>
-                  <td className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: 'var(--text-primary)' }}>
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: 'hsl(var(--ui-foreground))' }}>
                     {item.status === 'missing_sales' ? '—' : formatNumber(item.adjustedDailySales)}
                     {item.growthPercent > 0 && (
-                      <span className="text-[10px] ml-0.5" style={{ color: 'var(--text-tertiary)' }}>+{formatNumber(item.growthPercent, 0)}%</span>
+                      <span className="text-[10px] ml-0.5" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>+{formatNumber(item.growthPercent, 0)}%</span>
                     )}
-                  </td>
-                  <td className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: item.availableStock === 0 && item.status !== 'no_stock_data' ? '#dc2626' : 'var(--text-primary)' }}>
-                    {item.stockSource === 'missing' ? <span style={{ color: '#7c3aed' }}>未知</span> : formatInt(item.availableStock)}
-                  </td>
-                  <td className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: 'var(--text-primary)' }} title={`到仓前 ${item.inTransitBeforeArrival} · 覆盖期 ${item.inTransitDuringCoverage}`}>
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: item.availableStock === 0 && item.status !== 'no_stock_data' ? 'hsl(var(--ui-danger))' : 'hsl(var(--ui-foreground))' }}>
+                    {item.stockSource === 'missing' ? <span style={{ color: 'var(--restock-unknown)' }}>未知</span> : formatInt(item.availableStock)}
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: 'hsl(var(--ui-foreground))' }} title={`到仓前 ${item.inTransitBeforeArrival} · 覆盖期 ${item.inTransitDuringCoverage}`}>
                     {formatInt(item.inTransit)}
-                  </td>
-                  <td className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: item.stockoutDate ? '#dc2626' : 'var(--text-primary)' }}>
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-right tabular-nums`} style={{ ...rowStyle, color: item.stockoutDate ? 'hsl(var(--ui-danger))' : 'hsl(var(--ui-foreground))' }}>
                     {item.stockoutDate ?? '—'}
-                  </td>
-                  <td className={`${cellPadding} text-right tabular-nums font-semibold`} style={{ ...rowStyle, color: item.status === 'no_stock_data' ? 'var(--text-tertiary)' : 'var(--text-primary)' }}>
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-right tabular-nums font-semibold`} style={{ ...rowStyle, color: item.status === 'no_stock_data' ? 'hsl(var(--ui-muted-foreground))' : 'hsl(var(--ui-foreground))' }}>
                     {item.status === 'no_stock_data' ? '待核对' : formatInt(item.suggestedQty)}
-                  </td>
-                  <td className={`${cellPadding} text-center`} onClick={event => event.stopPropagation()}>
-                    <input
+                  </TableCell>
+                  <TableCell className={`${cellPadding} text-center`} onClick={event => event.stopPropagation()}>
+                    <Input
                       type="text"
                       inputMode="numeric"
                       value={edit?.confirmedQty ?? ''}
@@ -279,15 +280,15 @@ export default function ResultsTable(props: ResultsTableProps) {
                         onEdit(item.sku, { confirmedQty: Number(raw), adjustReason: edit?.adjustReason ?? '' });
                       }}
                       aria-label={`${item.sku} 确认补货量，默认建议量 ${item.suggestedQty}`}
-                      className="w-20 rounded border px-1.5 py-0.5 text-right text-[13px] tabular-nums disabled:opacity-40"
+                      className="h-8 w-20 rounded border px-1.5 py-0.5 text-right text-[13px] tabular-nums disabled:opacity-40"
                       style={{
-                        borderColor: 'var(--border-light)',
-                        backgroundColor: 'var(--bg-primary)',
-                        color: 'var(--text-primary)',
+                        borderColor: 'hsl(var(--ui-border))',
+                        backgroundColor: 'hsl(var(--ui-background))',
+                        color: 'hsl(var(--ui-foreground))',
                       }}
                     />
-                  </td>
-                  <td className={`${cellPadding}`} style={rowStyle}>
+                  </TableCell>
+                  <TableCell className={`${cellPadding}`} style={rowStyle}>
                     <span
                       className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] whitespace-nowrap"
                       style={{ backgroundColor: statusMeta.bg, color: statusMeta.color }}
@@ -299,51 +300,51 @@ export default function ResultsTable(props: ResultsTableProps) {
                     {item.salesQuality.status !== 'ok' && (
                       <div
                         className="text-[10px] mt-0.5 whitespace-nowrap"
-                        style={{ color: item.salesQuality.executable === false ? '#7c3aed' : 'var(--text-tertiary)' }}
+                        style={{ color: item.salesQuality.executable === false ? 'var(--restock-unknown)' : 'hsl(var(--ui-muted-foreground))' }}
                       >
                         {QUALITY_LABELS[item.salesQuality.status]}
                       </div>
                     )}
                     {!item.executable && (
-                      <div className="text-[10px] mt-0.5" style={{ color: '#7c3aed' }}>不可执行</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: 'var(--restock-unknown)' }}>不可执行</div>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
             {pageItems.length === 0 && (
-              <tr>
-                <td colSpan={9} className="py-8 text-center text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+              <TableRow>
+                <TableCell colSpan={9} className="py-8 text-center text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
                   当前筛选下没有商品
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {/* 分页 */}
-      <nav aria-label="补货结果分页" className="mx-4 mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-xs" style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-light)', backgroundColor: 'var(--bg-card)' }}>
+      <nav aria-label="补货结果分页" className="mx-4 mb-4 flex shrink-0 flex-wrap items-center gap-3 rounded-lg border px-3 py-3 text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))', borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-card))' }}>
         <span className="mr-auto">共 {sortedItems.length} 项 · 每页 {PAGE_SIZE} 项</span>
         <span className="tabular-nums">第 {currentPage} / {pageCount} 页</span>
-        <button
+        <Button variant="outline" size="sm"
           type="button"
           disabled={currentPage <= 1}
           onClick={() => setPage(currentPage - 1)}
-          className="rounded-lg border px-3 py-2 disabled:opacity-40"
-          style={{ borderColor: 'var(--border-light)' }}
+          className="h-8 rounded-lg border px-3 py-2 disabled:opacity-40"
+          style={{ borderColor: 'hsl(var(--ui-border))' }}
         >
           上一页
-        </button>
-        <button
+        </Button>
+        <Button variant="outline" size="sm"
           type="button"
           disabled={currentPage >= pageCount}
           onClick={() => setPage(currentPage + 1)}
-          className="rounded-lg border px-3 py-2 disabled:opacity-40"
-          style={{ borderColor: 'var(--border-light)' }}
+          className="h-8 rounded-lg border px-3 py-2 disabled:opacity-40"
+          style={{ borderColor: 'hsl(var(--ui-border))' }}
         >
           下一页
-        </button>
+        </Button>
       </nav>
     </section>
   );
