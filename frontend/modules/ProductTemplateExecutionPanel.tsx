@@ -27,7 +27,7 @@ export const ProductTemplateExecutionPanel: React.FC<ProductTemplateExecutionPan
         return (
             <div
                 role="alert"
-                className="mb-4 p-3 rounded-xl border border-red-200 bg-red-50 text-sm text-red-700"
+                className="mb-4 p-3 rounded-xl border border-destructive/30 bg-destructive/10 text-sm text-danger"
             >
                 {viewModel.errors.map((error, index) => (
                     <div key={`${error.code}-${index}`}>

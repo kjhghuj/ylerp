@@ -67,7 +67,7 @@ export const PasswordConfirmModal: React.FC<PasswordConfirmModalProps> = ({ titl
             <DialogContent showCloseButton={false} onEscapeKeyDown={event => { if (verifyingRef.current) event.preventDefault(); }} onInteractOutside={event => { if (verifyingRef.current) event.preventDefault(); }} onOpenAutoFocus={event => { event.preventDefault(); passwordRef.current?.focus(); }} aria-label={title} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-sm flex-col gap-0 overflow-hidden rounded-xl p-0">
                 <div className="flex items-center justify-between p-5 border-b border-border">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center">
+                        <div className="w-10 h-10 bg-destructive/10 rounded-xl flex items-center justify-center">
                             <Lock size={20} className="text-danger" />
                         </div>
                         <div>

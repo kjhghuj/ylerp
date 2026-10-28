@@ -440,7 +440,7 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
         )}
         <span className="mt-2 flex gap-2">
           <span className="rounded bg-accent px-2 py-0.5 text-xs font-bold text-primary">{t.matrix.margin}: {result.margin.toFixed(1)}%</span>
-          <span className="rounded bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-700">{t.matrix.roi}: {result.roi.toFixed(0)}%</span>
+          <span className="rounded bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">{t.matrix.roi}: {result.roi.toFixed(0)}%</span>
         </span>
       </Button>
       {tooltip}

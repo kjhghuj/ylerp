@@ -73,7 +73,7 @@ export const DatePickerModal: React.FC<DatePickerModalProps> = ({ isOpen, onClos
                                   onClick={() => setSelDate(dateStr)}
                                   className={`aspect-square rounded-lg text-sm font-medium flex items-center justify-center transition relative
                                       ${exists ? 'bg-muted text-muted-foreground cursor-not-allowed decoration-slate-300' : 
-                                        isSelected ? 'bg-primary text-primary-foreground shadow-md' : 'text-foreground hover:bg-purple-50 hover:text-purple-600'}
+                                        isSelected ? 'bg-primary text-primary-foreground shadow-md' : 'text-foreground hover:bg-accent hover:text-accent-foreground'}
                                   `}
                               >
                                   {d}

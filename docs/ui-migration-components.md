@@ -13,7 +13,7 @@ Read the relevant [shadcn documentation](https://v3.shadcn.com/docs) and [Radix 
 - Imports use `@/components/ui`, with `@/lib/utils` sharing clsx and Tailwind-3-compatible tailwind-merge 2.6.0.
 - Controls retain React.forwardRef. `Button` defaults to `type="button"`; forms must explicitly mark submit buttons.
 - DOM primitives carry `data-ui` markers. Semantic colors map through namespaced HSL `--ui-*` variables, avoiding collisions with existing full-color hex variables such as `--primary`.
-- Legacy global dark utility overrides exclude `[data-ui]`. Migrated controls must use semantic colors (`bg-card text-foreground border-input`), rather than relying on old hard-coded slate/white utility overrides.
+- Global dark utility overrides were removed after all active views migrated. Use semantic colors (`bg-card text-foreground border-input`) or an intentional fixed background/foreground pair. Compatibility variables such as `--text-secondary` and `--bg-card` map to the same semantic tokens. Business color meanings and storage keys remain compatible.
 - `Table wrapped={false}` renders only the table to preserve existing sticky headers/columns and scroll ownership. `containerClassName` is supported when using the default wrapper.
 - `DialogContent` and `SheetContent` expose `showCloseButton`, `closeLabel`, `overlayClassName` and `overlayStyle`. Titles and descriptions remain required accessible content; the default close label is Chinese and callers can pass their locale label. Dialogs/sheets use z-index 100, menus/selects/popovers/tooltips 200, and notifications 9999. Nested dialogs of the same layer follow DOM order.
 - Existing controlled `open/onOpenChange`, disabled and outside-interaction guards must stay in business components. Do not keep old Escape listeners/focus traps when Radix owns the dialog.
@@ -39,3 +39,12 @@ The scope adds no layout wrapper around children. Its portal host sits under bod
 ## Verification
 
 `npm run typecheck`, `npm test -- --reporter=dot __tests__/uiContracts.test.tsx __tests__/uiToastContract.test.tsx`, and `npm run build` verify the foundation. Contracts cover default/explicit form submission, Input ref and decimal drafts, native select events, nested dialog focus/closing, sticky table scroll ownership, Portal theme ownership, and the existing toast API. Existing business suites remain the behavioral source of truth. Browser checks cover the actual CSS and focus rendering.
+
+## Business adapters
+
+- Amount controls retain string drafts, including incomplete decimals; existing blur formatting, currency conversion and handlers own numeric interpretation. Use Input without parsing drafts in the primitive.
+- Date controls retain local date strings; do not round-trip them through UTC Date serialization.
+- Adapt Select/Checkbox/Switch value callbacks explicitly. NativeSelect is reserved for callers that need native events or empty-option values.
+- Keep submitting locks and late-response guards in business components. Financial identity confirmation blocks all dismissals while verification is pending and ignores results after unmount.
+- Use primary/primary-foreground and destructive/destructive-foreground for solid fills. Use warning/success/danger text on corresponding subtle backgrounds; fill foreground tokens do not belong on translucent status backgrounds.
+- Mobile coarse-pointer switch and checkbox hit areas expand to 44px through a pseudo-element while their artwork remains compact. Associated labels have 44px minimum height to keep adjacent rows separate.

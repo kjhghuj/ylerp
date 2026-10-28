@@ -88,7 +88,7 @@ export const TargetPricingPanel = ({ nodes, globalInputs, siteInputs, currency, 
     <>
       <Button variant="ghost" size="sm" ref={launcherRef} type="button" aria-haspopup="dialog" aria-expanded={expanded} aria-controls={expanded ? panelId : undefined}
         onClick={() => setExpanded(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-accent px-2.5 py-1.5 text-xs font-bold text-primary transition-colors hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-accent px-2.5 py-1.5 text-xs font-bold text-accent-foreground transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <Target size={14} aria-hidden="true" /><span>{labels.title}</span>
       </Button>
       {expanded && <Dialog open onOpenChange={setExpanded}><DialogContent ref={dialogRef} aria-modal="true" id={panelId} aria-labelledby={titleId} aria-describedby={undefined} showCloseButton={false} onOpenAutoFocus={event => { event.preventDefault(); targetRef.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); launcherRef.current?.focus(); }} className="profit-dialog flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-3xl flex-col gap-0 overflow-hidden rounded-xl p-0">

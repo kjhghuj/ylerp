@@ -108,7 +108,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 <NativeSelect
                     value={siteCountry}
                     onChange={e => onSetSiteCountry(e.target.value)}
-                    className="text-xs font-bold px-3 py-2 pr-8 bg-accent border border-blue-200 rounded-lg outline-none appearance-none cursor-pointer hover:bg-blue-100/50 text-primary focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                    className="text-xs font-bold px-3 py-2 pr-8 bg-accent border border-border rounded-lg outline-none appearance-none cursor-pointer hover:bg-accent text-accent-foreground focus:border-ring focus:ring-2 focus:ring-ring/20 transition-all"
                 >
                     {Object.entries(t.matrix.sites).map(([code, name]) => (
                         <option key={code} value={code}>{name} ({code})</option>

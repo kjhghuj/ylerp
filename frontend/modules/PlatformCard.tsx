@@ -665,7 +665,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             {!isTiktok && <Button variant="ghost" size="sm" type="button" onClick={() => onUpgrade?.(nodeId)} disabled={!onUpgrade}
                 className="font-bold text-primary disabled:opacity-40">{t.tiktok.upgrade}</Button>}
         </div>}
-        {isUpgradePreview && <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-amber-800">
+        {isUpgradePreview && <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-warning">
             <span>{t.tiktok.compactUpgradePreview}</span>
             <Button variant="ghost" size="sm" type="button" className="font-bold underline" onClick={() => onCancelUpgrade?.(nodeId)}>{t.tiktok.cancelUpgrade}</Button>
         </div>}
@@ -707,7 +707,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 <p className="font-bold">{isUSCrossBorder ? t.tiktok.usCrossBorderAssumptions : country === 'USD' ? t.tiktok.usAssumptions : t.tiktok.assumptions}</p>
                 {policyState.invalid ? <p role="alert" className="text-danger">{t.errors.inputValidationFailed}</p> : !isTiktok ? <p>{t.tiktok.legacy}</p> : <>
                     <p>{policyState.context.tiktokFeePolicy?.verifiedAt ? `${country === 'USD' ? t.tiktok.usSnapshot : t.tiktok.snapshot}${policyState.context.tiktokFeePolicy.verifiedAt}` : t.tiktok.manualWarning}</p>
-                    {isUpgradePreview && <p className="text-amber-800">{t.tiktok.upgradePreview}</p>}
+                    {isUpgradePreview && <p className="text-warning">{t.tiktok.upgradePreview}</p>}
                     <p>{isUSCrossBorder ? t.tiktok.usCrossBorderCategoryHint : t.tiktok.categoryHint}</p><p>{t.tiktok.adjustmentHint}</p>
                     {country === 'USD' ? <><p>{isUSCrossBorder ? t.tiktok.usCrossBorderFeeHint : t.tiktok.usHint}</p><p>{t.tiktok.usBases}</p><p>{t.tiktok.usLogistics}</p></> : <><p>{t.tiktok.bases}</p><p>{t.tiktok.logistics}</p></>}
                     {isUSCrossBorder && <>
@@ -762,7 +762,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                             {nodeName}
                         </div>
                     )}
-                    {isPricingBasis && <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-primary">
+                    {isPricingBasis && <span className="rounded bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-foreground">
                         {t.targetPricing.basisBadge}
                     </span>}
                 </div>

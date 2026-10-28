@@ -1,3 +1,4 @@
+import { Button } from './ui/button';
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Trash2, ChevronUp, ChevronDown, Terminal } from 'lucide-react';
 
@@ -93,9 +94,9 @@ export const DebugConsole: React.FC = () => {
                 <Terminal size={12} />
                 <span>Console Errors</span>
              </div>
-             <button onClick={() => setLogs([])} className="flex items-center gap-1 text-slate-400 hover:text-white transition bg-slate-800 px-2 py-1 rounded hover:bg-slate-700">
+             <Button variant="ghost" size="sm" onClick={() => setLogs([])} className="flex items-center gap-1 text-slate-400 hover:text-white transition bg-slate-800 px-2 py-1 rounded hover:bg-slate-700">
                <Trash2 size={12} /> Clear
-             </button>
+             </Button>
            </div>
            <div className="space-y-2">
              {logs.map(log => (

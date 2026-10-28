@@ -182,7 +182,7 @@ export const GraphTemplateCard: React.FC<GraphTemplateCardProps> = ({
                             <span className="text-lg font-black text-success">{Number(output.value.toFixed(4))}</span>
                         </div>
                     )) : (
-                        <div role="alert" className="text-xs text-danger bg-red-50 border border-red-100 rounded-lg p-2 space-y-1">
+                        <div role="alert" className="text-xs text-danger bg-destructive/10 border border-destructive/30 rounded-lg p-2 space-y-1">
                             {result.errors.map((error, index) => (
                                 <div key={`${error.code}-${error.nodeId || 'graph'}-${index}`}>
                                     {formatNodeGraphEvaluationError(error, errorLabels)}
