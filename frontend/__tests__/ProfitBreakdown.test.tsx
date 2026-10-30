@@ -52,6 +52,19 @@ const renderBreakdown = (overrides: Partial<React.ComponentProps<typeof ProfitBr
 );
 
 describe('ProfitBreakdown', () => {
+  it('keeps large negative profits and badges readable as one keyboard action and opens its details', async () => {
+    renderBreakdown({ result: { ...result, finalRevenueCNY: -12345678.9, finalRevenueLocal: -24691357.8, margin: -1234.5, roi: -9876 }, nodeName: '需要完整显示的长计算节点名称' });
+    const trigger = screen.getByRole('button', { name: '查看完整利润明细' });
+    expect(trigger).toHaveTextContent('-12345678.90');
+    expect(trigger).toHaveTextContent('-1234.5%');
+    expect(trigger).toHaveTextContent('-9876%');
+    trigger.focus();
+    await userEvent.keyboard(' ');
+    expect(screen.getByRole('dialog')).toHaveTextContent('需要完整显示的长计算节点名称');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
   it('renders a compact tooltip in a body portal on mouse hover and keyboard focus', () => {
     renderBreakdown();
     const trigger = screen.getByRole('button', { name: '查看完整利润明细' });

@@ -1,0 +1,5 @@
+# Preserve archived evidence bytes so manifest SHA-256 remains valid on checkout.
+* -text
+# Raw terminal output retains its original whitespace and Windows line endings.
+*.txt -whitespace
+*.json whitespace=cr-at-eol

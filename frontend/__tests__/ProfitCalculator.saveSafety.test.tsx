@@ -1,4 +1,5 @@
 import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { StoreProvider, useStore } from '../StoreContext';
@@ -47,6 +48,17 @@ const update = () => fireEvent.click(screen.getByRole('button', { name: '更新�
 const create = () => fireEvent.click(screen.getByRole('button', { name: '存入商品库' }));
 const copy = () => fireEvent.click(screen.getByRole('button', { name: '另存为新商品' }));
 
+// Real Select interaction requires browser layout APIs absent from jsdom.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => platformMethods.forEach(key => {
+  if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+}));
+afterAll(() => platformMethods.forEach((key, index) => {
+  if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+  else Reflect.deleteProperty(HTMLElement.prototype, key);
+}));
+
 describe('ProfitCalculator product save safety with the real store', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -72,7 +84,9 @@ describe('ProfitCalculator product save safety with the real store', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: '按目标利润率定价' }));
     fireEvent.click(screen.getByRole('button', { name: '20%' }));
-    fireEvent.change(screen.getByLabelText('基准计算节点'), { target: { value: 'reference' } });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: '基准计算节点' }));
+    await user.click(screen.getByRole('option', { name: /Reference/ }));
     await waitFor(() => expect(screen.getByRole('button', { name: '应用此售价' })).toBeEnabled());
     expect(screen.getByText('定价基准')).toBeInTheDocument();
     const suggestion = screen.getByTestId('suggested-revenue').textContent;

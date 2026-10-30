@@ -1,7 +1,7 @@
 import { Checkbox } from '../components/ui/checkbox';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { NativeSelect } from '../components/ui/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import React, { useState, useMemo } from 'react';
 import { PLATFORMS, PlatformType } from '../platformConfig';
 import { NumberInput } from '../components/CalcInputs';
@@ -35,6 +35,29 @@ import { TiktokSettingsGroup } from './profit/TiktokSettingsGroup';
 
 type ProfitStrings = typeof translations['zh']['profit'];
 const US_LOGISTICS_KEYS = ['usHeadFreightFee', 'usHeadFreightRatePerKg', 'usHeadFreightConfigured', 'usLocalDeliveryMode', 'usPackageLengthCm', 'usPackageWidthCm', 'usPackageHeightCm', 'usDestinationRegion', 'usShippingDate', 'usDirectCargoType', 'usDirectExtraFee'];
+
+// Controlled values follow https://v3.shadcn.com/docs/components/select.
+function NodeNumberSelect({ id, name, label, value, options, onValueChange, error }: {
+    id: string; name: string; label: string; value: string;
+    options: Array<[number | string, string, boolean?]>;
+    onValueChange: (value: number) => void; error?: string;
+}) {
+    const known = options.some(([number]) => String(number) === value);
+    return <Select name={name} value={known ? value : '__invalid__'} onValueChange={next => {
+        const option = options.find(([number]) => String(number) === next);
+        // Manual/unknown choices only explain the saved value; never coerce them to NaN.
+        if (option && !option[2]) onValueChange(Number(next));
+    }}>
+        <SelectTrigger id={id} aria-label={label} aria-invalid={Boolean(error)} aria-describedby={error ? id + '-error' : undefined}
+            className={`h-auto min-h-9 w-full min-w-0 whitespace-normal px-2 text-xs [&>span]:line-clamp-none [&>span]:break-words [&>span]:text-left ${error ? 'border-destructive bg-destructive/10 text-danger' : 'border-border bg-card text-foreground'}`}>
+            <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="max-w-[calc(100vw-2rem)]">
+            {!known && <SelectItem value="__invalid__" disabled>—</SelectItem>}
+            {options.map(([number, text, disabled]) => <SelectItem key={number} value={String(number)} disabled={disabled} className="whitespace-normal break-words">{text}</SelectItem>)}
+        </SelectContent>
+    </Select>;
+}
 
 interface PlatformCardProps {
     nodeId: string;
@@ -284,7 +307,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 ? editingLocal[key]
                 : localValue !== null ? localValue.toFixed(2) : String(data[key] ?? '');
             return (
-                <div key={key} className="col-span-1">
+                <div key={key} className="col-span-1 min-w-0">
                     <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">{inputLabel} ({country})</label>
                     <div className="relative">
                         <Input
@@ -339,7 +362,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                 ? editingCNY[key]
                 : cnyValue !== null ? cnyValue.toFixed(2) : String(data[key] ?? '');
             return (
-                <div key={key} className="col-span-1">
+                <div key={key} className="col-span-1 min-w-0">
                     <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate" title={`${inputLabel} (CNY)`}>{inputLabel} (CNY)</label>
                     <div className="relative">
                         <Input
@@ -455,7 +478,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     }, [nodeId, onInputValidationChange, parsedEditingCouponRate]);
 
     const renderPlatformCouponRateInput = () => (
-        <div className="col-span-1">
+        <div className="col-span-1 min-w-0">
             <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">
                 {t.inputs.platformCouponRate}
             </label>
@@ -573,12 +596,8 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
         const id = `${nodeId}-${key}`;
         return <div className="col-span-2" key={key}>
             <label htmlFor={id} className="block text-xs font-bold text-muted-foreground mb-0.5">{label}</label>
-            <NativeSelect id={id} name={key} value={value} aria-invalid={Boolean(error)} aria-describedby={error ? `${id}-error` : undefined}
-                onChange={event => onUpdate(nodeId, { [key]: Number(event.target.value) })}
-                className={`w-full p-2 rounded-lg border text-xs ${error ? 'border-rose-400 bg-destructive/10 text-danger' : 'border-border bg-card text-foreground'}`}>
-                {!options.some(([number]) => String(number) === value) && <option value={value} disabled>—</option>}
-                {options.map(([number, text]) => <option value={number} key={number}>{text}</option>)}
-            </NativeSelect>
+            <NodeNumberSelect id={id} name={key} label={label} value={value} options={options} error={error}
+                onValueChange={next => onUpdate(nodeId, { [key]: next })} />
             {error && <div id={`${id}-error`} className="text-[10px] text-danger font-bold mt-0.5">{error}</div>}
         </div>;
     };
@@ -635,28 +654,27 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     };
 
     const renderTiktokPresetControls = () => isTiktok ? <>
-        {isUSCrossBorder && <label className="block text-xs text-muted-foreground">{t.tiktok.usCampaignProgram}
-            <NativeSelect aria-label={t.tiktok.usCampaignProgram} className="block w-full mt-1 p-2 rounded border"
+        {isUSCrossBorder && <div className="space-y-1 text-xs text-muted-foreground">
+            <label htmlFor={nodeId + '-campaignPreset'}>{t.tiktok.usCampaignProgram}</label>
+            <NodeNumberSelect id={nodeId + '-campaignPreset'} name="campaignPreset" label={t.tiktok.usCampaignProgram}
                 value={[0, 1].includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'}
-                onChange={event => onUpdate(nodeId, { campaignServiceFeeRate: Number(event.target.value), campaignServiceFeeCap: 0 })}>
-                <option value="0">{t.tiktok.usNoCampaign}</option>
-                <option value="1">{t.tiktok.usStandardCampaign}</option>
-                <option value="manual" disabled>{t.tiktok.manual}</option>
-            </NativeSelect>
-        </label>}
-        {(country === 'THB' || country === 'PHP') && <label className="block text-xs text-muted-foreground">{t.tiktok.growthGroup}
-            <NativeSelect aria-label={t.tiktok.growthGroup} className="block w-full mt-1 p-2 rounded border" value={(country === 'THB' ? [8.03, 6.96] : [1.5, 1]).includes(Number(data.growthServiceFeeRate)) ? String(data.growthServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { growthServiceFeeRate: Number(e.target.value) })}>
-                {country === 'THB' ? <><option value="8.03">{t.tiktok.otherGoods}</option><option value="6.96">{t.tiktok.electronics}</option></> : <><option value="1.5">{t.tiktok.higherGroup}</option><option value="1">{t.tiktok.lowerGroup}</option></>}
-                <option value="manual" disabled>{t.tiktok.manual}</option>
-            </NativeSelect>
-        </label>}
-        {(country === 'MYR' || country === 'SGD') && <label className="block text-xs text-muted-foreground">{t.tiktok.bxp}
-            <NativeSelect aria-label={t.tiktok.bxp} className="block w-full mt-1 p-2 rounded border" value={(country === 'MYR' ? [0, 4.86] : [0, 3.27, 5.45, 4.36, 6.54]).includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'} onChange={e => onUpdate(nodeId, { campaignServiceFeeRate: Number(e.target.value), campaignServiceFeeCap: country === 'SGD' ? 30 : 0 })}>
-                <option value="0">{t.tiktok.noBxp}</option>
-                {country === 'MYR' ? <option value="4.86">{t.tiktok.myBxp}</option> : <><option value="3.27">{t.tiktok.dailyLow}</option><option value="5.45">{t.tiktok.dailyHigh}</option><option value="4.36">{t.tiktok.campaignLow}</option><option value="6.54">{t.tiktok.campaignHigh}</option></>}
-                <option value="manual" disabled>{t.tiktok.manual}</option>
-            </NativeSelect>
-        </label>}
+                options={[[0, t.tiktok.usNoCampaign], [1, t.tiktok.usStandardCampaign], ['manual', t.tiktok.manual, true]]}
+                onValueChange={value => onUpdate(nodeId, { campaignServiceFeeRate: value, campaignServiceFeeCap: 0 })} />
+        </div>}
+        {(country === 'THB' || country === 'PHP') && <div className="space-y-1 text-xs text-muted-foreground">
+            <label htmlFor={nodeId + '-growthPreset'}>{t.tiktok.growthGroup}</label>
+            <NodeNumberSelect id={nodeId + '-growthPreset'} name="growthPreset" label={t.tiktok.growthGroup}
+                value={(country === 'THB' ? [8.03, 6.96] : [1.5, 1]).includes(Number(data.growthServiceFeeRate)) ? String(data.growthServiceFeeRate) : 'manual'}
+                options={[...(country === 'THB' ? [[8.03, t.tiktok.otherGoods], [6.96, t.tiktok.electronics]] : [[1.5, t.tiktok.higherGroup], [1, t.tiktok.lowerGroup]]) as Array<[number, string]>, ['manual', t.tiktok.manual, true]]}
+                onValueChange={value => onUpdate(nodeId, { growthServiceFeeRate: value })} />
+        </div>}
+        {(country === 'MYR' || country === 'SGD') && <div className="space-y-1 text-xs text-muted-foreground">
+            <label htmlFor={nodeId + '-bxpPreset'}>{t.tiktok.bxp}</label>
+            <NodeNumberSelect id={nodeId + '-bxpPreset'} name="bxpPreset" label={t.tiktok.bxp}
+                value={(country === 'MYR' ? [0, 4.86] : [0, 3.27, 5.45, 4.36, 6.54]).includes(Number(data.campaignServiceFeeRate)) ? String(data.campaignServiceFeeRate) : 'manual'}
+                options={[[0, t.tiktok.noBxp], ...(country === 'MYR' ? [[4.86, t.tiktok.myBxp]] : [[3.27, t.tiktok.dailyLow], [5.45, t.tiktok.dailyHigh], [4.36, t.tiktok.campaignLow], [6.54, t.tiktok.campaignHigh]]) as Array<[number, string]>, ['manual', t.tiktok.manual, true]]}
+                onValueChange={value => onUpdate(nodeId, { campaignServiceFeeRate: value, campaignServiceFeeCap: country === 'SGD' ? 30 : 0 })} />
+        </div>}
     </> : null;
 
     const renderTiktokSettings = () => <div className="p-3 space-y-2">
@@ -747,15 +765,15 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
     </div>;
 
     return (
-        <div className={`min-w-0 w-full border-2 ${config.colors.border} rounded-xl bg-card shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
+        <div data-profit-node={nodeId} className={`min-w-0 w-full border-2 ${config.colors.border} rounded-xl bg-card shadow-sm flex flex-col overflow-hidden transition-all hover:shadow-md`}>
             {/* Header */}
-            <div className={`${config.colors.bg} px-3 py-2 flex items-center justify-between gap-2 border-b ${config.colors.border}`}>
+            <div data-profit-section="header" className={`${config.colors.bg} dark:bg-muted/50 px-3 py-2 flex items-start justify-between gap-2 border-b ${config.colors.border}`}>
                 <div className="min-w-0 flex flex-col">
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold text-primary-foreground bg-primary`}>
                             {t.matrix.platforms[platform] || config.name}
                         </span>
-                        <span className="text-sm font-black text-foreground tracking-tight">{siteName}</span>
+                        <span className="min-w-0 break-words text-sm font-black text-foreground tracking-tight">{siteName}</span>
                     </div>
                     {nodeName && (
                         <div className="max-w-full break-words text-[11px] text-muted-foreground font-bold mt-1 bg-muted/50 px-1.5 py-0.5 rounded border border-border/50 inline-block w-fit">
@@ -766,13 +784,13 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
                         {t.targetPricing.basisBadge}
                     </span>}
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(nodeId)} className="p-2 -mr-2 text-muted-foreground hover:text-red-500 transition-colors">
+                <Button variant="ghost" size="sm" aria-label={t.templates.delete} onClick={() => onDelete(nodeId)} className="shrink-0 p-2 text-muted-foreground hover:text-red-500 transition-colors">
                     <Trash2 size={16} />
                 </Button>
             </div>
 
             {results && (
-                <div className="border-b border-border bg-gradient-to-b from-muted to-card">
+                <div data-profit-section="result" className="border-b border-border bg-gradient-to-b from-muted to-card">
                     <ProfitBreakdown
                         result={results}
                         currency={currencyCode}
@@ -787,7 +805,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
             )}
 
             {/* Configurable Inputs Block */}
-            <div className="min-w-0">
+            <div data-profit-section="controls" className="min-w-0">
                 {platform === 'tiktok' ? renderTiktokSettings() : <div className="p-3">
                     <div className="grid grid-cols-2 gap-x-3 gap-y-2">
                         {config.fields.base.includes('platformCommissionRate') && renderInput('platformCommissionRate')}
@@ -818,7 +836,7 @@ export const PlatformCard: React.FC<PlatformCardProps> = ({
 
             {/* Results Block */}
             {results && (
-                <div className="border-t border-border bg-gradient-to-b from-muted to-card pb-3 rounded-b-2xl">
+                <div data-profit-section="footer" className="border-t border-border bg-gradient-to-b from-muted to-card pb-3 rounded-b-2xl">
                     {/* Save Template Action */}
                     <div className="px-4 pt-3 pb-1 flex gap-2">
                         <Input

@@ -1,0 +1,4 @@
+
+> yangling-erp@1.9.4 typecheck
+> tsc --noEmit
+

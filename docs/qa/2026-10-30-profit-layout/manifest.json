@@ -1,0 +1,254 @@
+[
+  {
+    "file": "validation/profit-browser.txt",
+    "source": ".tmp/profit-layout-ready-final-browser.log",
+    "sha256": "245745a6b50f09a9d97e0a742c04ab4b53cf648ccf7324c70acbfb0b361455b3",
+    "bytes": 5723
+  },
+  {
+    "file": "validation/navigation-browser.txt",
+    "source": ".tmp/profit-layout-nav-compat-browser.log",
+    "sha256": "af65379485b398a2d2509c1380c57f57e28531d5e2964e1d6dc8ee44fac15ca2",
+    "bytes": 943
+  },
+  {
+    "file": "validation/vitest.json",
+    "source": ".tmp/profit-layout-final-tests.json",
+    "sha256": "201e65275361bd130267f617aea2256f78563068ac81f26f827eb7737f70f7d6",
+    "bytes": 433702
+  },
+  {
+    "file": "validation/build.txt",
+    "source": ".tmp/profit-layout-final-build.log",
+    "sha256": "f60e30dd5e342f38d59d53c20d48ed36009123a34b968f9ad8ff3402a69a6094",
+    "bytes": 2692
+  },
+  {
+    "file": "validation/source-lint.txt",
+    "source": ".tmp/profit-layout-final-lint.log",
+    "sha256": "7bb949f7338d8dd0c1cc205aa70e0fe40efe711f388ba0033b715ee2236036d6",
+    "bytes": 16637
+  },
+  {
+    "file": "validation/typecheck.txt",
+    "source": ".tmp/profit-layout-ready-final-typecheck.log",
+    "sha256": "1877942ef28307a5c24a93f7f3e808dae9f1be3c1884bcd8b477f21683e1b46d",
+    "bytes": 52
+  },
+  {
+    "file": "validation/e2e-lint.txt",
+    "source": ".tmp/profit-layout-ready-final-lint.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0
+  },
+  {
+    "file": "validation/class-guard.txt",
+    "source": ".tmp/profit-layout-final-class-guard.log",
+    "sha256": "0fd4c7cc850dd33a8ac85fa40f8fd2dcc9421f63efc4b019bfb8f12681c4a2f4",
+    "bytes": 24
+  },
+  {
+    "file": "screenshots/profit-1440-light.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance-populated-profit-layout-1440-light-chromium/populated-cards.png",
+    "sha256": "81498d2f606f64d1697d5daaaa229352e5ad7dc90b15b1bfcdd9df98152b48a4",
+    "bytes": 119813
+  },
+  {
+    "file": "screenshots/profit-1440-dark.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance-populated-profit-layout-1440-dark-chromium/populated-cards.png",
+    "sha256": "e67aace1da61a4547e170996753650892b1a3099b0c7edeb0bdcb421ea8caa75",
+    "bytes": 121674
+  },
+  {
+    "file": "screenshots/profit-390-light.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance-populated-profit-layout-390-light-chromium/populated-cards.png",
+    "sha256": "00693e735b408a2c1a13bcae8279aff1a9972da7e5e4473ce2cea844f7959295",
+    "bytes": 54421
+  },
+  {
+    "file": "screenshots/profit-390-dark.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance-populated-profit-layout-390-dark-chromium/populated-cards.png",
+    "sha256": "6236b1787e7e48532d8730d52fffc26d1f22c70d9b7f8933069a6bd6a412c0a1",
+    "bytes": 55434
+  },
+  {
+    "file": "screenshots/profit-desktop-stress.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--52a80--platform-reference-selects-chromium/large-negative-long-name.png",
+    "sha256": "93e06932981c983b7d4184653dc36d7e93375e7f371ea3406ebce4fc75c7903a",
+    "bytes": 153625
+  },
+  {
+    "file": "screenshots/reference-mobile-light.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--eb1c7-rds-with-coarse-touch-light-chromium/coarse-long-reference-menu.png",
+    "sha256": "7d2ffa0205e9a27cc1b4f378b60a093e6c0c6fbc49420f8683c56b718b746f35",
+    "bytes": 58404
+  },
+  {
+    "file": "screenshots/profit-mobile-stress-light.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--eb1c7-rds-with-coarse-touch-light-chromium/coarse-long-negative-cards.png",
+    "sha256": "ea03771d7371f9bac5ca8429a7ba54b59c4abe1136ac803d8afdbe37a418f7ba",
+    "bytes": 70064
+  },
+  {
+    "file": "screenshots/reference-mobile-dark.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--9ac29-ards-with-coarse-touch-dark-chromium/coarse-long-reference-menu.png",
+    "sha256": "c1fe1807055970de00f5048adf544a65e33dc8d56b4f2606f8cc2d35a70039a5",
+    "bytes": 58526
+  },
+  {
+    "file": "screenshots/profit-mobile-stress-dark.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--9ac29-ards-with-coarse-touch-dark-chromium/coarse-long-negative-cards.png",
+    "sha256": "17bfcb82165cec52067e23c97021222d727a809b13f953b3efda5e4ae2ba52c2",
+    "bytes": 65598
+  },
+  {
+    "file": "screenshots/tiktok-usd.png",
+    "source": ".tmp/profit-layout-ready-final/profit-layout--acceptance--950b9-preserve-numeric-fee-intent-chromium/tiktok-USD-selects.png",
+    "sha256": "0ddd328205df6db29a5789887493337fafe55503775fe903afa106debce19376",
+    "bytes": 78252
+  },
+  {
+    "file": "navigation/1440/analysis.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/analysis.png",
+    "sha256": "94f9d216bc6bb141c12498859628a392cce0b15bd3a81f862e406f804613850c",
+    "bytes": 29854
+  },
+  {
+    "file": "navigation/1440/chroma.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/chroma.png",
+    "sha256": "607337c5e75d89446ae00ed77bf3692772e677495fb9318b2f6d98dab5de0072",
+    "bytes": 104495
+  },
+  {
+    "file": "navigation/1440/dashboard.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/dashboard.png",
+    "sha256": "7a9c49ad6accdc7dc9f5f8958e43b6c4db0a55ebf4a5ed2d0f77a096b7dbcec1",
+    "bytes": 81917
+  },
+  {
+    "file": "navigation/1440/finance.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/finance.png",
+    "sha256": "05ca26a5f8c1f44c2c7dc8c2d5859384f082820090270bc0dcab94530e089ee7",
+    "bytes": 100418
+  },
+  {
+    "file": "navigation/1440/personal-center.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/personal-center.png",
+    "sha256": "f7f971209310320a9a68a6d77e0452756b7a962630986f63c2745648f1f47649",
+    "bytes": 50670
+  },
+  {
+    "file": "navigation/1440/product-list.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/product-list.png",
+    "sha256": "d1d00979ffd392f486ca91cf7cfbb13879a0e05e7e854f049aeb65cd754ab930",
+    "bytes": 52151
+  },
+  {
+    "file": "navigation/1440/profit.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/profit.png",
+    "sha256": "00feac84b26a9a5370ed02c3c339c3ea08791e611b403d1e8a26ab57c9abdbf2",
+    "bytes": 78325
+  },
+  {
+    "file": "navigation/1440/restock.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/restock.png",
+    "sha256": "d0b26500b13bcc49414b9b0d23cf9921dc5bfeb5f855568551fb79ff94fb50f4",
+    "bytes": 38882
+  },
+  {
+    "file": "navigation/1440/schedule.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/schedule.png",
+    "sha256": "a7d55ab61bd89300d718edd07aa81bbb74044f15c5addf1bac923a72df31414f",
+    "bytes": 48493
+  },
+  {
+    "file": "navigation/1440/timings.json",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/timings.json",
+    "sha256": "d124647eb2a8cbe328b338c0ba5105c6c8709cc87705fb16770c7b2c7eb6095a",
+    "bytes": 370
+  },
+  {
+    "file": "navigation/1440/usage.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/usage.png",
+    "sha256": "5ff2492d75117e4b17b0e592cfe30c29f01389c3c6d540704a33cb3d29c13c85",
+    "bytes": 86160
+  },
+  {
+    "file": "navigation/1440/users.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-1440-light-chromium/users.png",
+    "sha256": "90cff9d3407cdbfa28aaa7dc48773368a0898fdc67cade076be0547ba2730fc2",
+    "bytes": 37761
+  },
+  {
+    "file": "navigation/390/analysis.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/analysis.png",
+    "sha256": "187962bbba257eb39f4974957bb0a2f1b66befc53dc6d8571d9bdf652f8873a9",
+    "bytes": 19351
+  },
+  {
+    "file": "navigation/390/chroma.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/chroma.png",
+    "sha256": "6762d638fff04a2bd259d85d52509431e4294062150ae3fde71e53217ffdca42",
+    "bytes": 36547
+  },
+  {
+    "file": "navigation/390/dashboard.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/dashboard.png",
+    "sha256": "be11024fa2977ae1708f797150a9eb56fef8af4ae0e7b960692fad19d5d713c9",
+    "bytes": 39640
+  },
+  {
+    "file": "navigation/390/finance.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/finance.png",
+    "sha256": "77d64ded6f99ce1cf3099e8bab9643f5c40d0c77c47b6d130e53b80fb23c8bab",
+    "bytes": 51508
+  },
+  {
+    "file": "navigation/390/personal-center.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/personal-center.png",
+    "sha256": "8cbd2321d276be3adfaae0c4b8a81a90e4849d24783170a6fea04b1ffc274bec",
+    "bytes": 34541
+  },
+  {
+    "file": "navigation/390/product-list.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/product-list.png",
+    "sha256": "bbf9a9a93b9ec4f138a5c5a61927ac9b4c274b93061373ebf6c48f725c06fbcf",
+    "bytes": 32416
+  },
+  {
+    "file": "navigation/390/profit.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/profit.png",
+    "sha256": "5b73a5942579cb2d16edf3a68c3ae6d269d9198eda183117bf04aada3abf9f90",
+    "bytes": 51693
+  },
+  {
+    "file": "navigation/390/restock.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/restock.png",
+    "sha256": "10ae225fa113bd613a917098ebc844fb1aef0460174654cf905c0cfcb0de6a10",
+    "bytes": 29324
+  },
+  {
+    "file": "navigation/390/schedule.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/schedule.png",
+    "sha256": "3a3d5afa1a50182b8bc5f3b6a9cf73ac2d0841af7233316f46ff271020180d17",
+    "bytes": 12942
+  },
+  {
+    "file": "navigation/390/timings.json",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/timings.json",
+    "sha256": "a5cdb24978be951a92f5f38cbc9a82c570fac3fe497522190af609dc35cb5c81",
+    "bytes": 368
+  },
+  {
+    "file": "navigation/390/usage.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/usage.png",
+    "sha256": "d464c3a30bd5d6250738cadcfc9f07555409a7dd89c211092f78735999dd7237",
+    "bytes": 41480
+  },
+  {
+    "file": "navigation/390/users.png",
+    "source": ".tmp/profit-layout-nav-compat/ui-migration-all-modules-390-light-chromium/users.png",
+    "sha256": "9f78ec2336a81af2dd89ac01473996cf71acfc6578b8837376b8931352d56d03",
+    "bytes": 26178
+  }
+]

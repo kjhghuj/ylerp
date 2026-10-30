@@ -425,20 +425,20 @@ export const ProfitBreakdown: React.FC<ProfitBreakdownProps> = ({
         onFocus={() => setTooltipOpen(true)}
         onBlur={() => setTooltipOpen(false)}
         onClick={openDrawer}
-        className="flex w-full cursor-pointer flex-col items-center border-b border-border/50 p-4 text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+        className="flex h-auto min-w-0 w-full cursor-pointer flex-col items-center gap-0 whitespace-normal border-b border-border/50 p-4 text-center focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
       >
         <span className="mb-1 border-b border-dashed border-slate-300 pb-0.5 text-[10px] font-bold tracking-wider text-muted-foreground">
           {t.matrix.netProfitCNY}
         </span>
-        <span className={`text-4xl font-black tracking-tight transition-transform hover:scale-105 ${result.finalRevenueCNY > 0 ? 'text-success' : 'text-danger'}`}>
+        <span className={`max-w-full break-all text-3xl font-black tabular-nums leading-tight tracking-tight sm:text-4xl ${result.finalRevenueCNY > 0 ? 'text-success' : 'text-danger'}`}>
           <span className="text-xl text-muted-foreground">¥</span>{result.finalRevenueCNY.toFixed(2)}
         </span>
         {canUseLocal && (
-          <span className={`mt-0.5 text-sm font-bold ${result.finalRevenueLocal > 0 ? 'text-success' : 'text-danger'}`}>
+          <span className={`mt-0.5 max-w-full break-all text-sm font-bold tabular-nums ${result.finalRevenueLocal > 0 ? 'text-success' : 'text-danger'}`}>
             ≈ {formatCurrencyAmount(result.finalRevenueLocal, currency)} {currency}
           </span>
         )}
-        <span className="mt-2 flex gap-2">
+        <span className="mt-2 flex max-w-full flex-wrap justify-center gap-2">
           <span className="rounded bg-accent px-2 py-0.5 text-xs font-bold text-primary">{t.matrix.margin}: {result.margin.toFixed(1)}%</span>
           <span className="rounded bg-purple-50 px-2 py-0.5 text-xs font-bold text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">{t.matrix.roi}: {result.roi.toFixed(0)}%</span>
         </span>

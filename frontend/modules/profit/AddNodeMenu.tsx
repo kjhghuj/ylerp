@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
-import { NativeSelect } from '../../components/ui/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { PLATFORMS, PlatformType } from '../../platformConfig';
 import { ProfitTemplate } from './types';
@@ -51,9 +51,12 @@ export const AddNodeMenu: React.FC<AddNodeMenuProps> = ({ showAddMenu, setShowAd
                 <h4 className="text-xs font-semibold text-muted-foreground">{t.matrix.createBlank}</h4>
                 <div className="grid grid-cols-2 items-center gap-2">
                     <span className="rounded-md bg-accent p-2 text-xs font-medium text-primary">{t.matrix.sites[siteCountry] || siteCountry} ({siteCountry})</span>
-                    <NativeSelect id={platformId} aria-label="平台" value={siteCountry === 'USD' ? 'tiktok' : selectedPlatform} onChange={event => setSelectedPlatform(event.target.value as PlatformType)} className="text-xs">
-                        {Object.keys(PLATFORMS).filter(platform => siteCountry !== 'USD' || platform === 'tiktok').map(platform => <option key={platform} value={platform}>{t.matrix.platforms[platform as PlatformType] || PLATFORMS[platform as PlatformType].name}</option>)}
-                    </NativeSelect>
+                    <Select value={siteCountry === 'USD' ? 'tiktok' : selectedPlatform} onValueChange={value => setSelectedPlatform(value as PlatformType)}>
+                        <SelectTrigger id={platformId} aria-label="平台" className="min-w-0 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {Object.keys(PLATFORMS).filter(platform => siteCountry !== 'USD' || platform === 'tiktok').map(platform => <SelectItem key={platform} value={platform}>{t.matrix.platforms[platform as PlatformType] || PLATFORMS[platform as PlatformType].name}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <Button onClick={onAddBlank} className="w-full">{siteCountry === 'USD' ? t.templates.newCrossBorderNode : t.matrix.newNode}</Button>
             </div>

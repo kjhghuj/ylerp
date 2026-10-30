@@ -1,0 +1,22 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 1024
+  },
+  "dark": false,
+  "timings": {
+    "firstRenderMs": 274,
+    "dashboard": 30,
+    "profit": 265,
+    "product-list": 264,
+    "finance": 304,
+    "restock": 238,
+    "chroma": 227,
+    "schedule": 215,
+    "analysis": 225,
+    "usage": 228,
+    "users": 172
+  },
+  "resources": [],
+  "baselineOverflow": []
+}

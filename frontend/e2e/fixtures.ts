@@ -97,13 +97,29 @@ export async function installFixtures(page: Page, { authenticated = true, dark =
 }
 
 export async function navigate(page: Page, label: string) {
+  // Do not choose the compact-menu fallback while the authenticated shell is
+  // still replacing its loading screen.
+  await expect(page.locator('main')).toBeVisible();
   const button = page.getByRole('button', { name: label, exact: true });
   if (!(await button.first().isVisible())) {
     const menu = page.getByRole('button', { name: /打开.*菜单|导航菜单|打开导航|菜单/ }).first();
-    if (await menu.count()) await menu.click();
-    else await page.locator('header button').first().click();
+    const opener = await menu.count() ? menu : page.locator('header button').first();
+    const usesSheet = await opener.getAttribute('aria-haspopup') === 'dialog';
+    const sheet = page.locator('[data-ui="sheet"][role="dialog"]');
+    await opener.click();
+    if (usesSheet) await expect(sheet).toBeVisible();
+    await button.filter({ visible: true }).first().click();
+    // Radix may restore focus after a Sheet's exit animation. Wait for that
+    // lifecycle before the caller fills its first input; otherwise WebKit's
+    // text insertion can race focus restoration. Legacy baseline menus have
+    // no Radix Sheet lifecycle, so retain their existing interaction path.
+    if (usesSheet) {
+      await expect(sheet).toHaveCount(0);
+      await expect(opener).toBeFocused();
+    }
+  } else {
+    await button.filter({ visible: true }).first().click();
   }
-  await button.filter({ visible: true }).first().click();
   await expect(page.locator('main')).toBeVisible();
 }
 

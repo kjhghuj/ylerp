@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TargetPricingPanel } from '../modules/profit/TargetPricingPanel';
 import { DEFAULT_NODE_DATA, DEFAULT_SITE_INPUTS, type PlatformNode } from '../modules/profit/types';
@@ -18,6 +18,16 @@ const target = (value: string) => fireEvent.change(screen.getByLabelText('目标
 const flush = () => act(() => { vi.advanceTimersByTime(300); });
 const apply = () => screen.getByRole('button', { name: '应用此售价' });
 
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => platformMethods.forEach(key => {
+  if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+}));
+afterAll(() => platformMethods.forEach((key, index) => {
+  if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+  else Reflect.deleteProperty(HTMLElement.prototype, key);
+}));
+
 describe('TargetPricingPanel', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -28,7 +38,8 @@ describe('TargetPricingPanel', () => {
     expect(screen.queryByLabelText('目标收入利润率')).not.toBeInTheDocument();
     open();
     expect(screen.getByLabelText('目标收入利润率')).toHaveValue('');
-    expect(screen.getByLabelText('基准计算节点')).toHaveValue('n1');
+    expect(screen.getByLabelText('基准计算节点')).toHaveTextContent('MY reference');
+    expect(props.onBasisChange).toHaveBeenLastCalledWith('n1');
     target('20');
     act(() => { vi.advanceTimersByTime(299); });
     expect(apply()).toBeDisabled();
@@ -94,15 +105,17 @@ describe('TargetPricingPanel', () => {
     document.body.style.overflow = '';
   });
 
-  it('requires an explicit basis for multiple nodes and marks the selected node', () => {
+  it('requires an explicit basis for multiple nodes and marks the selected node', async () => {
     const props = { ...base(), nodes: [node, { ...node, id: 'n2', name: 'Second' }] };
     render(<TargetPricingPanel {...props} />);
     open(); target('20'); flush();
     expect(apply()).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('基准计算节点'), { target: { value: 'n2' } });
-    flush();
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('基准计算节点'));
+    await user.click(screen.getByRole('option', { name: /Second/ }));
     expect(props.onBasisChange).toHaveBeenLastCalledWith('n2');
-    expect(apply()).toBeEnabled();
+    await waitFor(() => expect(apply()).toBeEnabled());
   });
 
   it('invalidates results immediately on changed costs, node deletion, rates and draft errors', () => {
@@ -121,6 +134,7 @@ describe('TargetPricingPanel', () => {
     flush(); expect(apply()).toBeDisabled();
     rerender(<TargetPricingPanel {...props} nodes={[]} />);
     flush(); expect(apply()).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: '基准计算节点' })).toBeDisabled();
     expect(props.onBasisChange).toHaveBeenLastCalledWith(null);
   });
 
@@ -137,15 +151,37 @@ describe('TargetPricingPanel', () => {
     flush(); expect(apply()).toBeEnabled();
   });
 
-  it('filters graphs and invalid historical nodes and supports zero percent', () => {
+  it('filters graphs and invalid historical nodes and supports zero percent', async () => {
     const props = { ...base(), nodes: [node, { ...node, id: 'graph', graphTemplateId: 'g' },
       { ...node, id: 'invalid', persistedData: { kind: 'invalid' as const, schemaVersion: 99, rawData: {} } }] };
     render(<TargetPricingPanel {...props} />);
     open(); target('0'); flush();
-    expect(screen.getAllByRole('option')).toHaveLength(2);
     expect(apply()).toBeEnabled();
     expect(screen.queryByText(/跨境前台价格/)).not.toBeInTheDocument();
     expect(screen.getByText(/^跨境买家实付价格：/)).toBeInTheDocument();
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('combobox', { name: '基准计算节点' }));
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    expect(screen.getByRole('option')).toHaveTextContent('MY reference');
+    await user.keyboard('{Escape}');
+  });
+
+  it('closes only the nested reference selector on Escape without applying or closing pricing', async () => {
+    const props = { ...base(), nodes: [node, { ...node, id: 'n2', name: 'Second' }] };
+    render(<TargetPricingPanel {...props} />);
+    open(); target('20'); flush();
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    const selection = screen.getByRole('combobox', { name: '基准计算节点' });
+    await user.click(selection);
+    expect(screen.getByRole('listbox')).toBeVisible();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: '按目标利润率定价 MYR' })).toBeVisible();
+    await waitFor(() => expect(selection).toHaveFocus());
+    expect(apply()).toBeDisabled();
+    expect(props.onApply).not.toHaveBeenCalled();
   });
 
   it('shows invalid and unreachable targets without an apply action', () => {

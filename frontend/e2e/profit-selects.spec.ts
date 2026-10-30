@@ -29,6 +29,8 @@ async function verifyProfitSelects(page: Page, testInfo: TestInfo, dark: boolean
   const coupon = page.locator('input[name="sellerCoupon"]');
   await expect(site).toHaveText('马来西亚 (MYR)');
   await productName.fill('下拉框回归商品');
+  await expect(productName).toHaveValue('下拉框回归商品');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('yl-profit-global-inputs') || '{}').name)).toBe('下拉框回归商品');
   await cost.fill('12.345');
   await cost.blur();
   await expect(cost).toHaveValue('12.35');
@@ -36,6 +38,7 @@ async function verifyProfitSelects(page: Page, testInfo: TestInfo, dark: boolean
   await coupon.fill('20');
   await coupon.blur();
   await expect(coupon).toHaveValue('20.00');
+  await expect(productName).toHaveValue('下拉框回归商品');
 
   await activate(couponType);
   await expect(page.getByRole('option', { name: '固定金额', exact: true })).toBeVisible();
@@ -64,6 +67,7 @@ async function verifyProfitSelects(page: Page, testInfo: TestInfo, dark: boolean
   await expect(couponType).toBeFocused();
   await expect(couponType).toHaveText('固定金额');
 
+  await expect(productName).toHaveValue('下拉框回归商品');
   await activate(site);
   await expect(page.getByRole('option', { name: '新加坡 (SGD)', exact: true })).toBeVisible();
   await expectMenuWithinViewport(page);

@@ -3,7 +3,7 @@ import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import React from 'react';
 import { Box, RefreshCw, RotateCcw, Globe } from 'lucide-react';
-import { NumberInput, TextInput, SelectInput } from '../../components/CalcInputs';
+import { NumberInput, TextInput } from '../../components/CalcInputs';
 import { BuyerPaidPrices, formatCNYAndLocalAmount } from './priceDisplay';
 import { ProfitGlobalInputs } from './types';
 import { translations } from '../../translations';
@@ -65,6 +65,7 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
     siteInputs, onSiteInputChange, inputErrors = {}, pricingPanel,
 }) => {
     const couponTypeId = React.useId();
+    const invoiceId = React.useId();
     return (
     <div className="bg-card border border-border/50 shadow-sm rounded-xl p-3 mb-3 flex-shrink-0">
         <div className="mb-3 flex flex-col gap-2 border-b border-border pb-2 sm:flex-row sm:items-center sm:justify-between">
@@ -138,7 +139,19 @@ export const GlobalInputsPanel: React.FC<GlobalInputsPanelProps> = ({
                 error={inputErrors.purchaseCost}
             />
             <NumberInput label={t.inputs.weight} name="productWeight" value={globalInputs.productWeight} onChange={onGlobalChange} min={0} error={inputErrors.productWeight} />
-            <SelectInput label={t.inputs.supplierInvoice} name="supplierInvoice" value={globalInputs.supplierInvoice} onChange={onGlobalChange} options={[{ value: 'yes', label: t.inputs.invoiceYes }, { value: 'no', label: t.inputs.invoiceNo }]} />
+            <div className="min-w-0">
+                <Label htmlFor={invoiceId} className="mb-0.5 block truncate text-xs font-bold text-muted-foreground">{t.inputs.supplierInvoice}</Label>
+                <Select name="supplierInvoice" value={globalInputs.supplierInvoice}
+                    onValueChange={value => onSetGlobalInputs(previous => ({ ...previous, supplierInvoice: value as ProfitGlobalInputs['supplierInvoice'] }))}>
+                    <SelectTrigger id={invoiceId} aria-label={t.inputs.supplierInvoice} className="w-full bg-muted px-2 text-sm font-bold text-foreground">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="yes">{t.inputs.invoiceYes}</SelectItem>
+                        <SelectItem value="no">{t.inputs.invoiceNo}</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
             <NumberInput label={t.inputs.supplierTax} name="supplierTaxPoint" value={globalInputs.supplierTaxPoint} onChange={onGlobalChange} suffix="%" error={inputErrors.supplierTaxPoint} />
             <NumberInput label={t.inputs.vat} name="vatRate" value={globalInputs.vatRate} onChange={onGlobalChange} suffix="%" error={inputErrors.vatRate} />
             <NumberInput label={t.inputs.corpTax} name="corporateIncomeTaxRate" value={globalInputs.corporateIncomeTaxRate} onChange={onGlobalChange} suffix="%" error={inputErrors.corporateIncomeTaxRate} />

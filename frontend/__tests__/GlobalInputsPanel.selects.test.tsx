@@ -66,7 +66,23 @@ describe('profit global panel custom selects', () => {
     expect(submit).not.toHaveBeenCalled();
   });
 
-  it('closes on Escape without selecting and keeps the supplier invoice native', async () => {
+  it('updates supplier invoice through its value setter without changing product drafts or submitting', async () => {
+    const props = makeProps(), submit = vi.fn(e => e.preventDefault());
+    render(<form onSubmit={submit}><GlobalInputsPanel {...props} /></form>);
+    const trigger = screen.getByRole('combobox', { name: t.inputs.supplierInvoice });
+    expect(trigger).toHaveTextContent(t.inputs.invoiceYes);
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('option', { name: t.inputs.invoiceNo }));
+    expect(props.onSetGlobalInputs).toHaveBeenCalledTimes(1);
+    const update = props.onSetGlobalInputs.mock.calls[0][0] as (previous: typeof props.globalInputs) => typeof props.globalInputs;
+    expect(update(props.globalInputs)).toEqual({ ...props.globalInputs, supplierInvoice: 'no' });
+    expect(props.onGlobalChange).not.toHaveBeenCalled();
+    expect(props.onSiteInputChange).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('closes on Escape without selecting', async () => {
     const props = makeProps();
     render(<GlobalInputsPanel {...props} />);
     const trigger = screen.getByRole('combobox', { name: t.inputs.sellerCouponType });
@@ -77,6 +93,5 @@ describe('profit global panel custom selects', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(props.onSiteInputChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('combobox', { name: t.inputs.supplierInvoice }).tagName).toBe('SELECT');
   });
 });

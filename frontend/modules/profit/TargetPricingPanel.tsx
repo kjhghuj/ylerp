@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
-import { NativeSelect } from '../../components/ui/native-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Target, X } from 'lucide-react';
 import type { translations } from '../../translations';
@@ -122,14 +122,16 @@ export const TargetPricingPanel = ({ nodes, globalInputs, siteInputs, currency, 
           </div>
           <div>
             <label htmlFor={selectId} className="mb-1 block text-xs font-bold text-muted-foreground">{labels.basis}</label>
-            <NativeSelect id={selectId} value={selected?.id ?? ''} disabled={!eligible.length}
-              onChange={event => changePreference({ nodeId: event.target.value })}
-              className="h-10 w-full min-w-0 rounded-lg border border-blue-200 bg-card px-2 text-sm">
-              <option value="" disabled>{labels.selectNode}</option>
-              {eligible.map((node, index) => <option key={node.id} value={node.id}>
-                {PLATFORMS[node.platform]?.name ?? node.platform} · {node.name || t.templates.unnamedNode} · #{index + 1}
-              </option>)}
-            </NativeSelect>
+            <Select value={selected?.id ?? ''} disabled={!eligible.length} onValueChange={value => changePreference({ nodeId: value })}>
+              <SelectTrigger id={selectId} aria-label={labels.basis} className="h-10 w-full min-w-0 rounded-lg border-border bg-card px-2 text-sm">
+                <SelectValue placeholder={labels.selectNode} />
+              </SelectTrigger>
+              <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-0 max-w-[calc(100vw-2rem)] [&_[data-radix-select-viewport]]:min-w-0">
+                {eligible.map((node, index) => <SelectItem key={node.id} value={node.id} className="min-w-0 whitespace-normal [&>span:last-child]:min-w-0 [&>span:last-child]:whitespace-normal [&>span:last-child]:[overflow-wrap:anywhere]">
+                  {PLATFORMS[node.platform]?.name ?? node.platform} · {node.name || t.templates.unnamedNode} · #{index + 1}
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
             <p className="mt-1 text-[11px] text-muted-foreground">{labels.nodeHint}</p>
           </div>
         </div>

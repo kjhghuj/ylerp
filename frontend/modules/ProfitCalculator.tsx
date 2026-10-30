@@ -192,7 +192,7 @@ export const ProfitCalculator: React.FC = () => {
                 useLocalCurrency={useLocalCurrency}
                 rates={rates}
                 onGlobalChange={handleGlobalChange}
-                onSetGlobalInputs={setGlobalInputs}
+                onSetGlobalInputs={update => { clearInputError('supplierInvoice'); setGlobalInputs(update); }}
                 onSetUseLocalCurrency={setUseLocalCurrency}
                 onSetSiteCountry={setSiteCountry}
                 t={t}

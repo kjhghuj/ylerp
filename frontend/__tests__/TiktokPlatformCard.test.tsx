@@ -7,6 +7,21 @@ import { createTiktokNode } from '../modules/profit/tiktokFeePolicy';
 import { DEFAULT_SITE_INPUTS } from '../modules/profit/types';
 import { zh } from '../locales/zh';
 
+// jsdom omits pointer capture and layout scrolling used by Radix.
+const methodNames = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const methodDescriptors = methodNames.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => methodNames.forEach(key => {
+  if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+}));
+afterAll(() => methodNames.forEach((key, index) => {
+  if (methodDescriptors[index]) Object.defineProperty(HTMLElement.prototype, key, methodDescriptors[index]!);
+  else Reflect.deleteProperty(HTMLElement.prototype, key);
+}));
+const choose = async (label: string, option: string) => {
+  await userEvent.click(screen.getByRole('combobox', { name: label }));
+  await userEvent.click(screen.getByRole('option', { name: option }));
+};
+
 const groupNames = {
   logistics: '物流结算',
   discounts: '优惠与货损',
@@ -42,7 +57,42 @@ const propsFor = (currency: string) => {
 };
 
 describe('TK template interface', () => {
-  it('prefills the cross-border commission and offers optional US campaign fees with official sources', () => {
+  it.each([
+    ['THB', 'growthGroup', 'electronics', 6.96, { growthServiceFeeRate: 6.96 }],
+    ['MYR', 'bxp', 'myBxp', 4.86, { campaignServiceFeeRate: 4.86, campaignServiceFeeCap: 0 }],
+  ] as const)('preserves numeric preset intent for %s without allowing the manual display option', async (currency, label, option, _rate, expected) => {
+    const props = propsFor(currency);
+    render(<PlatformCard {...props} data={{ ...props.data, growthServiceFeeRate: 2.22, campaignServiceFeeRate: 2.22 }} />);
+    openGroup(groupNames.services);
+    const trigger = screen.getByRole('combobox', { name: zh.profit.tiktok[label] });
+    expect(trigger).toHaveTextContent(zh.profit.tiktok.manual);
+    await userEvent.click(trigger);
+    const manual = screen.getByRole('option', { name: zh.profit.tiktok.manual });
+    expect(manual).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(manual);
+    expect(props.onUpdate).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(trigger).toHaveFocus();
+    await choose(zh.profit.tiktok[label], zh.profit.tiktok[option]);
+    expect(props.onUpdate).toHaveBeenCalledExactlyOnceWith(props.nodeId, expected);
+  });
+
+  it('keeps an unknown US mode and error visible until a valid numeric option is chosen', async () => {
+    const props = propsFor('USD');
+    render(<PlatformCard {...props} data={{ ...props.data, usLocalDeliveryMode: 999 }} inputErrors={{ usLocalDeliveryMode: '确认物流方式' }} />);
+    const trigger = screen.getByRole('combobox', { name: zh.profit.tiktok.usLocalMode });
+    expect(trigger).toHaveTextContent('—');
+    expect(trigger).toHaveAttribute('aria-invalid', 'true');
+    expect(trigger).toHaveAccessibleDescription('确认物流方式');
+    await userEvent.click(trigger);
+    expect(screen.getByRole('option', { name: '—' })).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.keyboard('{Escape}');
+    expect(props.onUpdate).not.toHaveBeenCalled();
+    await choose(zh.profit.tiktok.usLocalMode, zh.profit.tiktok.usLocalIncluded);
+    expect(props.onUpdate).toHaveBeenCalledExactlyOnceWith(props.nodeId, { usLocalDeliveryMode: 4 });
+  });
+
+  it('prefills the cross-border commission and offers optional US campaign fees with official sources', async () => {
     const props = propsFor('USD');
     const node = createTiktokNode('USD', '跨境');
     render(<PlatformCard {...props} nodeName={node.name} data={node.data} templateData={node.persistedData} useLocalCurrency />);
@@ -53,8 +103,8 @@ describe('TK template interface', () => {
     expect(field('tiktokOrderFee')).toHaveValue('0.00');
     expect(field('campaignServiceFeeRate')).toHaveValue('0.00');
     const campaign = screen.getByRole('combobox', { name: zh.profit.tiktok.usCampaignProgram });
-    expect(campaign).toHaveValue('0');
-    fireEvent.change(campaign, { target: { value: '1' } });
+    expect(campaign).toHaveTextContent(zh.profit.tiktok.usNoCampaign);
+    await choose(zh.profit.tiktok.usCampaignProgram, zh.profit.tiktok.usStandardCampaign);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { campaignServiceFeeRate: 1, campaignServiceFeeCap: 0 });
     openGroup(groupNames.rules);
     expect(screen.getByText(zh.profit.tiktok.usCrossBorderFeeHint)).toBeVisible();
@@ -83,14 +133,14 @@ describe('TK template interface', () => {
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { shippingCalculationMode: 2, manualShippingFee: 9.45 });
   });
 
-  it('configures direct cargo and extras in the fold, preserves values on folding and converts extra inputs', () => {
+  it('configures direct cargo and extras in the fold, preserves values on folding and converts extra inputs', async () => {
     const props = propsFor('USD');
     const data = { ...props.data, shippingCalculationMode: 4, usDirectCargoType: 1, usDirectExtraFee: 2 };
     const { rerender } = render(<PlatformCard {...props} data={data} globalInputs={{ ...props.globalInputs, productWeight: 500 }} useLocalCurrency />);
     expect(screen.getByText(`${zh.profit.tiktok.usTotalShippingQuote}: 13.30 USD`)).toBeVisible();
     expect(groupButton(groupNames.logistics)).toHaveTextContent(zh.profit.tiktok.usDirectSpecial);
     openGroup(groupNames.logistics);
-    fireEvent.change(screen.getByRole('combobox', { name: zh.profit.tiktok.usDirectCargo }), { target: { value: '2' } });
+    await choose(zh.profit.tiktok.usDirectCargo, zh.profit.tiktok.usDirectSensitive);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { usDirectCargoType: 2 });
     expect(field('usDirectExtraFee')).toHaveValue('2.00');
     fireEvent.click(groupButton(groupNames.logistics));
@@ -177,7 +227,7 @@ describe('TK template interface', () => {
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { usHeadFreightRatePerKg: useLocalCurrency ? '0' : 0, usHeadFreightConfigured: 1 });
   });
 
-  it('supports manual local delivery or no additional local fee without duplicating shipping inputs', () => {
+  it('supports manual local delivery or no additional local fee without duplicating shipping inputs', async () => {
     const props = propsFor('USD');
     const data = { ...props.data, shippingCalculationMode: 3, usHeadFreightConfigured: 1,
       usHeadFreightFee: 2, usLocalDeliveryMode: 1, lastMileFee: 7,
@@ -189,7 +239,7 @@ describe('TK template interface', () => {
     expect(document.querySelectorAll('input[name="lastMileFee"]')).toHaveLength(1);
     expect(document.querySelector('input[name="usPackageLengthCm"]')).not.toBeInTheDocument();
     expect(document.querySelector('input[name="usShippingDate"]')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByRole('combobox', { name: zh.profit.tiktok.usLocalMode }), { target: { value: '4' } });
+    await choose(zh.profit.tiktok.usLocalMode, zh.profit.tiktok.usLocalIncluded);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { usLocalDeliveryMode: 4 });
     rerender(<PlatformCard {...props} data={{ ...data, usLocalDeliveryMode: 4 }} useLocalCurrency />);
     expect(screen.getByText(`${zh.profit.tiktok.usTotalShippingQuote}: 2.00 USD`)).toBeVisible();
@@ -197,7 +247,7 @@ describe('TK template interface', () => {
     expect(screen.queryByRole('link', { name: zh.profit.tiktok.usLocalRateSource })).not.toBeInTheDocument();
   });
 
-  it('exposes LIVE dimensions, destination and date while preserving values through folding and mode changes', () => {
+  it('exposes LIVE dimensions, destination and date while preserving values through folding and mode changes', async () => {
     const props = propsFor('USD');
     const data = { ...props.data, shippingCalculationMode: 3, usHeadFreightConfigured: 1, usHeadFreightFee: 2,
       usLocalDeliveryMode: 3, usDestinationRegion: 1, usPackageLengthCm: 10, usPackageWidthCm: 5,
@@ -209,7 +259,7 @@ describe('TK template interface', () => {
     expect(field('usShippingDate')).toHaveValue('2026-10-04');
     fireEvent.change(field('usShippingDate'), { target: { value: '2026-10-05' } });
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { usShippingDate: 20261005 });
-    fireEvent.change(screen.getByRole('combobox', { name: zh.profit.tiktok.usRegion }), { target: { value: '2' } });
+    await choose(zh.profit.tiktok.usRegion, zh.profit.tiktok.usRegionOther);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { usDestinationRegion: 2 });
     fireEvent.change(field('usHeadFreightFee'), { target: { value: '2.' } });
     props.onUpdate.mockClear();
@@ -253,7 +303,7 @@ describe('TK template interface', () => {
     expect(props.onUpdate).not.toHaveBeenCalled();
   });
 
-  it('keeps Singapore last-mile costs manual and offers capped BXP choices', () => {
+  it('keeps Singapore last-mile costs manual and offers capped BXP choices', async () => {
     const props = propsFor('SGD');
     render(<PlatformCard {...props} data={{ ...props.data, firstWeight: 0, lastMileFee: 7 }} />);
     expect(props.onUpdate).not.toHaveBeenCalled();
@@ -261,18 +311,18 @@ describe('TK template interface', () => {
     expect(field('lastMileFee')).toHaveValue('3.50');
     expect(field('lastMileFee')).toBeVisible();
     openGroup(groupNames.services);
-    fireEvent.change(screen.getByRole('combobox', { name: zh.profit.tiktok.bxp }), { target: { value: '6.54' } });
+    await choose(zh.profit.tiktok.bxp, zh.profit.tiktok.campaignHigh);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { campaignServiceFeeRate: 6.54, campaignServiceFeeCap: 30 });
     openGroup(groupNames.rules);
     expect(screen.getByRole('link', { name: zh.profit.tiktok.category })).toHaveAttribute('href', expect.stringContaining('2161524467910401'));
   });
 
-  it('shows the current Philippine growth choices and local fixed fee', () => {
+  it('shows the current Philippine growth choices and local fixed fee', async () => {
     const props = propsFor('PHP');
     render(<PlatformCard {...props} useLocalCurrency />);
     openGroup(groupNames.services);
     expect(document.querySelector('input[name="tiktokOrderFee"]')).toHaveValue('5.00');
-    fireEvent.change(screen.getByRole('combobox', { name: zh.profit.tiktok.growthGroup }), { target: { value: '1' } });
+    await choose(zh.profit.tiktok.growthGroup, zh.profit.tiktok.lowerGroup);
     expect(props.onUpdate).toHaveBeenLastCalledWith(props.nodeId, { growthServiceFeeRate: 1 });
   });
 

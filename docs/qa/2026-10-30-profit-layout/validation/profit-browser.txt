@@ -1,0 +1,56 @@
+[WebServer] (node:61420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] (node:37440) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 29 tests using 3 workers
+
+(node:43556) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:11780) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:63604) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  2 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1920 dark (1.4s)
+  ok  3 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1920 light (1.4s)
+  ok  1 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1440 light (1.6s)
+  ok  4 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1440 dark (1.3s)
+  ok  6 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1366 dark (1.3s)
+  ok  5 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 1366 light (1.4s)
+  ok  7 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 768 light (1.1s)
+  ok  9 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 390 light (1.1s)
+  ok  8 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 768 dark (1.1s)
+  ok 12 [chromium] › e2e\profit-layout.spec.ts:180:1 › @acceptance profit reference select is disabled without any nodes (1.1s)
+  ok 10 [chromium] › e2e\profit-layout.spec.ts:114:5 › @acceptance populated profit layout 390 dark (1.3s)
+  ok 13 [chromium] › e2e\profit-layout.spec.ts:191:3 › @acceptance populated profit cards with coarse touch light (1.9s)
+  ok 14 [chromium] › e2e\profit-layout.spec.ts:191:3 › @acceptance populated profit cards with coarse touch dark (1.9s)
+  ok 15 [chromium] › e2e\profit-layout.spec.ts:246:3 › @acceptance TikTok MYR controlled selects preserve numeric fee intent (1.4s)
+  ok 16 [chromium] › e2e\profit-layout.spec.ts:246:3 › @acceptance TikTok SGD controlled selects preserve numeric fee intent (1.6s)
+  ok 11 [chromium] › e2e\profit-layout.spec.ts:136:1 › @acceptance @cross-browser profit stress values, save/delete and nested platform/reference selects (5.6s)
+  ok 17 [chromium] › e2e\profit-layout.spec.ts:246:3 › @acceptance TikTok THB controlled selects preserve numeric fee intent (2.0s)
+  ok 18 [chromium] › e2e\profit-layout.spec.ts:246:3 › @acceptance TikTok PHP controlled selects preserve numeric fee intent (2.1s)
+  ok 19 [chromium] › e2e\profit-layout.spec.ts:246:3 › @acceptance TikTok USD controlled selects preserve numeric fee intent (3.0s)
+  ok 20 [chromium] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction light (2.6s)
+  ok 21 [chromium] › e2e\profit-selects.spec.ts:110:3 › @acceptance profit selects coarse mobile light (2.8s)
+(node:69296) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 22 [chromium] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction dark (2.3s)
+  ok 23 [chromium] › e2e\profit-selects.spec.ts:110:3 › @acceptance profit selects coarse mobile dark (2.4s)
+(node:46600) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:45884) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 25 [firefox] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction light (5.3s)
+  ok 26 [firefox] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction dark (4.7s)
+(node:33100) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:66100) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 24 [firefox] › e2e\profit-layout.spec.ts:136:1 › @acceptance @cross-browser profit stress values, save/delete and nested platform/reference selects (7.5s)
+(node:69020) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 29 [webkit] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction dark (11.5s)
+  ok 27 [webkit] › e2e\profit-selects.spec.ts:106:3 › @cross-browser profit selects preserve values and keyboard interaction light (14.8s)
+  ok 28 [webkit] › e2e\profit-layout.spec.ts:136:1 › @acceptance @cross-browser profit stress values, save/delete and nested platform/reference selects (15.0s)
+
+  29 passed (44.5s)
