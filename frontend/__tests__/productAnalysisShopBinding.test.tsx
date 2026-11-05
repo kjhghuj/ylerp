@@ -7,8 +7,30 @@
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductAnalysis } from '../modules/product-analysis/ProductAnalysis';
+
+// jsdom lacks pointer capture and layout scrolling used by the real Radix list.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => {
+  platformMethods.forEach(key => {
+    if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+  });
+});
+afterAll(() => {
+  platformMethods.forEach((key, index) => {
+    if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  });
+});
+
+/** Real interaction: open the shop select and pick the option (no fake change events). */
+const switchShop = async (shopId: string) => {
+  fireEvent.click(screen.getByRole('combobox', { name: '店铺' }));
+  const option = await screen.findByRole('option', { name: shopId === 'shop-1' ? /MY 主店/ : /PH 分店/ });
+  fireEvent.click(option);
+};
 import {
   batchDeleteDailyUploads,
   deleteDailyUpload,
@@ -194,7 +216,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     await openCalendarView();
     await waitFor(() => expect(isUploadedCell(screen.getByLabelText('2026-09-06'))).toBe(true));
 
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
 
     // B 请求悬挂：A 店日历立即进入加载态（隐藏），单日/批量删除入口不可达
     await waitFor(() => expect(screen.getByLabelText('calendar-loading')).toBeTruthy());
@@ -220,7 +242,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     await openCalendarView();
     await waitFor(() => expect(screen.getByLabelText('2026-09-06')).toBeTruthy());
 
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('B 店日历失败');
@@ -239,7 +261,7 @@ describe('calendar binds to its owning shop (task 2)', () => {
     await openCalendarView();
     await waitFor(() => expect(screen.getByLabelText('2026-09-06')).toBeTruthy());
 
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
     // B 店同日数据加载完成后，删除按钮指向 B 店数据
     const deleteButton = await waitFor(() => screen.getByLabelText('删除 2026-09-06'));
     fireEvent.mouseOver(deleteButton.closest('span')!);
@@ -272,9 +294,9 @@ describe('calendar binds to its owning shop (task 2)', () => {
     pending[0].resolve(SHOP_A_DAYS);
     await waitFor(() => expect(isUploadedCell(screen.getByLabelText('2026-09-06'))).toBe(true));
 
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
     await waitFor(() => expect(pending).toHaveLength(2)); // B 请求悬挂
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-1' } });
+    await switchShop('shop-1');
     await waitFor(() => expect(pending).toHaveLength(3)); // 切回 A 的新请求
 
     // A 的最新请求先返回、B 的旧请求迟到返回：B 的日期绝不能标记为已上传
@@ -300,7 +322,7 @@ describe('potential list binds to its query identity (task 5)', () => {
 
     // B 店新品榜失败：A 店榜单不得继续显示，错误可见
     mockFetchPotential.mockRejectedValueOnce(new Error('B 店新品榜失败'));
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
     expect(await screen.findByText(/B 店新品榜失败/)).toBeTruthy();
     expect(screen.queryByText('A 店爆款')).toBeNull();
 
@@ -342,9 +364,9 @@ describe('potential list binds to its query identity (task 5)', () => {
     await waitFor(() => expect(screen.getByText('A 店商品')).toBeTruthy());
 
     // 切 B（B 请求悬挂）→ 切回 A（A 的新请求先返回）
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
     await waitFor(() => expect(pending).toHaveLength(2));
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-1' } });
+    await switchShop('shop-1');
     await waitFor(() => expect(pending).toHaveLength(3));
     pending[2].resolve(potentialResponse(['A 店商品']));
     await waitFor(() => expect(screen.getByText('A 店商品')).toBeTruthy());

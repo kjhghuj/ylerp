@@ -1,5 +1,5 @@
 import { Input } from '../../../components/ui/input';
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Button } from '../../../components/ui/button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
 /** 计划列表抽屉：搜索/分页、详情（历史计算依据）、草稿编辑、确认（重复提醒）、作废、复制为新版本、导出 */
@@ -202,18 +202,13 @@ export default function PlanHistoryDrawer(props: PlanHistoryDrawerProps) {
             style={{ color: 'hsl(var(--ui-foreground))' }}
           />
         </label>
-        <NativeSelect
+        <FormSelect
           value={statusFilter}
-          onChange={event => { setStatusFilter(event.target.value as '' | PlanListItem['status']); setPage(1); }}
+          onValueChange={value => { setStatusFilter(value as '' | PlanListItem['status']); setPage(1); }}
           aria-label="按状态筛选"
-          className="h-8 w-auto rounded-lg border px-2 py-1 text-[12.5px]"
-          style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
-        >
-          <option value="">全部状态</option>
-          <option value="draft">草稿</option>
-          <option value="confirmed">已确认</option>
-          <option value="void">已作废</option>
-        </NativeSelect>
+          triggerClassName="h-8 w-auto rounded-lg border px-2 py-1 text-[12.5px]"
+          options={[{ value: '', label: '全部状态' }, { value: 'draft', label: '草稿' }, { value: 'confirmed', label: '已确认' }, { value: 'void', label: '已作废' }]}
+        />
       </div>
 
       {loading && <p className="text-[13px]" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>加载中…</p>}

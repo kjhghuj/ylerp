@@ -1,4 +1,4 @@
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
 import {createUuid} from '../../../src/uuid';
@@ -111,8 +111,7 @@ function CollectionModalContent({shop,onClose,onImported,syncState,syncError}:Co
                 if(live.current){setRunId(run.id);setPage(1);setDetail(null);}})}>开始采集</Button>
           </div>
           <div className="pa-collection-section"><strong>任务进度</strong>
-            {runs.length>0&&<NativeSelect className="h-8 w-auto" aria-label="选择采集任务" value={runId} onChange={e=>{setDetail(null);setRunId(e.target.value);setPage(1);}}>
-              {runs.map(run=><option key={run.id} value={run.id}>{run.fromDate.slice(0,10)} ~ {run.toDate.slice(0,10)} · {run.status}</option>)}</NativeSelect>}
+            {runs.length>0&&<FormSelect triggerClassName="h-8 w-auto" aria-label="选择采集任务" value={runId||null} onValueChange={value=>{setDetail(null);setRunId(value);setPage(1);}} options={runs.map(run=>({value:run.id,label:`${run.fromDate.slice(0,10)} ~ ${run.toDate.slice(0,10)} · ${run.status}`}))} />}
             {detail?.batch&&<><p>{Object.entries(detail.batch.counts).map(([key,count])=>`${labels[key]||key} ${count}`).join(' · ')}</p>
               <div className="pa-collection-actions">{(['pause','resume','cancel','retry'] as const).map(item=><Button variant="outline" key={item} type="button" disabled={busy}
                 onClick={()=>void action(()=>actOnCollectionRun(shop.id,runId,item))}>{({pause:'暂停',resume:'继续',cancel:'取消',retry:'重试失败日期'})[item]}</Button>)}</div>

@@ -1,37 +1,26 @@
-import { Button } from '../../../components/ui/button';
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { createPortal } from "react-dom";
-import { ChevronDown } from "lucide-react";
-import type { RankedRestockTargetSku } from "../utils/restockTargetSku";
+import React, { useMemo } from 'react';
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../components/ui/select';
+import type { RankedRestockTargetSku } from '../utils/restockTargetSku';
 
 /** 补货V2 / V3 共用：SKU 忽略大小写与首尾空格的相等比较 */
 export const sameSku = (
   left: string | null | undefined,
   right: string | null | undefined,
 ) =>
-  String(left || "")
+  String(left || '')
     .trim()
     .toUpperCase() ===
-  String(right || "")
+  String(right || '')
     .trim()
     .toUpperCase();
 
-const prefersReducedMotion = () =>
-  typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
 const percentageStyle = (percentage: number) =>
   percentage === 100
-    ? "bg-success-subtle text-success ring-success/20"
+    ? 'bg-success-subtle text-success ring-success/20'
     : percentage >= 80
-      ? "bg-accent text-accent-foreground ring-primary/20"
-      : "bg-muted text-muted-foreground ring-border";
+      ? 'bg-accent text-accent-foreground ring-primary/20'
+      : 'bg-muted text-muted-foreground ring-border';
 
 interface CandidatePickerProps {
   itemId: string;
@@ -41,19 +30,23 @@ interface CandidatePickerProps {
   onChange: (sku: string) => void;
 }
 
-type CandidateMenuPosition = {
-  left: number;
-  width: number;
-  maxHeight: number;
-  placement: "top" | "bottom";
-  top?: number;
-  bottom?: number;
-};
+// Candidate identities are (id, sku) JSON tuples — ids are not guaranteed
+// unique upstream, so neither id nor sku alone can key an option. The c:/u:
+// namespaces never collide with real content because decoding requires the
+// exact prefix plus a valid tuple.
+const CANDIDATE_PREFIX = 'c:';
+const UNKNOWN_PREFIX = 'u:';
+const pairKey = (id: string, sku: string) => JSON.stringify([id, sku]);
+const isBlankSku = (value: string) => !value.trim();
 
-const candidateOptionId = (itemId: string, candidateId: string) =>
-  `target-sku-option-${itemId}-${candidateId}`.replace(/[^A-Za-z0-9_-]/g, "-");
-
-/** 补货V2 / V3 共用：本地 SKU 候选下拉（键盘可访问，portal 定位到 body） */
+/**
+ * 补货V2 / V3 共用：本地 SKU 候选下拉。
+ *
+ * 视图算法（全局选择迁移计划 X01）：
+ * - 外部 `selectedSku` 是唯一权威；组件不保存第二份已选状态。
+ * - 同 (id, sku) 的重复候选只在视图折叠为第一个，不改外部候选、排名或分数。
+ * - 选择回调只回传候选的原始 sku；sameSku 仅用于匹配展示。
+ */
 export const CandidatePicker: React.FC<CandidatePickerProps> = ({
   itemId,
   candidates,
@@ -61,263 +54,104 @@ export const CandidatePicker: React.FC<CandidatePickerProps> = ({
   selectedCandidate,
   onChange,
 }) => {
-  const [expanded, setExpanded] = useState(false);
-  const [menuMounted, setMenuMounted] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const enterFrameRef = useRef<number | null>(null);
-  const exitTimerRef = useRef<number | null>(null);
-  const [menuPosition, setMenuPosition] = useState<CandidateMenuPosition>({
-    left: 8,
-    width: 208,
-    maxHeight: 256,
-    placement: "bottom",
-    top: 0,
-  });
-
-  const updateMenuPosition = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const rect = trigger.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const gap = 4;
-    const width = Math.min(
-      Math.max(rect.width, 208),
-      Math.max(208, viewportWidth - 16),
-    );
-    const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
-    const belowSpace = viewportHeight - rect.bottom - gap - 8;
-    const aboveSpace = rect.top - gap - 8;
-    const placement =
-      belowSpace < 180 && aboveSpace > belowSpace ? "top" : "bottom";
-    const availableSpace = placement === "top" ? aboveSpace : belowSpace;
-    const maxHeight = Math.max(96, Math.min(256, availableSpace));
-    setMenuPosition(
-      placement === "top"
-        ? {
-            left,
-            width,
-            maxHeight,
-            placement,
-            bottom: viewportHeight - rect.top + gap,
-          }
-        : { left, width, maxHeight, placement, top: rect.bottom + gap },
-    );
-  }, []);
-
-  const closeMenu = useCallback(() => {
-    if (enterFrameRef.current !== null)
-      window.cancelAnimationFrame(enterFrameRef.current);
-    if (exitTimerRef.current !== null)
-      window.clearTimeout(exitTimerRef.current);
-    setExpanded(false);
-    setMenuVisible(false);
-    if (prefersReducedMotion()) {
-      setMenuMounted(false);
-      return;
-    }
-    exitTimerRef.current = window.setTimeout(() => {
-      setMenuMounted(false);
-      exitTimerRef.current = null;
-    }, 160);
-  }, []);
-
-  const openMenu = useCallback(() => {
-    if (exitTimerRef.current !== null)
-      window.clearTimeout(exitTimerRef.current);
-    if (enterFrameRef.current !== null)
-      window.cancelAnimationFrame(enterFrameRef.current);
-    updateMenuPosition();
-    setExpanded(true);
-    setMenuMounted(true);
-    setMenuVisible(false);
-    enterFrameRef.current = window.requestAnimationFrame(() => {
-      setMenuVisible(true);
-      enterFrameRef.current = null;
-    });
-  }, [updateMenuPosition]);
-
-  useEffect(() => {
-    const close = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node;
-      if (
-        !rootRef.current?.contains(target) &&
-        !menuRef.current?.contains(target)
-      )
-        closeMenu();
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("touchstart", close);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("touchstart", close);
-    };
-  }, [closeMenu]);
-
-  useEffect(() => {
-    if (!menuMounted) return undefined;
-    updateMenuPosition();
-    window.addEventListener("resize", updateMenuPosition);
-    window.addEventListener("scroll", updateMenuPosition, true);
-    return () => {
-      window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", updateMenuPosition, true);
-    };
-  }, [menuMounted, updateMenuPosition]);
-
-  useEffect(
-    () => () => {
-      if (enterFrameRef.current !== null)
-        window.cancelAnimationFrame(enterFrameRef.current);
-      if (exitTimerRef.current !== null)
-        window.clearTimeout(exitTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const index = candidates.findIndex((candidate) =>
-      sameSku(candidate.sku, selectedSku),
-    );
-    setActiveIndex(index >= 0 ? index : 0);
-  }, [candidates, selectedSku]);
-
-  useEffect(() => {
-    if (!expanded || !menuMounted) return;
-    const active = candidates[activeIndex];
-    if (!active) return;
-    const option = document.getElementById(
-      candidateOptionId(itemId, active.id),
-    );
-    if (option && typeof option.scrollIntoView === "function")
-      option.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, candidates, expanded, itemId, menuMounted]);
-
-  const select = (candidate?: RankedRestockTargetSku) => {
-    if (candidate) onChange(candidate.sku);
-    closeMenu();
-  };
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Escape") {
-      closeMenu();
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      event.preventDefault();
-      if (!expanded) {
-        openMenu();
-        return;
+  const { viewCandidates, candidateByPair } = useMemo(() => {
+    const byPair = new Map<string, RankedRestockTargetSku>();
+    const view: RankedRestockTargetSku[] = [];
+    for (const item of candidates) {
+      const key = pairKey(item.id, item.sku);
+      if (!byPair.has(key)) {
+        byPair.set(key, item);
+        view.push(item);
       }
-      if (!candidates.length) return;
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      setActiveIndex(
-        (previous) =>
-          (previous + direction + candidates.length) % candidates.length,
+    }
+    return { viewCandidates: view, candidateByPair: byPair };
+  }, [candidates]);
+
+  // Display resolution: the external selectedCandidate wins only when it is
+  // still present verbatim and matches selectedSku under sameSku; otherwise
+  // an exact sku match, then the first loose (trimmed, case-insensitive)
+  // match in ranking order. Unknown values stay visible as unavailable.
+  const displayCandidate = useMemo(() => {
+    if (!selectedSku) return null;
+    if (selectedCandidate) {
+      const stillPresent = candidates.some(
+        item => item.id === selectedCandidate.id && item.sku === selectedCandidate.sku,
       );
-      return;
+      if (stillPresent && sameSku(selectedCandidate.sku, selectedSku)) return selectedCandidate;
     }
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      if (expanded) select(candidates[activeIndex]);
-      else openMenu();
-    }
+    return (
+      candidates.find(item => item.sku === selectedSku) ??
+      candidates.find(item => sameSku(item.sku, selectedSku)) ??
+      null
+    );
+  }, [candidates, selectedCandidate, selectedSku]);
+
+  const unknownSelected = !displayCandidate && !isBlankSku(selectedSku);
+  const rootValue = displayCandidate
+    ? CANDIDATE_PREFIX + pairKey(displayCandidate.id, displayCandidate.sku)
+    : unknownSelected
+      ? UNKNOWN_PREFIX + JSON.stringify(selectedSku)
+      : '';
+
+  const handleValueChange = (raw: string) => {
+    if (!raw.startsWith(CANDIDATE_PREFIX)) return;
+    const item = candidateByPair.get(raw.slice(CANDIDATE_PREFIX.length));
+    if (!item || isBlankSku(item.sku)) return;
+    onChange(item.sku);
   };
 
-  const activeCandidate = expanded ? candidates[activeIndex] : undefined;
-  const activeDescendant = activeCandidate
-    ? candidateOptionId(itemId, activeCandidate.id)
-    : undefined;
-  const menu = menuMounted
-    ? createPortal(
-        <div
-          ref={menuRef}
-          id={`target-sku-options-${itemId}`}
-          role="listbox"
-          aria-label="本地 SKU 候选"
-          data-state={menuVisible ? "open" : expanded ? "entering" : "exiting"}
-          data-placement={menuPosition.placement}
-          style={{
-            position: "fixed",
-            zIndex: 200,
-            left: menuPosition.left,
-            width: menuPosition.width,
-            maxHeight: menuPosition.maxHeight,
-            top: menuPosition.top,
-            bottom: menuPosition.bottom,
-          }}
-          className={`overflow-auto rounded-xl border border-border bg-popover text-popover-foreground p-1 shadow-xl transition-[opacity,transform] [transition-duration:160ms] motion-reduce:transition-none motion-reduce:transform-none ${
-            menuVisible
-              ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-              : `pointer-events-none scale-[.98] opacity-0 ${menuPosition.placement === "top" ? "translate-y-1" : "-translate-y-1"}`
-          }`}
+  return (
+    <div className="relative min-w-[13rem]">
+      <Select value={rootValue} onValueChange={handleValueChange}>
+        <SelectTrigger
+          data-testid={`target-sku-select-${itemId}`}
+          aria-label="选择本地 SKU"
+          className="h-10 w-full justify-between rounded-lg border border-input bg-card px-3 text-left text-sm font-medium text-foreground shadow-sm transition hover:border-primary"
         >
-          {candidates.length ? (
-            candidates.map((candidate, index) => (
-              <Button variant="ghost" size="sm"
-                id={candidateOptionId(itemId, candidate.id)}
-                key={candidate.id}
-                type="button"
-                role="option"
-                aria-selected={sameSku(candidate.sku, selectedSku)}
-                onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => select(candidate)}
-                className={`h-auto flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${index === activeIndex ? "bg-accent text-accent-foreground" : "text-foreground hover:bg-muted"}`}
-              >
-                <span className="font-medium">{candidate.sku}</span>
-                {candidate.matchPercentage !== undefined ? (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[11px] ring-1 ${percentageStyle(candidate.matchPercentage)}`}
-                  >
-                    {candidate.matchPercentage}%
-                  </span>
-                ) : null}
-              </Button>
-            ))
+          <SelectValue placeholder="选择本地 SKU" />
+        </SelectTrigger>
+        <SelectContent className="w-[var(--radix-select-trigger-width)] min-w-[13rem] max-w-[calc(100vw-2rem)] [&_[data-radix-select-viewport]]:min-w-0">
+          {viewCandidates.length ? (
+            viewCandidates.map(item => {
+              const value = CANDIDATE_PREFIX + pairKey(item.id, item.sku);
+              return (
+                <SelectItem
+                  key={value}
+                  value={value}
+                  disabled={isBlankSku(item.sku)}
+                  textValue={isBlankSku(item.sku) ? undefined : item.sku.trim()}
+                  className="min-w-0 whitespace-normal [&>span:last-child]:min-w-0 [&>span:last-child]:whitespace-normal [&>span:last-child]:[overflow-wrap:anywhere]"
+                >
+                  {isBlankSku(item.sku) ? (
+                    '无效候选（空 SKU）'
+                  ) : (
+                    <span className="flex w-full items-center justify-between gap-2">
+                      <span className="min-w-0 break-all font-medium">{item.sku}</span>
+                      {item.matchPercentage !== undefined ? (
+                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] ring-1 ${percentageStyle(item.matchPercentage)}`}>
+                          {item.matchPercentage}%
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
+                </SelectItem>
+              );
+            })
           ) : (
             <p className="px-3 py-3 text-sm text-muted-foreground">没有符合的 SKU</p>
           )}
-        </div>,
-        document.body,
-      )
-    : null;
-
-  return (
-    <div ref={rootRef} className="relative min-w-[13rem]">
-      <Button variant="ghost" size="sm"
-        ref={triggerRef}
-        type="button"
-        data-testid={`target-sku-select-${itemId}`}
-        role="combobox"
-        aria-haspopup="listbox"
-        aria-expanded={expanded}
-        aria-controls={`target-sku-options-${itemId}`}
-        aria-activedescendant={activeDescendant}
-        onClick={() => (expanded ? closeMenu() : openMenu())}
-        onKeyDown={handleKeyDown}
-        className="flex h-10 w-full items-center justify-between rounded-lg border border-input bg-card px-3 text-left text-sm font-medium text-foreground shadow-sm transition [transition-duration:160ms] hover:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate">
-            {selectedCandidate?.sku || "选择本地 SKU"}
-          </span>
-          {selectedCandidate?.matchPercentage !== undefined ? (
-            <span
-              className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] ring-1 ${percentageStyle(selectedCandidate.matchPercentage)}`}
+          {unknownSelected && (
+            <SelectItem
+              value={UNKNOWN_PREFIX + JSON.stringify(selectedSku)}
+              disabled
+              textValue={selectedSku}
+              className="min-w-0 whitespace-normal text-muted-foreground [&>span:last-child]:min-w-0 [&>span:last-child]:whitespace-normal [&>span:last-child]:[overflow-wrap:anywhere]"
             >
-              {selectedCandidate.matchPercentage}%
-            </span>
-          ) : null}
-        </span>
-        <ChevronDown
-          size={16}
-          className={`shrink-0 text-muted-foreground transition-transform [transition-duration:160ms] motion-reduce:transition-none ${expanded ? "rotate-180" : ""}`}
-        />
-      </Button>
-      {menu}
+              当前值暂不可用：{selectedSku}
+            </SelectItem>
+          )}
+        </SelectContent>
+      </Select>
     </div>
   );
 };

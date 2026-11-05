@@ -64,7 +64,7 @@
 
 @layer base {
   [data-ui] { border-color: hsl(var(--ui-border)); }
-  [data-ui="input"], [data-ui="textarea"], [data-ui="native-select"] {
+  [data-ui="input"], [data-ui="textarea"] {
     color: hsl(var(--ui-foreground));
     background-color: hsl(var(--ui-card));
   }
@@ -80,7 +80,7 @@
 }
 
 @media (pointer: coarse) and (max-width: 767px) {
-  [data-ui="button"], [data-ui="select"], [data-ui="native-select"] {
+  [data-ui="button"], [data-ui="select"] {
     min-height: 44px;
   }
   [data-ui="button"] { min-width: 44px; }

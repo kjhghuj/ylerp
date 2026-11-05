@@ -7,8 +7,30 @@
  */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import React from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProductAnalysis, loadPotentialFilters } from '../modules/product-analysis/ProductAnalysis';
+
+// jsdom lacks pointer capture and layout scrolling used by the real Radix list.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => {
+  platformMethods.forEach(key => {
+    if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+  });
+});
+afterAll(() => {
+  platformMethods.forEach((key, index) => {
+    if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  });
+});
+
+/** Real interaction: open the shop select and pick the option (no fake change events). */
+const switchShop = async (shopId: string) => {
+  fireEvent.click(screen.getByRole('combobox', { name: '店铺' }));
+  const option = await screen.findByRole('option', { name: shopId === 'shop-1' ? /MY 主店/ : /PH 分店/ });
+  fireEvent.click(option);
+};
 import {
   DEFAULT_POTENTIAL_FILTERS,
   type AggResponse,
@@ -228,7 +250,7 @@ describe('ProductAnalysis write-then-refresh', () => {
     // 上传悬挂期间切换店铺
     await openCalendarView();
     await selectFiles([fakeFile('parentskudetail.20260906.xlsx')]);
-    fireEvent.change(screen.getByLabelText('店铺'), { target: { value: 'shop-2' } });
+    await switchShop('shop-2');
     await waitFor(() =>
       expect(mockFetchShopAgg).toHaveBeenCalledWith('shop-2', '2026-08-26', '2026-09-01')
     );

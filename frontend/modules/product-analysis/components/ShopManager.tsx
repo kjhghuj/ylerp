@@ -1,4 +1,4 @@
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
 import React, { useEffect, useRef, useState } from 'react';
@@ -120,17 +120,13 @@ export const ShopManager: React.FC<ShopManagerProps> = ({ shops, onClose, onRefr
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="pa-create-shop-site" className="text-xs font-medium" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.shop.site}</label>
-              <NativeSelect
+              <FormSelect
                 id="pa-create-shop-site"
                 value={site}
-                onChange={(event) => setSite(event.target.value as (typeof SITE_OPTIONS)[number])}
-                className="h-8 w-auto rounded-lg border px-3 py-2 text-sm"
-                style={inputStyle}
-              >
-                {SITE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </NativeSelect>
+                onValueChange={(value) => setSite(value as (typeof SITE_OPTIONS)[number])}
+                triggerClassName="h-8 w-auto rounded-lg border px-3 text-sm"
+                options={SITE_OPTIONS.map((option) => ({ value: option, label: option }))}
+              />
             </div>
             <Button variant="default"
               type="button"

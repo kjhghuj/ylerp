@@ -54,8 +54,7 @@
 
 .pa-shell button:focus-visible,
 .pa-shell [tabindex]:focus-visible,
-.pa-shell input:focus-visible,
-.pa-shell select:focus-visible {
+.pa-shell input:focus-visible {
   outline: 2px solid var(--pa-accent-ui);
   outline-offset: 2px;
 }
@@ -1298,7 +1297,7 @@
 .pa-collection-section > strong {font-size:14px}
 .pa-collection-section p {margin:0;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
 .pa-collection-section label {display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap}
-.pa-collection-section input:not([type=checkbox]), .pa-collection-section select, .pa-collection-section textarea {
+.pa-collection-section input:not([type=checkbox]), .pa-collection-section textarea {
   min-width:0;flex:1;padding:7px 9px;border:1px solid var(--border-light,#ccd);border-radius:7px;
   background:var(--bg-primary,#fff);color:var(--text-primary,#17212f);
 }
@@ -1330,12 +1329,12 @@
 
 /* Shared controls keep standard sizing; business table scroll owners stay unchanged. */
 .pa-collection-section [data-ui="button"], .pa-collection-pages [data-ui="button"] {width:fit-content;}
-.pa-shell [data-ui="input"], .pa-shell [data-ui="native-select"], .pa-collection-modal [data-ui="input"], .pa-collection-modal [data-ui="native-select"] {font-size:14px;}
+.pa-shell [data-ui="input"], .pa-shell [data-form-select-trigger], .pa-collection-modal [data-ui="input"], .pa-collection-modal [data-form-select-trigger] {font-size:14px;}
 .pa-shell .pa-card {border-radius:12px;box-shadow:0 1px 3px rgb(15 23 42 / .05);}
 .pa-shell [data-ui="button"] {flex-shrink:0;}
 .pa-shell .pa-insight-row, .pa-shell .pa-rank-row {white-space:normal;height:auto;}
 .pa-calendar-view [data-ui="input"], .pa-trend-range [data-ui="input"] {width:auto;min-width:0;}
-@media (pointer:coarse) {.pa-shell [data-ui="button"], .pa-collection-modal [data-ui="button"] {min-height:44px;} .pa-shell .group > [data-ui="button"] {position:static;opacity:1;width:44px;}}
+@media (pointer:coarse) {.pa-shell [data-ui="button"], .pa-collection-modal [data-ui="button"], .pa-shop-select {min-height:44px;} .pa-shell .group > [data-ui="button"] {position:static;opacity:1;width:44px;}}
 @media (pointer:coarse) {
   .pa-data-calendar {min-width:0;max-width:100%;overflow-x:auto;}
   .pa-data-calendar .pa-calendar-grid {min-width:348px;}

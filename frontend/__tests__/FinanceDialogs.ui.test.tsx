@@ -18,11 +18,29 @@ describe('Finance dialog UI contracts', () => {
     render(<AddTransactionModal isOpen onClose={onClose} onAdd={onAdd} initialDate="2026-10-27" t={zh.finance} />);
     fireEvent.change(screen.getByLabelText('营业收入金额'), { target: { value: '12.50' } });
     fireEvent.change(screen.getByLabelText('营业收入备注'), { target: { value: 'Daily revenue' } });
-    fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-10-26' } });
+    fireEvent.click(screen.getByRole('button', { name: '日期' }));
+    fireEvent.click(screen.getByRole('button', { name: '2026-10-26' }));
     fireEvent.click(screen.getByRole('button', { name: zh.finance.form.add }));
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onAdd).toHaveBeenCalledWith({ date: '2026-10-26', type: 'income', amount: 12.5, category: 'Revenue', description: 'Daily revenue' });
     expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('uses the current active date on reopening and closes only the calendar on Escape', async () => {
+    const onAdd = vi.fn(), onClose = vi.fn();
+    const view = render(<AddTransactionModal isOpen={false} onClose={onClose} onAdd={onAdd} initialDate="2026-10-27" t={zh.finance} />);
+    view.rerender(<AddTransactionModal isOpen onClose={onClose} onAdd={onAdd} initialDate="2026-11-05" t={zh.finance} />);
+    const trigger = screen.getByRole('button', { name: '日期' });
+    expect(trigger).toHaveTextContent('2026-11-05');
+    await userEvent.click(trigger);
+    await waitFor(() => expect(screen.getByRole('button', { name: '2026-11-05' })).toHaveFocus());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('营业收入金额'), { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: zh.finance.form.add }));
+    expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ date: '2026-11-05', amount: 25 }));
   });
 
   it('retains a failed password draft and returns focus to the initiating action after cancellation', async () => {

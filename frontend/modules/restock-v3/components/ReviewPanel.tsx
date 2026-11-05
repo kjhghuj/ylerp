@@ -1,7 +1,7 @@
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 /**
  * 异常处理区：默认只显示未匹配/冲突/缺数据商品；展示销量商品与候选对照、匹配依据与原因。
  * - 冲突（conflict）与待匹配（pending）分状态展示。
@@ -258,20 +258,17 @@ export default function ReviewPanel(props: ReviewPanelProps) {
                                     }))}
                                   />
                                 </div>
-                                <NativeSelect
+                                <FormSelect
                                   aria-label="映射作用域"
                                   value={selection?.scope ?? 'shop'}
-                                  onChange={event => selection && setSelections(previous => ({
+                                  onValueChange={value => selection && setSelections(previous => ({
                                     ...previous,
-                                    [key]: { targetSku: selection.targetSku, scope: event.target.value as 'shop' | 'site' },
+                                    [key]: { targetSku: selection.targetSku, scope: value as 'shop' | 'site' },
                                   }))}
-                                  className="h-8 w-auto rounded border px-1 py-1 text-[12px]"
-                                  style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
+                                  triggerClassName="h-8 w-auto rounded border px-1 py-1 text-[12px]"
                                   title="店铺级仅本店生效；站点级写入 V2 共享映射"
-                                >
-                                  <option value="shop">店铺级</option>
-                                  <option value="site">站点级</option>
-                                </NativeSelect>
+                                  options={[{ value: 'shop', label: '店铺级' }, { value: 'site', label: '站点级' }]}
+                                />
                                 <Button variant="default" size="sm"
                                   type="button"
                                   disabled={!selection?.targetSku || savingKey === `${entry.shopId}:${entry.externalSku}`}

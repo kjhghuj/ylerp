@@ -1,7 +1,28 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ProductList } from '../modules/product-analysis/components/ProductList';
+
+// jsdom lacks pointer capture and layout scrolling used by the real Radix list.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => {
+  platformMethods.forEach(key => {
+    if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+  });
+});
+afterAll(() => {
+  platformMethods.forEach((key, index) => {
+    if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  });
+});
+
+/** Real interaction: open the page-size select and pick an option by label. */
+const choosePageSize = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+  await user.click(screen.getByRole('combobox', { name: '每页条数' }));
+  await user.click(screen.getByRole('option', { name: label }));
+};
 import type { ParentProduct } from '../modules/product-analysis/types';
 
 vi.mock('../StoreContext', () => ({
@@ -78,7 +99,7 @@ describe('ProductList', () => {
       return <ProductList {...PROPS} items={many} page={page} onPageChange={next => { onPageChange(next); setPage(next); }} />;
     }
     const { container } = render(<Host />);
-    await user.selectOptions(screen.getByRole('combobox', { name: '每页条数' }), '50');
+    await choosePageSize(user, '50 条/页');
     expect(countRows(container)).toBe(50);
     expect(screen.getByText('分页商品 1')).toBeInTheDocument();
     expect(screen.queryByText('分页商品 51')).not.toBeInTheDocument();
@@ -141,7 +162,7 @@ describe('ProductList', () => {
     const { container } = render(
       <ProductList {...PROPS} items={many} page={3} onPageChange={onPageChange} />
     );
-    await user.selectOptions(screen.getByRole('combobox', { name: '每页条数' }), '50');
+    await choosePageSize(user, '50 条/页');
     expect(onPageChange).toHaveBeenCalledWith(1); // 25 条 / 50 条每页 → 收敛到第 1 页
     expect(countRows(container)).toBe(25);
   });

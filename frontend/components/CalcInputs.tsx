@@ -1,7 +1,6 @@
 import { Input } from './ui/input';
-import { NativeSelect } from './ui/native-select';
 import React, { useState, useEffect, useRef } from 'react';
-import { Info, ChevronRight } from 'lucide-react';
+import { Info } from 'lucide-react';
 import {
     parseCanonicalPositiveRate,
     parseCanonicalProfitNumber,
@@ -290,23 +289,6 @@ export const TextInput = ({ label, name, value, onChange, colSpan = "col-span-1"
             onChange={onChange}
             className="w-full h-9 px-2 rounded-lg border border-border bg-card outline-none text-sm font-bold text-foreground focus:border-primary focus:ring-2 focus:ring-slate-100 transition-all"
         />
-    </div>
-);
-
-export const SelectInput = ({ label, name, value, onChange, options, colSpan = "col-span-1" }: any) => (
-    <div className={colSpan}>
-        <label className="block text-xs font-bold text-muted-foreground mb-0.5 truncate">{label}</label>
-        <div className="relative group">
-            <NativeSelect
-                name={name} aria-label={label}
-                value={value}
-                onChange={onChange}
-                className="w-full h-9 px-2 appearance-none rounded-lg border border-border bg-muted outline-none text-sm font-bold text-foreground focus:border-primary focus:ring-2 focus:ring-slate-100 transition-all cursor-pointer hover:bg-muted/50"
-            >
-                {options.map((opt: any) => <option key={opt.value} value={opt.value} className="font-sans">{opt.label}</option>)}
-            </NativeSelect>
-            <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 rotate-90 text-muted-foreground pointer-events-none transition-colors group-hover:text-muted-foreground" size={14} />
-        </div>
     </div>
 );
 

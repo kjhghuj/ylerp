@@ -1,6 +1,6 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../components/ui/alert-dialog';
 import { Button } from '../components/ui/button';
-import { NativeSelect } from '../components/ui/native-select';
+import { FormSelect } from '../components/FormSelect';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/table';
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../AuthContext';
@@ -249,10 +249,7 @@ export const UserManagement: React.FC = () => {
                                                 <Button variant="ghost" size="sm" onClick={() => handleToggleActive(u)} className={`p-1.5 rounded-lg transition text-xs ${u.isActive ? 'text-warning hover:bg-warning-subtle' : 'text-success hover:bg-success-subtle'}`} title={u.isActive ? '禁用' : '启用'}>
                                                     {u.isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
                                                 </Button>
-                                                <NativeSelect aria-label={`修改 ${u.displayName} 的角色`} value={u.role} onChange={(e) => handleUpdateRole(u, e.target.value)} className="h-8 w-auto text-xs px-2 py-1 border border-border rounded-lg bg-card text-muted-foreground outline-none cursor-pointer">
-                                                    <option value="admin">管理员</option>
-                                                    <option value="viewer">查看者</option>
-                                                </NativeSelect>
+                                                <FormSelect aria-label={`修改 ${u.displayName} 的角色`} value={u.role} options={[{ value: 'admin', label: '管理员' }, { value: 'viewer', label: '查看者' }]} onValueChange={(value) => handleUpdateRole(u, value)} triggerClassName="h-8 w-auto text-xs px-2 py-1 border border-border rounded-lg bg-card text-muted-foreground cursor-pointer" />
                                                 <Button variant="ghost" size="sm" onClick={() => { setPermEditUser(u); setPermEditValues([...u.permissions]); }} className="p-1.5 text-primary hover:text-primary hover:bg-accent rounded-lg transition" title="编辑权限"><Lock size={16} /></Button>
                                                 <Button variant="ghost" size="sm" onClick={() => { setResetPwdUser(u); setResetPwdError(''); }} className="p-1.5 text-warning hover:text-warning hover:bg-warning-subtle rounded-lg transition" title="重置密码"><Key size={16} /></Button>
                                                 <Button variant="ghost" size="sm" onClick={event => { deleteOrigin.current = event.currentTarget; setDeleteError(''); setDeleteUser(u); }} className="p-1.5 text-danger hover:text-danger hover:bg-destructive/10 rounded-lg transition" title="删除"><Trash2 size={16} /></Button>

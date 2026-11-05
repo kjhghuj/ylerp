@@ -17,6 +17,7 @@ import { AddTransactionModal } from './finance/modals/AddTransactionModal';
 import { DayDetailModal } from './finance/modals/DayDetailModal';
 import { PasswordConfirmModal } from './finance/modals/PasswordConfirmModal';
 import { MonthGroup } from './finance/components/MonthGroup';
+import { formatLocalDate } from '../lib/localDate';
 
 export const FinanceManager: React.FC = () => {
     const { financeRecords, addTransaction, importTransactions, clearAllTransactions, accountBalance, totalDebt, strings, language, deleteTransactionsByMonth } = useStore();
@@ -25,7 +26,7 @@ export const FinanceManager: React.FC = () => {
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
     // --- Active Date State (Defaults to Today) ---
-    const [activeDate, setActiveDate] = useState(new Date().toISOString().split('T')[0]);
+    const [activeDate, setActiveDate] = useState(() => formatLocalDate(new Date()));
 
     // --- Modal States ---
     const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -464,9 +465,9 @@ export const FinanceManager: React.FC = () => {
                 const monthKey = dateStr.substring(0, 7);
                 setExpandedMonths(prev => new Set(prev).add(monthKey));
                 setActiveDate(dateStr);
-            }} existingMonths={existingMonths} t={t} />
-            <DatePickerModal isOpen={showDatePicker} onClose={() => setShowDatePicker(false)} onSelect={(d) => setActiveDate(d)} existingDates={existingDates} t={t} />
-            <AddTransactionModal isOpen={showAddTransModal} onClose={() => setShowAddTransModal(false)} onAdd={handleAddTransaction} initialDate={activeDate} t={t} />
+            }} existingMonths={existingMonths} locale={language === 'zh' ? 'zh-CN' : 'en-US'} t={t} />
+            <DatePickerModal isOpen={showDatePicker} onClose={() => setShowDatePicker(false)} onSelect={(d) => setActiveDate(d)} existingDates={existingDates} initialDate={activeDate} locale={language === 'zh' ? 'zh-CN' : 'en-US'} t={t} />
+            <AddTransactionModal isOpen={showAddTransModal} onClose={() => setShowAddTransModal(false)} onAdd={handleAddTransaction} initialDate={activeDate} locale={language === 'zh' ? 'zh-CN' : 'en-US'} t={t} />
             {confirmAction && (
                 <PasswordConfirmModal
                     title={confirmAction.title}

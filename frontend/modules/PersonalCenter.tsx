@@ -1,7 +1,8 @@
 import { PageHeader } from '../components/PageHeader';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { NativeSelect } from '../components/ui/native-select';
+import { FormSelect } from '../components/FormSelect';
+import { EditableModelCombobox } from '../components/EditableModelCombobox';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import React, { useState, useEffect, useRef } from 'react';
@@ -613,18 +614,18 @@ export const PersonalCenter: React.FC = () => {
                                     <Label htmlFor="ai-chat-provider" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         服务商
                                     </Label>
-                                    <NativeSelect
+                                    <FormSelect
                                         id="ai-chat-provider"
                                         value={aiChatProvider}
-                                        onChange={(e) => handleAiProviderChange(e.target.value as AiChatProviderKey)}
+                                        options={[
+                                            { value: '', label: '请选择（或直接手动填写下方配置）' },
+                                            ...AI_CHAT_PROVIDERS.map((preset) => ({ value: preset.key, label: preset.label })),
+                                        ]}
+                                        onValueChange={(value) => handleAiProviderChange(value as AiChatProviderKey)}
                                         disabled={aiLoading || aiSaving}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
-                                    >
-                                        <option value="">请选择（或直接手动填写下方配置）</option>
-                                        {AI_CHAT_PROVIDERS.map((preset) => (
-                                            <option key={preset.key} value={preset.key}>{preset.label}</option>
-                                        ))}
-                                    </NativeSelect>
+                                        placeholder="请选择（或直接手动填写下方配置）"
+                                        triggerClassName="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
+                                    />
                                     <p className="mt-1.5 text-xs text-muted-foreground">
                                         {AI_CHAT_PROVIDER_HINTS[aiChatProvider] || '选择服务商后自动填充推荐配置，商品分析 AI 对话将使用该配置'}
                                     </p>
@@ -684,26 +685,20 @@ export const PersonalCenter: React.FC = () => {
                                     <Label htmlFor="ai-chat-model" className="block text-sm font-medium text-muted-foreground mb-1.5">
                                         模型名称
                                     </Label>
-                                    <Input
+                                    <EditableModelCombobox
                                         id="ai-chat-model"
-                                        type="text"
+                                        label="模型名称"
                                         value={aiChatModel}
-                                        list="ai-chat-model-options"
-                                        onChange={(e) => setAiChatModel(e.target.value)}
+                                        onChange={setAiChatModel}
                                         disabled={aiLoading || aiSaving}
-                                        autoComplete="off"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all outline-none disabled:bg-muted"
                                         placeholder="默认 glm-5.3-flash"
-                                    />
-                                    <datalist id="ai-chat-model-options">
-                                        {Array.from(new Set(
+                                        className="px-4 py-2.5 rounded-xl border border-border bg-card text-foreground focus:ring-2 focus:ring-ring/20 focus:border-border transition-all disabled:bg-muted"
+                                        suggestions={Array.from(new Set(
                                             aiChatProvider && aiChatProvider !== 'custom'
                                                 ? AI_CHAT_PROVIDERS.find((preset) => preset.key === aiChatProvider)?.models ?? []
                                                 : AI_CHAT_PROVIDERS.flatMap((preset) => [...preset.models])
-                                        )).map((model) => (
-                                            <option key={model} value={model} />
                                         ))}
-                                    </datalist>
+                                    />
                                 </div>
                             </div>
 

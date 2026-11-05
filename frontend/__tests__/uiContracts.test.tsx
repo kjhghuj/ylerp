@@ -1,9 +1,24 @@
 import React, { createRef, useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// jsdom lacks pointer capture and layout scrolling used by the real Radix list.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => {
+  platformMethods.forEach(key => {
+    if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+  });
+});
+afterAll(() => {
+  platformMethods.forEach((key, index) => {
+    if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  });
+});
 import { Button } from '../components/ui/button';
+import { FormSelect } from '../components/FormSelect';
 import { Input } from '../components/ui/input';
-import { NativeSelect } from '../components/ui/native-select';
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableRow } from '../components/ui/table';
 import { UIThemeScope } from '../components/ui/theme-scope';
@@ -43,12 +58,22 @@ describe('shared UI behavior contracts', () => {
     expect(changed).toHaveBeenCalledOnce();
   });
 
-  it('preserves native select event semantics and an empty option', () => {
+  it('selects business values through FormSelect, keeping empty values and form isolation', async () => {
     const changed = vi.fn();
-    render(<NativeSelect aria-label="Site" name="site" defaultValue="" onChange={changed}><option value="">All</option><option value="SG">Singapore</option></NativeSelect>);
-    fireEvent.change(screen.getByLabelText('Site'), { target: { value: 'SG' } });
-    expect(changed.mock.calls[0][0].target.name).toBe('site');
-    expect(changed.mock.calls[0][0].target.value).toBe('SG');
+    const submitted = vi.fn((event: React.FormEvent) => event.preventDefault());
+    render(
+      <form onSubmit={submitted}>
+        <FormSelect aria-label="Site" value={null} options={[{ value: '', label: 'All' }, { value: 'SG', label: 'Singapore' }]} onValueChange={changed} />
+      </form>,
+    );
+    const trigger = screen.getByRole('combobox', { name: 'Site' });
+    await userEvent.click(trigger);
+    await userEvent.click(screen.getByRole('option', { name: 'Singapore' }));
+    expect(changed).toHaveBeenCalledExactlyOnceWith('SG');
+    expect(submitted).not.toHaveBeenCalled();
+    // The hidden Radix form bridge carries encoded values only; business
+    // serialization never sees them because FormSelect exposes no name.
+    expect(Array.from(new FormData(trigger.closest('form')!).keys())).toEqual([]);
   });
 
   it('closes only the upper dialog and restores focus to its trigger', async () => {

@@ -1,4 +1,4 @@
-import { NativeSelect } from '../../components/ui/native-select';
+import { FormSelect } from '../../components/FormSelect';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../components/ui/table';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
@@ -882,18 +882,13 @@ const ProductAnalysisViews: React.FC<ProductAnalysisProps> = ({ onGenerateRestoc
               <label className="text-xs font-medium shrink-0" style={{ color: 'hsl(var(--ui-muted-foreground))' }} htmlFor="shop-select">
                 {strings.shop.label}
               </label>
-              <NativeSelect
+              <FormSelect
                 id="shop-select"
                 value={activeShopId}
-                onChange={(event) => setActiveShopId(event.target.value)}
-                className="w-auto min-w-0 pa-shop-select truncate"
-              >
-                {shops.map((shop) => (
-                  <option key={shop.id} value={shop.id}>
-                    {shop.name}（{shop.site}）
-                  </option>
-                ))}
-              </NativeSelect>
+                onValueChange={(value) => setActiveShopId(value)}
+                triggerClassName="w-auto min-w-0 pa-shop-select"
+                options={shops.map((shop) => ({ value: shop.id, label: `${shop.name}（${shop.site}）`, textValue: `${shop.name} ${shop.site}` }))}
+              />
             </>
           ) : (
             <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>{strings.shop.emptyHint}</span>

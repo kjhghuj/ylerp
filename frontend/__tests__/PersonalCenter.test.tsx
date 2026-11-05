@@ -4,6 +4,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import api from '../src/api';
 import { PersonalCenter } from '../modules/PersonalCenter';
 
+// jsdom lacks pointer capture and layout scrolling used by the real Radix list.
+const platformMethods = ['hasPointerCapture', 'releasePointerCapture', 'scrollIntoView'] as const;
+const descriptors = platformMethods.map(key => Object.getOwnPropertyDescriptor(HTMLElement.prototype, key));
+beforeAll(() => {
+  platformMethods.forEach(key => {
+    if (!HTMLElement.prototype[key]) Object.defineProperty(HTMLElement.prototype, key, { configurable: true, value: key === 'hasPointerCapture' ? () => false : () => undefined });
+  });
+});
+afterAll(() => {
+  platformMethods.forEach((key, index) => {
+    if (descriptors[index]) Object.defineProperty(HTMLElement.prototype, key, descriptors[index]!);
+    else Reflect.deleteProperty(HTMLElement.prototype, key);
+  });
+});
+
 vi.mock('../AuthContext', () => ({
     useAuth: () => ({
         user: {
@@ -215,14 +230,21 @@ describe('PersonalCenter AI chat provider presets', () => {
         await screen.findByLabelText('服务商');
     };
 
+    // Real interaction: open the select and pick the option like a user would.
+    const chooseProvider = async (optionName: string) => {
+        const trigger = screen.getByRole('combobox', { name: '服务商' });
+        await userEvent.click(trigger);
+        await userEvent.click(screen.getByRole('option', { name: optionName }));
+    };
+
     it('fills recommended Base URL and model when a provider preset is selected', async () => {
         await openAiTab();
 
-        fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'glm' } });
+        await chooseProvider('智谱 GLM · Coding Plan');
         expect(screen.getByLabelText('对话模型 Base URL')).toHaveValue('https://open.bigmodel.cn/api/coding/paas/v4');
         expect(screen.getByLabelText('模型名称')).toHaveValue('glm-5.3');
 
-        fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'deepseek' } });
+        await chooseProvider('DeepSeek');
         expect(screen.getByLabelText('对话模型 Base URL')).toHaveValue('https://api.deepseek.com');
         expect(screen.getByLabelText('模型名称')).toHaveValue('deepseek-flash');
         expect(screen.getByText('deepseek-flash 为当前 V4.1 Flash API 模型，支持文本与视觉理解')).toBeInTheDocument();
@@ -238,21 +260,30 @@ describe('PersonalCenter AI chat provider presets', () => {
     it('keeps fields editable when switching to custom provider', async () => {
         await openAiTab();
 
-        fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'glm' } });
-        fireEvent.change(screen.getByLabelText('服务商'), { target: { value: 'custom' } });
+        await chooseProvider('智谱 GLM · Coding Plan');
+        await chooseProvider('自定义');
         expect(screen.getByLabelText('对话模型 Base URL')).toHaveValue('https://open.bigmodel.cn/api/coding/paas/v4');
         expect(screen.getByLabelText('模型名称')).toHaveValue('glm-5.3');
     });
 
-    it('renders each model suggestion once when showing models from all providers', async () => {
-        const { container } = render(<PersonalCenter />);
+    it('renders each model suggestion once and accepts one via real interaction', async () => {
+        render(<PersonalCenter />);
         await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
-        await screen.findByLabelText('模型名称');
+        const modelInput = await screen.findByRole('combobox', { name: '模型名称' });
 
-        const values = Array.from(container.querySelectorAll<HTMLOptionElement>('#ai-chat-model-options option'))
-            .map((option) => option.value);
-        expect(values.length).toBeGreaterThan(0);
-        expect(new Set(values).size).toBe(values.length);
+        // Suggestions deduplicate across providers.
+        modelInput.focus();
+        const suggestions = await screen.findAllByRole('option');
+        expect(suggestions.length).toBeGreaterThan(0);
+        expect(new Set(suggestions.map((option) => option.textContent)).size).toBe(suggestions.length);
+
+        // Manual acceptance writes the suggestion, not a fabricated value.
+        await userEvent.click(suggestions[0]);
+        expect(modelInput).toHaveValue(suggestions[0].textContent);
+        // Free-form input is still allowed and never coerced.
+        await userEvent.clear(modelInput);
+        await userEvent.type(modelInput, 'my-own-model');
+        expect(modelInput).toHaveValue('my-own-model');
     });
 
     it('infers the provider from a stored Base URL when provider is empty', async () => {
@@ -263,8 +294,8 @@ describe('PersonalCenter AI chat provider presets', () => {
         mockAiConfigGet({ baseUrl: 'https://api.deepseek.com', model: 'deepseek-chat' });
         render(<PersonalCenter />);
         await userEvent.click(screen.getByRole('tab', { name: 'AI 服务' }));
-        const providerSelect = await screen.findByLabelText('服务商') as HTMLSelectElement;
-        expect(providerSelect.value).toBe('deepseek');
+        const providerTrigger = await screen.findByRole('combobox', { name: '服务商' });
+        expect(providerTrigger).toHaveTextContent('DeepSeek');
     });
 });
 

@@ -1,5 +1,5 @@
 import { Input } from '../../../components/ui/input';
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
 /**
@@ -140,15 +140,13 @@ export default function PoolManagerDrawer(props: PoolManagerDrawerProps) {
             </label>
             <label className="flex flex-col gap-1 w-28">
               <span className="text-xs" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>站点</span>
-              <NativeSelect
+              <FormSelect
                 value={effectiveSite}
-                onChange={event => { setSite(event.target.value); setSelectedCodes(new Set()); }}
+                onValueChange={value => { setSite(value); setSelectedCodes(new Set()); }}
                 aria-label="库存池站点"
-                className="h-8 w-auto rounded-lg border px-2 py-1.5 text-[13px]"
-                style={{ borderColor: 'hsl(var(--ui-border))', backgroundColor: 'hsl(var(--ui-background))', color: 'hsl(var(--ui-foreground))' }}
-              >
-                {sites.map(candidate => <option key={candidate} value={candidate}>{candidate}</option>)}
-              </NativeSelect>
+                triggerClassName="h-8 w-auto rounded-lg border px-2 py-1.5 text-[13px]"
+                options={sites.map(candidate => ({ value: candidate, label: candidate }))}
+              />
             </label>
           </div>
           <p className="text-xs mb-1" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>

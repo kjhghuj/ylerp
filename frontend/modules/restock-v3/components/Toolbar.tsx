@@ -4,7 +4,7 @@ import { Calendar, ChevronDown, Layers, RefreshCw, Settings2, SlidersHorizontal,
 import { Button } from '../../../components/ui/button';
 import { Checkbox } from '../../../components/ui/checkbox';
 import { Input } from '../../../components/ui/input';
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Popover, PopoverContent, PopoverTrigger } from '../../../components/ui/popover';
 import type { RestockShop, StockPool } from '../types';
 import type { RangePreset, WorkbenchParams } from '../useWorkbench';
@@ -90,11 +90,9 @@ export default function Toolbar(props: ToolbarProps) {
     </div> : <span className="text-xs text-muted-foreground">{fromDate && toDate ? `${fromDate} ~ ${toDate}` : '待选择区间'}</span>}
     <label className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
       <Layers size={13} />
-      <NativeSelect value={poolId ?? ''} onChange={event => onPoolChange(event.target.value || null)} disabled={planSaving}
-        aria-label="库存池（仓库范围）" className="h-8 max-w-[180px] text-xs">
-        <option value="">整站仓库（默认）</option>
-        {availablePools.map(pool => <option key={pool.id} value={pool.id}>{pool.name}（{pool.warehouseCodes.length}仓）</option>)}
-      </NativeSelect>
+      <FormSelect value={poolId ?? ''} onValueChange={value => onPoolChange(value || null)} disabled={planSaving}
+        aria-label="库存池（仓库范围）" triggerClassName="h-8 max-w-[180px] text-xs"
+        options={[{ value: '', label: '整站仓库（默认）' }, ...availablePools.map(pool => ({ value: pool.id, label: `${pool.name}（${pool.warehouseCodes.length}仓）` }))]} />
     </label>
     <Button variant="outline" size="icon" onClick={onOpenPools} disabled={planSaving} aria-label="管理库存池" title="管理库存池（创建 / 删除 / 重叠提醒）" className="h-8 w-8"><SlidersHorizontal size={13} /></Button>
     <div className="flex-1" />

@@ -101,7 +101,14 @@ export async function navigate(page: Page, label: string) {
   // still replacing its loading screen.
   await expect(page.locator('main')).toBeVisible();
   const button = page.getByRole('button', { name: label, exact: true });
-  if (!(await button.first().isVisible())) {
+  let directlyVisible = await button.first().isVisible().catch(() => false);
+  if (!directlyVisible) {
+    // The persistent sidebar can render one tick after main; give the direct
+    // target a short chance before falling back to the compact menu sheet,
+    // whose opener button only exists on sidebar-less layouts.
+    directlyVisible = await button.first().waitFor({ state: 'visible', timeout: 1500 }).then(() => true).catch(() => false);
+  }
+  if (!directlyVisible) {
     const menu = page.getByRole('button', { name: /打开.*菜单|导航菜单|打开导航|菜单/ }).first();
     const opener = await menu.count() ? menu : page.locator('header button').first();
     const usesSheet = await opener.getAttribute('aria-haspopup') === 'dialog';

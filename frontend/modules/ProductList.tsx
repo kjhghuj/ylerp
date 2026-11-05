@@ -19,7 +19,7 @@ import { quoteTiktokUSDirectShipping } from './profit/tiktokUSDirectShipping';
 import { useToast } from '../components/Toast';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { NativeSelect } from '../components/ui/native-select';
+import { FormSelect } from '../components/FormSelect';
 import { Checkbox } from '../components/ui/checkbox';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../components/ui/dialog';
@@ -167,7 +167,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
     const decisionReturnFocusRef = useRef<HTMLElement | null>(null);
     const renameInputRef = useRef<HTMLInputElement>(null);
     const newGroupInputRef = useRef<HTMLInputElement>(null);
-    const groupSelectRef = useRef<HTMLSelectElement>(null);
+    const groupSelectRef = useRef<HTMLButtonElement>(null);
 
     const activeTab = productListActiveTab;
     const setActiveTab = setProductListActiveTab;
@@ -1155,14 +1155,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onNavigate }) => {
                             ) : (
                                 <label className="block text-sm font-medium text-foreground">
                                     选择商品组
-                                    <NativeSelect
+                                    <FormSelect
                                         ref={groupSelectRef}
-                                        value={targetGroupId}
-                                        onChange={event => setTargetGroupId(event.target.value)}
-                                        className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:border-primary"
-                                    >
-                                        {productGroups.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
-                                    </NativeSelect>
+                                        value={targetGroupId || null}
+                                        options={productGroups.map(group => ({ value: group.id, label: group.name }))}
+                                        onValueChange={setTargetGroupId}
+                                        placeholder="暂无分组"
+                                        triggerClassName="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2.5 outline-none focus:border-primary"
+                                    />
                                 </label>
                             )}
                         </div>

@@ -1,10 +1,10 @@
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator } from '../../components/ui/dropdown-menu';
+import { FormSelect } from '../../components/FormSelect';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
 import { cn } from '../../lib/utils';
 import { Button } from '../../components/ui/button';
 
 import React, { useState } from 'react';
-import { Languages, Palette, ImagePlus, Copy, Globe, ChevronDown, RotateCcw, Cpu, History } from 'lucide-react';
+import { Languages, Palette, ImagePlus, Copy, Globe, RotateCcw, History } from 'lucide-react';
 import { AppMode, AnalysisModel, GenerationModel } from './chromaTypes';
 import { getTranslation } from './utils/translations';
 import { useChromaApp } from './hooks/useChromaApp';
@@ -56,7 +56,6 @@ export const ChromaAdapt: React.FC = () => {
   } = useChromaApp();
 
   const t = getTranslation(state.language);
-  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const navItems = [
@@ -98,10 +97,22 @@ export const ChromaAdapt: React.FC = () => {
               <Globe size={14} />
               <span>{state.language === 'en' ? '中文' : 'EN'}</span>
             </Button>
-            <DropdownMenu open={modelDropdownOpen} onOpenChange={setModelDropdownOpen}>
-              <DropdownMenuTrigger asChild><Button variant="ghost" className="gap-1.5" aria-label={state.language === 'zh' ? '选择模型' : 'Choose models'}><Cpu size={14} /><span className="hidden sm:inline">{state.language === 'zh' ? '模型' : 'Models'}</span><ChevronDown size={12} /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60"><DropdownMenuLabel>{state.language === 'zh' ? '分析模型' : 'Analysis model'}</DropdownMenuLabel><DropdownMenuRadioGroup value={state.analysisModel} onValueChange={value => { setAnalysisModel(value as AnalysisModel); setModelDropdownOpen(false); }}>{analysisModels.map(model => <DropdownMenuRadioItem key={model.id} value={model.id}>{model.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup><DropdownMenuSeparator /><DropdownMenuLabel>{state.language === 'zh' ? '生图模型' : 'Image model'}</DropdownMenuLabel><DropdownMenuRadioGroup value={state.generationModel} onValueChange={value => { setGenerationModel(value as GenerationModel); setModelDropdownOpen(false); }}>{generationModels.map(model => <DropdownMenuRadioItem key={model.id} value={model.id}>{model.label}</DropdownMenuRadioItem>)}</DropdownMenuRadioGroup></DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <FormSelect
+                aria-label={state.language === 'zh' ? '分析模型' : 'Analysis model'}
+                value={state.analysisModel}
+                options={analysisModels.map(model => ({ value: model.id, label: model.label }))}
+                onValueChange={value => setAnalysisModel(value as AnalysisModel)}
+                triggerClassName="h-9 w-auto gap-1.5 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
+              />
+              <FormSelect
+                aria-label={state.language === 'zh' ? '生图模型' : 'Image model'}
+                value={state.generationModel}
+                options={generationModels.map(model => ({ value: model.id, label: model.label }))}
+                onValueChange={value => setGenerationModel(value as GenerationModel)}
+                triggerClassName="h-9 w-auto gap-1.5 rounded-xl px-3 text-sm font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
+              />
+            </div>
             <Button aria-label={t.reset} variant="ghost"
               onClick={resetApp}
               className={cn("h-auto", "p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-muted/80 transition-colors")}

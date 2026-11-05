@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from '../../../components/ui/dialog';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
+import { DatePicker } from '../../../components/DatePicker';
 import React, { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { FinanceRecord } from '../../../types';
@@ -11,6 +12,7 @@ interface AddTransactionModalProps {
     onClose: () => void;
     onAdd: (record: Omit<FinanceRecord, 'id' | 'accountId'>) => void;
     initialDate: string;
+    locale?: string;
     t: any;
 }
 
@@ -42,10 +44,15 @@ const createEmptyFields = (): Record<string, FieldState> => {
     return f;
 };
 
-export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onAdd, initialDate, t }) => {
+export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen, onClose, onAdd, initialDate, locale, t }) => {
     const { showToast } = useToast();
     const [date, setDate] = useState(initialDate);
     const [fields, setFields] = useState<Record<string, FieldState>>(createEmptyFields);
+    const dateId = React.useId();
+
+    React.useEffect(() => {
+        if (isOpen) setDate(initialDate);
+    }, [isOpen, initialDate]);
 
     if (!isOpen) return null;
 
@@ -112,11 +119,11 @@ export const AddTransactionModal: React.FC<AddTransactionModalProps> = ({ isOpen
 
                 <div className="p-5 border-b border-border">
                     <div className="flex items-center gap-3">
-                        <label className="text-xs text-muted-foreground font-bold uppercase shrink-0">日期</label>
-                        <Input
-                            type="date" aria-label="日期"
+                        <label htmlFor={dateId} className="text-xs text-muted-foreground font-bold uppercase shrink-0">日期</label>
+                        <DatePicker
+                            id={dateId} aria-label="日期" locale={locale}
                             value={date}
-                            onChange={e => setDate(e.target.value)}
+                            onValueChange={setDate}
                             className="flex-1 px-3 py-2 rounded-lg border border-border bg-muted/50 outline-none text-sm font-medium focus:border-primary focus:ring-1 focus:ring-indigo-100 transition"
                         />
                     </div>

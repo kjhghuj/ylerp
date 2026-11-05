@@ -1,6 +1,6 @@
 import { Input } from '../../../components/ui/input';
 import { Button } from '../../../components/ui/button';
-import { NativeSelect } from '../../../components/ui/native-select';
+import { FormSelect } from '../../../components/FormSelect';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../../../components/ui/table';
 import React, { useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, PackageX } from 'lucide-react';
@@ -129,26 +129,23 @@ export const ProductList: React.FC<ProductListProps> = ({
         <span className="tabular-nums" style={{ color: 'hsl(var(--ui-muted-foreground))' }}>
           {strings.pagination.total.replace('{total}', String(items.length))}
         </span>
-        <NativeSelect
-          value={pageSize}
+        <FormSelect
+          value={String(pageSize)}
           aria-label={strings.pagination.sizeLabel}
-          onChange={(event) => {
-            const size = Number(event.target.value);
+          onValueChange={(value) => {
+            const size = Number(value);
             if (!PAGE_SIZE_OPTIONS.includes(size) || size === pageSize) return;
             setPageSize(size);
             // 对齐 Element：切换每页条数后当前页收敛到新的有效范围
             const nextTotalPages = Math.max(1, Math.ceil(items.length / size));
             onPageChange(Math.min(page, nextTotalPages));
           }}
-          className="h-8 w-auto px-1.5 py-1 rounded-lg border cursor-pointer outline-none"
-          style={{ backgroundColor: 'var(--pa-card)', borderColor: 'var(--pa-card-border)', color: 'hsl(var(--ui-muted-foreground))' }}
-        >
-          {PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {strings.pagination.sizeOption.replace('{size}', String(size))}
-            </option>
-          ))}
-        </NativeSelect>
+          triggerClassName="h-8 w-auto px-1.5 rounded-lg border cursor-pointer"
+          options={PAGE_SIZE_OPTIONS.map((size) => ({
+            value: String(size),
+            label: strings.pagination.sizeOption.replace('{size}', String(size)),
+          }))}
+        />
         <div className="flex items-center gap-1">
           <Button variant="ghost"
             type="button"
